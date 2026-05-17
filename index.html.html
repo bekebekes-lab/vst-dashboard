@@ -1,0 +1,1588 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VST Dashboard Gerencial</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --red: #CC0000;
+    --red-light: #fff0f0;
+    --red-dark: #990000;
+    --bg: #f5f5f5;
+    --surface: #ffffff;
+    --surface2: #f9f9f9;
+    --border: #e8e8e8;
+    --text: #1a1a1a;
+    --text2: #666666;
+    --text3: #999999;
+    --radius: 10px;
+    --radius-sm: 6px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); font-size: 14px; min-height: 100vh; }
+
+  /* TOPBAR */
+  .topbar { background: var(--red); color: #fff; padding: 0 24px; display: flex; align-items: center; justify-content: space-between; height: 52px; position: sticky; top: 0; z-index: 100; }
+  .topbar-left { display: flex; align-items: center; gap: 16px; }
+  .topbar h1 { font-size: 15px; font-weight: 600; letter-spacing: -0.2px; }
+  .topbar-badge { background: rgba(255,255,255,0.2); padding: 3px 8px; border-radius: 20px; font-size: 11px; font-family: 'DM Mono', monospace; }
+  .topbar-right { display: flex; align-items: center; gap: 12px; }
+  .clock { font-family: 'DM Mono', monospace; font-size: 12px; opacity: 0.85; }
+  .status-dot { width: 7px; height: 7px; border-radius: 50%; background: #4ade80; display: inline-block; margin-right: 5px; animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+  .btn-refresh { background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3); color: #fff; padding: 5px 12px; border-radius: var(--radius-sm); font-size: 12px; cursor: pointer; font-family: 'DM Sans', sans-serif; transition: background 0.2s; }
+  .btn-refresh:hover { background: rgba(255,255,255,0.25); }
+  .last-update { font-size: 11px; opacity: 0.7; }
+
+  /* TABS */
+  .tabs-nav { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; display: flex; gap: 0; position: sticky; top: 52px; z-index: 99; }
+  .tab-btn { padding: 13px 18px; font-size: 13px; font-weight: 500; color: var(--text2); border-bottom: 2px solid transparent; cursor: pointer; transition: all 0.15s; white-space: nowrap; background: none; border-left: none; border-right: none; border-top: none; font-family: 'DM Sans', sans-serif; }
+  .tab-btn:hover { color: var(--text); }
+  .tab-btn.active { color: var(--red); border-bottom-color: var(--red); }
+
+  /* CONTENT */
+  .content { padding: 20px 24px; max-width: 1400px; margin: 0 auto; }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* FILTERS */
+  .filters-bar { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; margin-bottom: 16px; display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+  .filter-group label { font-size: 11px; color: var(--text3); font-weight: 500; display: block; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .filter-group select { width: 100%; padding: 7px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 12px; color: var(--text); background: var(--surface2); font-family: 'DM Sans', sans-serif; cursor: pointer; outline: none; transition: border-color 0.15s; }
+  .filter-group select:focus { border-color: var(--red); }
+
+  /* METRICS GRID */
+  .metrics-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; margin-bottom: 16px; }
+  .metric-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; }
+  .metric-card.highlight { border-color: var(--red); border-top: 3px solid var(--red); }
+  .metric-label { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.07em; font-weight: 600; margin-bottom: 6px; }
+  .metric-value { font-size: 28px; font-weight: 600; color: var(--red); line-height: 1; margin-bottom: 4px; font-family: 'DM Mono', monospace; }
+  .metric-avg { font-size: 11px; color: var(--text3); margin-bottom: 10px; }
+  .filas-list { border-top: 1px solid var(--border); padding-top: 8px; max-height: 220px; overflow-y: auto; }
+  .fila-name { color: var(--text2); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-right: 6px; }
+  .fila-count { font-weight: 600; color: var(--text); font-family: 'DM Mono', monospace; flex-shrink: 0; }
+
+  /* SECTION HEADER */
+  .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .section-title { font-size: 13px; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: 0.05em; }
+  .count-badge { background: var(--red-light); color: var(--red); font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 20px; }
+
+  /* TABLE */
+  .table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  .table-scroll { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  thead tr { background: var(--red); }
+  th { color: #fff; padding: 10px 12px; text-align: left; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap; }
+  th.center { text-align: center; }
+  td { padding: 9px 12px; border-bottom: 1px solid var(--border); color: var(--text); vertical-align: middle; }
+  td.center { text-align: center; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover td { background: var(--surface2); }
+  .consultant-name { display: flex; align-items: center; gap: 7px; }
+  .avatar { width: 26px; height: 26px; border-radius: 50%; background: var(--red-light); color: var(--red); font-size: 10px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .badge { display: inline-flex; align-items: center; justify-content: center; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 600; min-width: 28px; }
+  .badge-red { background: var(--red-light); color: var(--red); }
+  .badge-gray { background: #f0f0f0; color: var(--text3); }
+  .tag-pill { font-size: 10px; color: var(--text3); background: var(--surface2); border: 1px solid var(--border); padding: 1px 6px; border-radius: 4px; font-family: 'DM Mono', monospace; }
+  .equipe-text { font-size: 11px; color: var(--text2); }
+
+  /* LOADING / ERROR */
+  .loading-state { text-align: center; padding: 60px 20px; color: var(--text3); }
+  .loading-spinner { width: 32px; height: 32px; border: 3px solid var(--border); border-top-color: var(--red); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 12px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .error-state { background: var(--red-light); border: 1px solid #fca5a5; border-radius: var(--radius); padding: 16px 20px; color: #991b1b; font-size: 13px; margin-bottom: 16px; }
+  .error-state strong { display: block; margin-bottom: 4px; }
+
+  /* COMING SOON */
+  .coming-soon { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 40px; text-align: center; color: var(--text3); }
+  .coming-soon svg { margin-bottom: 12px; opacity: 0.4; }
+  .coming-soon p { font-size: 14px; }
+
+  /* SORT & CLICKABLE */
+  .th-sort { user-select: none; }
+  .th-sort:hover { background: rgba(255,255,255,0.15); }
+  .th-sort-active { background: rgba(255,255,255,0.12); }
+  .sort-arrow { font-size: 10px; opacity: 0.75; margin-left: 2px; font-style: normal; }
+  .consultant-clickable { cursor: pointer; }
+  .consultant-clickable:hover .consultant-link { color: var(--red); text-decoration: underline; }
+  .consultant-link { transition: color 0.15s; }
+  .equipe-clickable { cursor: pointer; color: var(--text2); transition: color 0.15s; }
+  .equipe-clickable:hover { color: var(--red); text-decoration: underline; }
+  .fila-item { display: flex; justify-content: space-between; align-items: center; padding: 3px 0; font-size: 11px; cursor: pointer; border-radius: 4px; padding-left: 2px; padding-right: 2px; transition: background 0.12s; }
+  .fila-item:hover { background: var(--red-light); }
+  .fila-item:hover .fila-name { color: var(--red); }
+  .fila-item:hover .fila-count { color: var(--red); }
+
+  /* DRILL-DOWN DETAIL TABLE */
+  .detail-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .detail-breadcrumb { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text2); }
+  .breadcrumb-back { background: none; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 4px 10px; font-size: 12px; color: var(--text2); cursor: pointer; font-family: 'DM Sans', sans-serif; transition: all 0.15s; }
+  .breadcrumb-back:hover { border-color: var(--red); color: var(--red); }
+  .breadcrumb-sep { color: var(--text3); }
+  .breadcrumb-item { font-weight: 600; color: var(--text); }
+  .breadcrumb-fila { background: var(--red-light); color: var(--red); padding: 2px 8px; border-radius: 20px; font-weight: 600; font-size: 11px; }
+  .detail-info-chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+  .detail-chip { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 4px 12px; font-size: 12px; color: var(--text2); }
+  .detail-chip strong { color: var(--text); }
+
+  /* STATS ROW */
+  .stats-row { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+  .stat-chip { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 5px 12px; font-size: 12px; color: var(--text2); }
+  .stat-chip strong { color: var(--text); }
+
+  /* PRODUÇÃO */
+  .prod-filters { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; margin-bottom: 14px; display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-end; }
+  .prod-filter-group { display: flex; flex-direction: column; gap: 4px; min-width: 140px; }
+  .prod-filter-group label { font-size: 10px; font-weight: 700; color: var(--text3); text-transform: uppercase; letter-spacing: 0.07em; }
+  .prod-filter-group select { padding: 7px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 12px; color: var(--text); background: var(--surface2); font-family: 'DM Sans', sans-serif; cursor: pointer; outline: none; transition: border-color 0.15s; }
+  .prod-filter-group select:focus { border-color: var(--red); }
+  .prod-toggle-group { display: flex; flex-direction: column; gap: 4px; }
+  .prod-toggle-group label.top-label { font-size: 10px; font-weight: 700; color: var(--text3); text-transform: uppercase; letter-spacing: 0.07em; }
+  .prod-toggle { display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 7px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface2); transition: all 0.15s; user-select: none; }
+  .prod-toggle.active { background: var(--red-light); border-color: var(--red); color: var(--red); }
+  .prod-toggle-dot { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--border); transition: all 0.15s; flex-shrink: 0; }
+  .prod-toggle.active .prod-toggle-dot { background: var(--red); border-color: var(--red); }
+  .prod-toggle span { font-size: 12px; font-weight: 500; }
+
+  /* Status chips */
+  .prod-status-section { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; margin-bottom: 14px; }
+  .prod-status-label { font-size: 10px; font-weight: 700; color: var(--text3); text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between; }
+  .prod-status-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .prod-chip { padding: 5px 12px; border-radius: 20px; border: 1px solid var(--border); background: var(--surface2); color: var(--text2); font-size: 11px; font-weight: 500; cursor: pointer; transition: all 0.15s; user-select: none; }
+  .prod-chip:hover { border-color: var(--red); color: var(--red); }
+  .prod-chip.selected { background: var(--red); border-color: var(--red); color: #fff; }
+  .prod-chip-action { padding: 5px 12px; border-radius: 20px; border: 1px solid var(--border); background: none; color: var(--text3); font-size: 11px; cursor: pointer; font-family: 'DM Sans', sans-serif; transition: all 0.15s; }
+  .prod-chip-action:hover { border-color: var(--red); color: var(--red); }
+
+  /* Tabela Produção */
+  .prod-table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  .prod-table-scroll { overflow-x: auto; }
+  .prod-table-wrap table thead tr { background: var(--red); }
+  .prod-table-wrap table th { color: #fff; padding: 9px 10px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap; text-align: center; }
+  .prod-table-wrap table th:first-child { text-align: left; min-width: 160px; }
+  .prod-table-wrap table td { padding: 8px 10px; border-bottom: 1px solid var(--border); font-size: 12px; text-align: center; vertical-align: middle; }
+  .prod-table-wrap table td:first-child { text-align: left; font-weight: 500; }
+  .prod-table-wrap table tbody tr:last-child td { border-bottom: none; }
+  .prod-table-wrap table tbody tr:hover td { background: var(--surface2); }
+  .prod-table-wrap table tfoot tr td { background: #f3f3f3; font-weight: 700; border-top: 2px solid var(--border); }
+  .prod-cell-zero { color: var(--text3); font-size: 11px; }
+  .prod-cell-val { font-family: 'DM Mono', monospace; font-weight: 600; }
+  .prod-cell-total { background: #fafafa; font-weight: 700; font-family: 'DM Mono', monospace; border-left: 2px solid var(--border) !important; }
+  .prod-empty { padding: 40px; text-align: center; color: var(--text3); font-size: 13px; }
+
+  /* SIMULADOR */
+  .sim-controls-bar { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 16px; display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start; }
+  .sim-section { display: flex; flex-direction: column; gap: 8px; }
+  .sim-section-label { font-size: 10px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: 0.06em; }
+  .sim-visoes { display: flex; gap: 4px; }
+  .sim-visao-btn { padding: 6px 14px; border-radius: 20px; border: 1px solid var(--border); background: var(--surface2); color: var(--text2); font-size: 12px; font-weight: 500; cursor: pointer; font-family: 'DM Sans', sans-serif; transition: all 0.15s; }
+  .sim-visao-btn:hover { border-color: var(--red); color: var(--red); }
+  .sim-visao-btn.active { background: var(--red); border-color: var(--red); color: #fff; }
+  .sim-mults { display: flex; gap: 10px; flex-wrap: wrap; }
+  .sim-mult-item { display: flex; flex-direction: column; gap: 3px; }
+  .sim-mult-item label { font-size: 10px; color: var(--text3); white-space: nowrap; }
+  .sim-mult-item input { width: 80px; padding: 5px 8px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 12px; font-family: 'DM Mono', monospace; color: var(--text); background: var(--surface2); outline: none; }
+  .sim-mult-item input:focus { border-color: var(--red); }
+  .sim-section-metas { flex: 1; min-width: 300px; }
+  .sim-metas-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+  .sim-meta-item { display: flex; flex-direction: column; gap: 3px; }
+  .sim-meta-item label { font-size: 10px; color: var(--text3); white-space: nowrap; max-width: 110px; overflow: hidden; text-overflow: ellipsis; }
+  .sim-meta-item input { width: 80px; padding: 5px 8px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 12px; font-family: 'DM Mono', monospace; color: var(--text); background: #fffbe6; outline: none; }
+  .sim-meta-item input:focus { border-color: var(--red); }
+  .btn-sim-calcular { align-self: flex-end; padding: 8px 18px; background: var(--red); color: #fff; border: none; border-radius: var(--radius-sm); font-size: 13px; font-weight: 600; cursor: pointer; font-family: 'DM Sans', sans-serif; transition: background 0.15s; white-space: nowrap; }
+  .btn-sim-calcular:hover { background: var(--red-dark); }
+  /* KPI cards simulador */
+  .sim-kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
+  .sim-kpi-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; }
+  .sim-kpi-card.warn { border-color: #fca5a5; background: #fff5f5; }
+  .sim-kpi-card.good { border-color: #86efac; background: #f0fdf4; }
+  .sim-kpi-label { font-size: 10px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; }
+  .sim-kpi-value { font-size: 24px; font-weight: 600; font-family: 'DM Mono', monospace; color: var(--text); line-height: 1; }
+  .sim-kpi-value.red { color: var(--red); }
+  .sim-kpi-value.green { color: #16a34a; }
+  .sim-kpi-sub { font-size: 11px; color: var(--text3); margin-top: 4px; }
+  /* Tabela simulador */
+  .sim-table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  .sim-table-scroll { overflow-x: auto; }
+  .sim-na-mesa { color: #dc2626; font-weight: 600; }
+  .sim-deixado { color: #d97706; font-weight: 600; }
+  .sim-ok { color: #16a34a; font-weight: 600; }
+  .sim-diff-neg { color: #dc2626; }
+  .sim-diff-pos { color: #16a34a; }
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="topbar-left">
+    <h1>VST Dashboard Gerencial</h1>
+    <span class="topbar-badge">BaseCRM Live</span>
+  </div>
+  <div class="topbar-right">
+    <span class="last-update" id="last-update"></span>
+    <button class="btn-refresh" onclick="loadData()">↻ Atualizar</button>
+    <span class="clock" id="clock"></span>
+  </div>
+</div>
+
+<!-- TABS -->
+<div class="tabs-nav">
+  <button class="tab-btn active" onclick="switchTab('gerencial', this)">📊 Gerencial</button>
+  <button class="tab-btn" onclick="switchTab('producao', this)">🏭 Produção</button>
+  <button class="tab-btn" onclick="switchTab('simulador', this)">🎯 Simulador de Carteira</button>
+</div>
+
+<!-- CONTENT -->
+<div class="content">
+
+  <!-- TAB GERENCIAL -->
+  <div class="tab-panel active" id="tab-gerencial">
+    <div class="filters-bar">
+      <div class="filter-group"><label>Estado</label><select id="f-estado" onchange="onFilterChange('estado')"><option>Todos</option></select></div>
+      <div class="filter-group"><label>Gestor</label><select id="f-gestor" onchange="onFilterChange('gestor')"><option>Todos</option></select></div>
+      <div class="filter-group"><label>Equipe</label><select id="f-equipe" onchange="onFilterChange('equipe')"><option>Todas</option></select></div>
+      <div class="filter-group"><label>Consultor</label><select id="f-consultor" onchange="render()"><option>Todos</option></select></div>
+      <div class="filter-group"><label>Tag / Unidade</label><select id="f-tag" onchange="render()"><option>Todas</option></select></div>
+    </div>
+
+    <div id="error-area"></div>
+    <div id="stats-row-area"></div>
+    <div id="metrics-area"><div class="loading-state"><div class="loading-spinner"></div><p>Carregando dados da BaseCRM...</p></div></div>
+    <div id="table-area"></div>
+  </div>
+
+  <!-- TAB PRODUÇÃO -->
+  <div class="tab-panel" id="tab-producao">
+
+    <!-- FILTROS PRINCIPAIS -->
+    <div class="prod-filters">
+      <div class="prod-filter-group">
+        <label>Estado</label>
+        <select id="prod-estado" onchange="onProdFilterChange('estado')">
+          <option value="Todos">Todos</option>
+        </select>
+      </div>
+      <div class="prod-filter-group">
+        <label>Gestor</label>
+        <select id="prod-gestor" onchange="onProdFilterChange('gestor')">
+          <option value="Todos">Todos</option>
+        </select>
+      </div>
+      <div class="prod-filter-group">
+        <label>Equipe</label>
+        <select id="prod-equipe" onchange="renderProducao()">
+          <option value="Todas">Todas</option>
+        </select>
+      </div>
+      <div class="prod-filter-group">
+        <label>UF</label>
+        <select id="prod-uf" onchange="renderProducao()">
+          <option value="Geral">Geral</option>
+          <option value="PR">PR</option>
+          <option value="RS">RS</option>
+          <option value="SC">SC</option>
+          <option value="RPS">PR + RS + SC</option>
+        </select>
+      </div>
+      <div class="prod-filter-group" style="min-width:180px">
+        <label>Grupo de Produto</label>
+        <select id="prod-grupo" onchange="renderProducao()">
+          <option value="Geral">Geral</option>
+        </select>
+      </div>
+      <div class="prod-toggle-group">
+        <label class="top-label">Receita</label>
+        <div class="prod-toggle" id="prod-toggle-receita" onclick="toggleReceita()">
+          <div class="prod-toggle-dot"></div>
+          <span>Exibir Receita</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- STATUS CHIPS -->
+    <div class="prod-status-section">
+      <div class="prod-status-label">
+        <span>Status de Fila <span id="prod-status-count" style="font-weight:400;color:var(--text3)"></span></span>
+        <div style="display:flex;gap:6px">
+          <button class="prod-chip-action" onclick="selectAllStatus()">Selecionar todos</button>
+          <button class="prod-chip-action" onclick="clearAllStatus()">Limpar</button>
+        </div>
+      </div>
+      <div class="prod-status-chips" id="prod-status-chips"></div>
+    </div>
+
+    <!-- RESULTADO -->
+    <div id="prod-result-area"></div>
+
+  </div>
+
+  <!-- TAB SIMULADOR -->
+  <div class="tab-panel" id="tab-simulador">
+
+    <!-- CONTROLES TOPO -->
+    <div class="sim-controls-bar">
+
+      <!-- Visões -->
+      <div class="sim-section">
+        <div class="sim-section-label">Escopo</div>
+        <div class="sim-visoes">
+          <button class="sim-visao-btn active" onclick="setVisao('ativo',this)">Ativo</button>
+          <button class="sim-visao-btn" onclick="setVisao('ativacao',this)">+ Ativação</button>
+          <button class="sim-visao-btn" onclick="setVisao('aprovados',this)">+ Aprovados</button>
+          <button class="sim-visao-btn" onclick="setVisao('geral',this)">Geral</button>
+        </div>
+      </div>
+
+      <!-- Multiplicadores -->
+      <div class="sim-section">
+        <div class="sim-section-label">Multiplicadores de Faturamento</div>
+        <div class="sim-mults">
+          <div class="sim-mult-item">
+            <label>NET PJ - VIRTUA</label>
+            <input type="number" id="mult-virtua" value="4" step="0.1" min="0" onchange="renderSimulador()">
+          </div>
+          <div class="sim-mult-item">
+            <label>VOZ - Novo</label>
+            <input type="number" id="mult-voz-novo" value="5.5" step="0.1" min="0" onchange="renderSimulador()">
+          </div>
+          <div class="sim-mult-item">
+            <label>VOZ - Portabilidade</label>
+            <input type="number" id="mult-voz-port" value="7.5" step="0.1" min="0" onchange="renderSimulador()">
+          </div>
+          <div class="sim-mult-item" style="border-left:2px solid var(--border);padding-left:10px;margin-left:4px">
+            <label>R$ por linha (carteira)</label>
+            <input type="number" id="mult-vlr-linha" value="2.60" step="0.10" min="0.01" onchange="renderSimulador()" style="background:#fffbe6">
+          </div>
+        </div>
+      </div>
+
+      <!-- Metas -->
+      <div class="sim-section sim-section-metas">
+        <div class="sim-section-label">Metas de Linhas por Unidade</div>
+        <div class="sim-metas-grid" id="sim-metas-grid">
+          <!-- preenchido via JS -->
+        </div>
+      </div>
+
+      <button class="btn-sim-calcular" onclick="renderSimulador()">↻ Recalcular</button>
+    </div>
+
+    <!-- KPI SUMMARY -->
+    <div id="sim-kpi-area"></div>
+
+    <!-- TABELA RESULTADO -->
+    <div id="sim-table-area"></div>
+
+  </div>
+
+</div>
+
+<script>
+const SHEET_ID = '1lNrHoK4vsSsjisB4C254SVMQJyP9nmtFTECdZzH4AjQ';
+const API_KEY = 'AIzaSyA5Dbl6mmIxk01KDXPAsVxNy2XYf5DEQgU';
+const SHEET_NAME = 'BaseCRM';
+
+const EQUIPES_ESTADOS = {
+  "ADM E GESTORES":"RS",
+  "COMERCIAL ERISON":"SC",
+  "COMERCIAL FRANCISCO BELTRAO":"PR",
+  "COMERCIAL JEAN":"SC",
+  "COMERCIAL KARINA":"RS",
+  "COMERCIAL KARINA 54/55":"RS",
+  "COMERCIAL LAURA":"RS",
+  "COMERCIAL LEANDRO":"SC",
+  "COMERCIAL LISANDRA CAPITAL":"PR",
+  "COMERCIAL LISANDRA INTERIOR":"PR",
+  "COMERCIAL LOHAYNE":"PR",
+  "COMERCIAL MARCOS":"SC",
+  "COMERCIAL MAURO":"SC",
+  "COMERCIAL PATRICIA":"RS",
+  "COMERCIAL RAFAEL GOMES":"SC",
+  "COMERCIAL RICHIELLE":"RS",
+  "COMERCIAL RICHIELLE 55":"RS",
+  "EQUIPE BALNEARIO CAMBORIU":"SC",
+  "EQUIPE CAMPO MOURÃO":"PR",
+  "EQUIPE CAMPO MOURÃO INTERNO":"PR",
+  "EQUIPE CANOAS":"RS",
+  "EQUIPE CASCAVEL":"PR",
+  "EQUIPE CASCAVEL - EXECUTIVA":"PR",
+  "EQUIPE CASCAVEL - INTERNO":"PR",
+  "EQUIPE CHAPECO":"SC",
+  "EQUIPE CONECTON":"PR",
+  "EQUIPE CRICIUMA":"SC",
+  "EQUIPE CURITIBA - INTERNO":"PR",
+  "EQUIPE CXS":"RS",
+  "EQUIPE CXS TEL":"RS",
+  "EQUIPE ERECHIM":"RS",
+  "EQUIPE FOZ DO IGUAÇU":"PR",
+  "EQUIPE KL":"PR",
+  "EQUIPE LIVRAMENTO":"RS",
+  "EQUIPE LONDRINA":"PR",
+  "EQUIPE LONDRINA - INTERNO":"PR",
+  "EQUIPE MARINGA":"PR",
+  "EQUIPE NH - INTERNO LAURA":"RS",
+  "EQUIPE NH - INTERNO MARIA":"RS",
+  "EQUIPE PEL":"RS",
+  "EQUIPE PEL 2":"RS",
+  "EQUIPE PONTA GROSSA":"PR",
+  "EQUIPE RIO GRANDE":"RS",
+  "EQUIPE STA CRUZ":"RS",
+  "INSIDE SALES POA - A":"RS",
+  "INSIDE SALES POA - B":"RS",
+  "PAP ERECHIM":"RS"
+};
+
+const EQUIPES_GESTORES = {
+  "ADM E GESTORES":"ADM E GESTORES",
+  "COMERCIAL ERISON":"RAFAEL GOMES",
+  "COMERCIAL FRANCISCO BELTRAO":"RAFAEL FIRMINO",
+  "COMERCIAL JEAN":"JEAN CORREA",
+  "COMERCIAL KARINA":"KARINA MENDES",
+  "COMERCIAL KARINA 54/55":"KARINA MENDES",
+  "COMERCIAL LAURA":"LAURA LIS",
+  "COMERCIAL LEANDRO":"MAURO NARDINO",
+  "COMERCIAL LISANDRA CAPITAL":"LISANDRA SANTOS",
+  "COMERCIAL LISANDRA INTERIOR":"LISANDRA SANTOS",
+  "COMERCIAL LOHAYNE":"LOHAYNE MOHANNA",
+  "COMERCIAL MARCOS":"MAURO NARDINO",
+  "COMERCIAL MAURO":"MAURO NARDINO",
+  "COMERCIAL PATRICIA":"PATRÍCIA",
+  "COMERCIAL RAFAEL GOMES":"RAFAEL GOMES",
+  "COMERCIAL RICHIELLE":"RICHIELLE MORAIS",
+  "COMERCIAL RICHIELLE 55":"RICHIELLE MORAIS",
+  "EQUIPE BALNEARIO CAMBORIU":"RICHIELLE MORAIS",
+  "EQUIPE CAMPO MOURÃO":"RAFAEL FIRMINO",
+  "EQUIPE CAMPO MOURÃO INTERNO":"LOHAYNE MOHANNA",
+  "EQUIPE CANOAS":"YAB",
+  "EQUIPE CASCAVEL":"RAFAEL FIRMINO",
+  "EQUIPE CASCAVEL - EXECUTIVA":"LOHAYNE MOHANNA",
+  "EQUIPE CASCAVEL - INTERNO":"LOHAYNE MOHANNA",
+  "EQUIPE CHAPECO":"JEAN CORREA",
+  "EQUIPE CONECTON":"LISANDRA SANTOS",
+  "EQUIPE CRICIUMA":"RAFAEL GOMES",
+  "EQUIPE CURITIBA - INTERNO":"LISANDRA SANTOS",
+  "EQUIPE CXS":"PATRÍCIA",
+  "EQUIPE CXS TEL":"TELECT",
+  "EQUIPE ERECHIM":"PATRÍCIA",
+  "EQUIPE FOZ DO IGUAÇU":"LOHAYNE MOHANNA",
+  "EQUIPE KL":"LISANDRA SANTOS",
+  "EQUIPE LIVRAMENTO":"PATRÍCIA",
+  "EQUIPE LONDRINA":"RAPHAEL MARIANO",
+  "EQUIPE LONDRINA - INTERNO":"RAPHAEL MARIANO",
+  "EQUIPE MARINGA":"GISLAINE",
+  "EQUIPE NH - INTERNO LAURA":"LAURA LIS",
+  "EQUIPE NH - INTERNO MARIA":"MARIA VAZ",
+  "EQUIPE PEL":"VAGNER PEREIRA",
+  "EQUIPE PEL 2":"RICHIELLE MORAIS",
+  "EQUIPE PONTA GROSSA":"BRS",
+  "EQUIPE RIO GRANDE":"RICHIELLE MORAIS",
+  "EQUIPE STA CRUZ":"PATRÍCIA",
+  "INSIDE SALES POA - A":"RICHARD REIS",
+  "INSIDE SALES POA - B":"RICHARD REIS",
+  "PAP ERECHIM":"PATRÍCIA"
+};
+
+let ALL_DATA = [];
+let headers = [];
+let sortCol = 'GERAL';
+let sortAsc = false;
+
+function getGrupoKey(g) {
+  if (g === "GROSS") return "GROSS";
+  if (g === "VOZ - Renovação") return "RENOVAÇÃO";
+  if (g === "NET PJ - VIRTUA") return "BL";
+  if (g === "VOZ - Tranf. Titularidade") return "TITULARIDADE";
+  if (g === "SVA FIXA") return "SERV. DIGITAIS";
+  return null;
+}
+
+function initials(name) {
+  return name.split(' ').slice(0, 2).map(w => w[0] || '').join('').toUpperCase();
+}
+
+async function loadData() {
+  document.getElementById('error-area').innerHTML = '';
+  document.getElementById('metrics-area').innerHTML = '<div class="loading-state"><div class="loading-spinner"></div><p>Carregando dados da BaseCRM...</p></div>';
+  document.getElementById('table-area').innerHTML = '';
+  document.getElementById('stats-row-area').innerHTML = '';
+
+  try {
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(SHEET_NAME)}?key=${API_KEY}`;
+    const res = await fetch(url);
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error?.message || 'HTTP ' + res.status);
+    }
+    const json = await res.json();
+    const rows = json.values || [];
+    if (rows.length < 2) throw new Error('Planilha sem dados.');
+
+    headers = rows[0];
+    ALL_DATA = rows.slice(1).map(r => {
+      let obj = {};
+      headers.forEach((h, i) => obj[h] = (r[i] || '').toString().trim());
+      return obj;
+    });
+
+    const now = new Date();
+    document.getElementById('last-update').textContent = 'Atualizado às ' + now.toLocaleTimeString('pt-BR');
+
+    buildFilters();
+    render();
+  } catch (e) {
+    document.getElementById('metrics-area').innerHTML = '';
+    document.getElementById('error-area').innerHTML = `
+      <div class="error-state">
+        <strong>Erro ao carregar dados</strong>
+        ${e.message}. Verifique se a planilha está compartilhada como "Qualquer pessoa com o link pode visualizar".
+      </div>`;
+  }
+}
+
+function buildFilters() {
+  const estados = new Set();
+  const gestores = new Set();
+  const equipes = new Set();
+  const consultores = new Set();
+  const tags = new Set();
+
+  ALL_DATA.forEach(r => {
+    const eq = r['EQUIPE'];
+    const est = EQUIPES_ESTADOS[eq];
+    const ges = EQUIPES_GESTORES[eq];
+    if (est) estados.add(est);
+    if (ges) gestores.add(ges);
+    if (eq) equipes.add(eq);
+    if (r['PROPRIETÁRIO DO PEDIDO']) consultores.add(r['PROPRIETÁRIO DO PEDIDO']);
+    if (r['TAGS ATIVIDADE']) tags.add(r['TAGS ATIVIDADE']);
+  });
+
+  fillSelect('f-estado', ['Todos', ...[...estados].sort()]);
+  fillSelect('f-gestor', ['Todos', ...[...gestores].sort()]);
+  fillSelect('f-equipe', ['Todas', ...[...equipes].sort()]);
+  fillSelect('f-consultor', ['Todos', ...[...consultores].sort()]);
+  fillSelect('f-tag', ['Todas', ...[...tags].sort()]);
+}
+
+function fillSelect(id, opts) {
+  const sel = document.getElementById(id);
+  const cur = sel.value;
+  sel.innerHTML = opts.map(o => `<option value="${o}">${o}</option>`).join('');
+  if (opts.includes(cur)) sel.value = cur;
+}
+
+function onFilterChange(level) {
+  const estado = document.getElementById('f-estado').value;
+  const gestor = document.getElementById('f-gestor').value;
+  const equipe = document.getElementById('f-equipe').value;
+
+  const gestores = new Set();
+  const equipes = new Set();
+  const consultores = new Set();
+
+  ALL_DATA.forEach(r => {
+    const eq = r['EQUIPE'];
+    const est = EQUIPES_ESTADOS[eq] || '';
+    const ges = EQUIPES_GESTORES[eq] || '';
+    if (estado === 'Todos' || est === estado) {
+      if (ges) gestores.add(ges);
+      if (gestor === 'Todos' || ges === gestor) {
+        if (eq) equipes.add(eq);
+        if (equipe === 'Todas' || eq === equipe) {
+          if (r['PROPRIETÁRIO DO PEDIDO']) consultores.add(r['PROPRIETÁRIO DO PEDIDO']);
+        }
+      }
+    }
+  });
+
+  if (level === 'estado') {
+    fillSelect('f-gestor', ['Todos', ...[...gestores].sort()]);
+    fillSelect('f-equipe', ['Todas', ...[...equipes].sort()]);
+    fillSelect('f-consultor', ['Todos', ...[...consultores].sort()]);
+  } else if (level === 'gestor') {
+    fillSelect('f-equipe', ['Todas', ...[...equipes].sort()]);
+    fillSelect('f-consultor', ['Todos', ...[...consultores].sort()]);
+  } else if (level === 'equipe') {
+    fillSelect('f-consultor', ['Todos', ...[...consultores].sort()]);
+  }
+  render();
+}
+
+// ─── helpers ────────────────────────────────────────────────────────────────
+function fmtDate(val) {
+  if (!val) return '—';
+  // Try dd/mm/yyyy hh:mm or ISO
+  const s = val.toString().trim();
+  const m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+  if (m) return `${m[1]}/${m[2]}/${m[3]}`;
+  const d = new Date(s);
+  if (!isNaN(d)) return d.toLocaleDateString('pt-BR');
+  return s.split(' ')[0]; // fallback: just take first token
+}
+
+function linkConsultor(name) {
+  const safe = name.replace(/'/g, "\\'");
+  return `<span class="consultant-link equipe-clickable" onclick="filterByConsultor('${safe}')">${name}</span>`;
+}
+
+function linkEquipe(eq) {
+  const safe = eq.replace(/'/g, "\\'");
+  return `<span class="equipe-clickable" onclick="filterByEquipe('${safe}')">${eq}</span>`;
+}
+
+function thDrill(col, label, currentCol, currentAsc, onclickFn) {
+  const active = currentCol === col;
+  const arrow = active ? (currentAsc ? ' ↑' : ' ↓') : ' ↕';
+  return `<th class="center th-sort${active ? ' th-sort-active' : ''}" style="cursor:pointer" onclick="${onclickFn}('${col}')">${label}<span class="sort-arrow">${arrow}</span></th>`;
+}
+
+// ─── main render ────────────────────────────────────────────────────────────
+function render() {
+  if (!ALL_DATA.length) return;
+
+  const estado    = document.getElementById('f-estado').value;
+  const gestor    = document.getElementById('f-gestor').value;
+  const equipe    = document.getElementById('f-equipe').value;
+  const consultor = document.getElementById('f-consultor').value;
+  const tag       = document.getElementById('f-tag').value;
+
+  const cats = ["GERAL", "GROSS", "RENOVAÇÃO", "BL", "TITULARIDADE", "SERV. DIGITAIS"];
+  let metrics = {};
+  cats.forEach(c => metrics[c] = { total: 0, filas: {} });
+  let consMap = {};
+  let nConsSet = new Set();
+  let totalRows = 0;
+
+  ALL_DATA.forEach(r => {
+    const eq  = r['EQUIPE'];
+    const est = EQUIPES_ESTADOS[eq] || '';
+    const ges = EQUIPES_GESTORES[eq] || '';
+    const cons = r['PROPRIETÁRIO DO PEDIDO'] || 'Sem Consultor';
+    const rtag = r['TAGS ATIVIDADE'] || '';
+    const qtd  = parseInt(r['QUANTIDADE']) || 1;
+    const fila = r['FILA'] || 'Sem Status';
+    const grupo = r['GRUPO'] || '';
+
+    if (estado    !== 'Todos' && est  !== estado)    return;
+    if (gestor    !== 'Todos' && ges  !== gestor)    return;
+    if (equipe    !== 'Todas' && eq   !== equipe)    return;
+    if (consultor !== 'Todos' && cons !== consultor) return;
+    if (tag       !== 'Todas' && rtag !== tag)       return;
+
+    totalRows++;
+    nConsSet.add(cons);
+    const key = getGrupoKey(grupo);
+    if (!key) return;
+
+    metrics[key].total += qtd;
+    metrics[key].filas[fila] = (metrics[key].filas[fila] || 0) + qtd;
+    metrics["GERAL"].total += qtd;
+    metrics["GERAL"].filas[fila] = (metrics["GERAL"].filas[fila] || 0) + qtd;
+
+    if (!consMap[cons]) consMap[cons] = { equipe: eq, tag: rtag, GROSS: 0, "RENOVAÇÃO": 0, BL: 0, TITULARIDADE: 0, "SERV. DIGITAIS": 0, GERAL: 0 };
+    consMap[cons][key] += qtd;
+    consMap[cons].GERAL += qtd;
+  });
+
+  const nc = nConsSet.size || 1;
+
+  // Stats row
+  document.getElementById('stats-row-area').innerHTML = `<div class="stats-row">
+    <div class="stat-chip"><strong>${ALL_DATA.length}</strong> registros na base</div>
+    <div class="stat-chip"><strong>${totalRows}</strong> registros filtrados</div>
+    <div class="stat-chip"><strong>${nc}</strong> consultores</div>
+    <div class="stat-chip"><strong>${nConsSet.size > 0 ? (metrics['GERAL'].total / nc).toFixed(1) : 0}</strong> média geral/consultor</div>
+  </div>`;
+
+  // Metrics cards
+  document.getElementById('metrics-area').innerHTML = `<div class="metrics-grid">${cats.map((c, i) => {
+    const med = (metrics[c].total / nc).toFixed(1);
+    const filas = Object.entries(metrics[c].filas).sort((a, b) => b[1] - a[1]);
+    return `<div class="metric-card ${i === 0 ? 'highlight' : ''}">
+      <div class="metric-label">${c}</div>
+      <div class="metric-value">${metrics[c].total}</div>
+      <div class="metric-avg">Média/consultor: ${med}</div>
+      <div class="filas-list">${filas.map(([fn, fv]) => `
+        <div class="fila-item" onclick="drillFila('${c}','${fn.replace(/'/g,"\\'")}')">
+          <span class="fila-name">${fn}</span>
+          <span class="fila-count">${fv}</span>
+        </div>`).join('')}
+      </div>
+    </div>`;
+  }).join('')}</div>`;
+
+  // Consultant table
+  const rows = Object.entries(consMap).sort((a, b) => {
+    const va = a[1][sortCol] || 0;
+    const vb = b[1][sortCol] || 0;
+    return sortAsc ? va - vb : vb - va;
+  });
+
+  if (rows.length === 0) {
+    document.getElementById('table-area').innerHTML = '<div class="coming-soon"><p>Nenhum dado para os filtros selecionados.</p></div>';
+    return;
+  }
+
+  const sortCols = [
+    { key: 'GROSS', label: 'Gross' },
+    { key: 'RENOVAÇÃO', label: 'Renov.' },
+    { key: 'BL', label: 'BL' },
+    { key: 'TITULARIDADE', label: 'Titular.' },
+    { key: 'SERV. DIGITAIS', label: 'Serv. Digitais' },
+    { key: 'GERAL', label: 'Total' }
+  ];
+
+  document.getElementById('table-area').innerHTML = `
+    <div class="section-header">
+      <span class="section-title">Detalhamento por consultor</span>
+      <span class="count-badge">${rows.length} consultores</span>
+    </div>
+    <div class="table-wrap"><div class="table-scroll">
+      <table>
+        <thead><tr>
+          <th style="width:24%">Consultor</th>
+          <th style="width:20%">Equipe</th>
+          ${sortCols.map(c => thDrill(c.key, c.label, sortCol, sortAsc, 'setSort')).join('')}
+          <th class="center" style="width:7%">Tag</th>
+        </tr></thead>
+        <tbody>${rows.map(([cn, d]) => `
+          <tr>
+            <td>
+              <div class="consultant-name consultant-clickable" onclick="filterByConsultor('${cn.replace(/'/g,"\\'")}')">
+                <div class="avatar">${initials(cn)}</div>
+                <span class="consultant-link">${cn}</span>
+              </div>
+            </td>
+            <td>${linkEquipe(d.equipe)}</td>
+            <td class="center"><span class="badge ${d.GROSS > 0 ? 'badge-red' : 'badge-gray'}">${d.GROSS}</span></td>
+            <td class="center">${d["RENOVAÇÃO"] || 0}</td>
+            <td class="center">${d.BL || 0}</td>
+            <td class="center">${d.TITULARIDADE || 0}</td>
+            <td class="center">${d["SERV. DIGITAIS"] || 0}</td>
+            <td class="center" style="font-weight:600">${d.GERAL}</td>
+            <td class="center"><span class="tag-pill">${d.tag || '—'}</span></td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div></div>`;
+}
+
+// ─── sort (tabela de consultores) ───────────────────────────────────────────
+function setSort(col) {
+  sortAsc = (sortCol === col) ? !sortAsc : false;
+  sortCol = col;
+  render();
+}
+
+// ─── sort (tabela de drill-down) ────────────────────────────────────────────
+let drillSortCol = 'QTD';
+let drillSortAsc = false;
+let lastDrillArgs = null;
+
+function setDrillSort(col) {
+  drillSortAsc = (drillSortCol === col) ? !drillSortAsc : false;
+  drillSortCol = col;
+  if (lastDrillArgs) drillFila(...lastDrillArgs);
+}
+
+// ─── filtros por clique ─────────────────────────────────────────────────────
+function filterByConsultor(name) {
+  // zeramos só o consultor — mantém estado/gestor/equipe/tag
+  document.getElementById('f-consultor').value = name;
+  render();
+}
+
+function filterByEquipe(equipe) {
+  // zera consultor ao trocar equipe, mantém estado/gestor
+  document.getElementById('f-equipe').value = equipe;
+  document.getElementById('f-consultor').value = 'Todos';
+  onFilterChange('equipe');
+}
+
+// ─── drill-down de pedidos por fila ─────────────────────────────────────────
+function drillFila(categoria, fila) {
+  if (!ALL_DATA.length) return;
+  lastDrillArgs = [categoria, fila];
+
+  const estado    = document.getElementById('f-estado').value;
+  const gestor    = document.getElementById('f-gestor').value;
+  const equipe    = document.getElementById('f-equipe').value;
+  const consultor = document.getElementById('f-consultor').value;
+  const tag       = document.getElementById('f-tag').value;
+
+  const filtered = ALL_DATA.filter(r => {
+    const eq  = r['EQUIPE'];
+    const est = EQUIPES_ESTADOS[eq] || '';
+    const ges = EQUIPES_GESTORES[eq] || '';
+    const cons = r['PROPRIETÁRIO DO PEDIDO'] || 'Sem Consultor';
+    const rtag = r['TAGS ATIVIDADE'] || '';
+    const grupo = r['GRUPO'] || '';
+    const filaR = r['FILA'] || 'Sem Status';
+    const grupoKey = getGrupoKey(grupo);
+
+    if (estado    !== 'Todos' && est  !== estado)    return false;
+    if (gestor    !== 'Todos' && ges  !== gestor)    return false;
+    if (equipe    !== 'Todas' && eq   !== equipe)    return false;
+    if (consultor !== 'Todos' && cons !== consultor) return false;
+    if (tag       !== 'Todas' && rtag !== tag)       return false;
+    if (filaR !== fila) return false;
+    // sempre restringir aos 4 grupos mapeados
+    if (!grupoKey) return false;
+    if (categoria !== 'GERAL' && grupoKey !== categoria) return false;
+    return true;
+  });
+
+  // Sort
+  const sortedRows = [...filtered].sort((a, b) => {
+    if (drillSortCol === 'QTD') {
+      const va = parseInt(a['QUANTIDADE']) || 1;
+      const vb = parseInt(b['QUANTIDADE']) || 1;
+      return drillSortAsc ? va - vb : vb - va;
+    }
+    if (drillSortCol === 'ATUALIZACAO') {
+      const da = new Date(a['ATUALIZACAO'] || 0);
+      const db = new Date(b['ATUALIZACAO'] || 0);
+      return drillSortAsc ? da - db : db - da;
+    }
+    const ca = (a[drillSortCol] || '').toString();
+    const cb = (b[drillSortCol] || '').toString();
+    return drillSortAsc ? ca.localeCompare(cb) : cb.localeCompare(ca);
+  });
+
+  const total = filtered.reduce((s, r) => s + (parseInt(r['QUANTIDADE']) || 1), 0);
+
+  const ctxParts = [];
+  if (estado    !== 'Todos') ctxParts.push(estado);
+  if (gestor    !== 'Todos') ctxParts.push(gestor);
+  if (equipe    !== 'Todas') ctxParts.push(equipe);
+  if (consultor !== 'Todos') ctxParts.push(consultor);
+  const ctxLabel = ctxParts.join(' › ');
+
+  const breadcrumb = `
+    <div class="detail-header">
+      <div class="detail-breadcrumb">
+        <button class="breadcrumb-back" onclick="lastDrillArgs=null;render()">← Voltar</button>
+        <span class="breadcrumb-sep">›</span>
+        <span class="breadcrumb-item">${categoria}</span>
+        <span class="breadcrumb-sep">›</span>
+        <span class="breadcrumb-fila">${fila}</span>
+        ${ctxLabel ? `<span class="breadcrumb-sep">·</span><span style="font-size:11px;color:var(--text3)">${ctxLabel}</span>` : ''}
+      </div>
+      <span class="count-badge">${total} pedidos · ${sortedRows.length} registros</span>
+    </div>`;
+
+  if (sortedRows.length === 0) {
+    document.getElementById('table-area').innerHTML = breadcrumb +
+      '<div class="coming-soon"><p>Nenhum pedido encontrado para este status.</p></div>';
+    return;
+  }
+
+  // th helper para drill
+  function thD(col, label, style='') {
+    return thDrill(col, label, drillSortCol, drillSortAsc, 'setDrillSort') .replace('style="cursor:pointer"', `style="cursor:pointer;${style}"`);
+  }
+
+  document.getElementById('table-area').innerHTML = breadcrumb + `
+    <div class="table-wrap"><div class="table-scroll">
+      <table>
+        <thead><tr>
+          <th style="width:13%">Grupo</th>
+          <th style="width:13%">Vinculado</th>
+          <th style="width:24%">Nome do Cliente</th>
+          <th style="width:16%">Proprietário</th>
+          <th style="width:16%">Equipe</th>
+          ${thD('ATUALIZACAO','Atualização','width:10%')}
+          ${thD('QTD','Qtd','width:8%')}
+        </tr></thead>
+        <tbody>${sortedRows.map(r => {
+          const qtd   = parseInt(r['QUANTIDADE']) || 1;
+          const prop  = r['PROPRIETÁRIO DO PEDIDO'] || '—';
+          const nome  = r['NOME CLIENTE'] || '—';
+          const vinc  = r['VINCULADO'] || '—';
+          const grupo = r['GRUPO'] || '—';
+          const eq    = r['EQUIPE'] || '—';
+          const upd   = fmtDate(r['ATUALIZACAO'] || '');
+          return `<tr>
+            <td><span class="tag-pill" style="font-size:11px">${grupo}</span></td>
+            <td style="font-size:12px;color:var(--text2)">${vinc}</td>
+            <td style="font-size:12px;font-weight:500">${nome}</td>
+            <td>
+              <div class="consultant-name">
+                <div class="avatar" style="width:22px;height:22px;font-size:9px">${initials(prop)}</div>
+                ${linkConsultor(prop)}
+              </div>
+            </td>
+            <td>${linkEquipe(eq)}</td>
+            <td class="center" style="font-size:11px;color:var(--text2)">${upd}</td>
+            <td class="center"><span class="badge badge-red">${qtd}</span></td>
+          </tr>`;
+        }).join('')}
+        </tbody>
+      </table>
+    </div></div>`;
+}
+
+// =============================================================
+// SIMULADOR DE CARTEIRA
+// =============================================================
+const MAPEAMENTO_TAGS = {
+  '#1EWV': '#1EWV - CASCAVEL',
+  '#1FK6': '#1FK6 - PELOTAS',
+  '#5Q8X': '#5Q8X - CAXIAS DO SUL',
+  '#6OV1': '#6OV1 - CRICIUMA',
+  '#E928': '#E928 - CAMPO MOURAO',
+  '#EKQG': '#EKQG - LONDRINA',
+  '#HG72': '#HG72 - NOVO HAMBURGO',
+  '#MW0K': '#MW0K - FRANCISCO BELTRAO',
+  '#YI8F': '#YI8F - CURITIBA'
+};
+
+const FILAS_POR_VISAO = {
+  ativo:     ['Ativo/Instalado'],
+  ativacao:  ['Ativo/Instalado','Portabilidade Agendada','Aguardando Instalação'],
+  aprovados: ['Ativo/Instalado','Portabilidade Agendada','Aguardando Instalação','Aguardando NF','Aguardando Portabilidade'],
+  geral:     ['Ativo/Instalado','Portabilidade Agendada','Aguardando Instalação','Aguardando NF','Aguardando Portabilidade','Para Input','Validação Pendente','Análise de Crédito']
+};
+
+let simVisao = 'ativo';
+
+function setVisao(v, el) {
+  simVisao = v;
+  document.querySelectorAll('.sim-visao-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  renderSimulador();
+}
+
+function buildMetasGrid() {
+  const grid = document.getElementById('sim-metas-grid');
+  if (!grid) return;
+  const existing = {};
+  grid.querySelectorAll('input').forEach(inp => existing[inp.dataset.tag] = inp.value);
+  grid.innerHTML = Object.entries(MAPEAMENTO_TAGS).sort((a,b) => a[1].localeCompare(b[1])).map(([tag, nome]) => {
+    const shortName = nome.split(' - ')[1] || nome;
+    const val = existing[tag] || '0';
+    return `<div class="sim-meta-item">
+      <label title="${nome}">${shortName}</label>
+      <input type="number" min="0" step="1" value="${val}" data-tag="${tag}" onchange="renderSimulador()">
+    </div>`;
+  }).join('');
+}
+
+function getMetasInput() {
+  const metas = {};
+  document.querySelectorAll('#sim-metas-grid input').forEach(inp => {
+    metas[inp.dataset.tag] = Math.round(parseFloat(inp.value) || 0);
+  });
+  return metas;
+}
+
+function calcularSimulador() {
+  if (!ALL_DATA.length) return null;
+
+  const multVirtua   = parseFloat(document.getElementById('mult-virtua')?.value)    || 4;
+  const multVozNovo  = parseFloat(document.getElementById('mult-voz-novo')?.value)   || 5.5;
+  const multVozPort  = parseFloat(document.getElementById('mult-voz-port')?.value)   || 7.5;
+  const vlrLinha     = parseFloat(document.getElementById('mult-vlr-linha')?.value)  || 2.60;
+  const metas        = getMetasInput();
+  const filasPermitidas = FILAS_POR_VISAO[simVisao];
+  const produtosAlvo = ['NET PJ - VIRTUA', 'VOZ - Novo', 'VOZ - Portabilidade'];
+
+  // agrega por tag
+  const agg = {};
+  Object.keys(MAPEAMENTO_TAGS).forEach(tag => {
+    agg[tag] = { virtua: { qtd: 0, rec: 0 }, vozNovo: { qtd: 0, rec: 0 }, vozPort: { qtd: 0, rec: 0 } };
+  });
+
+  ALL_DATA.forEach(r => {
+    const tag   = r['TAGS ATIVIDADE'] || '';
+    const grupo = r['GRUPO'] || '';
+    const fila  = r['FILA'] || '';
+    const qtd   = parseInt(r['QUANTIDADE']) || 1;
+    const valor = parseFloat((r['VALOR UNIT'] || '0').toString().replace(',', '.')) || 0;
+
+    if (!MAPEAMENTO_TAGS[tag]) return;
+    if (!filasPermitidas.includes(fila)) return;
+    if (!produtosAlvo.includes(grupo)) return;
+
+    const recCents = Math.round(valor * 100);
+
+    if (grupo === 'NET PJ - VIRTUA') {
+      agg[tag].virtua.qtd += qtd;
+      agg[tag].virtua.rec += qtd * recCents;         // NET PJ = qtd × valor unit
+    } else if (grupo === 'VOZ - Novo') {
+      agg[tag].vozNovo.qtd += qtd;
+      agg[tag].vozNovo.rec += recCents;              // VOZ = 1 linha = 1 valor unit
+    } else if (grupo === 'VOZ - Portabilidade') {
+      agg[tag].vozPort.qtd += qtd;
+      agg[tag].vozPort.rec += recCents;
+    }
+  });
+
+  // calcula resultados por tag
+  const resultados = Object.entries(MAPEAMENTO_TAGS).sort((a,b) => a[1].localeCompare(b[1])).map(([tag, nome]) => {
+    const d = agg[tag];
+
+    // Faturamento = receita × multiplicador de cada produto
+    const faturamentoCents =
+      Math.round(d.virtua.rec  * multVirtua)  +
+      Math.round(d.vozNovo.rec * multVozNovo) +
+      Math.round(d.vozPort.rec * multVozPort);
+    const faturamento = faturamentoCents / 100;
+
+    // Teto de recebimento = 40% do faturamento
+    const pond40 = faturamento * 0.40;
+
+    // Potencial de linhas a receber com base no faturamento
+    const potLinhas = Math.floor(pond40 / vlrLinha);
+
+    // Meta de linhas da carteira (definida pelo usuário)
+    const meta = metas[tag] || 0;
+
+    // linhasReceb = quanto efetivamente recebo
+    // = limitado pelo faturamento (potLinhas) E pela carteira disponível (meta)
+    const linhasReceb = Math.min(potLinhas, meta);
+
+    // Dinheiro total da carteira (meta × vlrLinha)
+    const dinheiroCart = meta * vlrLinha;
+
+    // Carteira efetivamente recebida = linhas que consigo receber × vlrLinha
+    const cartRecebida = linhasReceb * vlrLinha;
+
+    // Diferença em dinheiro = o que NÃO vou receber
+    const diffDinheiro = dinheiroCart - cartRecebida;
+
+    // Diferença em linhas: meta - linhasReceb
+    const diferencaLinhas = meta - linhasReceb;
+
+    // NA MESA = todo dinheiro não recebido (por falta de fat. OU por falta de linhas)
+    // diffDinheiro já captura os dois casos porque:
+    //   - se potLinhas < meta → linhasReceb = potLinhas → diff = (meta - potLinhas) × vlr
+    //   - se potLinhas > meta → linhasReceb = meta → diff = 0 (carteira completa)
+    const naMesa = diffDinheiro;
+
+    // EXCESSO = potencial de faturamento sobrando além da carteira
+    // → indica que posso pedir redistribuição de linhas de outra unidade
+    const excesso = potLinhas > meta ? (potLinhas - meta) * vlrLinha : 0;
+
+    const qtdVoz    = d.vozNovo.qtd + d.vozPort.qtd;
+    const qtdVirtua = d.virtua.qtd;
+
+    return {
+      tag, nome, faturamento, pond40, potLinhas, meta,
+      diferencaLinhas, linhasReceb,
+      dinheiroCart, cartRecebida, diffDinheiro, naMesa, excesso,
+      qtdVoz, qtdVirtua
+    };
+  });
+
+  // totais
+  const totais = resultados.reduce((acc, r) => {
+    acc.faturamento   += r.faturamento;
+    acc.pond40        += r.pond40;
+    acc.potLinhas     += r.potLinhas;
+    acc.meta          += r.meta;
+    acc.linhasReceb   += r.linhasReceb;
+    acc.dinheiroCart  += r.dinheiroCart;
+    acc.cartRecebida  += r.cartRecebida;
+    acc.diffDinheiro  += r.diffDinheiro;
+    acc.naMesa        += r.naMesa;
+    acc.excesso       += r.excesso;
+    acc.qtdVoz        += r.qtdVoz;
+    acc.qtdVirtua     += r.qtdVirtua;
+    return acc;
+  }, { faturamento:0, pond40:0, potLinhas:0, meta:0, linhasReceb:0, dinheiroCart:0, cartRecebida:0, diffDinheiro:0, naMesa:0, excesso:0, qtdVoz:0, qtdVirtua:0 });
+
+  totais.diferencaLinhas = totais.meta - totais.potLinhas;
+
+  // Incentivado: mínimo entre piso VOZ e piso VIRTUA
+  const potIncVoz    = Math.floor(totais.qtdVoz    / 12);
+  const potIncVirtua = Math.floor(totais.qtdVirtua / 3);
+  totais.incentivado = Math.min(potIncVoz, potIncVirtua);
+
+  return { resultados, totais };
+}
+
+function fmt(n, prefix='') {
+  return prefix + n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function fmtN(n) { return n.toLocaleString('pt-BR'); }
+
+function renderSimulador() {
+  if (!ALL_DATA.length) {
+    document.getElementById('sim-kpi-area').innerHTML = '<div class="coming-soon"><p>Carregue os dados primeiro (aba Gerencial).</p></div>';
+    return;
+  }
+
+  const vlrLinha = parseFloat(document.getElementById('mult-vlr-linha')?.value) || 2.60;
+  const calc = calcularSimulador();
+  if (!calc) return;
+  const { resultados, totais } = calc;
+
+  const visaoLabels = { ativo: 'Ativo/Instalado', ativacao: '+ Ativação', aprovados: '+ Aprovados', geral: 'Geral (todas as filas)' };
+
+  // Cores por status de fila
+  const filaColors = {
+    'Ativo/Instalado':            { bg: '#dcfce7', color: '#15803d' },
+    'Portabilidade Agendada':     { bg: '#dbeafe', color: '#1d4ed8' },
+    'Aguardando Instalação':      { bg: '#e0e7ff', color: '#4338ca' },
+    'Aguardando NF':              { bg: '#fef9c3', color: '#a16207' },
+    'Aguardando Portabilidade':   { bg: '#fce7f3', color: '#be185d' },
+    'Para Input':                 { bg: '#f3e8ff', color: '#7e22ce' },
+    'Validação Pendente':         { bg: '#ffedd5', color: '#c2410c' },
+    'Análise de Crédito':         { bg: '#fee2e2', color: '#b91c1c' },
+  };
+  const filasPills = FILAS_POR_VISAO[simVisao].map(f => {
+    const c = filaColors[f] || { bg: '#f3f4f6', color: '#374151' };
+    return `<span style="display:inline-flex;align-items:center;gap:4px;background:${c.bg};color:${c.color};border-radius:20px;padding:2px 10px;font-size:11px;font-weight:600;white-space:nowrap">${f}</span>`;
+  }).join('');
+
+  // ── KPIs ──────────────────────────────────────────────────────────────────
+  document.getElementById('sim-kpi-area').innerHTML = `
+    <div class="sim-kpi-grid">
+      <div class="sim-kpi-card">
+        <div class="sim-kpi-label">Dinheiro da Carteira</div>
+        <div class="sim-kpi-value">${fmt(totais.dinheiroCart, 'R$ ')}</div>
+        <div class="sim-kpi-sub">${fmtN(totais.meta)} linhas × R$ ${vlrLinha.toFixed(2).replace('.',',')}</div>
+      </div>
+      <div class="sim-kpi-card">
+        <div class="sim-kpi-label">Carteira Recebida</div>
+        <div class="sim-kpi-value red">${fmt(totais.cartRecebida, 'R$ ')}</div>
+        <div class="sim-kpi-sub">${fmtN(totais.linhasReceb)} linhas recebidas de ${fmtN(totais.meta)}</div>
+      </div>
+      <div class="sim-kpi-card ${totais.naMesa > 0.01 ? 'warn' : 'good'}">
+        <div class="sim-kpi-label">Carteira Não Recebida</div>
+        <div class="sim-kpi-value ${totais.naMesa > 0.01 ? 'red' : 'green'}">${fmt(totais.naMesa, 'R$ ')}</div>
+        <div class="sim-kpi-sub">Pot. menor que linhas na carteira — precisa faturar mais</div>
+      </div>
+      <div class="sim-kpi-card ${totais.excesso > 0.01 ? 'warn' : ''}">
+        <div class="sim-kpi-label">Deixado na Mesa</div>
+        <div class="sim-kpi-value ${totais.excesso > 0.01 ? '' : 'green'}" style="${totais.excesso > 0.01 ? 'color:#d97706' : ''}">${fmt(totais.excesso, 'R$ ')}</div>
+        <div class="sim-kpi-sub">Pot. maior que linhas na carteira — poderia ter mais linhas</div>
+      </div>
+      <div class="sim-kpi-card">
+        <div class="sim-kpi-label">Pot. Gross (Voz)</div>
+        <div class="sim-kpi-value">${fmtN(totais.qtdVoz)}</div>
+        <div class="sim-kpi-sub">Linhas VOZ na visão atual</div>
+      </div>
+      <div class="sim-kpi-card">
+        <div class="sim-kpi-label">Pot. Virtua (NET PJ)</div>
+        <div class="sim-kpi-value">${fmtN(totais.qtdVirtua)}</div>
+        <div class="sim-kpi-sub">Linhas VIRTUA na visão atual</div>
+      </div>
+      <div class="sim-kpi-card">
+        <div class="sim-kpi-label">Incentivado Estimado</div>
+        <div class="sim-kpi-value">${fmtN(totais.incentivado)}</div>
+        <div class="sim-kpi-sub">min(VOZ÷12, VIRTUA÷3)</div>
+      </div>
+      <div class="sim-kpi-card">
+        <div class="sim-kpi-label">40% do Faturamento</div>
+        <div class="sim-kpi-value">${fmt(totais.pond40, 'R$ ')}</div>
+        <div class="sim-kpi-sub">Teto de recebimento de carteira</div>
+      </div>
+    </div>`;
+
+  // ── TABELA ────────────────────────────────────────────────────────────────
+  // Colunas:
+  // Unidade | Faturamento | 40% Fat. | Pot. Linhas | Meta Carteira | Linhas Recebidas | Din. Carteira | Cart. Recebida | Diferença R$ | Na Mesa / Excesso
+  document.getElementById('sim-table-area').innerHTML = `
+    <div class="section-header" style="margin-top:4px;flex-wrap:wrap;gap:8px">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <span class="section-title">Resultado por Unidade — ${visaoLabels[simVisao]}</span>
+        <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">${filasPills}</div>
+      </div>
+      <span class="count-badge">${resultados.length} unidades</span>
+    </div>
+    <div class="sim-table-wrap"><div class="sim-table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th rowspan="2" style="width:16%;vertical-align:middle">Unidade</th>
+            <th colspan="2" class="center" style="border-bottom:1px solid rgba(255,255,255,0.2)">Faturamento</th>
+            <th colspan="2" class="center" style="border-bottom:1px solid rgba(255,255,255,0.2)">Linhas</th>
+            <th colspan="3" class="center" style="border-bottom:1px solid rgba(255,255,255,0.2)">Carteira (R$ ${vlrLinha.toFixed(2).replace('.',',')} / linha)</th>
+            <th colspan="2" class="center" style="border-bottom:1px solid rgba(255,255,255,0.2)">Dinheiro não recebido</th>
+          </tr>
+          <tr>
+            <th class="center" style="width:10%;font-size:10px">Faturamento</th>
+            <th class="center" style="width:9%;font-size:10px">40% Fat.</th>
+            <th class="center" style="width:8%;font-size:10px">Pot. Linhas</th>
+            <th class="center" style="width:7%;font-size:10px">Meta</th>
+            <th class="center" style="width:9%;font-size:10px">Lin. Recebidas</th>
+            <th class="center" style="width:10%;font-size:10px">Din. Carteira</th>
+            <th class="center" style="width:10%;font-size:10px">Cart. Recebida</th>
+            <th class="center" style="width:9%;font-size:10px">Cart. Não Recebida</th>
+            <th class="center" style="width:9%;font-size:10px">Deixado na Mesa</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${resultados.map(r => {
+            const temMeta = r.meta > 0;
+            const sobra   = r.potLinhas > r.meta && temMeta;
+            const falta   = r.potLinhas < r.meta && temMeta;
+            return `<tr>
+              <td style="font-weight:500">${r.nome}</td>
+              <td class="center">${fmt(r.faturamento, 'R$ ')}</td>
+              <td class="center">${fmt(r.pond40, 'R$ ')}</td>
+              <td class="center" style="font-weight:600;color:${sobra?'#16a34a':falta?'#dc2626':'var(--text)'}">${fmtN(r.potLinhas)}</td>
+              <td class="center">${fmtN(r.meta)}</td>
+              <td class="center">${fmtN(r.linhasReceb)}</td>
+              <td class="center">${fmt(r.dinheiroCart, 'R$ ')}</td>
+              <td class="center">${fmt(r.cartRecebida, 'R$ ')}</td>
+              <td class="center">
+                ${!temMeta
+                  ? '<span style="color:var(--text3);font-size:11px">sem meta</span>'
+                  : r.naMesa > 0.01
+                    ? `<span class="sim-na-mesa" title="Potencial menor que as linhas na carteira — precisa faturar mais">${fmt(r.naMesa,'R$ ')}<br><span style="font-size:10px;font-weight:400">${fmtN(r.diferencaLinhas)} lin. não recebidas</span></span>`
+                    : '<span class="sim-ok">✓</span>'
+                }
+              </td>
+              <td class="center">
+                ${!temMeta
+                  ? '<span style="color:var(--text3);font-size:11px">sem meta</span>'
+                  : r.excesso > 0.01
+                    ? `<span class="sim-deixado" title="Potencial maior que as linhas na carteira — faturamento alto, mas faltam linhas">${fmt(r.excesso,'R$ ')}<br><span style="font-size:10px;font-weight:400">${fmtN(Math.round(r.excesso/vlrLinha))} lin. a mais que a meta</span></span>`
+                    : '<span class="sim-ok">✓</span>'
+                }
+              </td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+        <tfoot>
+          <tr style="background:#f3f3f3;font-weight:600">
+            <td>TOTAL GERAL</td>
+            <td class="center">${fmt(totais.faturamento, 'R$ ')}</td>
+            <td class="center">${fmt(totais.pond40, 'R$ ')}</td>
+            <td class="center">${fmtN(totais.potLinhas)}</td>
+            <td class="center">${fmtN(totais.meta)}</td>
+            <td class="center">${fmtN(totais.linhasReceb)}</td>
+            <td class="center">${fmt(totais.dinheiroCart, 'R$ ')}</td>
+            <td class="center">${fmt(totais.cartRecebida, 'R$ ')}</td>
+            <td class="center">
+              ${totais.naMesa > 0.01
+                ? `<span class="sim-na-mesa">${fmt(totais.naMesa,'R$ ')}</span>`
+                : '<span class="sim-ok">✓</span>'
+              }
+            </td>
+            <td class="center">
+              ${totais.excesso > 0.01
+                ? `<span class="sim-deixado">${fmt(totais.excesso,'R$ ')}</span>`
+                : '<span class="sim-ok">✓</span>'
+              }
+            </td>
+          </tr>
+        </tfoot>
+      </table>
+    </div></div>`;
+}
+
+// inicializa metas quando a aba é clicada
+function initSimulador() {
+  buildMetasGrid();
+  renderSimulador();
+}
+
+// =============================================================
+// PAINEL DE PRODUÇÃO
+// =============================================================
+const EQUIPES_PR_LIST = [
+  'COMERCIAL FRANCISCO BELTRAO','COMERCIAL LISANDRA INTERIOR','COMERCIAL LISANDRA CAPITAL',
+  'COMERCIAL LOHAYNE','EQUIPE CAMPO MOURÃO','EQUIPE CASCAVEL','EQUIPE CASCAVEL - EXECUTIVA',
+  'EQUIPE CASCAVEL - INTERNO','EQUIPE CONECTON','EQUIPE CURITIBA - INTERNO','EQUIPE KL',
+  'EQUIPE LONDRINA','EQUIPE LONDRINA - INTERNO','EQUIPE MARINGA','EQUIPE PONTA GROSSA',
+  'PAP UNIAO DA VITORIA'
+];
+
+let prodExibirReceita = false;
+let prodStatusSelecionados = new Set();
+
+function toggleReceita() {
+  prodExibirReceita = !prodExibirReceita;
+  const el = document.getElementById('prod-toggle-receita');
+  el.classList.toggle('active', prodExibirReceita);
+  renderProducao();
+}
+
+function toggleStatusChip(status, el) {
+  if (prodStatusSelecionados.has(status)) {
+    prodStatusSelecionados.delete(status);
+    el.classList.remove('selected');
+  } else {
+    prodStatusSelecionados.add(status);
+    el.classList.add('selected');
+  }
+  atualizarContadorStatus();
+  renderProducao();
+}
+
+function selectAllStatus() {
+  document.querySelectorAll('.prod-chip[data-status]').forEach(el => {
+    prodStatusSelecionados.add(el.dataset.status);
+    el.classList.add('selected');
+  });
+  atualizarContadorStatus();
+  renderProducao();
+}
+
+function clearAllStatus() {
+  prodStatusSelecionados.clear();
+  document.querySelectorAll('.prod-chip[data-status]').forEach(el => el.classList.remove('selected'));
+  atualizarContadorStatus();
+  renderProducao();
+}
+
+function atualizarContadorStatus() {
+  const n = prodStatusSelecionados.size;
+  document.getElementById('prod-status-count').textContent = n > 0 ? `(${n} selecionados)` : '(nenhum selecionado)';
+}
+
+function initProducao() {
+  if (!ALL_DATA.length) return;
+
+  // Popula Estado
+  const estados = new Set();
+  ALL_DATA.forEach(r => {
+    const est = EQUIPES_ESTADOS[r['EQUIPE']];
+    if (est) estados.add(est);
+  });
+  fillProdSelect('prod-estado', ['Todos', ...[...estados].sort()]);
+
+  // Popula Gestor/Equipe em cascata
+  onProdFilterChange('estado');
+
+  // Popula grupos (excluindo itens não relevantes)
+  const gruposExcluidos = new Set(['VOZ - Novo', 'VOZ - Portabilidade', 'APARELHO']);
+  const grupos = new Set();
+  ALL_DATA.forEach(r => { if (r['GRUPO'] && !gruposExcluidos.has(r['GRUPO'])) grupos.add(r['GRUPO']); });
+  const selGrupo = document.getElementById('prod-grupo');
+  const curGrupo = selGrupo.value;
+  selGrupo.innerHTML = '<option value="Geral">Geral</option>' +
+    [...grupos].sort().map(g => `<option value="${g}">${g}</option>`).join('');
+  if ([...grupos].includes(curGrupo)) selGrupo.value = curGrupo;
+
+  // Popula status chips dinamicamente da base (sempre atualizado)
+  const statusSet = new Set();
+  ALL_DATA.forEach(r => { if (r['FILA']) statusSet.add(r['FILA']); });
+  const statusList = [...statusSet].sort();
+
+  const chipsEl = document.getElementById('prod-status-chips');
+  // Remove chips que não existem mais na base, preserva seleção dos que existem
+  const selectedAntes = new Set(prodStatusSelecionados);
+  prodStatusSelecionados.clear();
+  chipsEl.innerHTML = statusList.map(s => {
+    const sel = selectedAntes.has(s);
+    if (sel) prodStatusSelecionados.add(s);
+    return `<div class="prod-chip${sel ? ' selected' : ''}" data-status="${s}" onclick="toggleStatusChip('${s}',this)">${s}</div>`;
+  }).join('');
+  atualizarContadorStatus();
+  renderProducao();
+}
+
+function fillProdSelect(id, opts) {
+  const sel = document.getElementById(id);
+  const cur = sel.value;
+  sel.innerHTML = opts.map(o => `<option value="${o}">${o}</option>`).join('');
+  if (opts.includes(cur)) sel.value = cur;
+}
+
+function onProdFilterChange(level) {
+  const estado = document.getElementById('prod-estado').value;
+  const gestor = document.getElementById('prod-gestor').value;
+
+  const gestores = new Set();
+  const equipes = new Set();
+
+  ALL_DATA.forEach(r => {
+    const eq  = r['EQUIPE'];
+    const est = EQUIPES_ESTADOS[eq] || '';
+    const ges = EQUIPES_GESTORES[eq] || '';
+    if (estado === 'Todos' || est === estado) {
+      if (ges) gestores.add(ges);
+      if (gestor === 'Todos' || ges === gestor) {
+        if (eq) equipes.add(eq);
+      }
+    }
+  });
+
+  if (level === 'estado') {
+    fillProdSelect('prod-gestor', ['Todos', ...[...gestores].sort()]);
+    fillProdSelect('prod-equipe', ['Todas', ...[...equipes].sort()]);
+  } else if (level === 'gestor') {
+    fillProdSelect('prod-equipe', ['Todas', ...[...equipes].sort()]);
+  }
+  renderProducao();
+}
+
+function checkUF(filtro, uf) {
+  if (filtro === 'Geral') return true;
+  const u = (uf || '').trim().toUpperCase();
+  if (filtro === 'RPS') return ['RS','PR','SC'].includes(u);
+  return u === filtro;
+}
+
+function renderProducao() {
+  if (!ALL_DATA.length) return;
+
+  const filtroEstado = document.getElementById('prod-estado')?.value || 'Todos';
+  const filtroGestor = document.getElementById('prod-gestor')?.value || 'Todos';
+  const filtroEquipe = document.getElementById('prod-equipe')?.value || 'Todas';
+  const filtroUF     = document.getElementById('prod-uf').value;
+  const filtroGrupo  = document.getElementById('prod-grupo').value;
+  const statusArr    = [...prodStatusSelecionados];
+
+  const resultArea = document.getElementById('prod-result-area');
+
+  if (statusArr.length === 0) {
+    resultArea.innerHTML = '<div class="prod-empty">Selecione ao menos um status de fila para visualizar os dados.</div>';
+    return;
+  }
+
+  // Agrega: tag → status → { qtd, receita }
+  const agg = {};
+  const tagsMap = { ...MAPEAMENTO_TAGS };
+  Object.keys(tagsMap).forEach(tag => {
+    agg[tag] = {};
+    statusArr.forEach(s => agg[tag][s] = { qtd: 0, rec: 0 });
+  });
+
+  ALL_DATA.forEach(r => {
+    const equipe = r['EQUIPE'] || '';
+    const uf     = r['UF'] || '';
+    const grupo  = r['GRUPO'] || '';
+    const fila   = r['FILA'] || '';
+    const tag    = r['TAGS ATIVIDADE'] || '';
+    const qtd    = parseInt(r['QUANTIDADE']) || 1;
+    const valor  = parseFloat((r['VALOR UNIT'] || '0').toString().replace(',', '.')) || 0;
+
+    // Filtro estado/gestor/equipe em cascata
+    const est = EQUIPES_ESTADOS[equipe] || '';
+    const ges = EQUIPES_GESTORES[equipe] || '';
+    if (filtroEstado !== 'Todos' && est !== filtroEstado) return;
+    if (filtroGestor !== 'Todos' && ges !== filtroGestor) return;
+    if (filtroEquipe !== 'Todas' && equipe !== filtroEquipe) return;
+
+    // Filtro UF
+    if (!checkUF(filtroUF, uf)) return;
+
+    // Filtro grupo
+    const gruposExcluidos = new Set(['VOZ - Novo', 'VOZ - Portabilidade', 'APARELHO']);
+    if (filtroGrupo === 'Geral' && gruposExcluidos.has(grupo)) return;
+    if (filtroGrupo !== 'Geral' && grupo !== filtroGrupo) return;
+
+    // Filtro status
+    if (!statusArr.includes(fila)) return;
+
+    // Tag nas unidades foco
+    if (!tagsMap[tag]) return;
+
+    if (!agg[tag]) agg[tag] = {};
+    if (!agg[tag][fila]) agg[tag][fila] = { qtd: 0, rec: 0 };
+
+    agg[tag][fila].qtd += qtd;
+    if (prodExibirReceita) {
+      const recCents = grupo === 'NET PJ - VIRTUA'
+        ? qtd * Math.round(valor * 100)
+        : Math.round(valor * 100);
+      agg[tag][fila].rec += recCents;
+    }
+  });
+
+  // Monta colunas de status que têm dado
+  const colsComDado = statusArr.filter(s =>
+    Object.values(agg).some(tagData => (tagData[s]?.qtd || 0) > 0)
+  );
+  const colsFinal = colsComDado.length > 0 ? colsComDado : statusArr;
+
+  // Linhas por unidade
+  const linhas = Object.entries(tagsMap).sort((a,b) => a[1].localeCompare(b[1])).map(([tag, nome]) => {
+    const totalQtd = colsFinal.reduce((s, st) => s + (agg[tag]?.[st]?.qtd || 0), 0);
+    const totalRec = colsFinal.reduce((s, st) => s + (agg[tag]?.[st]?.rec || 0), 0);
+    return { tag, nome, cells: colsFinal.map(s => agg[tag]?.[s] || { qtd: 0, rec: 0 }), totalQtd, totalRec };
+  });
+
+  // Totais por coluna
+  const totaisCol = colsFinal.map((_, ci) => ({
+    qtd: linhas.reduce((s, r) => s + r.cells[ci].qtd, 0),
+    rec: linhas.reduce((s, r) => s + r.cells[ci].rec, 0)
+  }));
+  const totalGeralQtd = linhas.reduce((s, r) => s + r.totalQtd, 0);
+  const totalGeralRec = linhas.reduce((s, r) => s + r.totalRec, 0);
+
+  const fmtRec = v => 'R$ ' + (v/100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  const thStatus = colsFinal.map(s => prodExibirReceita
+    ? `<th colspan="2">${s}</th>`
+    : `<th>${s}</th>`
+  ).join('');
+
+  const thSub = prodExibirReceita
+    ? colsFinal.map(() => `<th style="font-size:9px">Qtd</th><th style="font-size:9px">Receita</th>`).join('')
+    : '';
+
+  const thTotal = prodExibirReceita
+    ? `<th colspan="2" style="border-left:2px solid rgba(255,255,255,0.3)">Total</th>`
+    : `<th style="border-left:2px solid rgba(255,255,255,0.3)">Total</th>`;
+
+  resultArea.innerHTML = `
+    <div class="section-header">
+      <span class="section-title">Produção por Unidade</span>
+      <span class="count-badge">${colsFinal.length} status · ${totalGeralQtd.toLocaleString('pt-BR')} registros</span>
+    </div>
+    <div class="prod-table-wrap"><div class="prod-table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th rowspan="${prodExibirReceita ? 2 : 1}" style="vertical-align:middle;text-align:left">Unidade</th>
+            ${thStatus}
+            ${thTotal}
+          </tr>
+          ${prodExibirReceita ? `<tr>${thSub}<th style="font-size:9px;border-left:2px solid rgba(255,255,255,0.3)">Qtd</th><th style="font-size:9px">Receita</th></tr>` : ''}
+        </thead>
+        <tbody>
+          ${linhas.map(r => `
+            <tr>
+              <td>${r.nome}</td>
+              ${r.cells.map(c => prodExibirReceita
+                ? `<td class="${c.qtd === 0 ? 'prod-cell-zero' : 'prod-cell-val'}">${c.qtd === 0 ? '—' : c.qtd.toLocaleString('pt-BR')}</td>
+                   <td class="${c.rec === 0 ? 'prod-cell-zero' : ''}" style="font-size:11px">${c.rec === 0 ? '—' : fmtRec(c.rec)}</td>`
+                : `<td class="${c.qtd === 0 ? 'prod-cell-zero' : 'prod-cell-val'}">${c.qtd === 0 ? '—' : c.qtd.toLocaleString('pt-BR')}</td>`
+              ).join('')}
+              <td class="prod-cell-total">${r.totalQtd === 0 ? '—' : r.totalQtd.toLocaleString('pt-BR')}</td>
+              ${prodExibirReceita ? `<td class="prod-cell-total" style="font-size:11px">${r.totalRec === 0 ? '—' : fmtRec(r.totalRec)}</td>` : ''}
+            </tr>`).join('')}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td>TOTAL GERAL</td>
+            ${totaisCol.map(c => prodExibirReceita
+              ? `<td>${c.qtd.toLocaleString('pt-BR')}</td><td style="font-size:11px">${fmtRec(c.rec)}</td>`
+              : `<td>${c.qtd.toLocaleString('pt-BR')}</td>`
+            ).join('')}
+            <td class="prod-cell-total">${totalGeralQtd.toLocaleString('pt-BR')}</td>
+            ${prodExibirReceita ? `<td class="prod-cell-total" style="font-size:11px">${fmtRec(totalGeralRec)}</td>` : ''}
+          </tr>
+        </tfoot>
+      </table>
+    </div></div>`;
+}
+
+function switchTab(name, el) {
+  document.querySelectorAll('.tab-btn').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  if (name === 'simulador') initSimulador();
+  if (name === 'producao') initProducao();
+}
+
+function updateClock() {
+  document.getElementById('clock').textContent = new Date().toLocaleTimeString('pt-BR');
+}
+setInterval(updateClock, 1000);
+updateClock();
+loadData();
+</script>
+</body>
+</html>
