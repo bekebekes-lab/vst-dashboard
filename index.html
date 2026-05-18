@@ -470,6 +470,7 @@
       </div>
 
       <button class="btn-sim-calcular" onclick="renderSimulador()">↻ Recalcular</button>
+      <button class="btn-sim-calcular" style="background:#16a34a;margin-left:4px" onclick="salvarTudoSimulador()" id="btn-salvar-sim">💾 Salvar</button>
     </div>
 
     <!-- KPI SUMMARY -->
@@ -1808,7 +1809,31 @@ async function carregarMetasDoBanco() {
   });
 }
 
-async function salvarMetasNoBanco() {
+async function salvarTudoSimulador() {
+  const btn = document.getElementById('btn-salvar-sim');
+  btn.textContent = '⏳ Salvando...';
+  btn.disabled = true;
+  try {
+    await salvarMetasNoBanco();
+    await salvarConfigSimulador();
+    btn.textContent = '✅ Salvo!';
+    btn.style.background = '#15803d';
+    setTimeout(() => {
+      btn.textContent = '💾 Salvar';
+      btn.style.background = '#16a34a';
+      btn.disabled = false;
+    }, 2000);
+  } catch(e) {
+    btn.textContent = '❌ Erro';
+    btn.style.background = '#dc2626';
+    setTimeout(() => {
+      btn.textContent = '💾 Salvar';
+      btn.style.background = '#16a34a';
+      btn.disabled = false;
+    }, 2000);
+  }
+}
+
   if (!USUARIO_ATUAL) return;
   if (!['admin', 'gestor_macro'].includes(USUARIO_ATUAL.perfil)) {
     alert('Você não tem permissão para editar metas.');
