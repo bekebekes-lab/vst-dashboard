@@ -1745,13 +1745,15 @@ async function carregarPerfil(user) {
   // Controla abas visíveis por perfil
   aplicarPermissoes();
 
-  // Carrega metas do banco
-  await carregarMetasDoBanco();
-  await carregarConfigSimulador();
-
   // Esconde login, mostra dashboard
   document.getElementById('login-screen').classList.remove('active');
   loadData();
+
+  // Carrega metas e config após o dashboard estar visível
+  setTimeout(async () => {
+    await carregarMetasDoBanco();
+    await carregarConfigSimulador();
+  }, 500);
 }
 
 function aplicarPermissoes() {
