@@ -5,7 +5,85 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>VST Dashboard Gerencial</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
+  /* LOGIN SCREEN */
+  #login-screen {
+    display: none;
+    position: fixed; inset: 0; z-index: 9999;
+    background: #f5f5f5;
+    align-items: center; justify-content: center;
+  }
+  #login-screen.active { display: flex; }
+  .login-card {
+    background: #fff;
+    border-radius: 16px;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.12);
+    padding: 48px 40px;
+    width: 100%; max-width: 400px;
+  }
+  .login-logo {
+    background: #CC0000;
+    color: #fff;
+    width: 56px; height: 56px;
+    border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px; font-weight: 700;
+    margin-bottom: 24px;
+    letter-spacing: -1px;
+  }
+  .login-title { font-size: 22px; font-weight: 700; color: #1a1a1a; margin-bottom: 4px; }
+  .login-sub { font-size: 13px; color: #666; margin-bottom: 32px; }
+  .login-field { margin-bottom: 16px; }
+  .login-field label { display: block; font-size: 12px; font-weight: 600; color: #444; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .login-field input {
+    width: 100%; padding: 11px 14px;
+    border: 1.5px solid #e8e8e8; border-radius: 8px;
+    font-size: 14px; font-family: 'DM Sans', sans-serif;
+    outline: none; transition: border-color 0.15s;
+    background: #fafafa;
+  }
+  .login-field input:focus { border-color: #CC0000; background: #fff; }
+  .login-btn {
+    width: 100%; padding: 13px;
+    background: #CC0000; color: #fff;
+    border: none; border-radius: 8px;
+    font-size: 15px; font-weight: 600;
+    cursor: pointer; font-family: 'DM Sans', sans-serif;
+    margin-top: 8px; transition: background 0.2s;
+  }
+  .login-btn:hover { background: #990000; }
+  .login-btn:disabled { background: #ccc; cursor: not-allowed; }
+  .login-error {
+    background: #fff0f0; border: 1px solid #ffcccc;
+    color: #cc0000; border-radius: 8px;
+    padding: 10px 14px; font-size: 13px;
+    margin-bottom: 16px; display: none;
+  }
+  .login-error.active { display: block; }
+  .login-footer { text-align: center; font-size: 12px; color: #999; margin-top: 24px; }
+
+  /* USER BADGE no topbar */
+  .user-badge {
+    display: flex; align-items: center; gap: 8px;
+    background: rgba(255,255,255,0.15);
+    border-radius: 20px; padding: 4px 12px 4px 6px;
+    font-size: 12px; cursor: pointer;
+    transition: background 0.2s;
+  }
+  .user-badge:hover { background: rgba(255,255,255,0.25); }
+  .user-avatar {
+    width: 24px; height: 24px; border-radius: 50%;
+    background: rgba(255,255,255,0.3);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 700;
+  }
+  .user-perfil-badge {
+    background: rgba(255,255,255,0.2);
+    border-radius: 10px; padding: 1px 6px;
+    font-size: 10px; font-family: 'DM Mono', monospace;
+  }
+</style>
   :root {
     --red: #CC0000;
     --red-light: #fff0f0;
@@ -215,6 +293,26 @@
 </head>
 <body>
 
+<!-- LOGIN SCREEN -->
+<div id="login-screen" class="active">
+  <div class="login-card">
+    <div class="login-logo">VST</div>
+    <div class="login-title">Bem-vindo</div>
+    <div class="login-sub">Acesse o Dashboard Gerencial VST</div>
+    <div class="login-error" id="login-error"></div>
+    <div class="login-field">
+      <label>E-mail</label>
+      <input type="email" id="login-email" placeholder="seu@email.com" autocomplete="email">
+    </div>
+    <div class="login-field">
+      <label>Senha</label>
+      <input type="password" id="login-senha" placeholder="••••••••" autocomplete="current-password">
+    </div>
+    <button class="login-btn" id="login-btn" onclick="fazerLogin()">Entrar</button>
+    <div class="login-footer">VST Dashboard · Acesso restrito</div>
+  </div>
+</div>
+
 <!-- TOPBAR -->
 <div class="topbar">
   <div class="topbar-left">
@@ -225,6 +323,11 @@
     <span class="last-update" id="last-update"></span>
     <button class="btn-refresh" onclick="loadData()">↻ Atualizar</button>
     <span class="clock" id="clock"></span>
+    <div class="user-badge" onclick="fazerLogout()" title="Clique para sair">
+      <div class="user-avatar" id="user-avatar">?</div>
+      <span id="user-nome">...</span>
+      <span class="user-perfil-badge" id="user-perfil"></span>
+    </div>
   </div>
 </div>
 
@@ -1577,12 +1680,210 @@ function switchTab(name, el) {
   if (name === 'producao') initProducao();
 }
 
+// ─── SUPABASE CONFIG ────────────────────────────────────────────────────────
+const SUPA_URL = 'https://ruvxjvgsyrgculthrugq.supabase.co';
+const SUPA_KEY = 'sb_publishable_VmQkaqxxHZzwXvfNZlDOlg_CgRQJGKF';
+const supa = supabase.createClient(SUPA_URL, SUPA_KEY);
+
+let USUARIO_ATUAL = null;
+
+// ─── LOGIN / LOGOUT ──────────────────────────────────────────────────────────
+async function fazerLogin() {
+  const email = document.getElementById('login-email').value.trim();
+  const senha = document.getElementById('login-senha').value;
+  const btn   = document.getElementById('login-btn');
+  const erro  = document.getElementById('login-error');
+
+  if (!email || !senha) {
+    erro.textContent = 'Preencha e-mail e senha.';
+    erro.classList.add('active');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Entrando...';
+  erro.classList.remove('active');
+
+  const { data, error } = await supa.auth.signInWithPassword({ email, password: senha });
+
+  if (error) {
+    erro.textContent = 'E-mail ou senha incorretos.';
+    erro.classList.add('active');
+    btn.disabled = false;
+    btn.textContent = 'Entrar';
+    return;
+  }
+
+  await carregarPerfil(data.user);
+}
+
+async function carregarPerfil(user) {
+  // Busca perfil na tabela usuarios
+  const { data: perfil } = await supa
+    .from('usuarios')
+    .select('*')
+    .eq('id', user.id)
+    .single();
+
+  USUARIO_ATUAL = perfil || {
+    id: user.id,
+    email: user.email,
+    nome: user.email.split('@')[0],
+    perfil: 'consultor',
+    gestor_ref: null,
+    equipe_ref: null,
+    consultor_ref: null
+  };
+
+  // Atualiza topbar
+  const nome = USUARIO_ATUAL.nome || USUARIO_ATUAL.email.split('@')[0];
+  const iniciais = nome.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+  document.getElementById('user-avatar').textContent = iniciais;
+  document.getElementById('user-nome').textContent = nome;
+  document.getElementById('user-perfil').textContent = USUARIO_ATUAL.perfil;
+
+  // Controla abas visíveis por perfil
+  aplicarPermissoes();
+
+  // Carrega metas do banco
+  await carregarMetasDoBanco();
+  await carregarConfigSimulador();
+
+  // Esconde login, mostra dashboard
+  document.getElementById('login-screen').classList.remove('active');
+  loadData();
+}
+
+function aplicarPermissoes() {
+  const p = USUARIO_ATUAL.perfil;
+  const tabs = {
+    'producao':  ['admin', 'gestor_macro', 'gestor'],
+    'simulador': ['admin', 'gestor_macro'],
+    'carteira':  ['admin', 'gestor_macro']
+  };
+
+  // Esconde abas não permitidas
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    const tab = btn.getAttribute('onclick')?.match(/'(\w+)'/)?.[1];
+    if (tab && tabs[tab] && !tabs[tab].includes(p)) {
+      btn.style.display = 'none';
+    }
+  });
+
+  // Trava filtros por perfil
+  if (p === 'gestor' && USUARIO_ATUAL.gestor_ref) {
+    setTimeout(() => {
+      const sel = document.getElementById('f-gestor');
+      if (sel) { sel.value = USUARIO_ATUAL.gestor_ref; sel.disabled = true; }
+      onFilterChange('gestor');
+    }, 1000);
+  }
+  if (p === 'consultor' && USUARIO_ATUAL.consultor_ref) {
+    setTimeout(() => {
+      const sel = document.getElementById('f-consultor');
+      if (sel) { sel.value = USUARIO_ATUAL.consultor_ref; sel.disabled = true; }
+      render();
+    }, 1000);
+  }
+}
+
+async function fazerLogout() {
+  if (!confirm('Deseja sair do dashboard?')) return;
+  await supa.auth.signOut();
+  USUARIO_ATUAL = null;
+  document.getElementById('login-screen').classList.add('active');
+  document.getElementById('login-email').value = '';
+  document.getElementById('login-senha').value = '';
+  document.getElementById('login-btn').disabled = false;
+  document.getElementById('login-btn').textContent = 'Entrar';
+}
+
+// ─── METAS DO BANCO ──────────────────────────────────────────────────────────
+async function carregarMetasDoBanco() {
+  const { data } = await supa.from('metas_carteira').select('*');
+  if (!data) return;
+  // Preenche inputs do simulador com valores do banco
+  data.forEach(m => {
+    const inp = document.querySelector(`#sim-metas-grid input[data-tag="${m.tag}"]`);
+    if (inp) inp.value = m.qtd_linhas || 0;
+  });
+}
+
+async function salvarMetasNoBanco() {
+  if (!USUARIO_ATUAL) return;
+  if (!['admin', 'gestor_macro'].includes(USUARIO_ATUAL.perfil)) {
+    alert('Você não tem permissão para editar metas.');
+    return;
+  }
+  const metas = getMetasInput();
+  const rows = Object.entries(metas).map(([tag, qtd]) => ({
+    tag,
+    nome_unidade: MAPEAMENTO_TAGS[tag] || tag,
+    qtd_linhas: qtd,
+    atualizado_por: USUARIO_ATUAL.id,
+    atualizado_em: new Date().toISOString()
+  }));
+
+  const { error } = await supa
+    .from('metas_carteira')
+    .upsert(rows, { onConflict: 'tag' });
+
+  if (error) {
+    alert('Erro ao salvar metas: ' + error.message);
+  } else {
+    alert('✅ Metas salvas com sucesso!');
+  }
+}
+
+async function carregarConfigSimulador() {
+  const { data } = await supa.from('config_simulador').select('*');
+  if (!data) return;
+  data.forEach(c => {
+    const map = {
+      'mult_virtua':   'mult-virtua',
+      'mult_voz_novo': 'mult-voz-novo',
+      'mult_voz_port': 'mult-voz-port',
+      'vlr_linha':     'mult-vlr-linha'
+    };
+    const id = map[c.chave];
+    if (id) {
+      const el = document.getElementById(id);
+      if (el) el.value = c.valor;
+    }
+  });
+}
+
+async function salvarConfigSimulador() {
+  if (!USUARIO_ATUAL) return;
+  if (!['admin', 'gestor_macro'].includes(USUARIO_ATUAL.perfil)) return;
+
+  const configs = [
+    { chave: 'mult_virtua',   valor: parseFloat(document.getElementById('mult-virtua')?.value) || 4 },
+    { chave: 'mult_voz_novo', valor: parseFloat(document.getElementById('mult-voz-novo')?.value) || 5.5 },
+    { chave: 'mult_voz_port', valor: parseFloat(document.getElementById('mult-voz-port')?.value) || 7.5 },
+    { chave: 'vlr_linha',     valor: parseFloat(document.getElementById('mult-vlr-linha')?.value) || 2.60 }
+  ];
+
+  await supa.from('config_simulador').upsert(configs, { onConflict: 'chave' });
+}
+
+// ─── VERIFICA SESSÃO AO CARREGAR ─────────────────────────────────────────────
+(async () => {
+  const { data: { session } } = await supa.auth.getSession();
+  if (session?.user) {
+    await carregarPerfil(session.user);
+  }
+  // Enter no campo de senha faz login
+  document.getElementById('login-senha')?.addEventListener('keydown', e => {
+    if (e.key === 'Enter') fazerLogin();
+  });
+})();
+
 function updateClock() {
   document.getElementById('clock').textContent = new Date().toLocaleTimeString('pt-BR');
 }
 setInterval(updateClock, 1000);
 updateClock();
-loadData();
 </script>
 </body>
 </html>
