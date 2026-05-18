@@ -270,6 +270,10 @@
   .sim-meta-item input:focus { border-color: var(--red); }
   .btn-sim-calcular { align-self: flex-end; padding: 8px 18px; background: var(--red); color: #fff; border: none; border-radius: var(--radius-sm); font-size: 13px; font-weight: 600; cursor: pointer; font-family: 'DM Sans', sans-serif; transition: background 0.15s; white-space: nowrap; }
   .btn-sim-calcular:hover { background: var(--red-dark); }
+  .sim-btn-discrete { padding: 4px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--surface2); color: var(--text2); font-size: 11px; font-weight: 500; cursor: pointer; font-family: 'DM Sans', sans-serif; transition: all 0.15s; }
+  .sim-btn-discrete:hover { border-color: var(--text2); color: var(--text); }
+  .sim-btn-save { border-color: #d1d5db; color: var(--text2); }
+  .sim-btn-save:hover { border-color: #6b7280; }
   /* KPI cards simulador */
   .sim-kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
   .sim-kpi-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; }
@@ -463,14 +467,16 @@
 
       <!-- Metas -->
       <div class="sim-section sim-section-metas">
-        <div class="sim-section-label">Metas de Linhas por Unidade</div>
-        <div class="sim-metas-grid" id="sim-metas-grid">
-          <!-- preenchido via JS -->
+        <div class="sim-section-label" style="display:flex;align-items:center;justify-content:space-between">
+          <span>Metas de Linhas por Unidade</span>
+          <div style="display:flex;gap:6px">
+            <button class="sim-btn-discrete" onclick="renderSimulador()">↻ Recalcular</button>
+            <button class="sim-btn-discrete sim-btn-save" onclick="salvarTudoSimulador()" id="btn-salvar-sim">Salvar</button>
+          </div>
         </div>
+        <div class="sim-metas-grid" id="sim-metas-grid"></div>
       </div>
 
-      <button class="btn-sim-calcular" onclick="renderSimulador()">↻ Recalcular</button>
-      <button class="btn-sim-calcular" style="background:#16a34a;margin-left:4px" onclick="salvarTudoSimulador()" id="btn-salvar-sim">💾 Salvar</button>
     </div>
 
     <!-- KPI SUMMARY -->
@@ -1226,20 +1232,20 @@ function renderSimulador() {
 
   const visaoLabels = { ativo: 'Ativo/Instalado', ativacao: '+ Ativação', aprovados: '+ Aprovados', geral: 'Geral (todas as filas)' };
 
-  // Cores por status de fila
+  // Cores por status de fila — discretas
   const filaColors = {
-    'Ativo/Instalado':            { bg: '#dcfce7', color: '#15803d' },
-    'Portabilidade Agendada':     { bg: '#dbeafe', color: '#1d4ed8' },
-    'Aguardando Instalação':      { bg: '#e0e7ff', color: '#4338ca' },
-    'Aguardando NF':              { bg: '#fef9c3', color: '#a16207' },
-    'Aguardando Portabilidade':   { bg: '#fce7f3', color: '#be185d' },
-    'Para Input':                 { bg: '#f3e8ff', color: '#7e22ce' },
-    'Validação Pendente':         { bg: '#ffedd5', color: '#c2410c' },
-    'Análise de Crédito':         { bg: '#fee2e2', color: '#b91c1c' },
+    'Ativo/Instalado':            { bg: '#f0fdf4', color: '#166534' },
+    'Portabilidade Agendada':     { bg: '#f0f9ff', color: '#075985' },
+    'Aguardando Instalação':      { bg: '#f5f3ff', color: '#4c1d95' },
+    'Aguardando NF':              { bg: '#fefce8', color: '#713f12' },
+    'Aguardando Portabilidade':   { bg: '#fdf4ff', color: '#701a75' },
+    'Para Input':                 { bg: '#f9fafb', color: '#374151' },
+    'Validação Pendente':         { bg: '#fff7ed', color: '#7c2d12' },
+    'Análise de Crédito':         { bg: '#fef2f2', color: '#7f1d1d' },
   };
   const filasPills = FILAS_POR_VISAO[simVisao].map(f => {
     const c = filaColors[f] || { bg: '#f3f4f6', color: '#374151' };
-    return `<span style="display:inline-flex;align-items:center;gap:4px;background:${c.bg};color:${c.color};border-radius:20px;padding:2px 10px;font-size:11px;font-weight:600;white-space:nowrap">${f}</span>`;
+    return `<span style="display:inline-flex;align-items:center;gap:4px;background:${c.bg};color:${c.color};border-radius:4px;padding:2px 8px;font-size:10px;font-weight:500;white-space:nowrap;border:1px solid ${c.bg}">${f}</span>`;
   }).join('');
 
   // ── KPIs ──────────────────────────────────────────────────────────────────
@@ -1803,12 +1809,12 @@ async function fazerLogout() {
 // ─── METAS DO BANCO ──────────────────────────────────────────────────────────
 async function carregarMetasDoBanco() {
   const { data } = await supa.from('metas_carteira').select('*');
-  if (!data) return;
-  // Preenche inputs do simulador com valores do banco
+  if (!data || data.length === 0) return;
   data.forEach(m => {
     const inp = document.querySelector(`#sim-metas-grid input[data-tag="${m.tag}"]`);
     if (inp) inp.value = m.qtd_linhas || 0;
   });
+  renderSimulador();
 }
 
 async function salvarTudoSimulador() {
@@ -1842,24 +1848,22 @@ async function salvarMetasNoBanco() {
     alert('Você não tem permissão para editar metas.');
     return;
   }
-  const metas = getMetasInput();
-  const rows = Object.entries(metas).map(([tag, qtd]) => ({
-    tag,
-    nome_unidade: MAPEAMENTO_TAGS[tag] || tag,
-    qtd_linhas: qtd,
-    atualizado_por: USUARIO_ATUAL.id,
-    atualizado_em: new Date().toISOString()
-  }));
-
+  const rows = [];
+  document.querySelectorAll('#sim-metas-grid input').forEach(inp => {
+    const tag = inp.dataset.tag;
+    const qtd = parseFloat(inp.value) || 0;
+    if (tag) rows.push({
+      tag,
+      nome_unidade: MAPEAMENTO_TAGS[tag] || tag,
+      qtd_linhas: qtd,
+      atualizado_por: USUARIO_ATUAL.id,
+      atualizado_em: new Date().toISOString()
+    });
+  });
   const { error } = await supa
     .from('metas_carteira')
     .upsert(rows, { onConflict: 'tag' });
-
-  if (error) {
-    alert('Erro ao salvar metas: ' + error.message);
-  } else {
-    alert('✅ Metas salvas com sucesso!');
-  }
+  if (error) throw new Error(error.message);
 }
 
 async function carregarConfigSimulador() {
