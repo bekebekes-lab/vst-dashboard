@@ -775,6 +775,13 @@ async function loadData() {
 
     buildFilters();
     render();
+    // Garante que o grid de metas e o simulador sejam atualizados
+    buildMetasGrid();
+    renderSimulador();
+    // Se produção já foi inicializada (chips existem), reinicia com novos dados
+    if (document.getElementById('prod-status-chips')?.children.length > 0) {
+      initProducao();
+    }
   } catch (e) {
     document.getElementById('metrics-area').innerHTML = '';
     document.getElementById('error-area').innerHTML = `
@@ -786,14 +793,8 @@ async function loadData() {
 }
 
 function trocarMes() {
-  // Recarrega dados e atualiza todos os painéis
+  // Recarrega dados — loadData() atualiza gerencial, simulador e produção automaticamente
   loadData();
-  // Se produção já foi inicializada, reinicia
-  if (document.getElementById('prod-status-chips')?.children.length > 0) {
-    initProducao();
-  }
-  // Recalcula simulador
-  renderSimulador();
 }
 
 function buildFilters() {
@@ -1431,7 +1432,7 @@ function renderSimulador() {
       <div class="sim-kpi-card">
         <div class="sim-kpi-label">Incentivado Estimado</div>
         <div class="sim-kpi-value">${fmtN(totais.incentivado)}</div>
-        <div class="sim-kpi-sub">min(VOZ÷12, VIRTUA÷3)</div>
+        <div class="sim-kpi-sub">min(VOZ÷${divVoz}, VIRTUA÷${divVirtua})</div>
       </div>
       <div class="sim-kpi-card">
         <div class="sim-kpi-label">40% do Faturamento</div>
