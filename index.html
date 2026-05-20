@@ -591,10 +591,7 @@
             <label>Divisor VIRTUA (incentivo 2)</label>
             <input type="number" id="div-virtua2" value="3" step="1" min="1" onchange="renderSimulador()" style="background:#f0fff4">
           </div>
-          <div class="sim-mult-item" style="border-left:2px solid var(--border);padding-left:10px;margin-left:4px;flex:2">
-            <label>Demonstrativo</label>
-            <textarea id="demonstrativo-text" rows="2" onchange="renderSimulador()" placeholder="Digite o demonstrativo aqui..." style="width:100%;resize:vertical;font-size:12px;padding:4px 6px;border:1px solid var(--border);border-radius:4px;background:#fffbe6;font-family:inherit"></textarea>
-          </div>
+
         </div>
       </div>
 
@@ -1498,10 +1495,7 @@ function renderSimulador() {
         <div class="sim-kpi-value">${fmtN(totais.incentivado2)}</div>
         <div class="sim-kpi-sub">min(VOZ÷${parseFloat(document.getElementById('div-voz2')?.value)||12}, VIRTUA÷${parseFloat(document.getElementById('div-virtua2')?.value)||3})</div>
       </div>
-      <div class="sim-kpi-card">
-        <div class="sim-kpi-label">Demonstrativo</div>
-        <div class="sim-kpi-value" style="font-size:13px;line-height:1.4">${(document.getElementById('demonstrativo-text')?.value || '—').replace(/\n/g,'<br>')}</div>
-      </div>
+
       <div class="sim-kpi-card">
         <div class="sim-kpi-label">40% do Faturamento</div>
         <div class="sim-kpi-value">${fmt(totais.pond40, 'R$ ')}</div>
