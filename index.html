@@ -611,6 +611,28 @@
 </div>
 
 <script>
+/*
+ * ══════════════════════════════════════════════════════════════════════════════
+ * MIGRAÇÃO NECESSÁRIA NO SUPABASE (rodar uma vez no SQL Editor)
+ * ══════════════════════════════════════════════════════════════════════════════
+ *
+ * 1. Adicionar coluna "periodo" à tabela metas_carteira e alterar a constraint
+ *    de unicidade de "tag" para "tag + periodo":
+ *
+ *    ALTER TABLE metas_carteira
+ *      ADD COLUMN IF NOT EXISTS periodo TEXT NOT NULL DEFAULT 'BaseCRM';
+ *
+ *    -- Remove constraint antiga (ajuste o nome real se for diferente)
+ *    ALTER TABLE metas_carteira DROP CONSTRAINT IF EXISTS metas_carteira_tag_key;
+ *
+ *    -- Cria constraint composta
+ *    ALTER TABLE metas_carteira
+ *      ADD CONSTRAINT metas_carteira_tag_periodo_key UNIQUE (tag, periodo);
+ *
+ * 2. Dados existentes sem periodo serão considerados período "BaseCRM" (mês atual).
+ *    Nenhuma ação adicional necessária — o DEFAULT já cobre isso.
+ * ══════════════════════════════════════════════════════════════════════════════
+ */
 const SHEET_ID = '1lNrHoK4vsSsjisB4C254SVMQJyP9nmtFTECdZzH4AjQ';
 const API_KEY = 'AIzaSyA5Dbl6mmIxk01KDXPAsVxNy2XYf5DEQgU';
 const SHEET_NAME = 'BaseCRM';
@@ -1259,9 +1281,10 @@ function buildMetasGrid() {
     const val = existing[tag] || '0';
     return `<div class="sim-meta-item">
       <label title="${nome}">${shortName}</label>
-      <input type="number" min="0" step="1" value="${val}" data-tag="${tag}" onchange="renderSimulador()">
+      <input type="number" min="0" step="1" value="${val}" data-tag="${tag}">
     </div>`;
   }).join('');
+  bindMetasInputs(); // registra listeners de input/auto-save
 }
 
 function getMetasInput() {
@@ -1580,7 +1603,12 @@ function renderSimulador() {
 // inicializa metas quando a aba é clicada
 function initSimulador() {
   buildMetasGrid();
-  renderSimulador();
+  // Recarrega metas do banco para o período ativo (garante sincronia ao navegar entre abas)
+  if (USUARIO_ATUAL) {
+    carregarMetasDoBanco(getPeriodoAtivo());
+  } else {
+    renderSimulador();
+  }
 }
 
 // =============================================================
@@ -1879,6 +1907,7 @@ function switchTab(name, el) {
 // ─── SUPABASE CONFIG ────────────────────────────────────────────────────────
 const SUPA_URL = 'https://kzlchetrpsfefwybaaoy.supabase.co';
 const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt6bGNoZXRycHNmZWZ3eWJhYW95Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkwNTM4NDIsImV4cCI6MjA5NDYyOTg0Mn0.4euWpZZadXe9ayg6ITY5SNueEhU094ajJv379gC9YrU';
+const SUPA_ANON = SUPA_KEY; // alias usado pelo beacon de unload
 const supa = supabase.createClient(SUPA_URL, SUPA_KEY);
 
 let USUARIO_ATUAL = null;
@@ -1947,7 +1976,7 @@ async function carregarPerfil(user) {
 
   // Carrega metas e config após o dashboard estar visível
   setTimeout(async () => {
-    await carregarMetasDoBanco();
+    await carregarMetasDoBanco(getPeriodoAtivo());
     await carregarConfigSimulador();
   }, 500);
 }
@@ -1996,39 +2025,149 @@ async function fazerLogout() {
   document.getElementById('login-btn').textContent = 'Entrar';
 }
 
-// ─── METAS DO BANCO ──────────────────────────────────────────────────────────
-async function carregarMetasDoBanco() {
-  const { data } = await supa.from('metas_carteira').select('*');
-  if (!data || data.length === 0) return;
-  data.forEach(m => {
-    const inp = document.querySelector(`#sim-metas-grid input[data-tag="${m.tag}"]`);
-    if (inp) inp.value = m.qtd_linhas || 0;
+// ─── UTILITÁRIO: período ativo ────────────────────────────────────────────────
+// Retorna o valor atual do seletor de mês (nome da aba), ex: "BaseCRM" ou "BaseCRM 042026"
+function getPeriodoAtivo() {
+  const sel = document.getElementById('mes-selector');
+  return sel ? sel.value : 'BaseCRM';
+}
+
+// ─── AUTO-SAVE: marca metas como "sujas" e agenda salvamento ─────────────────
+let _autoSaveTimer = null;
+let _metasSujas = false;   // true quando algum input foi alterado sem salvar
+
+function marcarMetasSujas() {
+  _metasSujas = true;
+  // Atualiza visual do botão para indicar alteração pendente
+  const btn = document.getElementById('btn-salvar-sim');
+  if (btn && btn.textContent === '💾 Salvar') {
+    btn.textContent = '💾 Salvar *';
+    btn.style.background = '#b45309'; // âmbar para indicar pendente
+  }
+  // Debounce: salva automaticamente 3 s após última alteração
+  clearTimeout(_autoSaveTimer);
+  _autoSaveTimer = setTimeout(() => {
+    if (_metasSujas) salvarTudoSimulador(true); // true = silencioso
+  }, 3000);
+}
+
+// Intercepta todos os inputs do grid de metas para marcar como sujo
+function bindMetasInputs() {
+  document.querySelectorAll('#sim-metas-grid input').forEach(inp => {
+    inp.removeEventListener('input', _onMetaInput);
+    inp.addEventListener('input', _onMetaInput);
   });
+}
+function _onMetaInput() {
+  renderSimulador();
+  marcarMetasSujas();
+}
+
+// Salva antes de fechar/recarregar a página
+window.addEventListener('beforeunload', (e) => {
+  if (_metasSujas && USUARIO_ATUAL) {
+    // Tenta salvar de forma síncrona usando sendBeacon (mais confiável no unload)
+    _salvarBeacon();
+    // Não retornamos string para não bloquear o fechamento com diálogo
+  }
+});
+
+function _salvarBeacon() {
+  // Monta payload para o endpoint REST do Supabase via fetch keepalive
+  if (!USUARIO_ATUAL || !['admin','gestor_macro'].includes(USUARIO_ATUAL.perfil)) return;
+  const periodo = getPeriodoAtivo();
+  const rows = [];
+  document.querySelectorAll('#sim-metas-grid input').forEach(inp => {
+    const tag = inp.dataset.tag;
+    const qtd = parseFloat(inp.value) || 0;
+    if (tag) rows.push({
+      tag,
+      periodo,
+      nome_unidade: MAPEAMENTO_TAGS[tag] || tag,
+      qtd_linhas: qtd,
+      atualizado_por: USUARIO_ATUAL.id,
+      atualizado_em: new Date().toISOString()
+    });
+  });
+  if (!rows.length) return;
+  // Usa fetch com keepalive para garantir envio mesmo durante unload
+  fetch(`${SUPA_URL}/rest/v1/metas_carteira`, {
+    method: 'POST',
+    keepalive: true,
+    headers: {
+      'Content-Type': 'application/json',
+      'apikey': SUPA_ANON,
+      'Authorization': `Bearer ${SUPA_ANON}`,
+      'Prefer': 'resolution=merge-duplicates'
+    },
+    body: JSON.stringify(rows)
+  }).catch(() => {});
+}
+
+// ─── METAS DO BANCO ───────────────────────────────────────────────────────────
+// Carrega metas para o período ativo. Se não existir registro, zera os inputs.
+async function carregarMetasDoBanco(periodo) {
+  periodo = periodo || getPeriodoAtivo();
+  // Garante que o grid existe antes de tentar popular
+  const grid = document.getElementById('sim-metas-grid');
+  if (grid && grid.children.length === 0) buildMetasGrid();
+
+  const { data, error } = await supa
+    .from('metas_carteira')
+    .select('tag, qtd_linhas')
+    .eq('periodo', periodo);
+
+  // Zera todos os inputs primeiro (garante limpeza ao trocar mês)
+  document.querySelectorAll('#sim-metas-grid input').forEach(inp => { inp.value = 0; });
+
+  if (data && data.length > 0) {
+    data.forEach(m => {
+      const inp = document.querySelector(`#sim-metas-grid input[data-tag="${m.tag}"]`);
+      if (inp) inp.value = m.qtd_linhas || 0;
+    });
+  }
+
+  bindMetasInputs(); // rebinda listeners após popular
+  _metasSujas = false;
+  const btn = document.getElementById('btn-salvar-sim');
+  if (btn) { btn.textContent = '💾 Salvar'; btn.style.background = '#16a34a'; }
   renderSimulador();
 }
 
-async function salvarTudoSimulador() {
+async function salvarTudoSimulador(silencioso = false) {
   const btn = document.getElementById('btn-salvar-sim');
-  btn.textContent = '⏳ Salvando...';
-  btn.disabled = true;
+  if (!silencioso) {
+    btn.textContent = '⏳ Salvando...';
+    btn.disabled = true;
+  }
   try {
     await salvarMetasNoBanco();
     await salvarConfigSimulador();
-    btn.textContent = '✅ Salvo!';
-    btn.style.background = '#15803d';
-    setTimeout(() => {
+    _metasSujas = false;
+    if (!silencioso) {
+      btn.textContent = '✅ Salvo!';
+      btn.style.background = '#15803d';
+      setTimeout(() => {
+        btn.textContent = '💾 Salvar';
+        btn.style.background = '#16a34a';
+        btn.disabled = false;
+      }, 2000);
+    } else {
       btn.textContent = '💾 Salvar';
       btn.style.background = '#16a34a';
       btn.disabled = false;
-    }, 2000);
+    }
   } catch(e) {
-    btn.textContent = '❌ Erro';
-    btn.style.background = '#dc2626';
-    setTimeout(() => {
-      btn.textContent = '💾 Salvar';
-      btn.style.background = '#16a34a';
-      btn.disabled = false;
-    }, 2000);
+    console.error('Erro ao salvar:', e);
+    if (!silencioso) {
+      btn.textContent = '❌ Erro';
+      btn.style.background = '#dc2626';
+      setTimeout(() => {
+        btn.textContent = '💾 Salvar';
+        btn.style.background = '#16a34a';
+        btn.disabled = false;
+      }, 2000);
+    }
   }
 }
 
@@ -2038,12 +2177,14 @@ async function salvarMetasNoBanco() {
     alert('Você não tem permissão para editar metas.');
     return;
   }
+  const periodo = getPeriodoAtivo();
   const rows = [];
   document.querySelectorAll('#sim-metas-grid input').forEach(inp => {
     const tag = inp.dataset.tag;
     const qtd = parseFloat(inp.value) || 0;
     if (tag) rows.push({
       tag,
+      periodo,                              // ← chave composta: tag + periodo
       nome_unidade: MAPEAMENTO_TAGS[tag] || tag,
       qtd_linhas: qtd,
       atualizado_por: USUARIO_ATUAL.id,
@@ -2052,22 +2193,22 @@ async function salvarMetasNoBanco() {
   });
   const { error } = await supa
     .from('metas_carteira')
-    .upsert(rows, { onConflict: 'tag' });
+    .upsert(rows, { onConflict: 'tag,periodo' }); // ← conflito por tag + periodo
   if (error) throw new Error(error.message);
 }
 
 async function carregarConfigSimulador() {
   const { data } = await supa.from('config_simulador').select('*');
   if (!data) return;
+  const map = {
+    'mult_virtua':   'mult-virtua',
+    'mult_voz_novo': 'mult-voz-novo',
+    'mult_voz_port': 'mult-voz-port',
+    'vlr_linha':     'mult-vlr-linha',
+    'div_voz':       'div-voz',
+    'div_virtua':    'div-virtua'
+  };
   data.forEach(c => {
-    const map = {
-      'mult_virtua':   'mult-virtua',
-      'mult_voz_novo': 'mult-voz-novo',
-      'mult_voz_port': 'mult-voz-port',
-      'vlr_linha':     'mult-vlr-linha',
-      'div_voz':       'div-voz',
-      'div_virtua':    'div-virtua'
-    };
     const id = map[c.chave];
     if (id) {
       const el = document.getElementById(id);
@@ -2080,7 +2221,6 @@ async function carregarConfigSimulador() {
 async function salvarConfigSimulador() {
   if (!USUARIO_ATUAL) return;
   if (!['admin', 'gestor_macro'].includes(USUARIO_ATUAL.perfil)) return;
-
   const configs = [
     { chave: 'mult_virtua',   valor: parseFloat(document.getElementById('mult-virtua')?.value)    || 4 },
     { chave: 'mult_voz_novo', valor: parseFloat(document.getElementById('mult-voz-novo')?.value)  || 5.5 },
@@ -2089,8 +2229,20 @@ async function salvarConfigSimulador() {
     { chave: 'div_voz',       valor: parseFloat(document.getElementById('div-voz')?.value)        || 12 },
     { chave: 'div_virtua',    valor: parseFloat(document.getElementById('div-virtua')?.value)     || 3 },
   ];
-
   await supa.from('config_simulador').upsert(configs, { onConflict: 'chave' });
+}
+
+// ─── TROCA DE MÊS: recarrega metas do banco para o novo período ───────────────
+// Chamado pelo select do topbar
+async function trocarMes() {
+  // Salva metas do período anterior se houver alterações pendentes
+  if (_metasSujas && USUARIO_ATUAL && ['admin','gestor_macro'].includes(USUARIO_ATUAL.perfil)) {
+    await salvarMetasNoBanco().catch(() => {});
+    _metasSujas = false;
+  }
+  loadData(); // recarrega os dados da planilha
+  // Recarrega as metas do banco para o novo período após os dados carregarem
+  setTimeout(() => carregarMetasDoBanco(), 800);
 }
 
 // ─── VERIFICA SESSÃO AO CARREGAR ─────────────────────────────────────────────
@@ -2099,7 +2251,6 @@ async function salvarConfigSimulador() {
   if (session?.user) {
     await carregarPerfil(session.user);
   }
-  // Enter no campo de senha faz login
   document.getElementById('login-senha')?.addEventListener('keydown', e => {
     if (e.key === 'Enter') fazerLogin();
   });
