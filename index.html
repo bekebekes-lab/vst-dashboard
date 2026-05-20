@@ -158,6 +158,10 @@
   @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
   .btn-refresh { background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3); color: #fff; padding: 5px 12px; border-radius: var(--radius-sm); font-size: 12px; cursor: pointer; font-family: 'DM Sans', sans-serif; transition: background 0.2s; }
   .btn-refresh:hover { background: rgba(255,255,255,0.25); }
+  .mes-selector-wrap { display: flex; align-items: center; gap: 6px; }
+  .mes-label { font-size: 11px; color: rgba(255,255,255,0.7); white-space: nowrap; }
+  .mes-select { background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3); color: #fff; padding: 5px 10px; border-radius: var(--radius-sm); font-size: 12px; font-family: 'DM Sans', sans-serif; cursor: pointer; outline: none; }
+  .mes-select option { background: #333; color: #fff; }
   .last-update { font-size: 11px; opacity: 0.7; }
 
   /* TABS */
@@ -423,9 +427,20 @@
 <div class="topbar">
   <div class="topbar-left">
     <h1>VST Dashboard Gerencial</h1>
-    <span class="topbar-badge">BaseCRM Live</span>
+    <span class="topbar-badge" id="topbar-badge">BaseCRM Live</span>
   </div>
   <div class="topbar-right">
+    <div class="mes-selector-wrap">
+      <label class="mes-label">Período:</label>
+      <select id="mes-selector" onchange="trocarMes()" class="mes-select">
+        <option value="BaseCRM">Atual (Live)</option>
+        <option value="BaseCRM 052026">Mai/2026</option>
+        <option value="BaseCRM 042026">Abr/2026</option>
+        <option value="BaseCRM 032026">Mar/2026</option>
+        <option value="BaseCRM 022026">Fev/2026</option>
+        <option value="BaseCRM 012026">Jan/2026</option>
+      </select>
+    </div>
     <span class="last-update" id="last-update"></span>
     <button class="btn-refresh" onclick="loadData()">↻ Atualizar</button>
     <span class="clock" id="clock"></span>
@@ -439,16 +454,16 @@
 
 <!-- TABS -->
 <div class="tabs-nav">
-  <button class="tab-btn active" onclick="switchTab('gerencial', this)">📊 Gerencial</button>
+  <button class="tab-btn active" onclick="switchTab('simulador', this)">🎯 Simulador de Carteira</button>
+  <button class="tab-btn" onclick="switchTab('gerencial', this)">📊 Gerencial</button>
   <button class="tab-btn" onclick="switchTab('producao', this)">🏭 Produção</button>
-  <button class="tab-btn" onclick="switchTab('simulador', this)">🎯 Simulador de Carteira</button>
 </div>
 
 <!-- CONTENT -->
 <div class="content">
 
   <!-- TAB GERENCIAL -->
-  <div class="tab-panel active" id="tab-gerencial">
+  <div class="tab-panel" id="tab-gerencial">
     <div class="filters-bar">
       <div class="filter-group"><label>Estado</label><select id="f-estado" onchange="onFilterChange('estado')"><option>Todos</option></select></div>
       <div class="filter-group"><label>Gestor</label><select id="f-gestor" onchange="onFilterChange('gestor')"><option>Todos</option></select></div>
@@ -529,7 +544,7 @@
   </div>
 
   <!-- TAB SIMULADOR -->
-  <div class="tab-panel" id="tab-simulador">
+  <div class="tab-panel active" id="tab-simulador">
 
     <!-- CONTROLES TOPO -->
     <div class="sim-controls-bar">
@@ -564,6 +579,14 @@
           <div class="sim-mult-item" style="border-left:2px solid var(--border);padding-left:10px;margin-left:4px">
             <label>R$ por linha (carteira)</label>
             <input type="number" id="mult-vlr-linha" value="2.60" step="0.10" min="0.01" onchange="renderSimulador()" style="background:#fffbe6">
+          </div>
+          <div class="sim-mult-item" style="border-left:2px solid var(--border);padding-left:10px;margin-left:4px">
+            <label>Divisor VOZ (incentivo)</label>
+            <input type="number" id="div-voz" value="12" step="1" min="1" onchange="renderSimulador()" style="background:#f0f9ff">
+          </div>
+          <div class="sim-mult-item">
+            <label>Divisor VIRTUA (incentivo)</label>
+            <input type="number" id="div-virtua" value="3" step="1" min="1" onchange="renderSimulador()" style="background:#f0f9ff">
           </div>
         </div>
       </div>
@@ -716,13 +739,21 @@ function initials(name) {
 }
 
 async function loadData() {
+  const mesSel = document.getElementById('mes-selector');
+  const sheetName = mesSel ? mesSel.value : 'BaseCRM';
+  const isLive = sheetName === 'BaseCRM';
+
+  // Atualiza badge
+  const badge = document.getElementById('topbar-badge');
+  if (badge) badge.textContent = isLive ? 'BaseCRM Live' : sheetName;
+
   document.getElementById('error-area').innerHTML = '';
   document.getElementById('metrics-area').innerHTML = '<div class="loading-state"><div class="loading-spinner"></div><p>Carregando dados da BaseCRM...</p></div>';
   document.getElementById('table-area').innerHTML = '';
   document.getElementById('stats-row-area').innerHTML = '';
 
   try {
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(SHEET_NAME)}?key=${API_KEY}`;
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(sheetName)}?key=${API_KEY}`;
     const res = await fetch(url);
     if (!res.ok) {
       const err = await res.json();
@@ -752,6 +783,17 @@ async function loadData() {
         ${e.message}. Verifique se a planilha está compartilhada como "Qualquer pessoa com o link pode visualizar".
       </div>`;
   }
+}
+
+function trocarMes() {
+  // Recarrega dados e atualiza todos os painéis
+  loadData();
+  // Se produção já foi inicializada, reinicia
+  if (document.getElementById('prod-status-chips')?.children.length > 0) {
+    initProducao();
+  }
+  // Recalcula simulador
+  renderSimulador();
 }
 
 function buildFilters() {
@@ -1309,9 +1351,11 @@ function calcularSimulador() {
 
   totais.diferencaLinhas = totais.meta - totais.potLinhas;
 
-  // Incentivado: mínimo entre piso VOZ e piso VIRTUA
-  const potIncVoz    = Math.floor(totais.qtdVoz    / 12);
-  const potIncVirtua = Math.floor(totais.qtdVirtua / 3);
+  // Incentivado: mínimo entre piso VOZ e piso VIRTUA (divisores editáveis)
+  const divVoz    = parseFloat(document.getElementById('div-voz')?.value)    || 12;
+  const divVirtua = parseFloat(document.getElementById('div-virtua')?.value) || 3;
+  const potIncVoz    = Math.floor(totais.qtdVoz    / divVoz);
+  const potIncVirtua = Math.floor(totais.qtdVirtua / divVirtua);
   totais.incentivado = Math.min(potIncVoz, potIncVirtua);
 
   return { resultados, totais };
@@ -1977,7 +2021,9 @@ async function carregarConfigSimulador() {
       'mult_virtua':   'mult-virtua',
       'mult_voz_novo': 'mult-voz-novo',
       'mult_voz_port': 'mult-voz-port',
-      'vlr_linha':     'mult-vlr-linha'
+      'vlr_linha':     'mult-vlr-linha',
+      'div_voz':       'div-voz',
+      'div_virtua':    'div-virtua'
     };
     const id = map[c.chave];
     if (id) {
@@ -1985,6 +2031,7 @@ async function carregarConfigSimulador() {
       if (el) el.value = c.valor;
     }
   });
+  renderSimulador();
 }
 
 async function salvarConfigSimulador() {
@@ -1992,10 +2039,12 @@ async function salvarConfigSimulador() {
   if (!['admin', 'gestor_macro'].includes(USUARIO_ATUAL.perfil)) return;
 
   const configs = [
-    { chave: 'mult_virtua',   valor: parseFloat(document.getElementById('mult-virtua')?.value) || 4 },
-    { chave: 'mult_voz_novo', valor: parseFloat(document.getElementById('mult-voz-novo')?.value) || 5.5 },
-    { chave: 'mult_voz_port', valor: parseFloat(document.getElementById('mult-voz-port')?.value) || 7.5 },
-    { chave: 'vlr_linha',     valor: parseFloat(document.getElementById('mult-vlr-linha')?.value) || 2.60 }
+    { chave: 'mult_virtua',   valor: parseFloat(document.getElementById('mult-virtua')?.value)    || 4 },
+    { chave: 'mult_voz_novo', valor: parseFloat(document.getElementById('mult-voz-novo')?.value)  || 5.5 },
+    { chave: 'mult_voz_port', valor: parseFloat(document.getElementById('mult-voz-port')?.value)  || 7.5 },
+    { chave: 'vlr_linha',     valor: parseFloat(document.getElementById('mult-vlr-linha')?.value) || 2.60 },
+    { chave: 'div_voz',       valor: parseFloat(document.getElementById('div-voz')?.value)        || 12 },
+    { chave: 'div_virtua',    valor: parseFloat(document.getElementById('div-virtua')?.value)     || 3 },
   ];
 
   await supa.from('config_simulador').upsert(configs, { onConflict: 'chave' });
