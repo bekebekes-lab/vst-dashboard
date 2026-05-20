@@ -611,28 +611,6 @@
 </div>
 
 <script>
-/*
- * ══════════════════════════════════════════════════════════════════════════════
- * MIGRAÇÃO NECESSÁRIA NO SUPABASE (rodar uma vez no SQL Editor)
- * ══════════════════════════════════════════════════════════════════════════════
- *
- * 1. Adicionar coluna "periodo" à tabela metas_carteira e alterar a constraint
- *    de unicidade de "tag" para "tag + periodo":
- *
- *    ALTER TABLE metas_carteira
- *      ADD COLUMN IF NOT EXISTS periodo TEXT NOT NULL DEFAULT 'BaseCRM';
- *
- *    -- Remove constraint antiga (ajuste o nome real se for diferente)
- *    ALTER TABLE metas_carteira DROP CONSTRAINT IF EXISTS metas_carteira_tag_key;
- *
- *    -- Cria constraint composta
- *    ALTER TABLE metas_carteira
- *      ADD CONSTRAINT metas_carteira_tag_periodo_key UNIQUE (tag, periodo);
- *
- * 2. Dados existentes sem periodo serão considerados período "BaseCRM" (mês atual).
- *    Nenhuma ação adicional necessária — o DEFAULT já cobre isso.
- * ══════════════════════════════════════════════════════════════════════════════
- */
 const SHEET_ID = '1lNrHoK4vsSsjisB4C254SVMQJyP9nmtFTECdZzH4AjQ';
 const API_KEY = 'AIzaSyA5Dbl6mmIxk01KDXPAsVxNy2XYf5DEQgU';
 const SHEET_NAME = 'BaseCRM';
@@ -851,10 +829,6 @@ async function carregarAbas() {
   } catch (e) {
     console.warn('Erro ao carregar abas:', e);
   }
-}
-
-function trocarMes() {
-  loadData();
 }
 
 function buildFilters() {
@@ -1284,7 +1258,9 @@ function buildMetasGrid() {
       <input type="number" min="0" step="1" value="${val}" data-tag="${tag}">
     </div>`;
   }).join('');
-  bindMetasInputs(); // registra listeners de input/auto-save
+  // Listeners registrados aqui para garantir que bindMetasInputs funcione mesmo
+  // quando buildMetasGrid é chamado antes de bindMetasInputs existir no fluxo
+  if (typeof bindMetasInputs === 'function') bindMetasInputs();
 }
 
 function getMetasInput() {
@@ -1603,8 +1579,8 @@ function renderSimulador() {
 // inicializa metas quando a aba é clicada
 function initSimulador() {
   buildMetasGrid();
-  // Recarrega metas do banco para o período ativo (garante sincronia ao navegar entre abas)
   if (USUARIO_ATUAL) {
+    // Recarrega metas do banco para o período ativo (sincroniza ao navegar entre abas)
     carregarMetasDoBanco(getPeriodoAtivo());
   } else {
     renderSimulador();
@@ -1907,10 +1883,314 @@ function switchTab(name, el) {
 // ─── SUPABASE CONFIG ────────────────────────────────────────────────────────
 const SUPA_URL = 'https://kzlchetrpsfefwybaaoy.supabase.co';
 const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt6bGNoZXRycHNmZWZ3eWJhYW95Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkwNTM4NDIsImV4cCI6MjA5NDYyOTg0Mn0.4euWpZZadXe9ayg6ITY5SNueEhU094ajJv379gC9YrU';
-const SUPA_ANON = SUPA_KEY; // alias usado pelo beacon de unload
 const supa = supabase.createClient(SUPA_URL, SUPA_KEY);
 
 let USUARIO_ATUAL = null;
+
+// ─── DETECÇÃO DE SCHEMA ──────────────────────────────────────────────────────
+// Verifica se a coluna "periodo" já existe na tabela metas_carteira
+// Resultado em cache para não repetir a verificação
+let _schemaPeriodoOk = null; // null = não verificado, true/false = resultado
+
+async function verificarSchemaPeriodo() {
+  if (_schemaPeriodoOk !== null) return _schemaPeriodoOk;
+  try {
+    // Testa se a coluna periodo existe buscando marcacao + periodo
+    const { error } = await supa
+      .from('metas_carteira')
+      .select('marcacao, periodo')
+      .limit(1);
+    _schemaPeriodoOk = !error || !error.message.includes('periodo');
+  } catch(e) {
+    _schemaPeriodoOk = false;
+  }
+  if (!_schemaPeriodoOk) mostrarAlertaMigracao();
+  return _schemaPeriodoOk;
+}
+
+function mostrarAlertaMigracao() {
+  // Só exibe uma vez por sessão
+  if (document.getElementById('migration-banner')) return;
+  const sql = `-- Banco já migrado ✅
+-- Estrutura atual da tabela metas_carteira:
+--   marcacao   → tag da unidade (ex: #1EWV)
+--   nome_unidade → nome legível
+--   qtd_linhas → meta de linhas
+--   por        → id do usuário que atualizou
+--   _em        → timestamp da atualização
+--   periodo    → aba do Google Sheets (ex: BaseCRM 042026)
+--
+-- Constraint única: UNIQUE (marcacao, periodo)
+-- Tudo certo! Nenhuma ação necessária.`;
+
+  const banner = document.createElement('div');
+  banner.id = 'migration-banner';
+  banner.style.cssText = `
+    position:fixed; bottom:16px; right:16px; z-index:9998;
+    background:#1e293b; color:#f8fafc; border-radius:12px;
+    padding:16px 18px; max-width:480px; box-shadow:0 8px 32px rgba(0,0,0,0.4);
+    font-family:'DM Sans',sans-serif; font-size:13px; line-height:1.5;
+  `;
+  banner.innerHTML = `
+    <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:10px">
+      <span style="font-size:20px">⚠️</span>
+      <div>
+        <strong style="color:#fbbf24;display:block;margin-bottom:2px">Migração de banco necessária</strong>
+        A coluna <code style="background:#334155;padding:1px 5px;border-radius:4px">periodo</code> ainda não existe na tabela
+        <code style="background:#334155;padding:1px 5px;border-radius:4px">metas_carteira</code>.
+        As metas serão salvas sem separação por mês até a migração ser executada.
+      </div>
+    </div>
+    <pre id="migration-sql" style="background:#0f172a;padding:10px;border-radius:6px;font-size:11px;
+      overflow-x:auto;white-space:pre;margin-bottom:10px;color:#86efac;line-height:1.6">${sql}</pre>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button onclick="copiarSQLMigracao()" style="background:#3b82f6;color:#fff;border:none;
+        border-radius:6px;padding:6px 14px;font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif">
+        📋 Copiar SQL
+      </button>
+      <button onclick="document.getElementById('migration-banner').remove()" style="background:#475569;
+        color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:12px;cursor:pointer;
+        font-family:'DM Sans',sans-serif">
+        Fechar
+      </button>
+    </div>`;
+  document.body.appendChild(banner);
+}
+
+function copiarSQLMigracao() {
+  const el = document.getElementById('migration-sql');
+  if (!el) return;
+  navigator.clipboard.writeText(el.textContent.trim()).then(() => {
+    const btn = el.nextElementSibling?.querySelector('button');
+    if (btn) { btn.textContent = '✅ Copiado!'; setTimeout(() => btn.textContent = '📋 Copiar SQL', 2000); }
+  });
+}
+
+// ─── UTILITÁRIO: período ativo ────────────────────────────────────────────────
+function getPeriodoAtivo() {
+  const sel = document.getElementById('mes-selector');
+  return sel ? sel.value : 'BaseCRM';
+}
+
+// ─── AUTO-SAVE ────────────────────────────────────────────────────────────────
+let _autoSaveTimer  = null;
+let _metasSujas     = false;
+
+function marcarMetasSujas() {
+  _metasSujas = true;
+  const btn = document.getElementById('btn-salvar-sim');
+  if (btn && !btn.textContent.includes('*')) {
+    btn.textContent = '💾 Salvar *';
+    btn.style.background = '#b45309';
+  }
+  clearTimeout(_autoSaveTimer);
+  _autoSaveTimer = setTimeout(() => {
+    if (_metasSujas) salvarTudoSimulador(true);
+  }, 3000);
+}
+
+function bindMetasInputs() {
+  document.querySelectorAll('#sim-metas-grid input').forEach(inp => {
+    inp.removeEventListener('input', _onMetaInput);
+    inp.addEventListener('input', _onMetaInput);
+  });
+}
+function _onMetaInput() {
+  renderSimulador();
+  marcarMetasSujas();
+}
+
+// Salva ao fechar/recarregar com fetch keepalive
+window.addEventListener('beforeunload', () => {
+  if (!_metasSujas || !USUARIO_ATUAL) return;
+  if (!['admin','gestor_macro'].includes(USUARIO_ATUAL.perfil)) return;
+
+  const periodo = getPeriodoAtivo();
+  const rows = [];
+  document.querySelectorAll('#sim-metas-grid input').forEach(inp => {
+    const tag = inp.dataset.tag;
+    const qtd = parseFloat(inp.value) || 0;
+    if (tag) {
+      const row = {
+        marcacao:     tag,
+        nome_unidade: MAPEAMENTO_TAGS[tag] || tag,
+        qtd_linhas:   qtd,
+        por:          USUARIO_ATUAL.id,
+        _em:          new Date().toISOString()
+      };
+      if (_schemaPeriodoOk) row.periodo = periodo;
+      rows.push(row);
+    }
+  });
+  if (!rows.length) return;
+
+  const conflict = _schemaPeriodoOk ? 'marcacao,periodo' : 'marcacao';
+  fetch(`${SUPA_URL}/rest/v1/metas_carteira?on_conflict=${encodeURIComponent(conflict)}`, {
+    method: 'POST',
+    keepalive: true,
+    headers: {
+      'Content-Type': 'application/json',
+      'apikey': SUPA_KEY,
+      'Authorization': `Bearer ${SUPA_KEY}`,
+      'Prefer': 'resolution=merge-duplicates'
+    },
+    body: JSON.stringify(rows)
+  }).catch(() => {});
+});
+
+// ─── METAS DO BANCO ──────────────────────────────────────────────────────────
+async function carregarMetasDoBanco(periodo) {
+  periodo = periodo || getPeriodoAtivo();
+
+  // Garante grid montado
+  const grid = document.getElementById('sim-metas-grid');
+  if (grid && grid.children.length === 0) buildMetasGrid();
+
+  const temPeriodo = await verificarSchemaPeriodo();
+
+  let query = supa.from('metas_carteira').select('marcacao, qtd_linhas');
+  if (temPeriodo) query = query.eq('periodo', periodo);
+
+  const { data, error } = await query;
+
+  // Zera todos os campos antes de preencher
+  document.querySelectorAll('#sim-metas-grid input').forEach(inp => { inp.value = 0; });
+
+  if (!error && data && data.length > 0) {
+    data.forEach(m => {
+      // campo no banco: "marcacao" = tag do input
+      const inp = document.querySelector(`#sim-metas-grid input[data-tag="${m.marcacao}"]`);
+      if (inp) inp.value = m.qtd_linhas || 0;
+    });
+  }
+
+  bindMetasInputs();
+  _metasSujas = false;
+  const btn = document.getElementById('btn-salvar-sim');
+  if (btn) { btn.textContent = '💾 Salvar'; btn.style.background = '#16a34a'; btn.disabled = false; }
+  renderSimulador();
+}
+
+async function salvarTudoSimulador(silencioso = false) {
+  const btn = document.getElementById('btn-salvar-sim');
+  if (!silencioso) { btn.textContent = '⏳ Salvando...'; btn.disabled = true; }
+  try {
+    await salvarMetasNoBanco();
+    await salvarConfigSimulador();
+    _metasSujas = false;
+    btn.textContent = '✅ Salvo!';
+    btn.style.background = '#15803d';
+    setTimeout(() => {
+      btn.textContent = '💾 Salvar';
+      btn.style.background = '#16a34a';
+      btn.disabled = false;
+    }, silencioso ? 0 : 2000);
+  } catch(e) {
+    console.error('Erro ao salvar:', e);
+    if (!silencioso) {
+      btn.textContent = '❌ Erro';
+      btn.style.background = '#dc2626';
+      setTimeout(() => {
+        btn.textContent = '💾 Salvar';
+        btn.style.background = '#16a34a';
+        btn.disabled = false;
+      }, 2000);
+    }
+  }
+}
+
+async function salvarMetasNoBanco() {
+  if (!USUARIO_ATUAL) return;
+  if (!['admin', 'gestor_macro'].includes(USUARIO_ATUAL.perfil)) {
+    alert('Você não tem permissão para editar metas.');
+    return;
+  }
+
+  const temPeriodo = await verificarSchemaPeriodo();
+  const periodo    = getPeriodoAtivo();
+  const rows = [];
+
+  document.querySelectorAll('#sim-metas-grid input').forEach(inp => {
+    const tag = inp.dataset.tag;
+    const qtd = parseFloat(inp.value) || 0;
+    if (!tag) return;
+    const row = {
+      marcacao:      tag,                          // banco: "marcacao" = tag
+      nome_unidade:  MAPEAMENTO_TAGS[tag] || tag,
+      qtd_linhas:    qtd,
+      por:           USUARIO_ATUAL.id,             // banco: "por" = atualizado_por
+      _em:           new Date().toISOString()      // banco: "_em" = atualizado_em
+    };
+    if (temPeriodo) row.periodo = periodo;
+    rows.push(row);
+  });
+
+  const conflito = temPeriodo ? 'marcacao,periodo' : 'marcacao';
+  const { error } = await supa
+    .from('metas_carteira')
+    .upsert(rows, { onConflict: conflito });
+  if (error) throw new Error(error.message);
+}
+
+async function carregarConfigSimulador() {
+  const { data } = await supa.from('config_simulador').select('*');
+  if (!data) return;
+  const map = {
+    'mult_virtua':   'mult-virtua',
+    'mult_voz_novo': 'mult-voz-novo',
+    'mult_voz_port': 'mult-voz-port',
+    'vlr_linha':     'mult-vlr-linha',
+    'div_voz':       'div-voz',
+    'div_virtua':    'div-virtua'
+  };
+  data.forEach(c => {
+    const id = map[c.chave];
+    if (id) { const el = document.getElementById(id); if (el) el.value = c.valor; }
+  });
+  renderSimulador();
+}
+
+async function salvarConfigSimulador() {
+  if (!USUARIO_ATUAL) return;
+  if (!['admin', 'gestor_macro'].includes(USUARIO_ATUAL.perfil)) return;
+  const configs = [
+    { chave: 'mult_virtua',   valor: parseFloat(document.getElementById('mult-virtua')?.value)    || 4 },
+    { chave: 'mult_voz_novo', valor: parseFloat(document.getElementById('mult-voz-novo')?.value)  || 5.5 },
+    { chave: 'mult_voz_port', valor: parseFloat(document.getElementById('mult-voz-port')?.value)  || 7.5 },
+    { chave: 'vlr_linha',     valor: parseFloat(document.getElementById('mult-vlr-linha')?.value) || 2.60 },
+    { chave: 'div_voz',       valor: parseFloat(document.getElementById('div-voz')?.value)        || 12 },
+    { chave: 'div_virtua',    valor: parseFloat(document.getElementById('div-virtua')?.value)     || 3 },
+  ];
+  const { error } = await supa.from('config_simulador').upsert(configs, { onConflict: 'chave' });
+  if (error) console.warn('Erro ao salvar config:', error.message);
+}
+
+// ─── TROCA DE MÊS ────────────────────────────────────────────────────────────
+async function trocarMes() {
+  // Salva metas pendentes do período anterior
+  if (_metasSujas && USUARIO_ATUAL && ['admin','gestor_macro'].includes(USUARIO_ATUAL.perfil)) {
+    await salvarMetasNoBanco().catch(e => console.warn('Falha ao salvar ao trocar mês:', e));
+    _metasSujas = false;
+  }
+  loadData();
+  // Aguarda dados carregarem, depois recarrega metas do novo período
+  setTimeout(() => carregarMetasDoBanco(getPeriodoAtivo()), 900);
+}
+
+// ─── VERIFICA SESSÃO AO CARREGAR ─────────────────────────────────────────────
+(async () => {
+  const { data: { session } } = await supa.auth.getSession();
+  if (session?.user) await carregarPerfil(session.user);
+  document.getElementById('login-senha')?.addEventListener('keydown', e => {
+    if (e.key === 'Enter') fazerLogin();
+  });
+})();
+
+function updateClock() {
+  document.getElementById('clock').textContent = new Date().toLocaleTimeString('pt-BR');
+}
+setInterval(updateClock, 1000);
+updateClock();
 
 // ─── LOGIN / LOGOUT ──────────────────────────────────────────────────────────
 async function fazerLogin() {
@@ -1976,9 +2256,11 @@ async function carregarPerfil(user) {
 
   // Carrega metas e config após o dashboard estar visível
   setTimeout(async () => {
+    buildMetasGrid();
+    bindMetasInputs();
     await carregarMetasDoBanco(getPeriodoAtivo());
     await carregarConfigSimulador();
-  }, 500);
+  }, 600);
 }
 
 function aplicarPermissoes() {
@@ -2024,243 +2306,6 @@ async function fazerLogout() {
   document.getElementById('login-btn').disabled = false;
   document.getElementById('login-btn').textContent = 'Entrar';
 }
-
-// ─── UTILITÁRIO: período ativo ────────────────────────────────────────────────
-// Retorna o valor atual do seletor de mês (nome da aba), ex: "BaseCRM" ou "BaseCRM 042026"
-function getPeriodoAtivo() {
-  const sel = document.getElementById('mes-selector');
-  return sel ? sel.value : 'BaseCRM';
-}
-
-// ─── AUTO-SAVE: marca metas como "sujas" e agenda salvamento ─────────────────
-let _autoSaveTimer = null;
-let _metasSujas = false;   // true quando algum input foi alterado sem salvar
-
-function marcarMetasSujas() {
-  _metasSujas = true;
-  // Atualiza visual do botão para indicar alteração pendente
-  const btn = document.getElementById('btn-salvar-sim');
-  if (btn && btn.textContent === '💾 Salvar') {
-    btn.textContent = '💾 Salvar *';
-    btn.style.background = '#b45309'; // âmbar para indicar pendente
-  }
-  // Debounce: salva automaticamente 3 s após última alteração
-  clearTimeout(_autoSaveTimer);
-  _autoSaveTimer = setTimeout(() => {
-    if (_metasSujas) salvarTudoSimulador(true); // true = silencioso
-  }, 3000);
-}
-
-// Intercepta todos os inputs do grid de metas para marcar como sujo
-function bindMetasInputs() {
-  document.querySelectorAll('#sim-metas-grid input').forEach(inp => {
-    inp.removeEventListener('input', _onMetaInput);
-    inp.addEventListener('input', _onMetaInput);
-  });
-}
-function _onMetaInput() {
-  renderSimulador();
-  marcarMetasSujas();
-}
-
-// Salva antes de fechar/recarregar a página
-window.addEventListener('beforeunload', (e) => {
-  if (_metasSujas && USUARIO_ATUAL) {
-    // Tenta salvar de forma síncrona usando sendBeacon (mais confiável no unload)
-    _salvarBeacon();
-    // Não retornamos string para não bloquear o fechamento com diálogo
-  }
-});
-
-function _salvarBeacon() {
-  // Monta payload para o endpoint REST do Supabase via fetch keepalive
-  if (!USUARIO_ATUAL || !['admin','gestor_macro'].includes(USUARIO_ATUAL.perfil)) return;
-  const periodo = getPeriodoAtivo();
-  const rows = [];
-  document.querySelectorAll('#sim-metas-grid input').forEach(inp => {
-    const tag = inp.dataset.tag;
-    const qtd = parseFloat(inp.value) || 0;
-    if (tag) rows.push({
-      tag,
-      periodo,
-      nome_unidade: MAPEAMENTO_TAGS[tag] || tag,
-      qtd_linhas: qtd,
-      atualizado_por: USUARIO_ATUAL.id,
-      atualizado_em: new Date().toISOString()
-    });
-  });
-  if (!rows.length) return;
-  // Usa fetch com keepalive para garantir envio mesmo durante unload
-  fetch(`${SUPA_URL}/rest/v1/metas_carteira`, {
-    method: 'POST',
-    keepalive: true,
-    headers: {
-      'Content-Type': 'application/json',
-      'apikey': SUPA_ANON,
-      'Authorization': `Bearer ${SUPA_ANON}`,
-      'Prefer': 'resolution=merge-duplicates'
-    },
-    body: JSON.stringify(rows)
-  }).catch(() => {});
-}
-
-// ─── METAS DO BANCO ───────────────────────────────────────────────────────────
-// Carrega metas para o período ativo. Se não existir registro, zera os inputs.
-async function carregarMetasDoBanco(periodo) {
-  periodo = periodo || getPeriodoAtivo();
-  // Garante que o grid existe antes de tentar popular
-  const grid = document.getElementById('sim-metas-grid');
-  if (grid && grid.children.length === 0) buildMetasGrid();
-
-  const { data, error } = await supa
-    .from('metas_carteira')
-    .select('tag, qtd_linhas')
-    .eq('periodo', periodo);
-
-  // Zera todos os inputs primeiro (garante limpeza ao trocar mês)
-  document.querySelectorAll('#sim-metas-grid input').forEach(inp => { inp.value = 0; });
-
-  if (data && data.length > 0) {
-    data.forEach(m => {
-      const inp = document.querySelector(`#sim-metas-grid input[data-tag="${m.tag}"]`);
-      if (inp) inp.value = m.qtd_linhas || 0;
-    });
-  }
-
-  bindMetasInputs(); // rebinda listeners após popular
-  _metasSujas = false;
-  const btn = document.getElementById('btn-salvar-sim');
-  if (btn) { btn.textContent = '💾 Salvar'; btn.style.background = '#16a34a'; }
-  renderSimulador();
-}
-
-async function salvarTudoSimulador(silencioso = false) {
-  const btn = document.getElementById('btn-salvar-sim');
-  if (!silencioso) {
-    btn.textContent = '⏳ Salvando...';
-    btn.disabled = true;
-  }
-  try {
-    await salvarMetasNoBanco();
-    await salvarConfigSimulador();
-    _metasSujas = false;
-    if (!silencioso) {
-      btn.textContent = '✅ Salvo!';
-      btn.style.background = '#15803d';
-      setTimeout(() => {
-        btn.textContent = '💾 Salvar';
-        btn.style.background = '#16a34a';
-        btn.disabled = false;
-      }, 2000);
-    } else {
-      btn.textContent = '💾 Salvar';
-      btn.style.background = '#16a34a';
-      btn.disabled = false;
-    }
-  } catch(e) {
-    console.error('Erro ao salvar:', e);
-    if (!silencioso) {
-      btn.textContent = '❌ Erro';
-      btn.style.background = '#dc2626';
-      setTimeout(() => {
-        btn.textContent = '💾 Salvar';
-        btn.style.background = '#16a34a';
-        btn.disabled = false;
-      }, 2000);
-    }
-  }
-}
-
-async function salvarMetasNoBanco() {
-  if (!USUARIO_ATUAL) return;
-  if (!['admin', 'gestor_macro'].includes(USUARIO_ATUAL.perfil)) {
-    alert('Você não tem permissão para editar metas.');
-    return;
-  }
-  const periodo = getPeriodoAtivo();
-  const rows = [];
-  document.querySelectorAll('#sim-metas-grid input').forEach(inp => {
-    const tag = inp.dataset.tag;
-    const qtd = parseFloat(inp.value) || 0;
-    if (tag) rows.push({
-      tag,
-      periodo,                              // ← chave composta: tag + periodo
-      nome_unidade: MAPEAMENTO_TAGS[tag] || tag,
-      qtd_linhas: qtd,
-      atualizado_por: USUARIO_ATUAL.id,
-      atualizado_em: new Date().toISOString()
-    });
-  });
-  const { error } = await supa
-    .from('metas_carteira')
-    .upsert(rows, { onConflict: 'tag,periodo' }); // ← conflito por tag + periodo
-  if (error) throw new Error(error.message);
-}
-
-async function carregarConfigSimulador() {
-  const { data } = await supa.from('config_simulador').select('*');
-  if (!data) return;
-  const map = {
-    'mult_virtua':   'mult-virtua',
-    'mult_voz_novo': 'mult-voz-novo',
-    'mult_voz_port': 'mult-voz-port',
-    'vlr_linha':     'mult-vlr-linha',
-    'div_voz':       'div-voz',
-    'div_virtua':    'div-virtua'
-  };
-  data.forEach(c => {
-    const id = map[c.chave];
-    if (id) {
-      const el = document.getElementById(id);
-      if (el) el.value = c.valor;
-    }
-  });
-  renderSimulador();
-}
-
-async function salvarConfigSimulador() {
-  if (!USUARIO_ATUAL) return;
-  if (!['admin', 'gestor_macro'].includes(USUARIO_ATUAL.perfil)) return;
-  const configs = [
-    { chave: 'mult_virtua',   valor: parseFloat(document.getElementById('mult-virtua')?.value)    || 4 },
-    { chave: 'mult_voz_novo', valor: parseFloat(document.getElementById('mult-voz-novo')?.value)  || 5.5 },
-    { chave: 'mult_voz_port', valor: parseFloat(document.getElementById('mult-voz-port')?.value)  || 7.5 },
-    { chave: 'vlr_linha',     valor: parseFloat(document.getElementById('mult-vlr-linha')?.value) || 2.60 },
-    { chave: 'div_voz',       valor: parseFloat(document.getElementById('div-voz')?.value)        || 12 },
-    { chave: 'div_virtua',    valor: parseFloat(document.getElementById('div-virtua')?.value)     || 3 },
-  ];
-  await supa.from('config_simulador').upsert(configs, { onConflict: 'chave' });
-}
-
-// ─── TROCA DE MÊS: recarrega metas do banco para o novo período ───────────────
-// Chamado pelo select do topbar
-async function trocarMes() {
-  // Salva metas do período anterior se houver alterações pendentes
-  if (_metasSujas && USUARIO_ATUAL && ['admin','gestor_macro'].includes(USUARIO_ATUAL.perfil)) {
-    await salvarMetasNoBanco().catch(() => {});
-    _metasSujas = false;
-  }
-  loadData(); // recarrega os dados da planilha
-  // Recarrega as metas do banco para o novo período após os dados carregarem
-  setTimeout(() => carregarMetasDoBanco(), 800);
-}
-
-// ─── VERIFICA SESSÃO AO CARREGAR ─────────────────────────────────────────────
-(async () => {
-  const { data: { session } } = await supa.auth.getSession();
-  if (session?.user) {
-    await carregarPerfil(session.user);
-  }
-  document.getElementById('login-senha')?.addEventListener('keydown', e => {
-    if (e.key === 'Enter') fazerLogin();
-  });
-})();
-
-function updateClock() {
-  document.getElementById('clock').textContent = new Date().toLocaleTimeString('pt-BR');
-}
-setInterval(updateClock, 1000);
-updateClock();
 </script>
 </body>
 </html>
