@@ -1895,12 +1895,14 @@ let _schemaPeriodoOk = null; // null = não verificado, true/false = resultado
 async function verificarSchemaPeriodo() {
   if (_schemaPeriodoOk !== null) return _schemaPeriodoOk;
   try {
-    // Testa se a coluna periodo existe buscando marcacao + periodo
-    const { error } = await supa
+    // Testa especificamente se a coluna periodo existe
+    const { data, error } = await supa
       .from('metas_carteira')
-      .select('marcacao, periodo')
+      .select('periodo')
       .limit(1);
-    _schemaPeriodoOk = !error || !error.message.includes('periodo');
+    // Se não der erro, a coluna existe
+    _schemaPeriodoOk = !error;
+    if (error) console.log('Coluna periodo não encontrada:', error.message);
   } catch(e) {
     _schemaPeriodoOk = false;
   }
@@ -2014,9 +2016,7 @@ window.addEventListener('beforeunload', () => {
       const row = {
         marcacao:     tag,
         nome_unidade: MAPEAMENTO_TAGS[tag] || tag,
-        qtd_linhas:   qtd,
-        por:          USUARIO_ATUAL.id,
-        _em:          new Date().toISOString()
+        qtd_linhas:   qtd
       };
       if (_schemaPeriodoOk) row.periodo = periodo;
       rows.push(row);
@@ -2048,7 +2048,7 @@ async function carregarMetasDoBanco(periodo) {
 
   const temPeriodo = await verificarSchemaPeriodo();
 
-  let query = supa.from('metas_carteira').select('marcacao, qtd_linhas');
+  let query = supa.from('metas_carteira').select('marcacao,qtd_linhas');
   if (temPeriodo) query = query.eq('periodo', periodo);
 
   const { data, error } = await query;
@@ -2115,11 +2115,12 @@ async function salvarMetasNoBanco() {
     const qtd = parseFloat(inp.value) || 0;
     if (!tag) return;
     const row = {
-      marcacao:      tag,                          // banco: "marcacao" = tag
+      marcacao:      tag,
       nome_unidade:  MAPEAMENTO_TAGS[tag] || tag,
-      qtd_linhas:    qtd,
-      por:           USUARIO_ATUAL.id,             // banco: "por" = atualizado_por
-      _em:           new Date().toISOString()      // banco: "_em" = atualizado_em
+      qtd_linhas:    qtd
+      // Nota: colunas "por" e "_em" são omitidas intencionalmente.
+      // O campo "_em" começa com underscore e o PostgREST do Supabase
+      // não aceita esse padrão via REST API. O campo "por" é opcional.
     };
     if (temPeriodo) row.periodo = periodo;
     rows.push(row);
@@ -2133,21 +2134,30 @@ async function salvarMetasNoBanco() {
 }
 
 async function carregarConfigSimulador() {
-  const { data } = await supa.from('config_simulador').select('*');
-  if (!data) return;
-  const map = {
-    'mult_virtua':   'mult-virtua',
-    'mult_voz_novo': 'mult-voz-novo',
-    'mult_voz_port': 'mult-voz-port',
-    'vlr_linha':     'mult-vlr-linha',
-    'div_voz':       'div-voz',
-    'div_virtua':    'div-virtua'
-  };
-  data.forEach(c => {
-    const id = map[c.chave];
-    if (id) { const el = document.getElementById(id); if (el) el.value = c.valor; }
-  });
-  renderSimulador();
+  try {
+    const { data, error } = await supa.from('config_simulador').select('*');
+    if (error || !data) {
+      console.warn('config_simulador indisponível:', error?.message);
+      renderSimulador();
+      return;
+    }
+    const map = {
+      'mult_virtua':   'mult-virtua',
+      'mult_voz_novo': 'mult-voz-novo',
+      'mult_voz_port': 'mult-voz-port',
+      'vlr_linha':     'mult-vlr-linha',
+      'div_voz':       'div-voz',
+      'div_virtua':    'div-virtua'
+    };
+    data.forEach(c => {
+      const id = map[c.chave];
+      if (id) { const el = document.getElementById(id); if (el) el.value = c.valor; }
+    });
+    renderSimulador();
+  } catch(e) {
+    console.warn('Erro ao carregar config simulador:', e);
+    renderSimulador();
+  }
 }
 
 async function salvarConfigSimulador() {
