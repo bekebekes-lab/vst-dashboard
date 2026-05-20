@@ -434,11 +434,6 @@
       <label class="mes-label">Período:</label>
       <select id="mes-selector" onchange="trocarMes()" class="mes-select">
         <option value="BaseCRM">Atual (Live)</option>
-        <option value="BaseCRM 052026">Mai/2026</option>
-        <option value="BaseCRM 042026">Abr/2026</option>
-        <option value="BaseCRM 032026">Mar/2026</option>
-        <option value="BaseCRM 022026">Fev/2026</option>
-        <option value="BaseCRM 012026">Jan/2026</option>
       </select>
     </div>
     <span class="last-update" id="last-update"></span>
@@ -739,6 +734,9 @@ function initials(name) {
 }
 
 async function loadData() {
+  // Atualiza dropdown com abas reais da planilha
+  carregarAbas();
+
   const mesSel = document.getElementById('mes-selector');
   const sheetName = mesSel ? mesSel.value : 'BaseCRM';
   const isLive = sheetName === 'BaseCRM';
@@ -787,8 +785,54 @@ async function loadData() {
   }
 }
 
+// Busca abas disponíveis na planilha e popula o dropdown dinamicamente
+async function carregarAbas() {
+  try {
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}?key=${API_KEY}&fields=sheets.properties.title`;
+    const res = await fetch(url);
+    if (!res.ok) return;
+    const json = await res.json();
+    const abas = (json.sheets || []).map(s => s.properties.title);
+
+    const meses = { '01':'Jan','02':'Fev','03':'Mar','04':'Abr','05':'Mai','06':'Jun','07':'Jul','08':'Ago','09':'Set','10':'Out','11':'Nov','12':'Dez' };
+
+    // Filtra abas no padrão "BaseCRM MMYYYY"
+    const historico = abas
+      .filter(a => a !== 'BaseCRM' && /^BaseCRM\s+\d{6}$/.test(a))
+      .sort((a, b) => {
+        const na = a.replace('BaseCRM ', '');
+        const nb = b.replace('BaseCRM ', '');
+        // MMYYYY → YYYYMM para ordenar desc
+        const ka = na.slice(2) + na.slice(0, 2);
+        const kb = nb.slice(2) + nb.slice(0, 2);
+        return kb.localeCompare(ka);
+      });
+
+    const sel = document.getElementById('mes-selector');
+    const valorAtual = sel.value;
+
+    sel.innerHTML = '<option value="BaseCRM">Atual (Live)</option>';
+    historico.forEach(aba => {
+      const mm   = aba.slice(-6, -4);
+      const yyyy = aba.slice(-4);
+      const label = `${meses[mm] || mm}/${yyyy}`;
+      const opt = document.createElement('option');
+      opt.value = aba;
+      opt.textContent = label;
+      sel.appendChild(opt);
+    });
+
+    // Restaura seleção anterior se ainda existir
+    if ([...sel.options].some(o => o.value === valorAtual)) {
+      sel.value = valorAtual;
+    }
+  } catch (e) {
+    console.warn('Erro ao carregar abas:', e);
+  }
+}
+
 function trocarMes() {
-  loadData(); // loadData já chama render() e renderSimulador() ao terminar
+  loadData();
 }
 
 function buildFilters() {
@@ -1362,7 +1406,7 @@ function fmt(n, prefix='') {
 function fmtN(n) { return n.toLocaleString('pt-BR'); }
 
 function renderSimulador() {
-  // Garante que o grid de metas sempre existe
+  // Garante que o grid de metas existe mesmo que a aba nunca tenha sido clicada
   const grid = document.getElementById('sim-metas-grid');
   if (grid && grid.children.length === 0) buildMetasGrid();
 
