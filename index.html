@@ -941,6 +941,18 @@ function thDrill(col, label, currentCol, currentAsc, onclickFn) {
 function render() {
   if (!ALL_DATA.length) return;
 
+  // Proteção: garante que consultor nunca veja dados de outros
+  if (USUARIO_ATUAL?.perfil === 'consultor' && USUARIO_ATUAL.consultor_ref) {
+    const selC = document.getElementById('f-consultor');
+    if (selC && selC.value !== USUARIO_ATUAL.consultor_ref) {
+      selC.value = USUARIO_ATUAL.consultor_ref;
+    }
+    ['f-estado','f-gestor','f-equipe','f-tag'].forEach(id => {
+      const sel = document.getElementById(id);
+      if (sel && sel.value !== sel.options[0]?.value) sel.value = sel.options[0].value;
+    });
+  }
+
   const estado    = document.getElementById('f-estado').value;
   const gestor    = document.getElementById('f-gestor').value;
   const equipe    = document.getElementById('f-equipe').value;
@@ -2300,35 +2312,70 @@ async function carregarPerfil(user) {
 
 function aplicarPermissoes() {
   const p = USUARIO_ATUAL.perfil;
-  const tabs = {
-    'producao':  ['admin', 'gestor_macro', 'gestor'],
-    'simulador': ['admin', 'gestor_macro'],
-    'carteira':  ['admin', 'gestor_macro']
+
+  // Abas permitidas por perfil
+  const abasPermitidas = {
+    'admin':        ['simulador', 'gerencial', 'producao'],
+    'gestor_macro': ['simulador', 'gerencial', 'producao'],
+    'gestor':       ['gerencial', 'producao'],
+    'consultor':    ['gerencial']
   };
+  const permitidas = abasPermitidas[p] || ['gerencial'];
 
   // Esconde abas não permitidas
   document.querySelectorAll('.tab-btn').forEach(btn => {
-    const tab = btn.getAttribute('onclick')?.match(/'(\w+)'/)?.[1];
-    if (tab && tabs[tab] && !tabs[tab].includes(p)) {
-      btn.style.display = 'none';
-    }
+    const match = btn.getAttribute('onclick')?.match(/'(\w+)'/);
+    const tab = match?.[1];
+    if (tab) btn.style.display = permitidas.includes(tab) ? '' : 'none';
   });
 
-  // Trava filtros por perfil
-  if (p === 'gestor' && USUARIO_ATUAL.gestor_ref) {
-    setTimeout(() => {
-      const sel = document.getElementById('f-gestor');
-      if (sel) { sel.value = USUARIO_ATUAL.gestor_ref; sel.disabled = true; }
-      onFilterChange('gestor');
-    }, 1000);
+  // Se a aba ativa não for permitida, redireciona para Gerencial
+  const tabAtiva = document.querySelector('.tab-panel.active');
+  if (tabAtiva) {
+    const idAtiva = tabAtiva.id.replace('tab-', '');
+    if (!permitidas.includes(idAtiva)) {
+      const btnGerencial = document.querySelector('.tab-btn[onclick*="gerencial"]');
+      switchTab('gerencial', btnGerencial);
+    }
   }
-  if (p === 'consultor' && USUARIO_ATUAL.consultor_ref) {
-    setTimeout(() => {
-      const sel = document.getElementById('f-consultor');
-      if (sel) { sel.value = USUARIO_ATUAL.consultor_ref; sel.disabled = true; }
+
+  const aplicarFiltros = () => {
+    if (p === 'consultor') {
+      // Bloqueia todos os filtros — consultor não pode mudar nada
+      ['f-estado','f-gestor','f-equipe','f-tag'].forEach(id => {
+        const sel = document.getElementById(id);
+        if (sel) {
+          sel.value = sel.options[0].value;
+          sel.disabled = true;
+          sel.style.opacity = '0.5';
+          sel.style.pointerEvents = 'none';
+        }
+      });
+      // Trava o filtro de consultor no próprio nome
+      const selC = document.getElementById('f-consultor');
+      if (selC && USUARIO_ATUAL.consultor_ref) {
+        selC.value = USUARIO_ATUAL.consultor_ref;
+        selC.disabled = true;
+        selC.style.opacity = '0.5';
+        selC.style.pointerEvents = 'none';
+      }
       render();
-    }, 1000);
-  }
+    } else if (p === 'gestor' && USUARIO_ATUAL.gestor_ref) {
+      const selG = document.getElementById('f-gestor');
+      if (selG) {
+        selG.value = USUARIO_ATUAL.gestor_ref;
+        selG.disabled = true;
+        selG.style.opacity = '0.5';
+        selG.style.pointerEvents = 'none';
+      }
+      onFilterChange('gestor');
+    }
+  };
+
+  // Aplica imediatamente e após os dados carregarem
+  aplicarFiltros();
+  setTimeout(aplicarFiltros, 800);
+  setTimeout(aplicarFiltros, 2000);
 }
 
 async function fazerLogout() {
