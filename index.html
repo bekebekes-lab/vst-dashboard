@@ -775,6 +775,8 @@ async function loadData() {
 
     buildFilters();
     render();
+    renderSimulador();
+    renderProducao();
   } catch (e) {
     document.getElementById('metrics-area').innerHTML = '';
     document.getElementById('error-area').innerHTML = `
@@ -786,14 +788,7 @@ async function loadData() {
 }
 
 function trocarMes() {
-  // Recarrega dados e atualiza todos os painéis
-  loadData();
-  // Se produção já foi inicializada, reinicia
-  if (document.getElementById('prod-status-chips')?.children.length > 0) {
-    initProducao();
-  }
-  // Recalcula simulador
-  renderSimulador();
+  loadData(); // loadData já chama render() e renderSimulador() ao terminar
 }
 
 function buildFilters() {
@@ -1367,6 +1362,10 @@ function fmt(n, prefix='') {
 function fmtN(n) { return n.toLocaleString('pt-BR'); }
 
 function renderSimulador() {
+  // Garante que o grid de metas sempre existe
+  const grid = document.getElementById('sim-metas-grid');
+  if (grid && grid.children.length === 0) buildMetasGrid();
+
   if (!ALL_DATA.length) {
     document.getElementById('sim-kpi-area').innerHTML = '<div class="coming-soon"><p>Carregue os dados primeiro (aba Gerencial).</p></div>';
     return;
@@ -1431,7 +1430,7 @@ function renderSimulador() {
       <div class="sim-kpi-card">
         <div class="sim-kpi-label">Incentivado Estimado</div>
         <div class="sim-kpi-value">${fmtN(totais.incentivado)}</div>
-        <div class="sim-kpi-sub">min(VOZ÷12, VIRTUA÷3)</div>
+        <div class="sim-kpi-sub">min(VOZ÷${parseFloat(document.getElementById('div-voz')?.value)||12}, VIRTUA÷${parseFloat(document.getElementById('div-virtua')?.value)||3})</div>
       </div>
       <div class="sim-kpi-card">
         <div class="sim-kpi-label">40% do Faturamento</div>
