@@ -1,7 +1,7 @@
 """
 NeoSales → Google Sheets Bot
 Seletores inspecionados diretamente na página real (Vaadin framework).
-Fluxo: login → painel-producao → preenche datas → seleciona painel
+Fluxo: login → 2FA TOTP → painel-producao → preenche datas → seleciona painel
        → seleciona visão EXPORTACAO → clica Pesquisar → aguarda download
        → atualiza aba BaseCRM no Google Sheets.
 """
@@ -15,6 +15,7 @@ from pathlib import Path
 
 import gspread
 import openpyxl
+import pyotp
 from google.oauth2.service_account import Credentials
 from playwright.sync_api import sync_playwright
 
@@ -30,38 +31,33 @@ log = logging.getLogger(__name__)
 NEOSALES_URL  = "https://vipsul.neosales.com.br"
 NEOSALES_USER = os.environ["NEOSALES_USER"]
 NEOSALES_PASS = os.environ["NEOSALES_PASS"]
+TOTP_SECRET   = os.environ.get("TOTP_SECRET", "")
 SHEET_ID      = os.environ["SHEET_ID"]
 ABA_DESTINO   = "BaseCRM"
 DOWNLOAD_DIR  = Path("/tmp/neosales")
 
 # ─── Seletores confirmados por inspeção real (Vaadin) ─────────────────────────
-# Login
-SEL_LOGIN_USER = "#input-vaadin-text-field-13"
-SEL_LOGIN_PASS = "#input-vaadin-password-field-14"
-SEL_LOGIN_BTN  = "vaadin-button"
-
-# Painel de Produção
-SEL_DATA_INI   = "#input-vaadin-date-picker-67"
-SEL_DATA_FIM   = "#input-vaadin-date-picker-68"
-SEL_PAINEL     = "#input-vaadin-combo-box-70"
-
-# Visão EXPORTACAO — radio button confirmado (id: input-vaadin-radio-button-85)
+SEL_LOGIN_USER       = "#input-vaadin-text-field-13"
+SEL_LOGIN_PASS       = "#input-vaadin-password-field-14"
+SEL_LOGIN_BTN        = "vaadin-button"
+SEL_DATA_INI         = "#input-vaadin-date-picker-67"
+SEL_DATA_FIM         = "#input-vaadin-date-picker-68"
+SEL_PAINEL           = "#input-vaadin-combo-box-70"
 SEL_RADIO_EXPORTACAO = "#input-vaadin-radio-button-85"
+SEL_PESQUISAR        = "vaadin-button:has-text('Pesquisar')"
+PAINEL_VALOR         = "PAINEL DE PRODUCAO CLARO VIPSUL"
 
-# Botão Pesquisar — dispara o download quando visão = EXPORTACAO
-SEL_PESQUISAR  = "vaadin-button:has-text('Pesquisar')"
 
-# Painel correto (confirmado pelas opções reais do combo)
-PAINEL_VALOR   = "PAINEL DE PRODUCAO CLARO VIPSUL"
+# ─── HELPER: gerar código TOTP ────────────────────────────────────────────────
+def gerar_totp() -> str:
+    totp = pyotp.TOTP(TOTP_SECRET)
+    codigo = totp.now()
+    log.info(f"  Código TOTP gerado")
+    return codigo
 
 
 # ─── HELPER: preencher vaadin-date-picker ─────────────────────────────────────
 def preencher_vaadin_date(page, seletor: str, valor: str, label: str = ""):
-    """
-    Preenche um campo vaadin-date-picker.
-    O input real fica dentro do shadow DOM do componente.
-    valor no formato DD/MM/AAAA.
-    """
     tentativas = [seletor]
     if label:
         tentativas.append(f"vaadin-date-picker[label='{label}'] input")
@@ -73,7 +69,7 @@ def preencher_vaadin_date(page, seletor: str, valor: str, label: str = ""):
             el.click()
             el.triple_click()
             el.type(valor, delay=80)
-            page.keyboard.press("Escape")   # fecha o calendário se abrir
+            page.keyboard.press("Escape")
             time.sleep(0.3)
             log.info(f"  Data '{valor}' via '{sel}'")
             return
@@ -102,24 +98,48 @@ def preencher_vaadin_date(page, seletor: str, valor: str, label: str = ""):
 
 # ─── HELPER: selecionar vaadin-combo-box ──────────────────────────────────────
 def selecionar_vaadin_combo(page, seletor: str, valor: str):
-    """Digita no combo e clica na opção correspondente."""
     try:
         el = page.locator(seletor).first
         el.wait_for(state="visible", timeout=5_000)
         el.click()
         el.triple_click()
-        # Digita os primeiros 10 chars para filtrar
         el.type(valor[:10], delay=80)
         time.sleep(1)
-
-        # Clica na opção que contém o valor
         opcao = page.locator(f"vaadin-combo-box-item:has-text('{valor[:20]}')")
         opcao.first.click(timeout=5_000)
         log.info(f"  Combo '{valor}' selecionado")
     except Exception as e:
         log.warning(f"  Combo '{seletor}' falhou: {e}")
-        # Tira screenshot para debug
         page.screenshot(path=str(DOWNLOAD_DIR / "erro_combo.png"))
+
+
+# ─── HELPER: lidar com 2FA TOTP se aparecer ───────────────────────────────────
+def lidar_com_2fa(page):
+    seletores_2fa = [
+        "input[autocomplete='one-time-code']",
+        "input[placeholder*='digo']",
+        "input[placeholder*='code']",
+        "input[placeholder*='token']",
+        "vaadin-text-field[label*='digo'] input",
+        "vaadin-text-field[label*='Code'] input",
+        "vaadin-text-field[label*='Token'] input",
+        "vaadin-text-field[label*='utenti'] input",
+    ]
+    for sel in seletores_2fa:
+        try:
+            el = page.locator(sel).first
+            el.wait_for(state="visible", timeout=3_000)
+            codigo = gerar_totp()
+            el.fill(codigo)
+            time.sleep(0.5)
+            page.keyboard.press("Enter")
+            log.info(f"  2FA preenchido via: {sel}")
+            time.sleep(2)
+            return True
+        except Exception:
+            continue
+    log.info("  Nenhuma tela de 2FA detectada.")
+    return False
 
 
 # ─── 1. LOGIN + DOWNLOAD ──────────────────────────────────────────────────────
@@ -143,13 +163,19 @@ def baixar_relatorio() -> Path:
         # ── Login ──────────────────────────────────────────────────────────
         log.info("Fazendo login...")
         page.goto(f"{NEOSALES_URL}/login", wait_until="networkidle")
-        page.wait_for_selector(SEL_LOGIN_USER, timeout=15_000)
+        page.wait_for_selector(SEL_LOGIN_USER, timeout=40_000)
 
         page.fill(SEL_LOGIN_USER, NEOSALES_USER)
         page.fill(SEL_LOGIN_PASS, NEOSALES_PASS)
         page.locator(SEL_LOGIN_BTN).first.click()
+        time.sleep(2)
 
-        page.wait_for_url(lambda url: "/login" not in url, timeout=20_000)
+        # ── 2FA (se necessário) ────────────────────────────────────────────
+        log.info("Verificando 2FA...")
+        lidar_com_2fa(page)
+
+        # ── Aguarda redirecionamento pós-login ─────────────────────────────
+        page.wait_for_url(lambda url: "/login" not in url, timeout=30_000)
         log.info("Login OK.")
 
         # ── Navega para Painel de Produção ─────────────────────────────────
@@ -163,20 +189,17 @@ def baixar_relatorio() -> Path:
         preencher_vaadin_date(page, SEL_DATA_INI, data_inicio, "Inicial")
         preencher_vaadin_date(page, SEL_DATA_FIM, data_fim,    "Final")
 
-        # ── Seleciona painel "PAINEL DE PRODUCAO CLARO VIPSUL" ─────────────
+        # ── Seleciona painel ───────────────────────────────────────────────
         log.info(f"Selecionando painel: {PAINEL_VALOR}")
         selecionar_vaadin_combo(page, SEL_PAINEL, PAINEL_VALOR)
         time.sleep(0.5)
 
-        # ── Seleciona visão EXPORTACAO (radio button) ──────────────────────
-        # IMPORTANTE: selecionar esta visão antes de pesquisar faz o
-        # Pesquisar disparar o download direto do arquivo XLSX.
+        # ── Seleciona visão EXPORTACAO ─────────────────────────────────────
         log.info("Selecionando visão EXPORTACAO...")
         try:
             page.locator(SEL_RADIO_EXPORTACAO).click(timeout=5_000)
             log.info("  Radio EXPORTACAO selecionado via ID")
         except Exception:
-            # Fallback por label
             page.locator("vaadin-radio-button:has-text('EXPORTACAO')").first.click(timeout=5_000)
             log.info("  Radio EXPORTACAO selecionado via texto")
 
