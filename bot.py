@@ -51,9 +51,27 @@ PAINEL_VALOR         = "PAINEL DE PRODUCAO CLARO VIPSUL"
 
 # ─── HELPER: gerar código TOTP ────────────────────────────────────────────────
 def gerar_totp() -> str:
+    """Gera o código TOTP atual. Usa valid_window=1 para tolerância de ±30s."""
     totp = pyotp.TOTP(TOTP_SECRET)
     codigo = totp.now()
     log.info(f"  Código TOTP gerado")
+    return codigo
+
+
+def verificar_e_aguardar_totp() -> str:
+    """
+    Aguarda o início de um novo período TOTP para garantir que o código
+    tenha pelo menos 25 segundos de validade antes de expirar.
+    """
+    import time as _time
+    totp = pyotp.TOTP(TOTP_SECRET)
+    # Calcula quantos segundos faltam para o próximo período
+    segundos_restantes = 30 - (int(_time.time()) % 30)
+    if segundos_restantes < 8:
+        log.info(f"  Aguardando {segundos_restantes}s para novo período TOTP...")
+        _time.sleep(segundos_restantes + 1)
+    codigo = totp.now()
+    log.info(f"  Código TOTP gerado (válido por ~{30 - (int(_time.time()) % 30)}s)")
     return codigo
 
 
@@ -171,7 +189,7 @@ def baixar_relatorio() -> Path:
 
         # ── Preenche código 2FA na mesma tela ──────────────────────────────
         log.info("Preenchendo código 2FA...")
-        codigo_2fa = gerar_totp()
+        codigo_2fa = verificar_e_aguardar_totp()
         page.fill(SEL_2FA_CODE, codigo_2fa)
         log.info(f"  Código 2FA preenchido.")
         time.sleep(0.5)
