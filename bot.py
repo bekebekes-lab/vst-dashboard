@@ -39,7 +39,7 @@ DOWNLOAD_DIR  = Path("/tmp/neosales")
 # ─── Seletores confirmados por inspeção real (Vaadin) ─────────────────────────
 SEL_LOGIN_USER       = "#input-vaadin-text-field-16"
 SEL_LOGIN_PASS       = "#input-vaadin-password-field-17"
-SEL_LOGIN_BTN        = "vaadin-button"
+SEL_LOGIN_BTN        = "vaadin-button:has-text('Logar')"
 SEL_2FA_CODE         = "#input-vaadin-text-field-22"
 SEL_DATA_INI         = "#input-vaadin-date-picker-67"
 SEL_DATA_FIM         = "#input-vaadin-date-picker-68"
@@ -164,8 +164,6 @@ def baixar_relatorio() -> Path:
         # ── Login ──────────────────────────────────────────────────────────
         log.info("Fazendo login...")
         page.goto(f"{NEOSALES_URL}/login", wait_until="networkidle")
-        page.screenshot(path=str(DOWNLOAD_DIR / "pagina_login.png"))
-        log.info("Screenshot da página de login salvo.")
         page.wait_for_selector(SEL_LOGIN_USER, timeout=40_000)
 
         page.fill(SEL_LOGIN_USER, NEOSALES_USER)
@@ -178,7 +176,9 @@ def baixar_relatorio() -> Path:
         log.info(f"  Código 2FA preenchido.")
         time.sleep(0.5)
 
-        page.locator(SEL_LOGIN_BTN).first.click()
+        page.screenshot(path=str(DOWNLOAD_DIR / "antes_logar.png"))
+        log.info("Screenshot antes de clicar Logar salvo.")
+        page.locator(SEL_LOGIN_BTN).click(timeout=10_000)
 
         # ── Aguarda redirecionamento pós-login ─────────────────────────────
         page.wait_for_url(lambda url: "/login" not in url, timeout=30_000)
