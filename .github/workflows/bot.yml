@@ -3,9 +3,8 @@ name: NeoSales Bot
 on:
   schedule:
     # A cada 2h em dias úteis — horário BRT (UTC-3)
-    # BRT 06h=UTC 09h, BRT 08h=UTC 11h, ..., BRT 22h=UTC 01h(+1dia)
     - cron: "0 9,11,13,15,17,19,21,23,1 * * 1-5"
-  workflow_dispatch:  # permite rodar manualmente pelo painel do GitHub
+  workflow_dispatch:
 
 jobs:
   bot:
@@ -22,16 +21,20 @@ jobs:
           python-version: "3.11"
           cache: "pip"
 
-      - name: Instalar dependências
+      - name: Instalar dependências Python
         run: pip install -r requirements.txt
 
-      - name: Corrigir dependência libasound2 (Ubuntu 24)
-        run: sudo apt-get install -y libasound2t64
+      - name: Instalar dependências do sistema para Playwright
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libnss3 libnspr4 libatk1.0-0 libatk-bridge2.0-0 \
+            libcups2 libdrm2 libxkbcommon0 libxcomposite1 \
+            libxdamage1 libxfixes3 libxrandr2 libgbm1 \
+            libpango-1.0-0 libcairo2 libasound2t64
 
       - name: Instalar Playwright + Chromium
-        run: |
-          playwright install chromium
-          playwright install-deps chromium
+        run: playwright install chromium
 
       - name: Executar bot
         env:
