@@ -36,6 +36,36 @@ SHEET_ID      = os.environ["SHEET_ID"]
 ABA_DESTINO   = "BaseCRM"
 DOWNLOAD_DIR  = Path("/tmp/neosales")
 
+# ─── DEBUG: Diagnóstico de variáveis de ambiente ──────────────────────────────
+def _debug_env():
+    log.info("=" * 60)
+    log.info("DEBUG — Variáveis de ambiente recebidas:")
+
+    # TOTP_SECRET — mostra tamanho e primeiros/últimos chars (sem expor o valor)
+    raw_totp = os.environ.get("TOTP_SECRET", "")
+    log.info(f"  TOTP_SECRET presente no env: {'SIM' if 'TOTP_SECRET' in os.environ else 'NAO'}")
+    log.info(f"  TOTP_SECRET len (raw)      : {len(raw_totp)}")
+    log.info(f"  TOTP_SECRET len (stripped) : {len(raw_totp.strip())}")
+    if raw_totp:
+        log.info(f"  TOTP_SECRET primeiros 4    : {raw_totp[:4]}****")
+        log.info(f"  TOTP_SECRET últimos 4      : ****{raw_totp[-4:]}")
+        # Verifica chars inválidos para base32
+        import re
+        invalidos = re.findall(r'[^A-Z2-7=]', raw_totp.strip().upper())
+        if invalidos:
+            log.warning(f"  TOTP_SECRET chars INVÁLIDOS para base32: {invalidos}")
+        else:
+            log.info("  TOTP_SECRET formato base32: OK")
+    else:
+        log.error("  TOTP_SECRET está VAZIO!")
+
+    # Outras variáveis — apenas confirma presença
+    for var in ["NEOSALES_USER", "NEOSALES_PASS", "SHEET_ID", "GOOGLE_CREDENTIALS"]:
+        val = os.environ.get(var, "")
+        log.info(f"  {var:<22}: {'presente (' + str(len(val)) + ' chars)' if val else 'AUSENTE!'}")
+
+    log.info("=" * 60)
+
 # ─── Seletores confirmados por inspeção real (Vaadin) ─────────────────────────
 SEL_LOGIN_USER       = "#input-vaadin-text-field-16"
 SEL_LOGIN_PASS       = "#input-vaadin-password-field-17"
@@ -55,7 +85,14 @@ def gerar_totp_seguro() -> str:
     Gera o código TOTP aguardando que haja pelo menos 15s de validade restante.
     Loga informações de diagnóstico para facilitar depuração.
     """
+    # ── DEBUG detalhado antes de validar ──────────────────────────────────
+    raw = os.environ.get("TOTP_SECRET", "")
+    log.info(f"  [DEBUG] TOTP_SECRET no env    : {'SIM' if raw else 'NAO/VAZIO'}")
+    log.info(f"  [DEBUG] TOTP_SECRET global var: {'presente' if TOTP_SECRET else 'VAZIO'}")
+    log.info(f"  [DEBUG] len(raw)={len(raw)} | len(global)={len(TOTP_SECRET)}")
+
     if not TOTP_SECRET:
+        log.error("  [DEBUG] TOTP_SECRET vazio após strip/replace — verifique o secret no GitHub!")
         raise ValueError("TOTP_SECRET não configurado!")
 
     totp = pyotp.TOTP(TOTP_SECRET)
@@ -332,6 +369,8 @@ def main():
     log.info("=" * 60)
     log.info(f"NeoSales Bot  —  {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     log.info("=" * 60)
+
+    _debug_env()  # ← diagnóstico completo de todas as variáveis
 
     try:
         arquivo = baixar_relatorio()
