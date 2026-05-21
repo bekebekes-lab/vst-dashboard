@@ -187,16 +187,17 @@ def baixar_relatorio() -> Path:
         page.fill(SEL_LOGIN_USER, NEOSALES_USER)
         page.fill(SEL_LOGIN_PASS, NEOSALES_PASS)
 
-        # ── Preenche código 2FA na mesma tela ──────────────────────────────
+        # ── Gera e preenche 2FA imediatamente antes de clicar ──────────────
         log.info("Preenchendo código 2FA...")
         codigo_2fa = verificar_e_aguardar_totp()
         page.fill(SEL_2FA_CODE, codigo_2fa)
         log.info(f"  Código 2FA preenchido.")
-        time.sleep(0.5)
 
-        page.screenshot(path=str(DOWNLOAD_DIR / "antes_logar.png"))
-        log.info("Screenshot antes de clicar Logar salvo.")
+        # Clica imediatamente sem delay
         page.locator(SEL_LOGIN_BTN).click(timeout=10_000)
+
+        page.screenshot(path=str(DOWNLOAD_DIR / "pos_login.png"))
+        log.info("Screenshot pós-login salvo.")
         time.sleep(3)
         page.screenshot(path=str(DOWNLOAD_DIR / "pos_login.png"))
         log.info("Screenshot pós-login salvo.")
