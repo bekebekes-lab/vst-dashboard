@@ -1,46 +1,38 @@
 name: NeoSales Bot
-
 on:
   schedule:
     # A cada 2h em dias úteis — horário BRT (UTC-3)
     # BRT 06h=UTC 09h, BRT 08h=UTC 11h, ..., BRT 22h=UTC 01h(+1dia)
     - cron: "0 9,11,13,15,17,19,21,23,1 * * 1-5"
   workflow_dispatch:  # permite rodar manualmente pelo painel do GitHub
-
 jobs:
   bot:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: "pip"
-
-      - name: Instalar dependências
+      - name: Instalar dependências Python
         run: pip install -r requirements.txt
-
       - name: Corrigir dependência libasound2 (Ubuntu 24)
         run: sudo apt-get install -y libasound2t64
-
       - name: Instalar Playwright + Chromium
         run: |
           playwright install chromium
           playwright install-deps chromium
-
       - name: Executar bot
         env:
           NEOSALES_USER:      ${{ secrets.NEOSALES_USER }}
           NEOSALES_PASS:      ${{ secrets.NEOSALES_PASS }}
+          TOTP_SECRET:        ${{ secrets.TOTP_SECRET }}
           SHEET_ID:           ${{ secrets.SHEET_ID }}
           GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
         run: python bot.py
-
       - name: Salvar artefatos em caso de erro
         if: failure()
         uses: actions/upload-artifact@v4
