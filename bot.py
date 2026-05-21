@@ -31,40 +31,10 @@ log = logging.getLogger(__name__)
 NEOSALES_URL  = "https://vipsul.neosales.com.br"
 NEOSALES_USER = os.environ["NEOSALES_USER"]
 NEOSALES_PASS = os.environ["NEOSALES_PASS"]
-TOTP_SECRET   = os.environ.get("TOTP_SECRET", "").strip().replace(" ", "")
+TOTP_SECRET   = os.environ.get("TOTP_SECRET", "")
 SHEET_ID      = os.environ["SHEET_ID"]
 ABA_DESTINO   = "BaseCRM"
 DOWNLOAD_DIR  = Path("/tmp/neosales")
-
-# ─── DEBUG: Diagnóstico de variáveis de ambiente ──────────────────────────────
-def _debug_env():
-    log.info("=" * 60)
-    log.info("DEBUG — Variáveis de ambiente recebidas:")
-
-    # TOTP_SECRET — mostra tamanho e primeiros/últimos chars (sem expor o valor)
-    raw_totp = os.environ.get("TOTP_SECRET", "")
-    log.info(f"  TOTP_SECRET presente no env: {'SIM' if 'TOTP_SECRET' in os.environ else 'NAO'}")
-    log.info(f"  TOTP_SECRET len (raw)      : {len(raw_totp)}")
-    log.info(f"  TOTP_SECRET len (stripped) : {len(raw_totp.strip())}")
-    if raw_totp:
-        log.info(f"  TOTP_SECRET primeiros 4    : {raw_totp[:4]}****")
-        log.info(f"  TOTP_SECRET últimos 4      : ****{raw_totp[-4:]}")
-        # Verifica chars inválidos para base32
-        import re
-        invalidos = re.findall(r'[^A-Z2-7=]', raw_totp.strip().upper())
-        if invalidos:
-            log.warning(f"  TOTP_SECRET chars INVÁLIDOS para base32: {invalidos}")
-        else:
-            log.info("  TOTP_SECRET formato base32: OK")
-    else:
-        log.error("  TOTP_SECRET está VAZIO!")
-
-    # Outras variáveis — apenas confirma presença
-    for var in ["NEOSALES_USER", "NEOSALES_PASS", "SHEET_ID", "GOOGLE_CREDENTIALS"]:
-        val = os.environ.get(var, "")
-        log.info(f"  {var:<22}: {'presente (' + str(len(val)) + ' chars)' if val else 'AUSENTE!'}")
-
-    log.info("=" * 60)
 
 # ─── Seletores confirmados por inspeção real (Vaadin) ─────────────────────────
 SEL_LOGIN_USER       = "#input-vaadin-text-field-16"
@@ -79,48 +49,29 @@ SEL_PESQUISAR        = "vaadin-button:has-text('Pesquisar')"
 PAINEL_VALOR         = "PAINEL DE PRODUCAO CLARO VIPSUL"
 
 
-# ─── HELPER: gerar código TOTP com diagnóstico ────────────────────────────────
-def gerar_totp_seguro() -> str:
-    """
-    Gera o código TOTP aguardando que haja pelo menos 15s de validade restante.
-    Loga informações de diagnóstico para facilitar depuração.
-    """
-    # ── DEBUG detalhado antes de validar ──────────────────────────────────
-    raw = os.environ.get("TOTP_SECRET", "")
-    log.info(f"  [DEBUG] TOTP_SECRET no env    : {'SIM' if raw else 'NAO/VAZIO'}")
-    log.info(f"  [DEBUG] TOTP_SECRET global var: {'presente' if TOTP_SECRET else 'VAZIO'}")
-    log.info(f"  [DEBUG] len(raw)={len(raw)} | len(global)={len(TOTP_SECRET)}")
-
-    if not TOTP_SECRET:
-        log.error("  [DEBUG] TOTP_SECRET vazio após strip/replace — verifique o secret no GitHub!")
-        raise ValueError("TOTP_SECRET não configurado!")
-
+# ─── HELPER: gerar código TOTP ────────────────────────────────────────────────
+def gerar_totp() -> str:
+    """Gera o código TOTP atual. Usa valid_window=1 para tolerância de ±30s."""
     totp = pyotp.TOTP(TOTP_SECRET)
-
-    # Diagnóstico: mostra o timestamp atual e o código gerado
-    ts_atual = int(time.time())
-    segundos_no_periodo = ts_atual % 30
-    segundos_restantes  = 30 - segundos_no_periodo
-
-    log.info(f"  TOTP — timestamp Unix: {ts_atual}")
-    log.info(f"  TOTP — posição no período: {segundos_no_periodo}s / 30s")
-    log.info(f"  TOTP — tempo restante no código atual: {segundos_restantes}s")
-
-    # Aguarda se restar menos de 10s para garantir validade durante o envio
-    if segundos_restantes < 10:
-        log.info(f"  TOTP — aguardando {segundos_restantes + 1}s para novo período...")
-        time.sleep(segundos_restantes + 1)
-        ts_atual = int(time.time())
-        segundos_restantes = 30 - (ts_atual % 30)
-        log.info(f"  TOTP — novo tempo restante: {segundos_restantes}s")
-
     codigo = totp.now()
-    log.info(f"  TOTP — código gerado (válido por ~{segundos_restantes}s)")
+    log.info(f"  Código TOTP gerado")
+    return codigo
 
-    # Validação local antes de enviar
-    if not totp.verify(codigo, valid_window=1):
-        log.warning("  TOTP — AVISO: código não validou localmente (possível dessincronização de relógio)")
 
+def verificar_e_aguardar_totp() -> str:
+    """
+    Aguarda o início de um novo período TOTP para garantir que o código
+    tenha pelo menos 25 segundos de validade antes de expirar.
+    """
+    import time as _time
+    totp = pyotp.TOTP(TOTP_SECRET)
+    # Calcula quantos segundos faltam para o próximo período
+    segundos_restantes = 30 - (int(_time.time()) % 30)
+    if segundos_restantes < 8:
+        log.info(f"  Aguardando {segundos_restantes}s para novo período TOTP...")
+        _time.sleep(segundos_restantes + 1)
+    codigo = totp.now()
+    log.info(f"  Código TOTP gerado (válido por ~{30 - (int(_time.time()) % 30)}s)")
     return codigo
 
 
@@ -181,6 +132,35 @@ def selecionar_vaadin_combo(page, seletor: str, valor: str):
         page.screenshot(path=str(DOWNLOAD_DIR / "erro_combo.png"))
 
 
+# ─── HELPER: lidar com 2FA TOTP se aparecer ───────────────────────────────────
+def lidar_com_2fa(page):
+    seletores_2fa = [
+        "input[autocomplete='one-time-code']",
+        "input[placeholder*='digo']",
+        "input[placeholder*='code']",
+        "input[placeholder*='token']",
+        "vaadin-text-field[label*='digo'] input",
+        "vaadin-text-field[label*='Code'] input",
+        "vaadin-text-field[label*='Token'] input",
+        "vaadin-text-field[label*='utenti'] input",
+    ]
+    for sel in seletores_2fa:
+        try:
+            el = page.locator(sel).first
+            el.wait_for(state="visible", timeout=3_000)
+            codigo = gerar_totp()
+            el.fill(codigo)
+            time.sleep(0.5)
+            page.keyboard.press("Enter")
+            log.info(f"  2FA preenchido via: {sel}")
+            time.sleep(2)
+            return True
+        except Exception:
+            continue
+    log.info("  Nenhuma tela de 2FA detectada.")
+    return False
+
+
 # ─── 1. LOGIN + DOWNLOAD ──────────────────────────────────────────────────────
 def baixar_relatorio() -> Path:
     DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -199,84 +179,32 @@ def baixar_relatorio() -> Path:
         page    = context.new_page()
         page.set_default_timeout(30_000)
 
-        # ── Login com loop de tentativas TOTP ─────────────────────────────
+        # ── Login ──────────────────────────────────────────────────────────
         log.info("Fazendo login...")
         page.goto(f"{NEOSALES_URL}/login", wait_until="networkidle")
         page.wait_for_selector(SEL_LOGIN_USER, timeout=40_000)
 
-        def preencher_campo_2fa(codigo: str):
-            """Preenche o campo 2FA usando ID fixo ou fallback."""
-            seletores = [
-                SEL_2FA_CODE,
-                "input[autocomplete='one-time-code']",
-                "vaadin-text-field[label*='2FA'] input",
-                "vaadin-text-field[label*='Codigo'] input",
-                "vaadin-text-field[label*='digo'] input",
-            ]
-            for sel in seletores:
-                try:
-                    el = page.locator(sel).first
-                    el.wait_for(state="visible", timeout=3_000)
-                    el.triple_click()
-                    el.fill(codigo)
-                    log.info(f"  Campo 2FA preenchido via: {sel}")
-                    return True
-                except Exception:
-                    continue
-            return False
+        page.fill(SEL_LOGIN_USER, NEOSALES_USER)
+        page.fill(SEL_LOGIN_PASS, NEOSALES_PASS)
 
-        login_ok = False
-        for tentativa in range(1, 4):  # até 3 tentativas (cobre ~90s de janela TOTP)
-            log.info(f"Tentativa de login {tentativa}/3...")
+        # ── Gera e preenche 2FA imediatamente antes de clicar ──────────────
+        log.info("Preenchendo código 2FA...")
+        codigo_2fa = verificar_e_aguardar_totp()
+        page.fill(SEL_2FA_CODE, codigo_2fa)
+        log.info(f"  Código 2FA preenchido.")
 
-            # Preenche usuário e senha sempre (a página pode ter recarregado)
-            page.fill(SEL_LOGIN_USER, NEOSALES_USER)
-            page.fill(SEL_LOGIN_PASS, NEOSALES_PASS)
+        # Clica imediatamente sem delay
+        page.locator(SEL_LOGIN_BTN).click(timeout=10_000)
 
-            # Gera código TOTP com margem mínima de 10s
-            codigo_2fa = gerar_totp_seguro()
+        page.screenshot(path=str(DOWNLOAD_DIR / "pos_login.png"))
+        log.info("Screenshot pós-login salvo.")
+        time.sleep(3)
+        page.screenshot(path=str(DOWNLOAD_DIR / "pos_login.png"))
+        log.info("Screenshot pós-login salvo.")
 
-            if not preencher_campo_2fa(codigo_2fa):
-                log.error("  Não foi possível encontrar o campo 2FA!")
-                break
-
-            page.screenshot(path=str(DOWNLOAD_DIR / f"pre_login_{tentativa}.png"))
-            log.info(f"  Screenshot pré-clique {tentativa} salvo.")
-
-            page.locator(SEL_LOGIN_BTN).click(timeout=10_000)
-            time.sleep(3)  # aguarda resposta do servidor
-
-            page.screenshot(path=str(DOWNLOAD_DIR / f"pos_login_{tentativa}.png"))
-            log.info(f"  Screenshot pós-clique {tentativa} salvo.")
-
-            current_url = page.url
-            log.info(f"  URL após tentativa {tentativa}: {current_url}")
-
-            if "/login" not in current_url:
-                log.info(f"  ✅ Login bem-sucedido na tentativa {tentativa}!")
-                login_ok = True
-                break
-
-            # Verifica mensagem de erro na página
-            try:
-                if page.locator("text=inválido").first.is_visible(timeout=1_000):
-                    log.warning(f"  Código TOTP rejeitado na tentativa {tentativa}.")
-            except Exception:
-                pass
-
-            if tentativa < 3:
-                # Aguarda o próximo período TOTP completo antes de tentar novamente
-                segundos_restantes = 30 - (int(time.time()) % 30)
-                log.info(f"  Aguardando {segundos_restantes + 2}s para próximo período TOTP...")
-                time.sleep(segundos_restantes + 2)
-
-        if not login_ok:
-            page.screenshot(path=str(DOWNLOAD_DIR / "falha_login_final.png"))
-            raise RuntimeError(
-                "Login falhou após 3 tentativas TOTP. "
-                "Verifique as screenshots e confirme que o relógio do runner está sincronizado. "
-                "O TOTP_SECRET foi confirmado como correto."
-            )
+        # ── Aguarda redirecionamento pós-login ─────────────────────────────
+        page.wait_for_url(lambda url: "/login" not in url, timeout=60_000)
+        log.info("Login OK.")
 
         # ── Navega para Painel de Produção ─────────────────────────────────
         log.info("Navegando para /painel-producao...")
@@ -369,8 +297,6 @@ def main():
     log.info("=" * 60)
     log.info(f"NeoSales Bot  —  {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     log.info("=" * 60)
-
-    _debug_env()  # ← diagnóstico completo de todas as variáveis
 
     try:
         arquivo = baixar_relatorio()
