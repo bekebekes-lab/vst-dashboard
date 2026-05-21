@@ -181,7 +181,7 @@ def baixar_relatorio() -> Path:
         page.locator(SEL_LOGIN_BTN).click(timeout=10_000)
 
         # ── Aguarda redirecionamento pós-login ─────────────────────────────
-        page.wait_for_url(lambda url: "/login" not in url, timeout=30_000)
+        page.wait_for_url(lambda url: "/login" not in url, timeout=60_000)
         log.info("Login OK.")
 
         # ── Navega para Painel de Produção ─────────────────────────────────
