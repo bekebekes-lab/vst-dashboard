@@ -163,6 +163,8 @@ def baixar_relatorio() -> Path:
         # ── Login ──────────────────────────────────────────────────────────
         log.info("Fazendo login...")
         page.goto(f"{NEOSALES_URL}/login", wait_until="networkidle")
+        page.screenshot(path=str(DOWNLOAD_DIR / "pagina_login.png"))
+        log.info("Screenshot da página de login salvo.")
         page.wait_for_selector(SEL_LOGIN_USER, timeout=40_000)
 
         page.fill(SEL_LOGIN_USER, NEOSALES_USER)
