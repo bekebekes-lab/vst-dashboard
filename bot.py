@@ -179,6 +179,9 @@ def baixar_relatorio() -> Path:
         page.screenshot(path=str(DOWNLOAD_DIR / "antes_logar.png"))
         log.info("Screenshot antes de clicar Logar salvo.")
         page.locator(SEL_LOGIN_BTN).click(timeout=10_000)
+        time.sleep(3)
+        page.screenshot(path=str(DOWNLOAD_DIR / "pos_login.png"))
+        log.info("Screenshot pós-login salvo.")
 
         # ── Aguarda redirecionamento pós-login ─────────────────────────────
         page.wait_for_url(lambda url: "/login" not in url, timeout=60_000)
