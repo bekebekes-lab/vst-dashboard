@@ -37,9 +37,10 @@ ABA_DESTINO   = "BaseCRM"
 DOWNLOAD_DIR  = Path("/tmp/neosales")
 
 # ─── Seletores confirmados por inspeção real (Vaadin) ─────────────────────────
-SEL_LOGIN_USER       = "#input-vaadin-text-field-13"
-SEL_LOGIN_PASS       = "#input-vaadin-password-field-14"
+SEL_LOGIN_USER       = "#input-vaadin-text-field-16"
+SEL_LOGIN_PASS       = "#input-vaadin-password-field-17"
 SEL_LOGIN_BTN        = "vaadin-button"
+SEL_2FA_CODE         = "#input-vaadin-text-field-22"
 SEL_DATA_INI         = "#input-vaadin-date-picker-67"
 SEL_DATA_FIM         = "#input-vaadin-date-picker-68"
 SEL_PAINEL           = "#input-vaadin-combo-box-70"
@@ -169,12 +170,15 @@ def baixar_relatorio() -> Path:
 
         page.fill(SEL_LOGIN_USER, NEOSALES_USER)
         page.fill(SEL_LOGIN_PASS, NEOSALES_PASS)
-        page.locator(SEL_LOGIN_BTN).first.click()
-        time.sleep(2)
 
-        # ── 2FA (se necessário) ────────────────────────────────────────────
-        log.info("Verificando 2FA...")
-        lidar_com_2fa(page)
+        # ── Preenche código 2FA na mesma tela ──────────────────────────────
+        log.info("Preenchendo código 2FA...")
+        codigo_2fa = gerar_totp()
+        page.fill(SEL_2FA_CODE, codigo_2fa)
+        log.info(f"  Código 2FA preenchido.")
+        time.sleep(0.5)
+
+        page.locator(SEL_LOGIN_BTN).first.click()
 
         # ── Aguarda redirecionamento pós-login ─────────────────────────────
         page.wait_for_url(lambda url: "/login" not in url, timeout=30_000)
