@@ -743,10 +743,18 @@ function initials(name) {
 }
 
 async function loadData() {
-  // Atualiza dropdown com abas reais da planilha
-  carregarAbas();
-
+  // Captura o período selecionado ANTES de atualizar o dropdown
   const mesSel = document.getElementById('mes-selector');
+  const periodoSelecionado = mesSel ? mesSel.value : 'BaseCRM';
+
+  // Atualiza dropdown com abas reais da planilha (aguarda para preservar seleção)
+  await carregarAbas();
+
+  // Restaura a seleção após carregarAbas() (que reseta o select)
+  if (mesSel && [...mesSel.options].some(o => o.value === periodoSelecionado)) {
+    mesSel.value = periodoSelecionado;
+  }
+
   const sheetName = mesSel ? mesSel.value : 'BaseCRM';
   const isLive = sheetName === 'BaseCRM';
 
