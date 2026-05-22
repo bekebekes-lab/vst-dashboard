@@ -2270,9 +2270,9 @@ async function fazerLogin() {
 }
 
 async function carregarPerfil(user) {
-  // Busca perfil na tabela usuarios
+  // Busca perfil na tabela usuarios_dashboard
   const { data: perfil } = await supa
-    .from('usuarios')
+    .from('usuarios_dashboard')
     .select('*')
     .eq('id', user.id)
     .single();
