@@ -2270,12 +2270,25 @@ async function fazerLogin() {
 }
 
 async function carregarPerfil(user) {
-  // Busca perfil na tabela usuarios_dashboard
-  const { data: perfil } = await supa
+  // Busca perfil em usuarios_dashboard primeiro, depois usuarios como fallback
+  let perfil = null;
+
+  const { data: perfilDash } = await supa
     .from('usuarios_dashboard')
     .select('*')
     .eq('id', user.id)
     .single();
+
+  if (perfilDash) {
+    perfil = perfilDash;
+  } else {
+    const { data: perfilLeg } = await supa
+      .from('usuarios')
+      .select('*')
+      .eq('id', user.id)
+      .single();
+    perfil = perfilLeg;
+  }
 
   USUARIO_ATUAL = perfil || {
     id: user.id,
