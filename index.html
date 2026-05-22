@@ -813,15 +813,14 @@ async function carregarAbas() {
 
     const meses = { '01':'Jan','02':'Fev','03':'Mar','04':'Abr','05':'Mai','06':'Jun','07':'Jul','08':'Ago','09':'Set','10':'Out','11':'Nov','12':'Dez' };
 
-    // Filtra abas no padrão "BaseCRM MMYYYY"
+    // Filtra abas no padrão "BaseCRM MMYYYY" (qualquer nº de espaços entre BaseCRM e os dígitos)
+    const parseAba = a => { const m = a.match(/^BaseCRM\s+(\d{2})(\d{4})$/); return m ? { mm: m[1], yyyy: m[2] } : null; };
     const historico = abas
-      .filter(a => a !== 'BaseCRM' && /^BaseCRM\s+\d{6}$/.test(a))
+      .filter(a => parseAba(a))
       .sort((a, b) => {
-        const na = a.replace('BaseCRM ', '');
-        const nb = b.replace('BaseCRM ', '');
-        // MMYYYY → YYYYMM para ordenar desc
-        const ka = na.slice(2) + na.slice(0, 2);
-        const kb = nb.slice(2) + nb.slice(0, 2);
+        const pa = parseAba(a), pb = parseAba(b);
+        const ka = pa.yyyy + pa.mm;
+        const kb = pb.yyyy + pb.mm;
         return kb.localeCompare(ka);
       });
 
@@ -830,8 +829,7 @@ async function carregarAbas() {
 
     sel.innerHTML = '<option value="BaseCRM">Atual (Live)</option>';
     historico.forEach(aba => {
-      const mm   = aba.slice(-6, -4);
-      const yyyy = aba.slice(-4);
+      const { mm, yyyy } = parseAba(aba);
       const label = `${meses[mm] || mm}/${yyyy}`;
       const opt = document.createElement('option');
       opt.value = aba;
