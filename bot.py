@@ -295,11 +295,24 @@ def baixar_relatorio() -> Path:
         log.info("Clicando em Pesquisar (gera o download)...")
         arquivo = DOWNLOAD_DIR / f"producao_{hoje.strftime('%Y%m%d_%H%M')}.xlsx"
 
-        with page.expect_download(timeout=120_000) as dl_info:
-            page.locator(SEL_PESQUISAR).click(timeout=10_000)
-
-        dl_info.value.save_as(str(arquivo))
-        log.info(f"Download salvo: {arquivo}")
+        try:
+            with page.expect_download(timeout=120_000) as dl_info:
+                page.locator(SEL_PESQUISAR).click(timeout=10_000)
+                time.sleep(2)
+                page.screenshot(path=str(DOWNLOAD_DIR / "pos_pesquisar.png"))
+                log.info("Screenshot pós-pesquisar salvo.")
+            dl_info.value.save_as(str(arquivo))
+            log.info(f"Download salvo: {arquivo}")
+        except Exception as e_dl:
+            page.screenshot(path=str(DOWNLOAD_DIR / "erro_download.png"))
+            log.error(f"Falha no download: {e_dl}")
+            # Tenta clicar novamente após aguardar
+            log.info("Tentando clicar Pesquisar novamente...")
+            time.sleep(5)
+            with page.expect_download(timeout=180_000) as dl_info2:
+                page.locator(SEL_PESQUISAR).click(timeout=10_000)
+            dl_info2.value.save_as(str(arquivo))
+            log.info(f"Download salvo na 2a tentativa: {arquivo}")
 
         browser.close()
 
