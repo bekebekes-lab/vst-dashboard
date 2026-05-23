@@ -210,7 +210,39 @@ def baixar_relatorio() -> Path:
         # ── Navega para Painel de Produção ─────────────────────────────────
         log.info("Navegando para /painel-producao...")
         page.goto(f"{NEOSALES_URL}/painel-producao", wait_until="networkidle")
-        page.wait_for_selector(SEL_DATA_INI, timeout=20_000)
+        time.sleep(3)
+        page.screenshot(path=str(DOWNLOAD_DIR / "painel_producao.png"))
+        log.info("Screenshot do painel salvo.")
+
+        # Loga todos os IDs de campos vaadin para debug
+        try:
+            ids = page.evaluate(
+                "() => Array.from(document.querySelectorAll('vaadin-date-picker,vaadin-combo-box,vaadin-radio-button')).map(e => ({tag:e.tagName,id:e.id,label:e.getAttribute('label')||''}))"
+            )
+            for item in ids:
+                log.info(f"  Vaadin: {item}")
+        except Exception as ex:
+            log.warning(f"  Falha ao inspecionar elementos: {ex}")
+
+        # Aguarda campo de data com fallback por label
+        sels_data = [
+            SEL_DATA_INI,
+            "vaadin-date-picker[label='Inicial'] input",
+            "vaadin-date-picker[label='Data Inicial'] input",
+            "vaadin-date-picker:first-of-type input",
+        ]
+        encontrou_data = False
+        for sel in sels_data:
+            try:
+                page.wait_for_selector(sel, timeout=5_000)
+                log.info(f"  Campo de data encontrado via: {sel}")
+                encontrou_data = True
+                break
+            except Exception:
+                continue
+        if not encontrou_data:
+            page.screenshot(path=str(DOWNLOAD_DIR / "erro_painel.png"))
+            raise RuntimeError("Campo de data não encontrado no painel de produção.")
         time.sleep(1)
 
         # ── Preenche datas ─────────────────────────────────────────────────
