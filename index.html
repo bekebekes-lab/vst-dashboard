@@ -2394,15 +2394,13 @@ function aplicarPermissoes() {
       }
       onFilterChange('gestor');
 
-      // Bloqueia estado e equipe — gestor não pode mudar esses filtros
-      ['f-estado', 'f-equipe'].forEach(id => {
-        const sel = document.getElementById(id);
-        if (sel) {
-          sel.disabled = true;
-          sel.style.opacity = '0.5';
-          sel.style.pointerEvents = 'none';
-        }
-      });
+      // Bloqueia apenas estado — gestor pode filtrar equipe e consultor
+      const selE = document.getElementById('f-estado');
+      if (selE) {
+        selE.disabled = true;
+        selE.style.opacity = '0.5';
+        selE.style.pointerEvents = 'none';
+      }
     }
   };
 
