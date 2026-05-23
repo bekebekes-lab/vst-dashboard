@@ -275,24 +275,21 @@ def baixar_relatorio() -> Path:
 
         # ── Seleciona visão EXPORTACAO ─────────────────────────────────────
         log.info("Selecionando visão EXPORTACAO...")
-        sels_radio = [
-            "vaadin-radio-button:has-text('EXPORTACAO')",
-            "vaadin-radio-button:has-text('Exportacao')",
-            "vaadin-radio-button:has-text('exportacao')",
-            SEL_RADIO_EXPORTACAO,
-        ]
-        for sel_r in sels_radio:
+        for sel_r in ["vaadin-radio-button:has-text('EXPORTACAO')", SEL_RADIO_EXPORTACAO]:
             try:
                 el_r = page.locator(sel_r).first
                 el_r.scroll_into_view_if_needed()
                 el_r.click(timeout=5_000, force=True)
                 time.sleep(0.5)
-                log.info(f"  Radio EXPORTACAO selecionado via: {sel_r}")
+                log.info(f"  Radio EXPORTACAO clicado via: {sel_r}")
                 break
             except Exception:
                 continue
-        page.screenshot(path=str(DOWNLOAD_DIR / "pos_radio.png"))
+        page.evaluate(
+            "document.querySelectorAll('vaadin-radio-button').forEach(r => { if(r.textContent.trim().includes('EXPORTACAO')) r.click(); })"
+        )
         time.sleep(0.5)
+        page.screenshot(path=str(DOWNLOAD_DIR / "pos_radio.png"))
 
         # ── Pesquisar → dispara o download ─────────────────────────────────
         log.info("Clicando em Pesquisar (gera o download)...")
