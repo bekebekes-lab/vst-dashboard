@@ -1,5 +1,4 @@
 name: NeoSales Bot
-
 on:
   schedule:
     # A cada 2h em dias úteis — horário BRT (UTC-3)
@@ -40,6 +39,7 @@ jobs:
         env:
           NEOSALES_USER:      ${{ secrets.NEOSALES_USER }}
           NEOSALES_PASS:      ${{ secrets.NEOSALES_PASS }}
+          TOTP_SECRET:        ${{ secrets.TOTP_SECRET }}
           SHEET_ID:           ${{ secrets.SHEET_ID }}
           GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
         run: python bot.py
