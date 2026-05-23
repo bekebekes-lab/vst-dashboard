@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
+  <!-- v:1779531702 -->
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
@@ -440,7 +441,7 @@
       </select>
     </div>
     <span class="last-update" id="last-update"></span>
-    <button class="btn-refresh" onclick="loadData()">↻ Atualizar</button>
+    <button class="btn-refresh" onclick="loadData(); setTimeout(() => aplicarPermissoes(), 1000); setTimeout(() => aplicarPermissoes(), 2500);">↻ Atualizar</button>
     <span class="clock" id="clock"></span>
     <div class="user-badge" onclick="fazerLogout()" title="Clique para sair">
       <div class="user-avatar" id="user-avatar">?</div>
@@ -795,6 +796,11 @@ async function loadData() {
     render();
     renderSimulador();
     renderProducao();
+    // Reaplica permissões sempre que os dados carregarem
+    if (USUARIO_ATUAL) {
+      setTimeout(() => aplicarPermissoes(), 500);
+      setTimeout(() => aplicarPermissoes(), 1500);
+    }
   } catch (e) {
     document.getElementById('metrics-area').innerHTML = '';
     document.getElementById('error-area').innerHTML = `
@@ -2429,5 +2435,23 @@ async function fazerLogout() {
   document.getElementById('login-btn').textContent = 'Entrar';
 }
 </script>
+  <script>
+    // Registra Service Worker para evitar cache
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').then(reg => {
+        // Força atualização imediata se houver nova versão
+        reg.addEventListener('updatefound', () => {
+          const newWorker = reg.installing;
+          newWorker.addEventListener('statechange', () => {
+            if (newWorker.state === 'activated') {
+              window.location.reload();
+            }
+          });
+        });
+        // Verifica atualização a cada 60 segundos
+        setInterval(() => reg.update(), 60000);
+      });
+    }
+  </script>
 </body>
 </html>
