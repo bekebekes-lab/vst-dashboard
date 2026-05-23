@@ -122,6 +122,10 @@ def selecionar_vaadin_combo(page, seletor: str, valor: str):
         el.wait_for(state="visible", timeout=10_000)
         el.click()
         time.sleep(0.5)
+        el.triple_click()
+        page.keyboard.press('Control+a')
+        page.keyboard.press('Delete')
+        time.sleep(0.3)
         el.type(valor[:10], delay=80)
         time.sleep(1.5)
         # Tenta clicar na opção pelo texto
@@ -279,12 +283,15 @@ def baixar_relatorio() -> Path:
         ]
         for sel_r in sels_radio:
             try:
-                page.locator(sel_r).first.click(timeout=5_000)
+                el_r = page.locator(sel_r).first
+                el_r.scroll_into_view_if_needed()
+                el_r.click(timeout=5_000, force=True)
+                time.sleep(0.5)
                 log.info(f"  Radio EXPORTACAO selecionado via: {sel_r}")
                 break
             except Exception:
                 continue
-
+        page.screenshot(path=str(DOWNLOAD_DIR / "pos_radio.png"))
         time.sleep(0.5)
 
         # ── Pesquisar → dispara o download ─────────────────────────────────
