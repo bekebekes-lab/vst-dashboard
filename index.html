@@ -995,12 +995,16 @@ function render() {
 
     metrics[key].total += qtd;
     metrics[key].filas[fila] = (metrics[key].filas[fila] || 0) + qtd;
-    metrics["GERAL"].total += qtd;
-    metrics["GERAL"].filas[fila] = (metrics["GERAL"].filas[fila] || 0) + qtd;
+    // SERV. DIGITAIS não soma no GERAL
+    if (key !== "SERV. DIGITAIS") {
+      metrics["GERAL"].total += qtd;
+      metrics["GERAL"].filas[fila] = (metrics["GERAL"].filas[fila] || 0) + qtd;
+    }
 
     if (!consMap[cons]) consMap[cons] = { equipe: eq, tag: rtag, GROSS: 0, "RENOVAÇÃO": 0, BL: 0, TITULARIDADE: 0, "SERV. DIGITAIS": 0, GERAL: 0 };
     consMap[cons][key] += qtd;
-    consMap[cons].GERAL += qtd;
+    // SERV. DIGITAIS não soma no GERAL
+    if (key !== "SERV. DIGITAIS") consMap[cons].GERAL += qtd;
   });
 
   const nc = nConsSet.size || 1;
