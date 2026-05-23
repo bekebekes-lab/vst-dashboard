@@ -1004,10 +1004,12 @@ function render() {
       metrics["GERAL"].filas[fila] = (metrics["GERAL"].filas[fila] || 0) + qtd;
     }
 
-    if (!consMap[cons]) consMap[cons] = { equipe: eq, tag: rtag, GROSS: 0, "RENOVAÇÃO": 0, BL: 0, TITULARIDADE: 0, "SERV. DIGITAIS": 0, GERAL: 0 };
+    if (!consMap[cons]) consMap[cons] = { equipe: eq, tag: rtag, GROSS: 0, "RENOVAÇÃO": 0, BL: 0, TITULARIDADE: 0, "SERV. DIGITAIS": 0, GERAL: 0, ATIVO: 0 };
     consMap[cons][key] += qtd;
     // SERV. DIGITAIS não soma no GERAL
     if (key !== "SERV. DIGITAIS") consMap[cons].GERAL += qtd;
+    // ATIVO/INSTALADO soma apenas categorias diferentes de SERV. DIGITAIS com fila Ativo/Instalado
+    if (key !== "SERV. DIGITAIS" && fila === "Ativo/Instalado") consMap[cons].ATIVO += qtd;
   });
 
   const nc = nConsSet.size || 1;
@@ -1054,7 +1056,7 @@ function render() {
     { key: 'RENOVAÇÃO', label: 'Renov.' },
     { key: 'BL', label: 'BL' },
     { key: 'TITULARIDADE', label: 'Titular.' },
-    { key: 'SERV. DIGITAIS', label: 'Serv. Digitais' },
+    { key: 'ATIVO', label: 'Ativo/Instalado' },
     { key: 'GERAL', label: 'Total' }
   ];
 
@@ -1084,7 +1086,7 @@ function render() {
             <td class="center">${d["RENOVAÇÃO"] || 0}</td>
             <td class="center">${d.BL || 0}</td>
             <td class="center">${d.TITULARIDADE || 0}</td>
-            <td class="center">${d["SERV. DIGITAIS"] || 0}</td>
+            <td class="center">${d.ATIVO || 0}</td>
             <td class="center" style="font-weight:600">${d.GERAL}</td>
             <td class="center"><span class="tag-pill">${d.tag || '—'}</span></td>
           </tr>`).join('')}
