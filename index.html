@@ -2235,6 +2235,9 @@ async function trocarMes() {
   loadData();
   // Aguarda dados carregarem, depois recarrega metas do novo período
   setTimeout(() => carregarMetasDoBanco(getPeriodoAtivo()), 900);
+  // Reaplica permissões após dados carregarem
+  setTimeout(() => aplicarPermissoes(), 1000);
+  setTimeout(() => aplicarPermissoes(), 2500);
 }
 
 // ─── VERIFICA SESSÃO AO CARREGAR ─────────────────────────────────────────────
