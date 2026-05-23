@@ -41,10 +41,10 @@ SEL_LOGIN_USER       = "#input-vaadin-text-field-16"
 SEL_LOGIN_PASS       = "#input-vaadin-password-field-17"
 SEL_LOGIN_BTN        = "vaadin-button:has-text('Logar')"
 SEL_2FA_CODE         = "#input-vaadin-text-field-22"
-SEL_DATA_INI         = "#input-vaadin-date-picker-67"
-SEL_DATA_FIM         = "#input-vaadin-date-picker-68"
-SEL_PAINEL           = "#input-vaadin-combo-box-70"
-SEL_RADIO_EXPORTACAO = "#input-vaadin-radio-button-85"
+SEL_DATA_INI         = "vaadin-date-picker:first-of-type input"
+SEL_DATA_FIM         = "vaadin-date-picker:nth-of-type(2) input"
+SEL_PAINEL           = "vaadin-combo-box:first-of-type"
+SEL_RADIO_EXPORTACAO = "vaadin-radio-button:has-text('EXPORTACAO')"
 SEL_PESQUISAR        = "vaadin-button:has-text('Pesquisar')"
 PAINEL_VALOR         = "PAINEL DE PRODUCAO CLARO VIPSUL"
 
@@ -119,14 +119,20 @@ def preencher_vaadin_date(page, seletor: str, valor: str, label: str = ""):
 def selecionar_vaadin_combo(page, seletor: str, valor: str):
     try:
         el = page.locator(seletor).first
-        el.wait_for(state="visible", timeout=5_000)
+        el.wait_for(state="visible", timeout=10_000)
         el.click()
-        el.triple_click()
+        time.sleep(0.5)
         el.type(valor[:10], delay=80)
-        time.sleep(1)
+        time.sleep(1.5)
+        # Tenta clicar na opção pelo texto
         opcao = page.locator(f"vaadin-combo-box-item:has-text('{valor[:20]}')")
-        opcao.first.click(timeout=5_000)
-        log.info(f"  Combo '{valor}' selecionado")
+        if opcao.count() > 0:
+            opcao.first.click(timeout=5_000)
+            log.info(f"  Combo '{valor}' selecionado via item")
+        else:
+            # Fallback: pressiona Enter
+            page.keyboard.press("Enter")
+            log.info(f"  Combo '{valor}' confirmado via Enter")
     except Exception as e:
         log.warning(f"  Combo '{seletor}' falhou: {e}")
         page.screenshot(path=str(DOWNLOAD_DIR / "erro_combo.png"))
@@ -250,19 +256,34 @@ def baixar_relatorio() -> Path:
         preencher_vaadin_date(page, sel_ini_ok, data_inicio, "Inicial")
         preencher_vaadin_date(page, SEL_DATA_FIM, data_fim,    "Final")
 
+        # ── Fecha calendário antes de interagir com combo ────────────────
+        page.keyboard.press("Escape")
+        time.sleep(0.5)
+        page.keyboard.press("Escape")
+        time.sleep(0.5)
+        page.screenshot(path=str(DOWNLOAD_DIR / "pre_combo.png"))
+
         # ── Seleciona painel ───────────────────────────────────────────────
         log.info(f"Selecionando painel: {PAINEL_VALOR}")
         selecionar_vaadin_combo(page, SEL_PAINEL, PAINEL_VALOR)
         time.sleep(0.5)
+        page.screenshot(path=str(DOWNLOAD_DIR / "pos_combo.png"))
 
         # ── Seleciona visão EXPORTACAO ─────────────────────────────────────
         log.info("Selecionando visão EXPORTACAO...")
-        try:
-            page.locator(SEL_RADIO_EXPORTACAO).click(timeout=5_000)
-            log.info("  Radio EXPORTACAO selecionado via ID")
-        except Exception:
-            page.locator("vaadin-radio-button:has-text('EXPORTACAO')").first.click(timeout=5_000)
-            log.info("  Radio EXPORTACAO selecionado via texto")
+        sels_radio = [
+            "vaadin-radio-button:has-text('EXPORTACAO')",
+            "vaadin-radio-button:has-text('Exportacao')",
+            "vaadin-radio-button:has-text('exportacao')",
+            SEL_RADIO_EXPORTACAO,
+        ]
+        for sel_r in sels_radio:
+            try:
+                page.locator(sel_r).first.click(timeout=5_000)
+                log.info(f"  Radio EXPORTACAO selecionado via: {sel_r}")
+                break
+            except Exception:
+                continue
 
         time.sleep(0.5)
 
