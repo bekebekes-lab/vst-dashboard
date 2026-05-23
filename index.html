@@ -2340,7 +2340,7 @@ function aplicarPermissoes() {
   const abasPermitidas = {
     'admin':        ['simulador', 'gerencial', 'producao'],
     'gestor_macro': ['simulador', 'gerencial', 'producao'],
-    'gestor':       ['gerencial', 'producao'],
+    'gestor':       ['gerencial'],
     'consultor':    ['gerencial']
   };
   const permitidas = abasPermitidas[p] || ['gerencial'];
@@ -2384,6 +2384,7 @@ function aplicarPermissoes() {
       }
       render();
     } else if (p === 'gestor' && USUARIO_ATUAL.gestor_ref) {
+      // Trava filtro de gestor
       const selG = document.getElementById('f-gestor');
       if (selG) {
         selG.value = USUARIO_ATUAL.gestor_ref;
@@ -2392,6 +2393,16 @@ function aplicarPermissoes() {
         selG.style.pointerEvents = 'none';
       }
       onFilterChange('gestor');
+
+      // Bloqueia estado e equipe — gestor não pode mudar esses filtros
+      ['f-estado', 'f-equipe'].forEach(id => {
+        const sel = document.getElementById(id);
+        if (sel) {
+          sel.disabled = true;
+          sel.style.opacity = '0.5';
+          sel.style.pointerEvents = 'none';
+        }
+      });
     }
   };
 
