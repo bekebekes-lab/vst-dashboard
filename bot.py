@@ -346,10 +346,22 @@ def atualizar_sheets(cabecalhos: list, dados: list[list]):
     if not raw_creds:
         raise ValueError("GOOGLE_CREDENTIALS está vazio!")
     log.info(f"  GOOGLE_CREDENTIALS — primeiros 20 chars: {raw_creds[:20]}")
-    try:
-        creds_dict = json.loads(raw_creds)
-    except json.JSONDecodeError as e:
-        raise ValueError(f"GOOGLE_CREDENTIALS não é JSON válido: {e}")
+    log.info(f"  GOOGLE_CREDENTIALS — tamanho: {len(raw_creds)} chars")
+    # Tenta parse direto, depois tenta corrigir aspas simples
+    creds_dict = None
+    for tentativa, texto in enumerate([
+        raw_creds,
+        raw_creds.replace("'", '"'),
+        raw_creds.strip("'").strip('"'),
+    ]):
+        try:
+            creds_dict = json.loads(texto)
+            log.info(f"  JSON parsed OK na tentativa {tentativa+1}")
+            break
+        except json.JSONDecodeError as e:
+            log.warning(f"  Tentativa {tentativa+1} falhou: {e}")
+    if creds_dict is None:
+        raise ValueError("GOOGLE_CREDENTIALS não é JSON válido após 3 tentativas")
     creds = Credentials.from_service_account_info(
         creds_dict,
         scopes=["https://www.googleapis.com/auth/spreadsheets"],
