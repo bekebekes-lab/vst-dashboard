@@ -342,8 +342,16 @@ def ler_xlsx(arquivo: Path) -> tuple[list, list[list]]:
 def atualizar_sheets(cabecalhos: list, dados: list[list]):
     log.info(f"Atualizando Sheets → aba '{ABA_DESTINO}'...")
 
+    raw_creds = os.environ.get("GOOGLE_CREDENTIALS", "").strip()
+    if not raw_creds:
+        raise ValueError("GOOGLE_CREDENTIALS está vazio!")
+    log.info(f"  GOOGLE_CREDENTIALS — primeiros 20 chars: {raw_creds[:20]}")
+    try:
+        creds_dict = json.loads(raw_creds)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"GOOGLE_CREDENTIALS não é JSON válido: {e}")
     creds = Credentials.from_service_account_info(
-        json.loads(os.environ["GOOGLE_CREDENTIALS"]),
+        creds_dict,
         scopes=["https://www.googleapis.com/auth/spreadsheets"],
     )
     gc    = gspread.authorize(creds)
