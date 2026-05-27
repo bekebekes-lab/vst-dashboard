@@ -319,21 +319,13 @@ def baixar_relatorio() -> Path:
 
 # ─── 2. LER XLSX ──────────────────────────────────────────────────────────────
 def formatar_celula(valor):
-    """
-    Converte células do XLSX para o tipo correto para o Google Sheets.
-    - Datas → string DD/MM/YYYY
-    - Floats/ints → número (preservado)
-    - None → string vazia
-    - Outros → string
-    """
+    """Converte valor para tipo seguro para o Google Sheets via RAW."""
     if valor is None:
         return ""
-    if isinstance(valor, (datetime,)):
-        return valor.strftime("%d/%m/%Y")
-    if hasattr(valor, 'date'):  # date sem hora
-        return valor.strftime("%d/%m/%Y")
+    import math
     if isinstance(valor, float):
-        # Evita notação científica e preserva o número
+        if math.isnan(valor):
+            return ""
         if valor == int(valor):
             return int(valor)
         return valor
@@ -342,21 +334,16 @@ def formatar_celula(valor):
     return str(valor)
 
 def ler_xlsx(arquivo: Path) -> tuple[list, list[list]]:
+    import pandas as pd
     log.info(f"Lendo {arquivo.name}...")
-    wb   = openpyxl.load_workbook(arquivo, read_only=True, data_only=True)
-    ws   = wb.active
-    rows = list(ws.iter_rows(values_only=True))
-    wb.close()
 
-    if not rows:
-        raise ValueError("Arquivo XLSX vazio.")
+    # dtype=str evita que o pandas converta qualquer coisa para datetime ou float
+    df = pd.read_excel(arquivo, dtype=str)
+    df = df.fillna("")
 
-    cabecalhos = [str(c) if c is not None else "" for c in rows[0]]
-    dados = [
-        [formatar_celula(c) for c in row]
-        for row in rows[1:]
-        if any(c for c in row)
-    ]
+    cabecalhos = list(df.columns)
+    dados = df.values.tolist()
+
     log.info(f"  {len(dados)} registros | {len(cabecalhos)} colunas")
     return cabecalhos, dados
 
