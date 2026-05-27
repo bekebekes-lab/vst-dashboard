@@ -318,6 +318,29 @@ def baixar_relatorio() -> Path:
 
 
 # ─── 2. LER XLSX ──────────────────────────────────────────────────────────────
+def formatar_celula(valor):
+    """
+    Converte células do XLSX para o tipo correto para o Google Sheets.
+    - Datas → string DD/MM/YYYY
+    - Floats/ints → número (preservado)
+    - None → string vazia
+    - Outros → string
+    """
+    if valor is None:
+        return ""
+    if isinstance(valor, (datetime,)):
+        return valor.strftime("%d/%m/%Y")
+    if hasattr(valor, 'date'):  # date sem hora
+        return valor.strftime("%d/%m/%Y")
+    if isinstance(valor, float):
+        # Evita notação científica e preserva o número
+        if valor == int(valor):
+            return int(valor)
+        return valor
+    if isinstance(valor, int):
+        return valor
+    return str(valor)
+
 def ler_xlsx(arquivo: Path) -> tuple[list, list[list]]:
     log.info(f"Lendo {arquivo.name}...")
     wb   = openpyxl.load_workbook(arquivo, read_only=True, data_only=True)
@@ -330,7 +353,7 @@ def ler_xlsx(arquivo: Path) -> tuple[list, list[list]]:
 
     cabecalhos = [str(c) if c is not None else "" for c in rows[0]]
     dados = [
-        [str(c) if c is not None else "" for c in row]
+        [formatar_celula(c) for c in row]
         for row in rows[1:]
         if any(c for c in row)
     ]
@@ -377,7 +400,7 @@ def atualizar_sheets(cabecalhos: list, dados: list[list]):
 
     aba.resize(rows=len(dados) + 1, cols=len(cabecalhos))
     aba.clear()
-    aba.update([cabecalhos] + dados, value_input_option="USER_ENTERED")
+    aba.update([cabecalhos] + dados, value_input_option="RAW")
     log.info(f"  ✅ {len(dados)} linhas gravadas em '{ABA_DESTINO}'.")
 
 
