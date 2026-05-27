@@ -1136,6 +1136,11 @@ function filterByEquipe(equipe) {
 // ─── drill-down de pedidos por fila ─────────────────────────────────────────
 function drillFila(categoria, fila) {
   if (!ALL_DATA.length) return;
+  // Limpa filtros de data ao trocar de fila
+  if (!lastDrillArgs || lastDrillArgs[0] !== categoria || lastDrillArgs[1] !== fila) {
+    window._drillDateDe  = '';
+    window._drillDateAte = '';
+  }
   lastDrillArgs = [categoria, fila];
 
   const estado    = document.getElementById('f-estado').value;
@@ -1211,10 +1216,55 @@ function drillFila(categoria, fila) {
     return;
   }
 
+  // Filtro de data de atualização
+  const filtroDeAtual  = window._drillDateDe  || '';
+  const filtroAteAtual = window._drillDateAte || '';
+
+  if (filtroDeAtual || filtroAteAtual) {
+    sortedRows = sortedRows.filter(r => {
+      const upd = r['ATUALIZACAO'] || '';
+      if (!upd) return true;
+      // Converte DD/MM/YYYY → YYYY-MM-DD para comparação
+      let updISO = upd;
+      if (upd.includes('/')) {
+        const [d,m,y] = upd.split('/');
+        updISO = `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
+      }
+      if (filtroDeAtual  && updISO < filtroDeAtual)  return false;
+      if (filtroAteAtual && updISO > filtroAteAtual) return false;
+      return true;
+    });
+  }
+
   // th helper para drill
   function thD(col, label, style='') {
     return thDrill(col, label, drillSortCol, drillSortAsc, 'setDrillSort') .replace('style="cursor:pointer"', `style="cursor:pointer;${style}"`);
   }
+
+  // Cabeçalho Atualização com filtro De/Até
+  const thAtualizacao = `
+    <th style="width:16%;min-width:200px">
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <div style="display:flex;align-items:center;gap:4px;cursor:pointer" onclick="setDrillSort('ATUALIZACAO')">
+          <span>Atualização</span>
+          <span style="font-size:10px;opacity:0.7">${drillSortCol==='ATUALIZACAO' ? (drillSortAsc?'↑':'↓') : '↕'}</span>
+        </div>
+        <div style="display:flex;gap:3px;align-items:center">
+          <input type="date" id="drill-date-de" value="${filtroDeAtual}"
+            style="width:88px;padding:2px 4px;font-size:10px;border:1px solid rgba(255,255,255,0.3);border-radius:3px;background:rgba(255,255,255,0.15);color:#fff;outline:none"
+            onchange="window._drillDateDe=this.value;renderDrillDown(...lastDrillArgs)"
+            title="Data inicial">
+          <span style="font-size:10px;opacity:0.6">—</span>
+          <input type="date" id="drill-date-ate" value="${filtroAteAtual}"
+            style="width:88px;padding:2px 4px;font-size:10px;border:1px solid rgba(255,255,255,0.3);border-radius:3px;background:rgba(255,255,255,0.15);color:#fff;outline:none"
+            onchange="window._drillDateAte=this.value;renderDrillDown(...lastDrillArgs)"
+            title="Data final">
+          ${(filtroDeAtual||filtroAteAtual) ? `<button onclick="window._drillDateDe='';window._drillDateAte='';renderDrillDown(...lastDrillArgs)" style="background:rgba(255,255,255,0.2);border:none;color:#fff;border-radius:3px;padding:1px 5px;font-size:10px;cursor:pointer" title="Limpar">✕</button>` : ''}
+        </div>
+      </div>
+    </th>`;
+
+  const registrosFiltrados = sortedRows.length;
 
   document.getElementById('table-area').innerHTML = breadcrumb + `
     <div class="table-wrap"><div class="table-scroll">
@@ -1222,13 +1272,15 @@ function drillFila(categoria, fila) {
         <thead><tr>
           <th style="width:13%">Grupo</th>
           <th style="width:13%">Vinculado</th>
-          <th style="width:24%">Nome do Cliente</th>
-          <th style="width:16%">Proprietário</th>
-          <th style="width:16%">Equipe</th>
-          ${thD('ATUALIZACAO','Atualização','width:10%')}
+          <th style="width:22%">Nome do Cliente</th>
+          <th style="width:14%">Proprietário</th>
+          <th style="width:14%">Equipe</th>
+          ${thAtualizacao}
           ${thD('QTD','Qtd','width:8%')}
         </tr></thead>
-        <tbody>${sortedRows.map(r => {
+        <tbody>${sortedRows.length === 0
+          ? `<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--text3)">Nenhum registro no período selecionado.</td></tr>`
+          : sortedRows.map(r => {
           const qtd   = parseInt(r['QUANTIDADE']) || 1;
           const prop  = r['PROPRIETÁRIO DO PEDIDO'] || '—';
           const nome  = r['NOME CLIENTE'] || '—';
