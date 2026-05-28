@@ -1220,18 +1220,29 @@ function drillFila(categoria, fila) {
   const filtroDeAtual  = window._drillDateDe  || '';
   const filtroAteAtual = window._drillDateAte || '';
 
+  function parseDateBR(val) {
+    if (!val) return null;
+    const s = val.toString().trim();
+    // DD/MM/YYYY ou DD/MM/YYYY HH:MM
+    const m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+    if (m) return new Date(`${m[3]}-${m[2]}-${m[1]}`);
+    // ISO YYYY-MM-DD
+    const d = new Date(s);
+    return isNaN(d) ? null : d;
+  }
+
   if (filtroDeAtual || filtroAteAtual) {
+    const de  = filtroDeAtual  ? new Date(filtroDeAtual)  : null;
+    const ate = filtroAteAtual ? new Date(filtroAteAtual) : null;
+    if (ate) ate.setHours(23, 59, 59, 999); // inclui o dia inteiro
+
     sortedRows = sortedRows.filter(r => {
       const upd = r['ATUALIZACAO'] || '';
-      if (!upd) return true;
-      // Converte DD/MM/YYYY → YYYY-MM-DD para comparação
-      let updISO = upd;
-      if (upd.includes('/')) {
-        const [d,m,y] = upd.split('/');
-        updISO = `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
-      }
-      if (filtroDeAtual  && updISO < filtroDeAtual)  return false;
-      if (filtroAteAtual && updISO > filtroAteAtual) return false;
+      if (!upd) return !de && !ate; // sem data: só aparece se sem filtro
+      const d = parseDateBR(upd);
+      if (!d) return true;
+      if (de  && d < de)  return false;
+      if (ate && d > ate) return false;
       return true;
     });
   }
@@ -1252,14 +1263,14 @@ function drillFila(categoria, fila) {
         <div style="display:flex;gap:3px;align-items:center">
           <input type="date" id="drill-date-de" value="${filtroDeAtual}"
             style="width:88px;padding:2px 4px;font-size:10px;border:1px solid rgba(255,255,255,0.3);border-radius:3px;background:rgba(255,255,255,0.15);color:#fff;outline:none"
-            onchange="window._drillDateDe=this.value;renderDrillDown(...lastDrillArgs)"
+            onchange="window._drillDateDe=this.value;drillFila('${categoria}','${fila}')"
             title="Data inicial">
           <span style="font-size:10px;opacity:0.6">—</span>
           <input type="date" id="drill-date-ate" value="${filtroAteAtual}"
             style="width:88px;padding:2px 4px;font-size:10px;border:1px solid rgba(255,255,255,0.3);border-radius:3px;background:rgba(255,255,255,0.15);color:#fff;outline:none"
-            onchange="window._drillDateAte=this.value;renderDrillDown(...lastDrillArgs)"
+            onchange="window._drillDateAte=this.value;drillFila('${categoria}','${fila}')"
             title="Data final">
-          ${(filtroDeAtual||filtroAteAtual) ? `<button onclick="window._drillDateDe='';window._drillDateAte='';renderDrillDown(...lastDrillArgs)" style="background:rgba(255,255,255,0.2);border:none;color:#fff;border-radius:3px;padding:1px 5px;font-size:10px;cursor:pointer" title="Limpar">✕</button>` : ''}
+          ${(filtroDeAtual||filtroAteAtual) ? `<button onclick="window._drillDateDe='';window._drillDateAte='';drillFila('${categoria}','${fila}')" style="background:rgba(255,255,255,0.2);border:none;color:#fff;border-radius:3px;padding:1px 5px;font-size:10px;cursor:pointer" title="Limpar">✕</button>` : ''}
         </div>
       </div>
     </th>`;
