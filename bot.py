@@ -2,7 +2,7 @@
 NeoSales → Google Sheets Bot
 Seletores inspecionados diretamente na página real (Vaadin framework).
 Fluxo: login → 2FA TOTP → painel-producao → preenche datas → seleciona painel
-       → seleciona visão EXPORTACAO → clica Pesquisar → aguarda download
+       → clica aba "Exportação" → aguarda modal → faz download
        → atualiza aba BaseCRM no Google Sheets.
 """
 
@@ -44,8 +44,8 @@ SEL_2FA_CODE         = "#input-vaadin-text-field-22"
 SEL_DATA_INI         = "vaadin-date-picker:first-of-type input"
 SEL_DATA_FIM         = "vaadin-date-picker:nth-of-type(2) input"
 SEL_PAINEL           = "vaadin-combo-box:first-of-type"
-SEL_RADIO_EXPORTACAO = "vaadin-radio-button:has-text('EXPORTACAO')"
-SEL_PESQUISAR        = "vaadin-button:has-text('Pesquisar')"
+SEL_ABA_EXPORTACAO   = "vaadin-tab:has-text('Exportação')"
+SEL_PESQUISAR        = "vaadin-button:has-text('Pesquisar')"  # ainda usado para acionar a busca inicial
 PAINEL_VALOR         = "PAINEL DE PRODUCAO CLARO VIPSUL"
 
 
@@ -273,33 +273,34 @@ def baixar_relatorio() -> Path:
         time.sleep(0.5)
         page.screenshot(path=str(DOWNLOAD_DIR / "pos_combo.png"))
 
-        # ── Seleciona visão EXPORTACAO ─────────────────────────────────────
-        log.info("Selecionando visão EXPORTACAO...")
-        for sel_r in ["vaadin-radio-button:has-text('EXPORTACAO')", SEL_RADIO_EXPORTACAO]:
+        # ── Clica na aba "Exportação" (novo fluxo) ────────────────────────
+        log.info("Clicando na aba 'Exportação'...")
+        arquivo = DOWNLOAD_DIR / f"producao_{hoje.strftime('%Y%m%d_%H%M')}.xlsx"
+
+        # Tenta via seletor Vaadin tab; fallback via JS
+        aba_exportacao_clicada = False
+        for sel_tab in [SEL_ABA_EXPORTACAO, "vaadin-tab:has-text('Exportacao')"]:
             try:
-                el_r = page.locator(sel_r).first
-                el_r.scroll_into_view_if_needed()
-                el_r.click(timeout=5_000, force=True)
-                time.sleep(0.5)
-                log.info(f"  Radio EXPORTACAO clicado via: {sel_r}")
+                el_tab = page.locator(sel_tab).first
+                el_tab.wait_for(state="visible", timeout=10_000)
+                el_tab.click(timeout=10_000)
+                aba_exportacao_clicada = True
+                log.info(f"  Aba Exportação clicada via: {sel_tab}")
                 break
             except Exception:
                 continue
-        page.evaluate(
-            "document.querySelectorAll('vaadin-radio-button').forEach(r => { if(r.textContent.trim().includes('EXPORTACAO')) r.click(); })"
-        )
-        time.sleep(0.5)
-        page.screenshot(path=str(DOWNLOAD_DIR / "pos_radio.png"))
 
-        # ── Pesquisar → dispara o download ─────────────────────────────────
-        log.info("Clicando em Pesquisar (gera o download)...")
-        arquivo = DOWNLOAD_DIR / f"producao_{hoje.strftime('%Y%m%d_%H%M')}.xlsx"
+        if not aba_exportacao_clicada:
+            log.warning("  Fallback JS para clicar na aba Exportação")
+            page.evaluate(
+                "document.querySelectorAll('vaadin-tab').forEach(t => { if(t.textContent.trim().toLowerCase().includes('exporta')) t.click(); })"
+            )
 
-        # Clica Pesquisar e aguarda modal "Arquivo disponível"
-        page.locator(SEL_PESQUISAR).click(timeout=10_000)
-        log.info("Pesquisar clicado. Aguardando modal de download...")
+        time.sleep(2)
+        page.screenshot(path=str(DOWNLOAD_DIR / "pos_aba_exportacao.png"))
 
-        # Aguarda o modal aparecer (até 120s para gerar o arquivo)
+        # Aguarda o modal "Arquivo disponível" (aparece automaticamente após clicar na aba)
+        log.info("Aguardando modal 'Arquivo disponível'...")
         page.wait_for_selector("text=Arquivo disponível", timeout=120_000)
         time.sleep(1)
         page.screenshot(path=str(DOWNLOAD_DIR / "modal_download.png"))
