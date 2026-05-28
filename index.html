@@ -1263,12 +1263,12 @@ function drillFila(categoria, fila) {
         <div style="display:flex;gap:3px;align-items:center">
           <input type="date" id="drill-date-de" value="${filtroDeAtual}"
             style="width:88px;padding:2px 4px;font-size:10px;border:1px solid rgba(255,255,255,0.3);border-radius:3px;background:rgba(255,255,255,0.15);color:#fff;outline:none"
-            onchange="window._drillDateDe=this.value;drillFila('${categoria}','${fila}')"
+            oninput="window._drillDateDe=this.value;drillFila('${categoria}','${fila}')"
             title="Data inicial">
           <span style="font-size:10px;opacity:0.6">—</span>
           <input type="date" id="drill-date-ate" value="${filtroAteAtual}"
             style="width:88px;padding:2px 4px;font-size:10px;border:1px solid rgba(255,255,255,0.3);border-radius:3px;background:rgba(255,255,255,0.15);color:#fff;outline:none"
-            onchange="window._drillDateAte=this.value;drillFila('${categoria}','${fila}')"
+            oninput="window._drillDateAte=this.value;drillFila('${categoria}','${fila}')"
             title="Data final">
           ${(filtroDeAtual||filtroAteAtual) ? `<button onclick="window._drillDateDe='';window._drillDateAte='';drillFila('${categoria}','${fila}')" style="background:rgba(255,255,255,0.2);border:none;color:#fff;border-radius:3px;padding:1px 5px;font-size:10px;cursor:pointer" title="Limpar">✕</button>` : ''}
         </div>
