@@ -6,8 +6,18 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>VST Dashboard Gerencial</title>
+
+<!-- PWA: manifest e ícone -->
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#CC0000">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="VST Dashboard">
+<meta name="description" content="VST Group — Dashboard Gerencial">
+
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
@@ -349,52 +359,126 @@
   .sim-diff-pos { color: #16a34a; }
 
   /* ─── MOBILE RESPONSIVE ─────────────────────────────────── */
+
+  /* Toque: remove highlight azul em mobile */
+  * { -webkit-tap-highlight-color: transparent; }
+
+  /* Scroll horizontal suave nas tabelas */
+  .table-scroll, .prod-table-scroll, .sim-table-scroll {
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Inputs e selects: font-size 16px evita zoom automático no iOS */
   @media (max-width: 768px) {
+    input, select, textarea { font-size: 16px !important; }
+
     /* Topbar */
     .topbar { padding: 0 14px; height: 48px; }
     .topbar h1 { font-size: 13px; }
     .topbar-badge { display: none; }
     .last-update { display: none; }
-    .clock { font-size: 11px; }
-    .btn-refresh { padding: 4px 10px; font-size: 11px; }
+    .clock { display: none; }
+    .btn-refresh { padding: 5px 10px; font-size: 12px; min-height: 36px; }
     .user-badge { padding: 3px 8px 3px 4px; gap: 5px; }
     #user-nome { display: none; }
+    .user-avatar { width: 28px; height: 28px; font-size: 11px; }
+    .mes-label { display: none; }
+    .mes-select { font-size: 12px !important; padding: 5px 8px; }
 
-    /* Tabs */
-    .tabs-nav { padding: 0 10px; gap: 0; overflow-x: auto; scrollbar-width: none; }
+    /* Tabs — scroll horizontal, sem barra visível */
+    .tabs-nav { padding: 0 10px; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
     .tabs-nav::-webkit-scrollbar { display: none; }
-    .tab-btn { padding: 11px 14px; font-size: 12px; }
+    .tab-btn { padding: 13px 16px; font-size: 12px; white-space: nowrap; min-height: 44px; }
 
     /* Content */
-    .content { padding: 12px 12px; }
+    .content { padding: 12px; }
 
-    /* Filters */
+    /* Filters — 2 colunas */
     .filters-bar { grid-template-columns: 1fr 1fr; gap: 8px; padding: 10px 12px; }
     .prod-filters { gap: 8px; padding: 12px; }
-    .prod-filter-group { min-width: calc(50% - 4px); }
+    .prod-filter-group { min-width: calc(50% - 4px); flex: 1 1 calc(50% - 4px); }
 
-    /* Metrics grid */
+    /* Metrics grid — 3 colunas */
     .metrics-grid { grid-template-columns: repeat(3, 1fr); gap: 8px; }
     .metric-value { font-size: 22px; }
+    .metric-card { padding: 12px; }
 
     /* Sim KPI grid */
     .sim-kpi-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
     .sim-kpi-value { font-size: 18px; }
+    .sim-kpi-card { padding: 12px; }
 
-    /* Sim controls */
-    .sim-controls-bar { padding: 12px; gap: 14px; }
-    .sim-mults { gap: 8px; }
-    .sim-mult-item input { width: 70px; }
+    /* Sim controls — empilha verticalmente */
+    .sim-controls-bar { padding: 12px; gap: 12px; flex-direction: column; }
+    .sim-mults { gap: 8px; flex-wrap: wrap; }
+    .sim-mult-item input { width: 80px; }
+    .sim-section-metas { min-width: 100%; }
 
     /* Section headers */
     .section-header { flex-wrap: wrap; gap: 6px; }
+
+    /* Tabela: cards em mobile */
+    .table-wrap { border-radius: var(--radius); overflow: hidden; }
+
+    /* Stats chips — scroll horizontal */
+    .stats-row { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; padding-bottom: 4px; }
+    .stats-row::-webkit-scrollbar { display: none; }
+
+    /* Detail chips */
+    .detail-info-chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+    .detail-info-chips::-webkit-scrollbar { display: none; }
+
+    /* Prod status chips — scroll horizontal */
+    .prod-status-chips { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+    .prod-status-chips::-webkit-scrollbar { display: none; }
+
+    /* Sim visões — scroll horizontal */
+    .sim-visoes { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+    .sim-visoes::-webkit-scrollbar { display: none; }
+
+    /* Metas grid no sim */
+    .sim-metas-grid { gap: 10px; }
+    .sim-meta-item input { width: 90px; }
   }
 
   @media (max-width: 480px) {
     .metrics-grid { grid-template-columns: repeat(2, 1fr); }
     .sim-kpi-grid { grid-template-columns: 1fr 1fr; }
     .filters-bar { grid-template-columns: 1fr; }
-    .prod-filter-group { min-width: 100%; }
+    .prod-filter-group { min-width: 100%; flex: 1 1 100%; }
+
+    /* Topbar compacto */
+    .topbar { padding: 0 12px; }
+    .topbar h1 { font-size: 12px; }
+    .btn-refresh { padding: 4px 8px; font-size: 11px; }
+
+    /* Tabs menores */
+    .tab-btn { padding: 12px 14px; font-size: 11px; }
+
+    /* Content sem padding lateral excessivo */
+    .content { padding: 10px; }
+  }
+
+  /* ─── PWA: safe area para notch e barra inferior (iOS) ─── */
+  @supports (padding-top: env(safe-area-inset-top)) {
+    .topbar {
+      padding-left: max(14px, env(safe-area-inset-left));
+      padding-right: max(14px, env(safe-area-inset-right));
+    }
+    body {
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+  }
+
+  /* ─── Botões com área de toque mínima (44px) ─── */
+  @media (hover: none) and (pointer: coarse) {
+    .tab-btn { min-height: 44px; }
+    .btn-refresh { min-height: 36px; }
+    .login-btn { min-height: 48px; }
+    .breadcrumb-back { min-height: 36px; padding: 8px 14px; }
+    .prod-chip, .prod-chip-action, .sim-visao-btn, .sim-btn-discrete { min-height: 36px; display: inline-flex; align-items: center; }
+    .fila-item { min-height: 36px; }
+    .filter-group select, .prod-filter-group select { min-height: 40px; }
   }
 </style>
 </head>
