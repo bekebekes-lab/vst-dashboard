@@ -2499,10 +2499,11 @@ function aplicarPermissoes() {
 
   // Abas permitidas por perfil
   const abasPermitidas = {
-    'admin':        ['simulador', 'gerencial', 'producao'],
-    'gestor_macro': ['simulador', 'gerencial', 'producao'],
-    'gestor':       ['gerencial'],
-    'consultor':    ['gerencial']
+    'admin':          ['simulador', 'gerencial', 'producao'],
+    'gestor_macro':   ['simulador', 'gerencial', 'producao'],
+    'gestor':         ['gerencial'],
+    'gestor_equipe':  ['gerencial'],
+    'consultor':      ['gerencial']
   };
   const permitidas = abasPermitidas[p] || ['gerencial'];
 
@@ -2562,6 +2563,25 @@ function aplicarPermissoes() {
         selE.style.opacity = '0.5';
         selE.style.pointerEvents = 'none';
       }
+    } else if (p === 'gestor_equipe' && USUARIO_ATUAL.equipe_ref) {
+      // Trava filtro de equipe — gestor_equipe só vê sua equipe
+      const selEq = document.getElementById('f-equipe');
+      if (selEq) {
+        selEq.value = USUARIO_ATUAL.equipe_ref;
+        selEq.disabled = true;
+        selEq.style.opacity = '0.5';
+        selEq.style.pointerEvents = 'none';
+      }
+      onFilterChange('equipe');
+      // Bloqueia estado e gestor
+      ['f-estado', 'f-gestor'].forEach(id => {
+        const sel = document.getElementById(id);
+        if (sel) {
+          sel.disabled = true;
+          sel.style.opacity = '0.5';
+          sel.style.pointerEvents = 'none';
+        }
+      });
     }
   };
 
