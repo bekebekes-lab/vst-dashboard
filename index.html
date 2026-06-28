@@ -522,6 +522,27 @@
     .sim2-kpi-grid { grid-template-columns: 1fr 1fr; }
     .sim2-kpi-value { font-size: 20px; }
   }
+
+  /* Sim2 metas grid por unidade */
+  #sim2-metas-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+  .sim2-meta-unit { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 12px; min-width: 160px; }
+  .sim2-meta-unit-name { font-size: 10px; font-weight: 700; color: var(--text3); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
+  .sim2-meta-unit-fields { display: flex; gap: 8px; align-items: center; }
+  .sim2-meta-unit-field { display: flex; flex-direction: column; gap: 2px; }
+  .sim2-meta-unit-field label { font-size: 9px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.04em; }
+  .sim2-meta-unit-field input { width: 72px; padding: 5px 7px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 12px; font-family: 'DM Mono', monospace; color: var(--text); background: #fffbe6; outline: none; }
+  .sim2-meta-unit-field input.cnpj-input { background: #f0f9ff; }
+  .sim2-meta-unit-field input:focus { border-color: var(--red); }
+  /* resultado por unidade */
+  .sim2-unit-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .sim2-unit-table th { background: var(--red); color: #fff; padding: 9px 12px; text-align: left; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap; }
+  .sim2-unit-table td { padding: 9px 12px; border-top: 1px solid var(--border); white-space: nowrap; }
+  .sim2-unit-table tr:hover td { background: var(--surface2); }
+  .sim2-unit-table tr.total-row td { font-weight: 700; background: var(--surface2); border-top: 2px solid var(--border); }
+  .sim2-unit-table .money { font-family: 'DM Mono', monospace; font-weight: 600; }
+  .sim2-unit-table .positive { color: #16a34a; }
+  .sim2-unit-table .negative { color: var(--red); }
+  .sim2-unit-table .warn { color: #d97706; }
 </style>
 </head>
 <body>
@@ -613,14 +634,10 @@
         </div>
       </div>
 
-      <!-- Inputs: Carteira -->
+      <!-- Inputs: Carteira Global -->
       <div class="sim-section">
-        <div class="sim-section-label">Carteira</div>
+        <div class="sim-section-label">Carteira Global</div>
         <div class="sim-mults">
-          <div class="sim-mult-item">
-            <label>Linhas ativas carteira</label>
-            <input type="number" id="s2-linhas-cart" value="25000" min="0" step="100" onchange="calcSim2()">
-          </div>
           <div class="sim-mult-item">
             <label>CNPJs ativos carteira</label>
             <input type="number" id="s2-cnpjs" value="25000" min="0" step="100" onchange="calcSim2()">
@@ -630,6 +647,15 @@
             <input type="number" id="s2-netadds" value="0" step="1" onchange="calcSim2()">
           </div>
         </div>
+      </div>
+
+      <!-- Metas por Unidade -->
+      <div class="sim-section sim-section-metas">
+        <div class="sim-section-label" style="display:flex;align-items:center;justify-content:space-between">
+          <span>Linhas e CNPJs por Unidade</span>
+          <button class="sim-btn-discrete" onclick="calcSim2()">↻ Recalcular</button>
+        </div>
+        <div class="sim-metas-grid" id="sim2-metas-grid"></div>
       </div>
 
       <!-- Inputs: Categoria -->
@@ -2626,6 +2652,7 @@ async function carregarPerfil(user) {
   setTimeout(async () => {
     buildMetasGrid();
     bindMetasInputs();
+    buildSim2MetasGrid();
     await carregarMetasDoBanco(getPeriodoAtivo());
     await carregarConfigSimulador();
   }, 600);
@@ -2839,6 +2866,44 @@ function fmtPct(v) {
   return (v * 100).toFixed(1) + '%';
 }
 
+function buildSim2MetasGrid() {
+  const grid = document.getElementById('sim2-metas-grid');
+  if (!grid) return;
+  const existing = {};
+  grid.querySelectorAll('input').forEach(inp => {
+    existing[inp.dataset.key] = inp.value;
+  });
+  grid.innerHTML = Object.entries(MAPEAMENTO_TAGS).sort((a,b) => a[1].localeCompare(b[1])).map(([tag, nome]) => {
+    const shortName = nome.split(' - ')[1] || nome;
+    const linhas = existing[tag+'-linhas'] || '0';
+    const cnpjs  = existing[tag+'-cnpjs']  || '0';
+    return `<div class="sim2-meta-unit">
+      <div class="sim2-meta-unit-name">${shortName}</div>
+      <div class="sim2-meta-unit-fields">
+        <div class="sim2-meta-unit-field">
+          <label>Linhas</label>
+          <input type="number" min="0" step="1" value="${linhas}" data-key="${tag}-linhas" data-tag="${tag}" data-tipo="linhas" onchange="calcSim2()">
+        </div>
+        <div class="sim2-meta-unit-field">
+          <label>CNPJs</label>
+          <input type="number" min="0" step="1" value="${cnpjs}" data-key="${tag}-cnpjs" data-tag="${tag}" data-tipo="cnpjs" class="cnpj-input" onchange="calcSim2()">
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function getSim2MetasInput() {
+  const result = {};
+  document.querySelectorAll('#sim2-metas-grid input').forEach(inp => {
+    const tag  = inp.dataset.tag;
+    const tipo = inp.dataset.tipo;
+    if (!result[tag]) result[tag] = { linhas: 0, cnpjs: 0 };
+    result[tag][tipo] = parseFloat(inp.value) || 0;
+  });
+  return result;
+}
+
 function calcSim2() {
   if (!ALL_DATA || !ALL_DATA.length) {
     document.getElementById('sim2-resultado').innerHTML = '<div class="sim2-card" style="color:var(--text2)">Aguardando dados...</div>';
@@ -2848,21 +2913,27 @@ function calcSim2() {
   const metaVozHC  = parseFloat(document.getElementById('s2-meta-voz').value) || 18;
   const metaBLHC   = parseFloat(document.getElementById('s2-meta-bl').value)  || 6;
   const metaSDHC   = parseFloat(document.getElementById('s2-meta-sd').value)  || 50;
-  const linhasCart = parseFloat(document.getElementById('s2-linhas-cart').value) || 0;
-  const cnpjs      = parseFloat(document.getElementById('s2-cnpjs').value)    || 0;
+  const cnpjsGlobal = parseFloat(document.getElementById('s2-cnpjs').value)   || 0;
   const netAdds    = parseFloat(document.getElementById('s2-netadds').value)   || 0;
   const categoria  = document.getElementById('s2-categoria').value;
   const escopo     = document.getElementById('s2-escopo').value;
+  const metasUnit  = getSim2MetasInput();
 
   const filasOk = SIM2_CONFIG.filas[escopo];
+  const cfg = SIM2_CONFIG;
 
-  // ── 1. Agrega da base ────────────────────────────────────
+  // ── 1. Agrega da base por TAG e global ────────────────────
+  const aggTag = {};
+  Object.keys(MAPEAMENTO_TAGS).forEach(tag => {
+    aggTag[tag] = { vozNovoQtd:0, vozNovoRec:0, vozPortQtd:0, vozPortRec:0, blQtd:0, blRec:0, sdRec:0 };
+  });
   let vozNovoQtd=0, vozNovoRec=0;
-  let vozPortQtd=0,  vozPortRec=0;
-  let blQtd=0,       blRec=0;
+  let vozPortQtd=0, vozPortRec=0;
+  let blQtd=0, blRec=0;
   let sdRec=0;
 
   ALL_DATA.forEach(r => {
+    const tag   = r['TAGS ATIVIDADE'] || '';
     const grupo = r['GRUPO'] || '';
     const fila  = r['FILA']  || '';
     const qtd   = parseInt(r['QUANTIDADE']) || 1;
@@ -2872,18 +2943,22 @@ function calcSim2() {
 
     if (grupo === 'VOZ - Novo') {
       vozNovoQtd += qtd; vozNovoRec += valor;
+      if (aggTag[tag]) { aggTag[tag].vozNovoQtd += qtd; aggTag[tag].vozNovoRec += valor; }
     } else if (grupo === 'VOZ - Portabilidade') {
       vozPortQtd += qtd; vozPortRec += valor;
+      if (aggTag[tag]) { aggTag[tag].vozPortQtd += qtd; aggTag[tag].vozPortRec += valor; }
     } else if (grupo === 'NET PJ - VIRTUA') {
       blQtd += qtd; blRec += qtd * valor;
+      if (aggTag[tag]) { aggTag[tag].blQtd += qtd; aggTag[tag].blRec += qtd * valor; }
     } else if (grupo === 'SVA FIXA') {
       sdRec += valor;
+      if (aggTag[tag]) aggTag[tag].sdRec += valor;
     }
   });
 
   const vozTotalQtd = vozNovoQtd + vozPortQtd;
 
-  // ── 2. HC máximo pela produção ───────────────────────────
+  // ── 2. HC máximo pela produção (global) ──────────────────
   const hcPelaVoz = metaVozHC > 0 ? Math.floor(vozTotalQtd / metaVozHC) : 0;
   const hcPelaBL  = metaBLHC  > 0 ? Math.floor(blQtd / metaBLHC)        : 0;
   const hcPelaSD  = metaSDHC  > 0 ? Math.floor(sdRec  / metaSDHC)       : 0;
@@ -2894,10 +2969,8 @@ function calcSim2() {
   );
   const hcMaxReal = isFinite(hcMaxProd) ? hcMaxProd : 0;
 
-  // HC ideal para Faixa 1 (≤200 CNPJ/HC)
-  const hcIdealCart = Math.ceil(cnpjs / 200);
-
-  // HC recomendado = menor entre os dois (não subir mais do que a produção sustenta)
+  // HC ideal para Faixa 1 (≤200 CNPJ/HC) — usa CNPJs global
+  const hcIdealCart = Math.ceil(cnpjsGlobal / 200);
   const hcRecomendado = Math.min(hcMaxReal, hcIdealCart);
 
   // ── 3. % Atingimento por produto ────────────────────────
@@ -2912,16 +2985,10 @@ function calcSim2() {
   const faixaVoz = getFaixaAting(pctVoz);
   const faixaBL  = getFaixaAting(pctBL);
 
-  // ── 4. Faturamento ativação ──────────────────────────────
-  const cfg = SIM2_CONFIG;
-
-  // Fator total = fixo + adicional (se atingiu meta)
-  const fatVozNovoTotal = cfg.fatores.vozNovo +
-    (faixaVoz.faixa ? cfg.adicionais.vozNovo[faixaVoz.faixa] : 0);
-  const fatVozPortTotal = cfg.fatores.vozPort + cfg.fatores.pluginPort +
-    (faixaVoz.faixa ? cfg.adicionais.vozPort[faixaVoz.faixa] : 0);
-  const fatBLTotal = cfg.fatores.blFixa +
-    (faixaBL.faixa ? cfg.adicionais.blFixa[faixaBL.faixa] : 0);
+  // ── 4. Faturamento ativação global ───────────────────────
+  const fatVozNovoTotal = cfg.fatores.vozNovo + (faixaVoz.faixa ? cfg.adicionais.vozNovo[faixaVoz.faixa] : 0);
+  const fatVozPortTotal = cfg.fatores.vozPort + cfg.fatores.pluginPort + (faixaVoz.faixa ? cfg.adicionais.vozPort[faixaVoz.faixa] : 0);
+  const fatBLTotal      = cfg.fatores.blFixa  + (faixaBL.faixa  ? cfg.adicionais.blFixa[faixaBL.faixa]   : 0);
 
   const fatVozNovo = vozNovoRec * fatVozNovoTotal;
   const fatVozPort = vozPortRec * fatVozPortTotal;
@@ -2931,33 +2998,60 @@ function calcSim2() {
   // ── 5. Bônus Categoria ───────────────────────────────────
   const bonusCat = fatTotal * cfg.bonusCategoria[categoria];
 
-  // ── 6. Carteira ──────────────────────────────────────────
-  const faixaCNPJHC = getFaixaCNPJHC(cnpjs, hcRecomendado);
-  const unitario = netAdds >= 0
-    ? cfg.unitarioPos[faixaCNPJHC.faixa]
-    : cfg.unitarioNeg[categoria];
-
-  const carteiraCalculada = linhasCart * unitario;
+  // ── 6. Carteira global ───────────────────────────────────
+  const faixaCNPJHC = getFaixaCNPJHC(cnpjsGlobal, hcRecomendado);
+  const unitarioGlobal = netAdds >= 0 ? cfg.unitarioPos[faixaCNPJHC.faixa] : cfg.unitarioNeg[categoria];
+  const linhasCartGlobal = Object.values(metasUnit).reduce((s,u) => s + u.linhas, 0);
+  const carteiraCalculada = linhasCartGlobal * unitarioGlobal;
   const teto = fatTotal * cfg.teto[categoria][faixaCNPJHC.faixa];
-  const carteiraRecebida  = Math.min(carteiraCalculada, teto);
+  const carteiraRecebida = Math.min(carteiraCalculada, teto);
 
   // ── 7. Total geral ───────────────────────────────────────
   const totalGeral = fatTotal + bonusCat + carteiraRecebida;
+  const hcGargalo  = (hcMaxReal === hcPelaVoz) ? 'Voz' : (hcMaxReal === hcPelaBL) ? 'BL Fixa' : 'SD';
 
-  // ── 8. Render ────────────────────────────────────────────
-  const hcGargalo = (hcMaxReal === hcPelaVoz) ? 'Voz' : (hcMaxReal === hcPelaBL) ? 'BL Fixa' : 'SD';
+  // ── 8. Resultado por unidade ─────────────────────────────
+  const resultadosPorUnidade = Object.entries(MAPEAMENTO_TAGS).sort((a,b) => a[1].localeCompare(b[1])).map(([tag, nome]) => {
+    const d = aggTag[tag];
+    const mu = metasUnit[tag] || { linhas: 0, cnpjs: 0 };
+    const vTotal = d.vozNovoQtd + d.vozPortQtd;
 
-  // Tabela de cenários HC para carteira
-  const cenariosHC = [
-    { hc: hcIdealCart - 2, label: '' },
-    { hc: hcIdealCart - 1, label: '' },
-    { hc: hcIdealCart,     label: '← Ideal carteira' },
-    { hc: hcIdealCart + 1, label: '' },
-    { hc: hcIdealCart + 2, label: '' },
-  ].filter(c => c.hc > 0).map(c => {
-    const f = getFaixaCNPJHC(cnpjs, c.hc);
+    // Faturamento por unidade
+    const fN  = d.vozNovoRec * fatVozNovoTotal;
+    const fP  = d.vozPortRec * fatVozPortTotal;
+    const fBL = d.blRec      * fatBLTotal;
+    const fat = fN + fP + fBL;
+
+    // Carteira por unidade
+    const unitUnidade = netAdds >= 0 ? cfg.unitarioPos[faixaCNPJHC.faixa] : cfg.unitarioNeg[categoria];
+    const cartCalc = mu.linhas * unitUnidade;
+    const tetoUnit = fat * cfg.teto[categoria][faixaCNPJHC.faixa];
+    const cartReceb = Math.min(cartCalc, tetoUnit);
+    const cartNaoReceb = cartCalc - cartReceb;
+
+    // HC por unidade
+    const hcVozUnit = metaVozHC > 0 ? Math.floor(vTotal    / metaVozHC) : 0;
+    const hcBLUnit  = metaBLHC  > 0 ? Math.floor(d.blQtd   / metaBLHC)  : 0;
+    const hcUnit    = Math.min(hcVozUnit || Infinity, hcBLUnit || Infinity);
+    const hcUnitReal = isFinite(hcUnit) ? hcUnit : 0;
+    const hcIdealUnit = mu.cnpjs > 0 ? Math.ceil(mu.cnpjs / 200) : 0;
+
+    const shortName = nome.split(' - ')[1] || nome;
+    return { tag, shortName, voz: vTotal, bl: d.blQtd, fat, cartCalc, cartReceb, cartNaoReceb, hcMaxUnit: hcUnitReal, hcIdealUnit, linhas: mu.linhas, cnpjs: mu.cnpjs };
+  });
+
+  const totUnit = resultadosPorUnidade.reduce((s,r) => ({
+    voz: s.voz+r.voz, bl: s.bl+r.bl, fat: s.fat+r.fat,
+    cartCalc: s.cartCalc+r.cartCalc, cartReceb: s.cartReceb+r.cartReceb,
+    cartNaoReceb: s.cartNaoReceb+r.cartNaoReceb,
+    linhas: s.linhas+r.linhas
+  }), { voz:0, bl:0, fat:0, cartCalc:0, cartReceb:0, cartNaoReceb:0, linhas:0 });
+
+  // Tabela cenários HC
+  const cenariosHC = [-2,-1,0,1,2].map(d => hcIdealCart + d).filter(h => h > 0).map(h => {
+    const f = getFaixaCNPJHC(cnpjsGlobal, h);
     const u = netAdds >= 0 ? cfg.unitarioPos[f.faixa] : cfg.unitarioNeg[categoria];
-    return { ...c, faixa: f.label, ratio: cnpjs / c.hc, unitario: u };
+    return { hc: h, faixa: f.label, ratio: Math.round(cnpjsGlobal/h), unitario: u };
   });
 
   document.getElementById('sim2-resultado').innerHTML = `
@@ -2990,14 +3084,19 @@ function calcSim2() {
         <div class="sim2-kpi-sub">Gargalo: ${hcGargalo} (${fmtN(vozTotalQtd)}v / ${fmtN(blQtd)}bl)</div>
       </div>
       <div class="sim2-kpi">
-        <div class="sim2-kpi-label">🎯 HC Ideal (Carteira Faixa 1)</div>
+        <div class="sim2-kpi-label">🎯 HC Ideal (Faixa 1)</div>
         <div class="sim2-kpi-value">${fmtN(hcIdealCart)}</div>
-        <div class="sim2-kpi-sub">${fmtN(cnpjs)} CNPJs ÷ 200</div>
+        <div class="sim2-kpi-sub">${fmtN(cnpjsGlobal)} CNPJs ÷ 200</div>
       </div>
       <div class="sim2-kpi ${hcRecomendado === hcIdealCart ? 'ok' : 'warn'}">
         <div class="sim2-kpi-label">✅ HC Recomendado</div>
         <div class="sim2-kpi-value">${fmtN(hcRecomendado)}</div>
-        <div class="sim2-kpi-sub">${faixaCNPJHC.label} · ${fmtR(unitario)}/linha</div>
+        <div class="sim2-kpi-sub">${faixaCNPJHC.label} · ${fmtR(unitarioGlobal)}/linha</div>
+      </div>
+      <div class="sim2-kpi">
+        <div class="sim2-kpi-label">📋 Linhas na Carteira</div>
+        <div class="sim2-kpi-value">${fmtN(linhasCartGlobal)}</div>
+        <div class="sim2-kpi-sub">Soma das unidades informadas</div>
       </div>
     </div>
 
@@ -3009,8 +3108,8 @@ function calcSim2() {
         <div class="sim2-receita-row"><span class="sim2-receita-label">Qtd ativações</span><span class="sim2-receita-value">${fmtN(vozNovoQtd)}</span></div>
         <div class="sim2-receita-row"><span class="sim2-receita-label">Receita contratada</span><span class="sim2-receita-value">${fmtR(vozNovoRec)}</span></div>
         <div class="sim2-receita-row"><span class="sim2-receita-label">Fator fixo</span><span class="sim2-receita-value">${cfg.fatores.vozNovo.toFixed(2)}×</span></div>
-        <div class="sim2-receita-row"><span class="sim2-receita-label">Fator adicional (${faixaVoz.label})</span><span class="sim2-receita-value"><span class="${faixaVoz.cls} sim2-faixa-badge">${faixaVoz.faixa ? cfg.adicionais.vozNovo[faixaVoz.faixa].toFixed(2)+'×' : '—'}</span></span></div>
-        <div class="sim2-receita-row"><span class="sim2-receita-label">% Atingimento meta</span><span class="sim2-receita-value">${fmtPct(pctVoz)}</span></div>
+        <div class="sim2-receita-row"><span class="sim2-receita-label">Fator adicional</span><span class="sim2-receita-value"><span class="${faixaVoz.cls} sim2-faixa-badge">${faixaVoz.faixa ? cfg.adicionais.vozNovo[faixaVoz.faixa].toFixed(2)+'×' : '—'}</span> ${faixaVoz.label}</span></div>
+        <div class="sim2-receita-row"><span class="sim2-receita-label">% Meta Voz</span><span class="sim2-receita-value">${fmtPct(pctVoz)}</span></div>
         <div class="sim2-total-row"><span>Faturamento</span><span>${fmtR(fatVozNovo)}</span></div>
       </div>
       <div class="sim2-card">
@@ -3019,23 +3118,79 @@ function calcSim2() {
         <div class="sim2-receita-row"><span class="sim2-receita-label">Receita contratada</span><span class="sim2-receita-value">${fmtR(vozPortRec)}</span></div>
         <div class="sim2-receita-row"><span class="sim2-receita-label">Fator fixo</span><span class="sim2-receita-value">${cfg.fatores.vozPort.toFixed(2)}×</span></div>
         <div class="sim2-receita-row"><span class="sim2-receita-label">Plugin Portabilidade</span><span class="sim2-receita-value">+${cfg.fatores.pluginPort.toFixed(2)}×</span></div>
-        <div class="sim2-receita-row"><span class="sim2-receita-label">Fator adicional (${faixaVoz.label})</span><span class="sim2-receita-value"><span class="${faixaVoz.cls} sim2-faixa-badge">${faixaVoz.faixa ? cfg.adicionais.vozPort[faixaVoz.faixa].toFixed(2)+'×' : '—'}</span></span></div>
+        <div class="sim2-receita-row"><span class="sim2-receita-label">Fator adicional</span><span class="sim2-receita-value"><span class="${faixaVoz.cls} sim2-faixa-badge">${faixaVoz.faixa ? cfg.adicionais.vozPort[faixaVoz.faixa].toFixed(2)+'×' : '—'}</span></span></div>
         <div class="sim2-total-row"><span>Faturamento</span><span>${fmtR(fatVozPort)}</span></div>
       </div>
       <div class="sim2-card">
-        <div class="sim2-card-title">🌐 BL Fixa (NET PJ - VIRTUA)</div>
+        <div class="sim2-card-title">🌐 BL Fixa</div>
         <div class="sim2-receita-row"><span class="sim2-receita-label">Qtd instalações</span><span class="sim2-receita-value">${fmtN(blQtd)}</span></div>
         <div class="sim2-receita-row"><span class="sim2-receita-label">Receita contratada</span><span class="sim2-receita-value">${fmtR(blRec)}</span></div>
         <div class="sim2-receita-row"><span class="sim2-receita-label">Fator fixo</span><span class="sim2-receita-value">${cfg.fatores.blFixa.toFixed(2)}×</span></div>
-        <div class="sim2-receita-row"><span class="sim2-receita-label">Fator adicional (${faixaBL.label})</span><span class="sim2-receita-value"><span class="${faixaBL.cls} sim2-faixa-badge">${faixaBL.faixa ? cfg.adicionais.blFixa[faixaBL.faixa].toFixed(2)+'×' : '—'}</span></span></div>
-        <div class="sim2-receita-row"><span class="sim2-receita-label">% Atingimento meta</span><span class="sim2-receita-value">${fmtPct(pctBL)}</span></div>
+        <div class="sim2-receita-row"><span class="sim2-receita-label">Fator adicional</span><span class="sim2-receita-value"><span class="${faixaBL.cls} sim2-faixa-badge">${faixaBL.faixa ? cfg.adicionais.blFixa[faixaBL.faixa].toFixed(2)+'×' : '—'}</span> ${faixaBL.label}</span></div>
+        <div class="sim2-receita-row"><span class="sim2-receita-label">% Meta BL</span><span class="sim2-receita-value">${fmtPct(pctBL)}</span></div>
         <div class="sim2-total-row"><span>Faturamento</span><span>${fmtR(fatBL)}</span></div>
       </div>
     </div>
 
-    <!-- TABELA HC CENÁRIOS -->
-    <div class="sim2-section-title">Análise de Cenários de HC vs Carteira</div>
-    <div class="sim2-card">
+    <!-- RESULTADO POR UNIDADE -->
+    <div class="sim2-section-title">Resultado por Unidade</div>
+    <div class="sim2-card" style="padding:0;overflow:hidden">
+      <div style="overflow-x:auto">
+      <table class="sim2-unit-table">
+        <thead>
+          <tr>
+            <th>Unidade</th>
+            <th style="text-align:right">Voz Ativ.</th>
+            <th style="text-align:right">BL Ativ.</th>
+            <th style="text-align:right">Faturamento</th>
+            <th style="text-align:right">Linhas Cart.</th>
+            <th style="text-align:right">Cart. Calculada</th>
+            <th style="text-align:right">Teto (${fmtPct(cfg.teto[categoria][faixaCNPJHC.faixa])})</th>
+            <th style="text-align:right">Cart. Recebida</th>
+            <th style="text-align:right">Não Recebida</th>
+            <th style="text-align:right">HC Máx. Prod.</th>
+            <th style="text-align:right">HC Ideal Cart.</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${resultadosPorUnidade.map(r => `
+          <tr>
+            <td><strong>${r.shortName}</strong></td>
+            <td class="money" style="text-align:right">${fmtN(r.voz)}</td>
+            <td class="money" style="text-align:right">${fmtN(r.bl)}</td>
+            <td class="money positive" style="text-align:right">${fmtR(r.fat)}</td>
+            <td class="money" style="text-align:right">${fmtN(r.linhas)}</td>
+            <td class="money" style="text-align:right">${fmtR(r.cartCalc)}</td>
+            <td class="money warn" style="text-align:right">${fmtR(r.fat * cfg.teto[categoria][faixaCNPJHC.faixa])}</td>
+            <td class="money positive" style="text-align:right">${fmtR(r.cartReceb)}</td>
+            <td class="money ${r.cartNaoReceb > 0 ? 'negative' : 'positive'}" style="text-align:right">${r.cartNaoReceb > 0 ? fmtR(r.cartNaoReceb) : '✓'}</td>
+            <td class="money" style="text-align:right">${fmtN(r.hcMaxUnit)}</td>
+            <td class="money" style="text-align:right">${r.hcIdealUnit > 0 ? fmtN(r.hcIdealUnit) : '—'}</td>
+          </tr>`).join('')}
+        </tbody>
+        <tfoot>
+          <tr class="total-row">
+            <td><strong>TOTAL GERAL</strong></td>
+            <td class="money" style="text-align:right">${fmtN(totUnit.voz)}</td>
+            <td class="money" style="text-align:right">${fmtN(totUnit.bl)}</td>
+            <td class="money positive" style="text-align:right">${fmtR(totUnit.fat)}</td>
+            <td class="money" style="text-align:right">${fmtN(totUnit.linhas)}</td>
+            <td class="money" style="text-align:right">${fmtR(totUnit.cartCalc)}</td>
+            <td class="money warn" style="text-align:right">${fmtR(teto)}</td>
+            <td class="money positive" style="text-align:right">${fmtR(carteiraRecebida)}</td>
+            <td class="money ${totUnit.cartNaoReceb > 0 ? 'negative' : 'positive'}" style="text-align:right">${totUnit.cartNaoReceb > 0 ? fmtR(totUnit.cartNaoReceb) : '✓'}</td>
+            <td class="money" style="text-align:right">${fmtN(hcMaxReal)}</td>
+            <td class="money" style="text-align:right">${fmtN(hcIdealCart)}</td>
+          </tr>
+        </tfoot>
+      </table>
+      </div>
+    </div>
+
+    <!-- CENÁRIOS HC -->
+    <div class="sim2-section-title">Análise de Cenários HC vs Carteira</div>
+    <div class="sim2-card" style="padding:0;overflow:hidden">
+      <div style="overflow-x:auto">
       <table class="sim2-hc-table">
         <thead>
           <tr>
@@ -3044,19 +3199,20 @@ function calcSim2() {
             <th>Faixa</th>
             <th>Unitário/linha</th>
             <th>Carteira calculada</th>
-            <th>Teto (${fmtPct(cfg.teto[categoria][faixaCNPJHC.faixa])} fat.)</th>
+            <th>Teto</th>
             <th>Carteira recebida</th>
           </tr>
         </thead>
         <tbody>
           ${cenariosHC.map(c => {
-            const t = fatTotal * cfg.teto[categoria][getFaixaCNPJHC(cnpjs, c.hc).faixa];
-            const cc = linhasCart * c.unitario;
+            const f = getFaixaCNPJHC(cnpjsGlobal, c.hc);
+            const t = fatTotal * cfg.teto[categoria][f.faixa];
+            const cc = linhasCartGlobal * c.unitario;
             const cr = Math.min(cc, t);
             const isAtual = c.hc === hcRecomendado;
             return `<tr class="${isAtual ? 'ativa' : ''}">
-              <td>${fmtN(c.hc)} ${c.label} ${isAtual ? '← recomendado' : ''}</td>
-              <td>${fmtN(Math.round(cnpjs/c.hc))}</td>
+              <td>${fmtN(c.hc)}${isAtual ? ' ← recomendado' : ''}</td>
+              <td>${fmtN(c.ratio)}</td>
               <td>${c.faixa}</td>
               <td>${fmtR(c.unitario)}</td>
               <td>${fmtR(cc)}</td>
@@ -3066,12 +3222,15 @@ function calcSim2() {
           }).join('')}
         </tbody>
       </table>
+      </div>
     </div>
   `;
 }
 
 // Inicializa ao carregar dados
 const _origLoadData2 = typeof loadData === 'function' ? loadData : null;
+
+
 
 async function fazerLogout() {
   if (!confirm('Deseja sair do dashboard?')) return;
