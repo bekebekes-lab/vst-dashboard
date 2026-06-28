@@ -1,0 +1,41 @@
+// Vercel Serverless Function — dispara o NeoSales Bot no GitHub Actions
+// Token fica seguro em GITHUB_ACTIONS_TOKEN (env var do Vercel)
+
+export default async function handler(req, res) {
+  // Só aceita POST
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  const token = process.env.GITHUB_ACTIONS_TOKEN;
+  if (!token) {
+    return res.status(500).json({ error: 'Token não configurado' });
+  }
+
+  try {
+    const response = await fetch(
+      'https://api.github.com/repos/bekebekes-lab/vst-dashboard/actions/workflows/bot.yml/dispatches',
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/vnd.github+json',
+          'X-GitHub-Api-Version': '2022-11-28',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ ref: 'main' }),
+      }
+    );
+
+    // GitHub retorna 204 No Content em caso de sucesso
+    if (response.status === 204) {
+      return res.status(200).json({ ok: true, message: 'Bot disparado com sucesso' });
+    }
+
+    const errorBody = await response.text();
+    return res.status(response.status).json({ error: errorBody });
+
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+}
