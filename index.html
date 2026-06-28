@@ -2387,6 +2387,19 @@ async function trocarMes() {
     await salvarMetasNoBanco().catch(e => console.warn('Falha ao salvar ao trocar mês:', e));
     _metasSujas = false;
   }
+
+  // Reseta filtros livres para evitar valores inválidos na nova base
+  const p = USUARIO_ATUAL?.perfil;
+  const filtrosLivres = [];
+  if (!['consultor'].includes(p)) filtrosLivres.push('f-consultor');
+  if (!['consultor','gestor','gestor_equipe'].includes(p)) filtrosLivres.push('f-equipe');
+  if (!['consultor','gestor'].includes(p)) filtrosLivres.push('f-tag');
+
+  filtrosLivres.forEach(id => {
+    const sel = document.getElementById(id);
+    if (sel && !sel.disabled) sel.selectedIndex = 0;
+  });
+
   loadData();
   // Aguarda dados carregarem, depois recarrega metas do novo período
   setTimeout(() => carregarMetasDoBanco(getPeriodoAtivo()), 900);
