@@ -525,7 +525,7 @@
       </select>
     </div>
     <span class="last-update" id="last-update"></span>
-    <button class="btn-refresh" onclick="loadData(); setTimeout(() => aplicarPermissoes(), 1000); setTimeout(() => aplicarPermissoes(), 2500);">↻ Atualizar</button>
+    <button class="btn-refresh" id="btn-refresh" onclick="triggerBotEAtualizar(this)">↻ Atualizar</button>
     <span class="clock" id="clock"></span>
     <div class="user-badge" onclick="fazerLogout()" title="Clique para sair">
       <div class="user-avatar" id="user-avatar">?</div>
@@ -2602,6 +2602,47 @@ function aplicarPermissoes() {
   aplicarFiltros();
   setTimeout(aplicarFiltros, 800);
   setTimeout(aplicarFiltros, 2000);
+}
+
+async function triggerBotEAtualizar(btn) {
+  const originalText = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '⏳ Aguarde...';
+
+  try {
+    // 1. Dispara o bot via Vercel Function
+    const res = await fetch('/api/trigger-bot', { method: 'POST' });
+    const data = await res.json();
+
+    if (!res.ok) throw new Error(data.error || 'Erro ao disparar bot');
+
+    // 2. Feedback visual — bot está rodando (~2min)
+    btn.innerHTML = '🤖 Bot rodando...';
+
+    // 3. Aguarda ~2min e recarrega os dados
+    let segundos = 120;
+    const intervalo = setInterval(() => {
+      segundos--;
+      btn.innerHTML = `🤖 Atualizando (${segundos}s)`;
+      if (segundos <= 0) {
+        clearInterval(intervalo);
+        btn.innerHTML = '↻ Carregando...';
+        loadData();
+        setTimeout(() => aplicarPermissoes(), 1000);
+        setTimeout(() => aplicarPermissoes(), 2500);
+        setTimeout(() => {
+          btn.disabled = false;
+          btn.innerHTML = originalText;
+        }, 3000);
+      }
+    }, 1000);
+
+  } catch (err) {
+    console.error('Erro ao disparar bot:', err);
+    alert('Erro ao disparar atualização: ' + err.message);
+    btn.disabled = false;
+    btn.innerHTML = originalText;
+  }
 }
 
 async function fazerLogout() {
