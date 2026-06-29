@@ -2774,7 +2774,8 @@ async function discadoraCarregar() {
   try {
     let todos = [];
     let pagina = 1;
-    while (true) {
+    const MAX_PAGINAS = 10;
+    while (pagina <= MAX_PAGINAS) {
       const lote = await discadoraBuscarPagina(pagina);
       todos = todos.concat(lote);
       if (lote.length < 1000) break;
