@@ -2730,8 +2730,8 @@ async function fazerLogout() {
 }
 
 // ─── DISCADORA ───────────────────────────────────────────────────────────────
-const DISC_API_URL = 'https://legacyapi.makesystem.com.br/historic/graphql';
-const DISC_API_KEY = 'CB9D95E0-EDAA-4BB1-B65B-2744DB4935B1';
+const DISC_API_URL = '/api/discadora';
+const DISC_API_KEY = '';
 let _discTimer = null;
 let _discDados = [];
 let _discIniciado = false;
@@ -2777,7 +2777,7 @@ async function discadoraCarregar() {
   try {
     const res = await fetch(DISC_API_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'key': DISC_API_KEY },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ query })
     });
     const json = await res.json();
