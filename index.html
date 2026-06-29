@@ -710,12 +710,10 @@
   <div class="tab-panel" id="tab-discadora">
     <div class="filters-bar" style="flex-wrap:wrap; gap:8px; align-items:flex-end;">
       <div class="filter-group">
-        <label>Data início</label>
-        <input type="date" id="disc-dt-ini" style="padding:6px 10px; border:1px solid var(--border); border-radius:var(--radius); font-size:13px; background:var(--surface); color:var(--text);">
-      </div>
-      <div class="filter-group">
-        <label>Data fim</label>
-        <input type="date" id="disc-dt-fim" style="padding:6px 10px; border:1px solid var(--border); border-radius:var(--radius); font-size:13px; background:var(--surface); color:var(--text);">
+        <label>Grupo</label>
+        <select id="disc-grupo" style="padding:6px 10px; border:1px solid var(--border); border-radius:var(--radius); font-size:13px; background:var(--surface); color:var(--text);">
+          <option value="">Todos</option>
+        </select>
       </div>
       <div class="filter-group">
         <label>Fila</label>
@@ -751,7 +749,8 @@
                 <th>Atendidas</th>
                 <th>Produtivas (+1min)</th>
                 <th>% Produtividade</th>
-                <th>TMA</th>
+                <th>TMA geral</th>
+                <th>TMA +1min</th>
               </tr>
             </thead>
             <tbody id="disc-tbody"></tbody>
@@ -2731,38 +2730,23 @@ async function fazerLogout() {
 
 // ─── DISCADORA ───────────────────────────────────────────────────────────────
 const DISC_API_URL = '/api/discadora';
-const DISC_API_KEY = '';
 let _discTimer = null;
 let _discDados = [];
 let _discIniciado = false;
 
-function discDataHoje() {
-  return new Date().toISOString().split('T')[0];
-}
-
 function initDiscadora() {
   if (_discIniciado) return;
   _discIniciado = true;
-  const hoje = discDataHoje();
-  document.getElementById('disc-dt-ini').value = hoje;
-  document.getElementById('disc-dt-fim').value = hoje;
   discadoraCarregar();
   _discTimer = setInterval(discadoraCarregar, 30000);
 }
 
-async function discadoraCarregar() {
-  const ini = document.getElementById('disc-dt-ini').value;
-  const fim = document.getElementById('disc-dt-fim').value;
-  const statusEl = document.getElementById('disc-status');
-  statusEl.textContent = '⟳ Atualizando...';
-
+async function discadoraBuscarPagina(pagina) {
   const query = `{
     listar_historico_contato(
-      data_hora_minima: "${ini}T00:00:00"
-      data_hora_maxima: "${fim}T23:59:59"
       contem_usuarios: true
       limite: 1000
-      pagina: 1
+      pagina: ${pagina}
     ) {
       dataRegistro
       duracao
@@ -2773,16 +2757,30 @@ async function discadoraCarregar() {
       fila { nome }
     }
   }`;
+  const res = await fetch(DISC_API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query })
+  });
+  const json = await res.json();
+  if (json.errors) throw new Error(json.errors[0].message);
+  return json.data.listar_historico_contato || [];
+}
+
+async function discadoraCarregar() {
+  const statusEl = document.getElementById('disc-status');
+  statusEl.textContent = '⟳ Carregando...';
 
   try {
-    const res = await fetch(DISC_API_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query })
-    });
-    const json = await res.json();
-    if (json.errors) throw new Error(json.errors[0].message);
-    _discDados = json.data.listar_historico_contato || [];
+    let todos = [];
+    let pagina = 1;
+    while (true) {
+      const lote = await discadoraBuscarPagina(pagina);
+      todos = todos.concat(lote);
+      if (lote.length < 1000) break;
+      pagina++;
+    }
+    _discDados = todos;
     const agora = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
     document.getElementById('disc-ultima-atualizacao').textContent = 'Atualizado às ' + agora;
     statusEl.textContent = '';
@@ -2806,43 +2804,55 @@ function discProdColor(pct) {
 }
 
 function discadoraRender() {
-  const filaFiltro = document.getElementById('disc-fila').value;
+  const grupoFiltro     = document.getElementById('disc-grupo').value;
+  const filaFiltro      = document.getElementById('disc-fila').value;
   const consultorFiltro = document.getElementById('disc-consultor').value;
 
-  // Popular filtros dinamicamente
-  const filas = [...new Set(_discDados.map(r => r.fila?.nome).filter(Boolean))].sort();
-  const consultores = [...new Set(_discDados.map(r => r.usuario?.nome).filter(Boolean))].sort();
-  const filaEl = document.getElementById('disc-fila');
-  const consultorEl = document.getElementById('disc-consultor');
-  const filaAtual = filaEl.value;
-  const consultorAtual = consultorEl.value;
-  filaEl.innerHTML = '<option value="">Todas</option>' + filas.map(f => `<option value="${f}"${f===filaAtual?' selected':''}>${f}</option>`).join('');
-  consultorEl.innerHTML = '<option value="">Todos</option>' + consultores.map(c => `<option value="${c}"${c===consultorAtual?' selected':''}>${c}</option>`).join('');
+  // Popular filtros dinamicamente preservando seleção atual
+  const grupos     = [...new Set(_discDados.map(r => r.grupo?.nome).filter(Boolean))].sort();
+  const filas      = [...new Set(_discDados.map(r => r.fila?.nome).filter(Boolean))].sort();
+  const consultores= [...new Set(_discDados.map(r => r.usuario?.nome).filter(Boolean))].sort();
 
-  // Filtrar dados
+  document.getElementById('disc-grupo').innerHTML =
+    '<option value="">Todos</option>' + grupos.map(g => `<option value="${g}"${g===grupoFiltro?' selected':''}>${g}</option>`).join('');
+  document.getElementById('disc-fila').innerHTML =
+    '<option value="">Todas</option>' + filas.map(f => `<option value="${f}"${f===filaFiltro?' selected':''}>${f}</option>`).join('');
+  document.getElementById('disc-consultor').innerHTML =
+    '<option value="">Todos</option>' + consultores.map(c => `<option value="${c}"${c===consultorFiltro?' selected':''}>${c}</option>`).join('');
+
+  // Filtrar
   let dados = _discDados;
-  if (filaFiltro) dados = dados.filter(r => r.fila?.nome === filaFiltro);
+  if (grupoFiltro)     dados = dados.filter(r => r.grupo?.nome === grupoFiltro);
+  if (filaFiltro)      dados = dados.filter(r => r.fila?.nome === filaFiltro);
   if (consultorFiltro) dados = dados.filter(r => r.usuario?.nome === consultorFiltro);
 
   // Agrupar por consultor
   const porConsultor = {};
   dados.forEach(r => {
-    const nome = r.usuario?.nome || 'Desconhecido';
+    const nome  = r.usuario?.nome || 'Desconhecido';
     const grupo = r.grupo?.nome || '–';
-    const fila = r.fila?.nome || '–';
-    if (!porConsultor[nome]) porConsultor[nome] = { nome, grupo, fila, total: 0, atendidas: 0, produtivas: 0, durTotal: 0 };
+    const fila  = r.fila?.nome || '–';
+    if (!porConsultor[nome]) porConsultor[nome] = { nome, grupo, fila, total: 0, atendidas: 0, produtivas: 0, durTotal: 0, durProd: 0 };
     porConsultor[nome].total++;
-    if (r.duracao !== null) { porConsultor[nome].atendidas++; porConsultor[nome].durTotal += r.duracao; }
-    if ((r.duracao || 0) > 60) porConsultor[nome].produtivas++;
+    if (r.duracao !== null) {
+      porConsultor[nome].atendidas++;
+      porConsultor[nome].durTotal += r.duracao;
+    }
+    if ((r.duracao || 0) > 60) {
+      porConsultor[nome].produtivas++;
+      porConsultor[nome].durProd += r.duracao;
+    }
   });
 
   // KPIs globais
-  const totalLig = dados.length;
+  const totalLig   = dados.length;
   const totalAtend = dados.filter(r => r.duracao !== null).length;
-  const totalProd = dados.filter(r => (r.duracao || 0) > 60).length;
-  const durTotal = dados.reduce((s, r) => s + (r.duracao || 0), 0);
-  const tmaGlobal = totalAtend > 0 ? Math.round(durTotal / totalAtend) : 0;
-  const pctProd = totalAtend > 0 ? Math.round(totalProd / totalAtend * 100) : 0;
+  const totalProd  = dados.filter(r => (r.duracao || 0) > 60).length;
+  const durTotal   = dados.reduce((s, r) => s + (r.duracao || 0), 0);
+  const durProd    = dados.filter(r => (r.duracao||0) > 60).reduce((s, r) => s + r.duracao, 0);
+  const tmaGlobal  = totalAtend > 0 ? Math.round(durTotal / totalAtend) : 0;
+  const tmaProd    = totalProd  > 0 ? Math.round(durProd  / totalProd)  : 0;
+  const pctProd    = totalAtend > 0 ? Math.round(totalProd / totalAtend * 100) : 0;
 
   document.getElementById('disc-kpi-area').innerHTML = `
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;">
@@ -2862,15 +2872,20 @@ function discadoraRender() {
       <div style="font-size:24px;font-weight:700;color:${discProdColor(pctProd)};">${pctProd}%</div>
     </div>
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;">
-      <div style="font-size:11px;color:var(--text2);margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em;">TMA</div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em;">TMA geral</div>
       <div style="font-size:24px;font-weight:700;color:var(--text);">${discFmt(tmaGlobal)}</div>
+    </div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;">
+      <div style="font-size:11px;color:var(--text2);margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em;">TMA +1min</div>
+      <div style="font-size:24px;font-weight:700;color:var(--text);">${discFmt(tmaProd)}</div>
     </div>
   `;
 
   // Tabela por consultor
   const rows = Object.values(porConsultor).sort((a, b) => b.produtivas - a.produtivas);
-  const tmaRow = r => r.atendidas > 0 ? Math.round(r.durTotal / r.atendidas) : 0;
-  const pctRow = r => r.atendidas > 0 ? Math.round(r.produtivas / r.atendidas * 100) : 0;
+  const tmaRow     = r => r.atendidas  > 0 ? Math.round(r.durTotal / r.atendidas) : 0;
+  const tmaProdRow = r => r.produtivas > 0 ? Math.round(r.durProd  / r.produtivas) : 0;
+  const pctRow     = r => r.atendidas  > 0 ? Math.round(r.produtivas / r.atendidas * 100) : 0;
 
   document.getElementById('disc-tbody').innerHTML = rows.map(r => `
     <tr>
@@ -2882,6 +2897,7 @@ function discadoraRender() {
       <td>${r.produtivas}</td>
       <td style="color:${discProdColor(pctRow(r))};font-weight:600;">${pctRow(r)}%</td>
       <td>${discFmt(tmaRow(r))}</td>
+      <td>${r.produtivas > 0 ? discFmt(tmaProdRow(r)) : '–'}</td>
     </tr>
   `).join('');
 
@@ -2893,11 +2909,12 @@ function discadoraRender() {
       <td>${totalProd}</td>
       <td style="color:${discProdColor(pctProd)};font-weight:700;">${pctProd}%</td>
       <td>${discFmt(tmaGlobal)}</td>
+      <td>${discFmt(tmaProd)}</td>
     </tr>
   `;
 
   // Tabela por hora
-  const horas = Array.from({length: 14}, (_, i) => i + 8); // 08 às 21
+  const horas = Array.from({length: 14}, (_, i) => i + 8);
   const filasCols = [...new Set(dados.map(r => r.fila?.nome).filter(Boolean))].sort();
   const porHoraFila = {};
   dados.forEach(r => {
@@ -2908,7 +2925,9 @@ function discadoraRender() {
   });
 
   document.getElementById('disc-hora-header').innerHTML =
-    '<th style="text-align:left;">Hora</th>' + filasCols.map(f => `<th>${f}</th>`).join('') + '<th>Total</th>';
+    '<th style="text-align:left;background:var(--red);color:#fff;">Hora</th>' +
+    filasCols.map(f => `<th style="background:var(--red);color:#fff;">${f}</th>`).join('') +
+    '<th style="background:var(--red);color:#fff;">Total</th>';
 
   document.getElementById('disc-hora-tbody').innerHTML = horas.map(h => {
     const celulas = filasCols.map(f => {
