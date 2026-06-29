@@ -2774,10 +2774,16 @@ async function discadoraCarregar() {
   try {
     let todos = [];
     let pagina = 1;
-    const MAX_PAGINAS = 10;
+    const MAX_PAGINAS = 20;
+    const hoje = new Date().toISOString().split('T')[0];
     while (pagina <= MAX_PAGINAS) {
       const lote = await discadoraBuscarPagina(pagina);
-      todos = todos.concat(lote);
+      if (!lote.length) break;
+      // Filtra só registros de hoje
+      const deHoje = lote.filter(r => r.dataRegistro && r.dataRegistro.startsWith(hoje));
+      todos = todos.concat(deHoje);
+      // Para se o lote trouxe registros de outro dia
+      if (deHoje.length < lote.length) break;
       if (lote.length < 1000) break;
       pagina++;
     }
