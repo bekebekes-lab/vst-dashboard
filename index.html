@@ -3225,8 +3225,15 @@ async function discadoraCarregar() {
       const lote = await discadoraBuscarPagina(pagina);
       if (!lote.length) break;
 
+      // CORREÇÃO DO FUSO HORÁRIO:
+      // Remove o "Z" (UTC) enviado pela API e amarra em UTC-3 (Brasília)
+      lote.forEach(r => {
+        if (r.dataRegistro && r.dataRegistro.endsWith('Z')) {
+          r.dataRegistro = r.dataRegistro.replace('Z', '-03:00');
+        }
+      });
+
       const tsRecente = new Date(lote[0].dataRegistro).getTime();
-      const tsAntigo  = new Date(lote[lote.length - 1].dataRegistro).getTime();
 
       if (tsRecente < tsIni) break;
 
