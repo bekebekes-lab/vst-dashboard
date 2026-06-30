@@ -710,6 +710,22 @@
   <div class="tab-panel" id="tab-discadora">
     <div class="filters-bar" style="flex-wrap:wrap; gap:8px; align-items:flex-end;">
       <div class="filter-group">
+        <label>Data início</label>
+        <input type="date" id="disc-dt-ini" style="padding:6px 10px; border:1px solid var(--border); border-radius:var(--radius); font-size:13px; background:var(--surface); color:var(--text);">
+      </div>
+      <div class="filter-group">
+        <label>Hora início</label>
+        <input type="time" id="disc-hr-ini" value="08:00" style="padding:6px 10px; border:1px solid var(--border); border-radius:var(--radius); font-size:13px; background:var(--surface); color:var(--text);">
+      </div>
+      <div class="filter-group">
+        <label>Data fim</label>
+        <input type="date" id="disc-dt-fim" style="padding:6px 10px; border:1px solid var(--border); border-radius:var(--radius); font-size:13px; background:var(--surface); color:var(--text);">
+      </div>
+      <div class="filter-group">
+        <label>Hora fim</label>
+        <input type="time" id="disc-hr-fim" value="22:00" style="padding:6px 10px; border:1px solid var(--border); border-radius:var(--radius); font-size:13px; background:var(--surface); color:var(--text);">
+      </div>
+      <div class="filter-group">
         <label>Grupo</label>
         <select id="disc-grupo" style="padding:6px 10px; border:1px solid var(--border); border-radius:var(--radius); font-size:13px; background:var(--surface); color:var(--text);">
           <option value="">Todos</option>
@@ -727,9 +743,17 @@
           <option value="">Todos</option>
         </select>
       </div>
-      <button onclick="discadoraCarregar()" style="padding:6px 16px; background:var(--red); color:#fff; border:none; border-radius:var(--radius); font-size:13px; font-weight:600; cursor:pointer;">Atualizar</button>
+      <button onclick="discadoraCarregar()" style="padding:6px 16px; background:var(--red); color:#fff; border:none; border-radius:var(--radius); font-size:13px; font-weight:600; cursor:pointer;">Buscar</button>
       <span id="disc-ultima-atualizacao" style="font-size:11px; color:var(--text2); margin-left:8px;"></span>
       <span id="disc-status" style="font-size:11px; color:var(--text2); margin-left:4px;"></span>
+    </div>
+
+    <!-- PROGRESS BAR -->
+    <div id="disc-progress-wrap" style="display:none; padding:8px 24px 0;">
+      <div style="font-size:12px; color:var(--text2); margin-bottom:4px;" id="disc-progress-label">Carregando...</div>
+      <div style="background:var(--border); border-radius:4px; height:6px; overflow:hidden;">
+        <div id="disc-progress-bar" style="height:100%; background:var(--red); width:0%; transition:width 0.3s;"></div>
+      </div>
     </div>
 
     <!-- KPI CARDS -->
@@ -2733,12 +2757,33 @@ const DISC_API_URL = '/api/discadora';
 let _discTimer = null;
 let _discDados = [];
 let _discIniciado = false;
+let _discCarregando = false;
+
+function discDataHoje() {
+  return new Date().toISOString().split('T')[0];
+}
 
 function initDiscadora() {
   if (_discIniciado) return;
   _discIniciado = true;
+  const hoje = discDataHoje();
+  document.getElementById('disc-dt-ini').value = hoje;
+  document.getElementById('disc-dt-fim').value = hoje;
   discadoraCarregar();
-  _discTimer = setInterval(discadoraCarregar, 30000);
+  _discTimer = setInterval(() => {
+    const fim = document.getElementById('disc-dt-fim').value;
+    if (fim === discDataHoje()) discadoraCarregar();
+  }, 30000);
+}
+
+function discProgressSet(pct, label) {
+  const wrap = document.getElementById('disc-progress-wrap');
+  const bar  = document.getElementById('disc-progress-bar');
+  const lbl  = document.getElementById('disc-progress-label');
+  if (pct === null) { wrap.style.display = 'none'; return; }
+  wrap.style.display = '';
+  bar.style.width = pct + '%';
+  lbl.textContent = label || 'Carregando...';
 }
 
 async function discadoraBuscarPagina(pagina) {
@@ -2768,37 +2813,66 @@ async function discadoraBuscarPagina(pagina) {
 }
 
 async function discadoraCarregar() {
+  if (_discCarregando) return;
+  _discCarregando = true;
+
+  const dtIni = document.getElementById('disc-dt-ini').value;
+  const hrIni = document.getElementById('disc-hr-ini').value || '00:00';
+  const dtFim = document.getElementById('disc-dt-fim').value;
+  const hrFim = document.getElementById('disc-hr-fim').value || '23:59';
   const statusEl = document.getElementById('disc-status');
-  statusEl.textContent = '⟳ Carregando...';
+
+  const tsIni = new Date(`${dtIni}T${hrIni}:00-03:00`).getTime();
+  const tsFim = new Date(`${dtFim}T${hrFim}:59-03:00`).getTime();
+
+  statusEl.textContent = '';
+  discProgressSet(5, 'Iniciando busca...');
 
   try {
     let todos = [];
     let pagina = 1;
-    const MAX_PAGINAS = 20;
-    const hoje = new Date().toISOString().split('T')[0];
+    const MAX_PAGINAS = 50;
+
     while (pagina <= MAX_PAGINAS) {
+      discProgressSet(
+        Math.min(5 + (pagina / MAX_PAGINAS) * 90, 95),
+        `Buscando pagina ${pagina}... (${todos.length} registros)`
+      );
+
       const lote = await discadoraBuscarPagina(pagina);
       if (!lote.length) break;
-      // Filtra só registros de hoje
-      const deHoje = lote.filter(r => r.dataRegistro && r.dataRegistro.startsWith(hoje));
-      todos = todos.concat(deHoje);
-      // Para se o lote trouxe registros de outro dia
-      if (deHoje.length < lote.length) break;
+
+      const tsRecente = new Date(lote[0].dataRegistro).getTime();
+      const tsAntigo  = new Date(lote[lote.length - 1].dataRegistro).getTime();
+
+      if (tsRecente < tsIni) break;
+
+      const filtrados = lote.filter(r => {
+        const ts = new Date(r.dataRegistro).getTime();
+        return ts >= tsIni && ts <= tsFim;
+      });
+
+      if (filtrados.length > 0) todos = todos.concat(filtrados);
+      if (tsAntigo < tsIni) break;
       if (lote.length < 1000) break;
       pagina++;
     }
+
     _discDados = todos;
     const agora = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    document.getElementById('disc-ultima-atualizacao').textContent = 'Atualizado às ' + agora;
-    statusEl.textContent = '';
+    document.getElementById('disc-ultima-atualizacao').textContent = `Atualizado as ${agora} · ${todos.length} registros`;
+    discProgressSet(null);
     discadoraRender();
   } catch(e) {
-    statusEl.textContent = '⚠ Erro: ' + e.message;
+    statusEl.textContent = 'Erro: ' + e.message;
+    discProgressSet(null);
+  } finally {
+    _discCarregando = false;
   }
 }
 
 function discFmt(seg) {
-  if (!seg && seg !== 0) return '–';
+  if (!seg && seg !== 0) return '-';
   const m = Math.floor(seg / 60).toString().padStart(2, '0');
   const s = (seg % 60).toString().padStart(2, '0');
   return m + ':' + s;
@@ -2815,33 +2889,30 @@ function discadoraRender() {
   const filaFiltro      = document.getElementById('disc-fila').value;
   const consultorFiltro = document.getElementById('disc-consultor').value;
 
-  // Popular filtros dinamicamente preservando seleção atual
-  const grupos     = [...new Set(_discDados.map(r => r.grupo?.nome).filter(Boolean))].sort();
-  const filas      = [...new Set(_discDados.map(r => r.fila?.nome).filter(Boolean))].sort();
-  const consultores= [...new Set(_discDados.map(r => r.usuario?.nome).filter(Boolean))].sort();
+  const grupos      = [...new Set(_discDados.map(r => r.grupo && r.grupo.nome).filter(Boolean))].sort();
+  const filas       = [...new Set(_discDados.map(r => r.fila && r.fila.nome).filter(Boolean))].sort();
+  const consultores = [...new Set(_discDados.map(r => r.usuario && r.usuario.nome).filter(Boolean))].sort();
 
   document.getElementById('disc-grupo').innerHTML =
-    '<option value="">Todos</option>' + grupos.map(g => `<option value="${g}"${g===grupoFiltro?' selected':''}>${g}</option>`).join('');
+    '<option value="">Todos</option>' + grupos.map(g => '<option value="' + g + '"' + (g===grupoFiltro?' selected':'') + '>' + g + '</option>').join('');
   document.getElementById('disc-fila').innerHTML =
-    '<option value="">Todas</option>' + filas.map(f => `<option value="${f}"${f===filaFiltro?' selected':''}>${f}</option>`).join('');
+    '<option value="">Todas</option>' + filas.map(f => '<option value="' + f + '"' + (f===filaFiltro?' selected':'') + '>' + f + '</option>').join('');
   document.getElementById('disc-consultor').innerHTML =
-    '<option value="">Todos</option>' + consultores.map(c => `<option value="${c}"${c===consultorFiltro?' selected':''}>${c}</option>`).join('');
+    '<option value="">Todos</option>' + consultores.map(c => '<option value="' + c + '"' + (c===consultorFiltro?' selected':'') + '>' + c + '</option>').join('');
 
-  // Filtrar
   let dados = _discDados;
-  if (grupoFiltro)     dados = dados.filter(r => r.grupo?.nome === grupoFiltro);
-  if (filaFiltro)      dados = dados.filter(r => r.fila?.nome === filaFiltro);
-  if (consultorFiltro) dados = dados.filter(r => r.usuario?.nome === consultorFiltro);
+  if (grupoFiltro)     dados = dados.filter(r => r.grupo && r.grupo.nome === grupoFiltro);
+  if (filaFiltro)      dados = dados.filter(r => r.fila && r.fila.nome === filaFiltro);
+  if (consultorFiltro) dados = dados.filter(r => r.usuario && r.usuario.nome === consultorFiltro);
 
-  // Agrupar por consultor
   const porConsultor = {};
-  dados.forEach(r => {
-    const nome  = r.usuario?.nome || 'Desconhecido';
-    const grupo = r.grupo?.nome || '–';
-    const fila  = r.fila?.nome || '–';
-    if (!porConsultor[nome]) porConsultor[nome] = { nome, grupo, fila, total: 0, atendidas: 0, produtivas: 0, durTotal: 0, durProd: 0 };
+  dados.forEach(function(r) {
+    const nome  = (r.usuario && r.usuario.nome) || 'Desconhecido';
+    const grupo = (r.grupo && r.grupo.nome) || '-';
+    const fila  = (r.fila && r.fila.nome) || '-';
+    if (!porConsultor[nome]) porConsultor[nome] = { nome: nome, grupo: grupo, fila: fila, total: 0, atendidas: 0, produtivas: 0, durTotal: 0, durProd: 0 };
     porConsultor[nome].total++;
-    if (r.duracao !== null) {
+    if (r.duracao !== null && r.duracao !== undefined) {
       porConsultor[nome].atendidas++;
       porConsultor[nome].durTotal += r.duracao;
     }
@@ -2851,101 +2922,95 @@ function discadoraRender() {
     }
   });
 
-  // KPIs globais
   const totalLig   = dados.length;
-  const totalAtend = dados.filter(r => r.duracao !== null).length;
-  const totalProd  = dados.filter(r => (r.duracao || 0) > 60).length;
-  const durTotal   = dados.reduce((s, r) => s + (r.duracao || 0), 0);
-  const durProd    = dados.filter(r => (r.duracao||0) > 60).reduce((s, r) => s + r.duracao, 0);
+  const totalAtend = dados.filter(function(r){ return r.duracao !== null && r.duracao !== undefined; }).length;
+  const totalProd  = dados.filter(function(r){ return (r.duracao || 0) > 60; }).length;
+  const durTotal   = dados.reduce(function(s,r){ return s + (r.duracao || 0); }, 0);
+  const durProd    = dados.filter(function(r){ return (r.duracao||0) > 60; }).reduce(function(s,r){ return s + r.duracao; }, 0);
   const tmaGlobal  = totalAtend > 0 ? Math.round(durTotal / totalAtend) : 0;
   const tmaProd    = totalProd  > 0 ? Math.round(durProd  / totalProd)  : 0;
   const pctProd    = totalAtend > 0 ? Math.round(totalProd / totalAtend * 100) : 0;
 
-  document.getElementById('disc-kpi-area').innerHTML = `
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;">
-      <div style="font-size:11px;color:var(--text2);margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em;">Total ligações</div>
-      <div style="font-size:24px;font-weight:700;color:var(--text);">${totalLig}</div>
-    </div>
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;">
-      <div style="font-size:11px;color:var(--text2);margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em;">Atendidas</div>
-      <div style="font-size:24px;font-weight:700;color:var(--text);">${totalAtend}</div>
-    </div>
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;">
-      <div style="font-size:11px;color:var(--text2);margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em;">Produtivas +1min</div>
-      <div style="font-size:24px;font-weight:700;color:var(--text);">${totalProd}</div>
-    </div>
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;">
-      <div style="font-size:11px;color:var(--text2);margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em;">% Produtividade</div>
-      <div style="font-size:24px;font-weight:700;color:${discProdColor(pctProd)};">${pctProd}%</div>
-    </div>
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;">
-      <div style="font-size:11px;color:var(--text2);margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em;">TMA geral</div>
-      <div style="font-size:24px;font-weight:700;color:var(--text);">${discFmt(tmaGlobal)}</div>
-    </div>
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;">
-      <div style="font-size:11px;color:var(--text2);margin-bottom:4px;text-transform:uppercase;letter-spacing:.05em;">TMA +1min</div>
-      <div style="font-size:24px;font-weight:700;color:var(--text);">${discFmt(tmaProd)}</div>
-    </div>
-  `;
+  document.getElementById('disc-kpi-area').innerHTML =
+    '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;">' +
+      '<div style="font-size:11px;color:var(--text2);margin-bottom:4px;text-transform:uppercase;">Total ligacoes</div>' +
+      '<div style="font-size:24px;font-weight:700;color:var(--text);">' + totalLig + '</div></div>' +
+    '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;">' +
+      '<div style="font-size:11px;color:var(--text2);margin-bottom:4px;text-transform:uppercase;">Atendidas</div>' +
+      '<div style="font-size:24px;font-weight:700;color:var(--text);">' + totalAtend + '</div></div>' +
+    '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;">' +
+      '<div style="font-size:11px;color:var(--text2);margin-bottom:4px;text-transform:uppercase;">Produtivas +1min</div>' +
+      '<div style="font-size:24px;font-weight:700;color:var(--text);">' + totalProd + '</div></div>' +
+    '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;">' +
+      '<div style="font-size:11px;color:var(--text2);margin-bottom:4px;text-transform:uppercase;">% Produtividade</div>' +
+      '<div style="font-size:24px;font-weight:700;color:' + discProdColor(pctProd) + ';">' + pctProd + '%</div></div>' +
+    '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;">' +
+      '<div style="font-size:11px;color:var(--text2);margin-bottom:4px;text-transform:uppercase;">TMA geral</div>' +
+      '<div style="font-size:24px;font-weight:700;color:var(--text);">' + discFmt(tmaGlobal) + '</div></div>' +
+    '<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;">' +
+      '<div style="font-size:11px;color:var(--text2);margin-bottom:4px;text-transform:uppercase;">TMA +1min</div>' +
+      '<div style="font-size:24px;font-weight:700;color:var(--text);">' + discFmt(tmaProd) + '</div></div>';
 
-  // Tabela por consultor
-  const rows = Object.values(porConsultor).sort((a, b) => b.produtivas - a.produtivas);
-  const tmaRow     = r => r.atendidas  > 0 ? Math.round(r.durTotal / r.atendidas) : 0;
-  const tmaProdRow = r => r.produtivas > 0 ? Math.round(r.durProd  / r.produtivas) : 0;
-  const pctRow     = r => r.atendidas  > 0 ? Math.round(r.produtivas / r.atendidas * 100) : 0;
+  const rows = Object.values(porConsultor).sort(function(a,b){ return b.produtivas - a.produtivas; });
 
-  document.getElementById('disc-tbody').innerHTML = rows.map(r => `
-    <tr>
-      <td style="text-align:left;font-weight:500;">${r.nome}</td>
-      <td>${r.grupo}</td>
-      <td>${r.fila}</td>
-      <td>${r.total}</td>
-      <td>${r.atendidas}</td>
-      <td>${r.produtivas}</td>
-      <td style="color:${discProdColor(pctRow(r))};font-weight:600;">${pctRow(r)}%</td>
-      <td>${discFmt(tmaRow(r))}</td>
-      <td>${r.produtivas > 0 ? discFmt(tmaProdRow(r)) : '–'}</td>
-    </tr>
-  `).join('');
+  document.getElementById('disc-tbody').innerHTML = rows.map(function(r) {
+    const tmaR  = r.atendidas  > 0 ? Math.round(r.durTotal / r.atendidas)  : 0;
+    const tmaP  = r.produtivas > 0 ? Math.round(r.durProd  / r.produtivas) : 0;
+    const pctR  = r.atendidas  > 0 ? Math.round(r.produtivas / r.atendidas * 100) : 0;
+    return '<tr>' +
+      '<td style="text-align:left;font-weight:500;">' + r.nome + '</td>' +
+      '<td>' + r.grupo + '</td>' +
+      '<td>' + r.fila + '</td>' +
+      '<td>' + r.total + '</td>' +
+      '<td>' + r.atendidas + '</td>' +
+      '<td>' + r.produtivas + '</td>' +
+      '<td style="color:' + discProdColor(pctR) + ';font-weight:600;">' + pctR + '%</td>' +
+      '<td>' + discFmt(tmaR) + '</td>' +
+      '<td>' + (r.produtivas > 0 ? discFmt(tmaP) : '-') + '</td>' +
+    '</tr>';
+  }).join('');
 
-  document.getElementById('disc-tfoot').innerHTML = `
-    <tr>
-      <td style="text-align:left;" colspan="3">TOTAL</td>
-      <td>${totalLig}</td>
-      <td>${totalAtend}</td>
-      <td>${totalProd}</td>
-      <td style="color:${discProdColor(pctProd)};font-weight:700;">${pctProd}%</td>
-      <td>${discFmt(tmaGlobal)}</td>
-      <td>${discFmt(tmaProd)}</td>
-    </tr>
-  `;
+  document.getElementById('disc-tfoot').innerHTML =
+    '<tr>' +
+      '<td style="text-align:left;" colspan="3">TOTAL</td>' +
+      '<td>' + totalLig + '</td>' +
+      '<td>' + totalAtend + '</td>' +
+      '<td>' + totalProd + '</td>' +
+      '<td style="color:' + discProdColor(pctProd) + ';font-weight:700;">' + pctProd + '%</td>' +
+      '<td>' + discFmt(tmaGlobal) + '</td>' +
+      '<td>' + discFmt(tmaProd) + '</td>' +
+    '</tr>';
 
-  // Tabela por hora
-  const horas = Array.from({length: 14}, (_, i) => i + 8);
-  const filasCols = [...new Set(dados.map(r => r.fila?.nome).filter(Boolean))].sort();
+  const hrIniVal = parseInt((document.getElementById('disc-hr-ini').value || '08:00').split(':')[0]);
+  const hrFimVal = parseInt((document.getElementById('disc-hr-fim').value || '22:00').split(':')[0]);
+  const horas = [];
+  for (var i = hrIniVal; i <= hrFimVal; i++) horas.push(i);
+
+  const filasCols = [...new Set(dados.map(function(r){ return r.fila && r.fila.nome; }).filter(Boolean))].sort();
   const porHoraFila = {};
-  dados.forEach(r => {
+  dados.forEach(function(r) {
     const h = new Date(r.dataRegistro).getHours();
-    const f = r.fila?.nome || '–';
+    const f = (r.fila && r.fila.nome) || '-';
     if (!porHoraFila[h]) porHoraFila[h] = {};
     porHoraFila[h][f] = (porHoraFila[h][f] || 0) + 1;
   });
 
   document.getElementById('disc-hora-header').innerHTML =
     '<th style="text-align:left;background:var(--red);color:#fff;">Hora</th>' +
-    filasCols.map(f => `<th style="background:var(--red);color:#fff;">${f}</th>`).join('') +
+    filasCols.map(function(f){ return '<th style="background:var(--red);color:#fff;">' + f + '</th>'; }).join('') +
     '<th style="background:var(--red);color:#fff;">Total</th>';
 
-  document.getElementById('disc-hora-tbody').innerHTML = horas.map(h => {
-    const celulas = filasCols.map(f => {
-      const v = porHoraFila[h]?.[f] || 0;
+  document.getElementById('disc-hora-tbody').innerHTML = horas.map(function(h) {
+    const celulas = filasCols.map(function(f) {
+      const v = (porHoraFila[h] && porHoraFila[h][f]) || 0;
       const bg = v === 0 ? '' : v < 5 ? 'background:#fef9c3' : v < 10 ? 'background:#fed7aa' : 'background:#bbf7d0';
-      return `<td style="${bg}">${v || ''}</td>`;
+      return '<td style="' + bg + '">' + (v || '') + '</td>';
     }).join('');
-    const total = filasCols.reduce((s, f) => s + (porHoraFila[h]?.[f] || 0), 0);
-    return `<tr><td style="text-align:left;font-weight:500;">${String(h).padStart(2,'0')}h</td>${celulas}<td style="font-weight:600;">${total || ''}</td></tr>`;
+    const total = filasCols.reduce(function(s,f){ return s + ((porHoraFila[h] && porHoraFila[h][f]) || 0); }, 0);
+    return '<tr><td style="text-align:left;font-weight:500;">' + String(h).padStart(2,'0') + 'h</td>' + celulas + '<td style="font-weight:600;">' + (total || '') + '</td></tr>';
   }).join('');
 }
+
 
 </script>
 <script>
