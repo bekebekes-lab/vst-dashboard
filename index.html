@@ -3243,6 +3243,10 @@ async function discadoraCarregar() {
       });
 
       if (filtrados.length > 0) todos = todos.concat(filtrados);
+      
+      // Declarando o tsAntigo antes de usá-lo na linha de baixo
+      const tsAntigo = new Date(lote[lote.length - 1].dataRegistro).getTime();
+      
       if (tsAntigo < tsIni) break;
       if (lote.length < 1000) break;
       pagina++;
