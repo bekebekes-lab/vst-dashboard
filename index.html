@@ -3372,13 +3372,23 @@ function discadoraRender() {
 
   const filasCols = [...new Set(dados.map(function(r){ return r.fila && r.fila.nome; }).filter(Boolean))].sort();
   const porHoraFila = {};
+  
   dados.forEach(function(r) {
-    const h = new Date(r.dataRegistro).getHours();
+    // Converte a string UTC da API em um objeto Date
+    const dataOriginal = new Date(r.dataRegistro);
+    
+    // Força a extração da hora em UTC-3 (Fuso de Brasília) e converte para número
+    const h = parseInt(dataOriginal.toLocaleString("pt-BR", { 
+        timeZone: "America/Sao_Paulo", 
+        hour: "numeric" 
+    }), 10);
+    
     const f = (r.fila && r.fila.nome) || '-';
+    
     if (!porHoraFila[h]) porHoraFila[h] = {};
     porHoraFila[h][f] = (porHoraFila[h][f] || 0) + 1;
   });
-
+  
   document.getElementById('disc-hora-header').innerHTML =
     '<th style="text-align:left;background:var(--red);color:#fff;">Hora</th>' +
     filasCols.map(function(f){ return '<th style="background:var(--red);color:#fff;">' + f + '</th>'; }).join('') +
