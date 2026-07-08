@@ -535,6 +535,14 @@
   .prod-toggle.active .prod-toggle-dot { background: var(--brand); border-color: var(--brand); }
   .prod-toggle span { font-size: 12px; font-weight: 500; }
 
+  .prod-mom-tri-wrap { display: none; flex-direction: row; gap: 10px; }
+  .prod-mom-tri-wrap.visible { display: flex; }
+  .mom-cell, .tri-cell { font-size: 11px; white-space: nowrap; }
+  .mom-tri-up   { color: var(--green); font-weight: 600; }
+  .mom-tri-down { color: var(--red-sem); font-weight: 600; }
+  .mom-tri-flat { color: var(--text-3); font-weight: 600; }
+  .mom-tri-loading { font-size: 10px; color: var(--text-3); font-style: italic; }
+
   .prod-status-section {
     background: var(--surface); border: 1px solid var(--border);
     border-radius: var(--radius-lg); padding: 14px 16px;
@@ -987,6 +995,22 @@
           <span>Exibir Receita</span>
         </div>
       </div>
+      <div class="prod-mom-tri-wrap" id="prod-mom-tri-wrap">
+        <div class="prod-toggle-group">
+          <label class="top-label">Comparativo</label>
+          <div class="prod-toggle" id="prod-toggle-mom" onclick="toggleMOM()">
+            <div class="prod-toggle-dot"></div>
+            <span>MOM</span>
+          </div>
+        </div>
+        <div class="prod-toggle-group">
+          <label class="top-label">&nbsp;</label>
+          <div class="prod-toggle" id="prod-toggle-tri" onclick="toggleTRI()">
+            <div class="prod-toggle-dot"></div>
+            <span>TRI</span>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- STATUS CHIPS -->
@@ -1394,6 +1418,9 @@ async function carregarAbas() {
         const kb = pb.yyyy + pb.mm;
         return kb.localeCompare(ka);
       });
+
+    // Guarda lista de abas históricas disponíveis (usado pelo comparativo MOM/TRI)
+    window.ABAS_HISTORICO = historico;
 
     const sel = document.getElementById('mes-selector');
     const valorAtual = sel.value;
@@ -2279,12 +2306,209 @@ const EQUIPES_PR_LIST = [
 
 let prodExibirReceita = false;
 let prodStatusSelecionados = new Set();
+let prodExibirMOM = false;
+let prodExibirTRI = false;
+let prodComparativoReqId = 0;
+const HIST_SHEETS_CACHE = {}; // cache de abas históricas já buscadas (por nome da aba)
+
+// ─── Helpers de data/mês para o comparativo MOM/TRI ─────────────────────────
+function parseDataRefBR(val) {
+  if (!val) return null;
+  const s = val.toString().trim();
+  const m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+  if (m) return new Date(parseInt(m[3]), parseInt(m[2]) - 1, parseInt(m[1]));
+  const d = new Date(s);
+  return isNaN(d) ? null : d;
+}
+
+function diasNoMes(mm, yyyy) {
+  return new Date(parseInt(yyyy), parseInt(mm), 0).getDate();
+}
+
+function nomeAba(mm, yyyy) {
+  return `BaseCRM ${mm}${yyyy}`;
+}
+
+function abaExiste(mm, yyyy) {
+  return (window.ABAS_HISTORICO || []).some(a => a.mm === mm && a.yyyy === yyyy);
+}
+
+function mesAnterior(mm, yyyy, delta) {
+  let m = parseInt(mm), y = parseInt(yyyy);
+  m -= delta;
+  while (m <= 0) { m += 12; y -= 1; }
+  return { mm: String(m).padStart(2, '0'), yyyy: String(y) };
+}
+
+// Mês/ano de referência = o período atualmente selecionado no seletor do topo
+function getMesReferenciaSelecionado() {
+  const sel = document.getElementById('mes-selector');
+  const val = sel ? sel.value : 'BaseCRM';
+  if (val === 'BaseCRM') {
+    const hoje = new Date();
+    return { mm: String(hoje.getMonth() + 1).padStart(2, '0'), yyyy: String(hoje.getFullYear()) };
+  }
+  const m = val.match(/^BaseCRM\s+(\d{2})(\d{4})$/);
+  if (m) return { mm: m[1], yyyy: m[2] };
+  const hoje = new Date();
+  return { mm: String(hoje.getMonth() + 1).padStart(2, '0'), yyyy: String(hoje.getFullYear()) };
+}
+
+// Dia de corte base: se estiver no mês corrente (Live), usa o dia real de hoje;
+// se for um mês fechado (histórico), usa o último dia daquele mês.
+function getDiaCorteBase() {
+  const sel = document.getElementById('mes-selector');
+  const val = sel ? sel.value : 'BaseCRM';
+  if (val === 'BaseCRM') return new Date().getDate();
+  const ref = getMesReferenciaSelecionado();
+  return diasNoMes(ref.mm, ref.yyyy);
+}
+
+async function fetchAbaDados(sheetName) {
+  if (HIST_SHEETS_CACHE[sheetName]) return HIST_SHEETS_CACHE[sheetName];
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(sheetName)}?key=${API_KEY}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('Falha ao buscar ' + sheetName);
+  const json = await res.json();
+  const rows = json.values || [];
+  if (rows.length < 2) { HIST_SHEETS_CACHE[sheetName] = []; return []; }
+  const hdrs = rows[0];
+  const data = rows.slice(1).map(r => {
+    let obj = {};
+    hdrs.forEach((h, i) => obj[h] = (r[i] || '').toString().trim());
+    return obj;
+  });
+  HIST_SHEETS_CACHE[sheetName] = data;
+  return data;
+}
+
+// Conta, por tag de unidade, quantos registros estavam Ativo/Instalado com
+// DATA REF <= cutoffDate, respeitando os mesmos filtros da tela.
+function contarAtivoPorTag(rows, filtros, cutoffDate) {
+  const tagsMap = MAPEAMENTO_TAGS;
+  const gruposExcluidos = new Set(['VOZ - Novo', 'VOZ - Portabilidade', 'APARELHO']);
+  const out = {};
+  rows.forEach(r => {
+    const equipe  = r['EQUIPE'] || '';
+    const uf      = r['UF'] || '';
+    const grupo   = r['GRUPO'] || '';
+    const fila    = r['FILA'] || '';
+    const tag     = r['TAGS ATIVIDADE'] || '';
+    const qtd     = parseInt(r['QUANTIDADE']) || 1;
+    const dataRef = parseDataRefBR(r['DATA REF']);
+
+    if (fila !== 'Ativo/Instalado') return;
+    if (!tagsMap[tag]) return;
+    if (!dataRef || dataRef.getTime() > cutoffDate.getTime()) return;
+
+    const est = EQUIPES_ESTADOS[equipe] || '';
+    const ges = EQUIPES_GESTORES[equipe] || '';
+    if (filtros.estado !== 'Todos' && est !== filtros.estado) return;
+    if (filtros.gestor !== 'Todos' && ges !== filtros.gestor) return;
+    if (filtros.equipe !== 'Todas' && equipe !== filtros.equipe) return;
+    if (!checkUF(filtros.uf, uf)) return;
+    if (filtros.grupo === 'Geral' && gruposExcluidos.has(grupo)) return;
+    if (filtros.grupo !== 'Geral' && grupo !== filtros.grupo) return;
+
+    out[tag] = (out[tag] || 0) + qtd;
+  });
+  return out;
+}
+
+// Busca e calcula os mapas MOM e/ou TRI (por tag) conforme toggles ativos
+async function calcularComparativos(filtros) {
+  const resultado = { mom: null, tri: null, momErro: null, triErro: null, triMeses: 0 };
+  const mesRef = getMesReferenciaSelecionado();
+  const diaCorteBase = getDiaCorteBase();
+
+  if (prodExibirMOM) {
+    const alvo = mesAnterior(mesRef.mm, mesRef.yyyy, 1);
+    if (!abaExiste(alvo.mm, alvo.yyyy)) {
+      resultado.momErro = `aba de ${alvo.mm}/${alvo.yyyy} não encontrada na planilha`;
+    } else {
+      try {
+        const rows = await fetchAbaDados(nomeAba(alvo.mm, alvo.yyyy));
+        const cutoffDia = Math.min(diaCorteBase, diasNoMes(alvo.mm, alvo.yyyy));
+        const cutoff = new Date(parseInt(alvo.yyyy), parseInt(alvo.mm) - 1, cutoffDia, 23, 59, 59, 999);
+        resultado.mom = contarAtivoPorTag(rows, filtros, cutoff);
+      } catch (e) {
+        resultado.momErro = 'erro ao buscar dados do mês anterior';
+      }
+    }
+  }
+
+  if (prodExibirTRI) {
+    const somaPorTag = {};
+    let mesesValidos = 0;
+    for (let delta = 1; delta <= 3; delta++) {
+      const alvo = mesAnterior(mesRef.mm, mesRef.yyyy, delta);
+      if (!abaExiste(alvo.mm, alvo.yyyy)) continue; // ignora mês faltante
+      try {
+        const rows = await fetchAbaDados(nomeAba(alvo.mm, alvo.yyyy));
+        const cutoffDia = Math.min(diaCorteBase, diasNoMes(alvo.mm, alvo.yyyy));
+        const cutoff = new Date(parseInt(alvo.yyyy), parseInt(alvo.mm) - 1, cutoffDia, 23, 59, 59, 999);
+        const mapa = contarAtivoPorTag(rows, filtros, cutoff);
+        Object.keys(mapa).forEach(tag => { somaPorTag[tag] = (somaPorTag[tag] || 0) + mapa[tag]; });
+        mesesValidos++;
+      } catch (e) { /* ignora este mês em caso de erro de rede */ }
+    }
+    if (mesesValidos === 0) {
+      resultado.triErro = 'nenhum mês do trimestre disponível na planilha';
+    } else {
+      const mediaPorTag = {};
+      Object.keys(somaPorTag).forEach(tag => { mediaPorTag[tag] = somaPorTag[tag] / mesesValidos; });
+      resultado.tri = mediaPorTag;
+      resultado.triMeses = mesesValidos;
+    }
+  }
+
+  return resultado;
+}
+
+// Formata a variação percentual atual vs. anterior
+function formatVariacao(atual, anterior) {
+  if (!anterior) return { texto: '—', classe: 'mom-tri-flat' };
+  const pct = ((atual - anterior) / anterior) * 100;
+  if (Math.abs(pct) < 0.05) return { texto: '▬ 0,0%', classe: 'mom-tri-flat' };
+  const seta = pct > 0 ? '▲' : '▼';
+  const classe = pct > 0 ? 'mom-tri-up' : 'mom-tri-down';
+  const texto = `${seta} ${pct > 0 ? '+' : ''}${pct.toFixed(1)}%`;
+  return { texto, classe };
+}
 
 function toggleReceita() {
   prodExibirReceita = !prodExibirReceita;
   const el = document.getElementById('prod-toggle-receita');
   el.classList.toggle('active', prodExibirReceita);
   renderProducao();
+}
+
+function toggleMOM() {
+  prodExibirMOM = !prodExibirMOM;
+  document.getElementById('prod-toggle-mom').classList.toggle('active', prodExibirMOM);
+  renderProducao();
+}
+
+function toggleTRI() {
+  prodExibirTRI = !prodExibirTRI;
+  document.getElementById('prod-toggle-tri').classList.toggle('active', prodExibirTRI);
+  renderProducao();
+}
+
+// Só habilita MOM/TRI quando o ÚNICO status selecionado for "Ativo/Instalado"
+function apenasAtivoSelecionado() {
+  return prodStatusSelecionados.size === 1 && prodStatusSelecionados.has('Ativo/Instalado');
+}
+
+function atualizarVisibilidadeMomTri() {
+  const wrap = document.getElementById('prod-mom-tri-wrap');
+  const habilitado = apenasAtivoSelecionado();
+  wrap.classList.toggle('visible', habilitado);
+  if (!habilitado) {
+    // Desliga os toggles quando saem do modo "somente Ativo/Instalado"
+    if (prodExibirMOM) { prodExibirMOM = false; document.getElementById('prod-toggle-mom').classList.remove('active'); }
+    if (prodExibirTRI) { prodExibirTRI = false; document.getElementById('prod-toggle-tri').classList.remove('active'); }
+  }
 }
 
 function toggleStatusChip(status, el) {
@@ -2296,6 +2520,7 @@ function toggleStatusChip(status, el) {
     el.classList.add('selected');
   }
   atualizarContadorStatus();
+  atualizarVisibilidadeMomTri();
   renderProducao();
 }
 
@@ -2305,6 +2530,7 @@ function selectAllStatus() {
     el.classList.add('selected');
   });
   atualizarContadorStatus();
+  atualizarVisibilidadeMomTri();
   renderProducao();
 }
 
@@ -2312,6 +2538,7 @@ function clearAllStatus() {
   prodStatusSelecionados.clear();
   document.querySelectorAll('.prod-chip[data-status]').forEach(el => el.classList.remove('selected'));
   atualizarContadorStatus();
+  atualizarVisibilidadeMomTri();
   renderProducao();
 }
 
@@ -2359,6 +2586,7 @@ function initProducao() {
     return `<div class="prod-chip${sel ? ' selected' : ''}" data-status="${s}" onclick="toggleStatusChip('${s}',this)">${s}</div>`;
   }).join('');
   atualizarContadorStatus();
+  atualizarVisibilidadeMomTri();
   renderProducao();
 }
 
@@ -2404,7 +2632,7 @@ function checkUF(filtro, uf) {
   return u === filtro;
 }
 
-function renderProducao() {
+async function renderProducao() {
   if (!ALL_DATA.length) return;
 
   const filtroEstado = document.getElementById('prod-estado')?.value || 'Todos';
@@ -2494,6 +2722,20 @@ function renderProducao() {
 
   const fmtRec = v => 'R$ ' + (v/100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+  // ─── Comparativo MOM/TRI (só quando o único status ativo é Ativo/Instalado) ─
+  const mostrarComparativo = apenasAtivoSelecionado() && (prodExibirMOM || prodExibirTRI);
+  let comparativo = { mom: null, tri: null, momErro: null, triErro: null, triMeses: 0 };
+
+  if (mostrarComparativo) {
+    resultArea.innerHTML = '<div class="prod-empty">Calculando comparativo MOM/TRI...</div>';
+    const filtros = { estado: filtroEstado, gestor: filtroGestor, equipe: filtroEquipe, uf: filtroUF, grupo: filtroGrupo };
+    const idRequisicao = ++prodComparativoReqId;
+    comparativo = await calcularComparativos(filtros);
+    if (idRequisicao !== prodComparativoReqId) return; // uma nova chamada substituiu esta
+  }
+
+  const rowspanReceita = prodExibirReceita ? ' rowspan="2"' : '';
+
   const thStatus = colsFinal.map(s => prodExibirReceita
     ? `<th colspan="2">${s}</th>`
     : `<th>${s}</th>`
@@ -2503,14 +2745,83 @@ function renderProducao() {
     ? colsFinal.map(() => `<th style="font-size:9px">Qtd</th><th style="font-size:9px">Receita</th>`).join('')
     : '';
 
+  const thComparativo = mostrarComparativo
+    ? (prodExibirMOM ? `<th${rowspanReceita} style="border-left:2px solid rgba(255,255,255,0.3)">MOM</th>` : '')
+    + (prodExibirTRI ? `<th${rowspanReceita}${!prodExibirMOM ? ' style="border-left:2px solid rgba(255,255,255,0.3)"' : ''}>TRI</th>` : '')
+    : '';
+
   const thTotal = prodExibirReceita
     ? `<th colspan="2" style="border-left:2px solid rgba(255,255,255,0.3)">Total</th>`
     : `<th style="border-left:2px solid rgba(255,255,255,0.3)">Total</th>`;
 
+  // Células de comparativo por linha (unidade)
+  const linhaComparativo = (r) => {
+    if (!mostrarComparativo) return '';
+    let html = '';
+    if (prodExibirMOM) {
+      if (comparativo.momErro) {
+        html += `<td class="mom-cell prod-cell-zero" style="border-left:2px solid var(--border)">—</td>`;
+      } else {
+        const anterior = comparativo.mom?.[r.tag] || 0;
+        const v = formatVariacao(r.totalQtd, anterior);
+        html += `<td class="mom-cell ${v.classe}" style="border-left:2px solid var(--border)">${anterior.toLocaleString('pt-BR')}<br><span>${v.texto}</span></td>`;
+      }
+    }
+    if (prodExibirTRI) {
+      if (comparativo.triErro) {
+        html += `<td class="tri-cell prod-cell-zero"${!prodExibirMOM ? ' style="border-left:2px solid var(--border)"' : ''}>—</td>`;
+      } else {
+        const anterior = comparativo.tri?.[r.tag] || 0;
+        const v = formatVariacao(r.totalQtd, anterior);
+        html += `<td class="tri-cell ${v.classe}"${!prodExibirMOM ? ' style="border-left:2px solid var(--border)"' : ''}>${anterior.toLocaleString('pt-BR',{maximumFractionDigits:1})}<br><span>${v.texto}</span></td>`;
+      }
+    }
+    return html;
+  };
+
+  // Células de comparativo no total geral
+  let totalComparativoHtml = '';
+  if (mostrarComparativo) {
+    if (prodExibirMOM) {
+      if (comparativo.momErro) {
+        totalComparativoHtml += `<td class="prod-cell-zero" style="border-left:2px solid rgba(255,255,255,0.3)">—</td>`;
+      } else {
+        const totalAnterior = Object.values(comparativo.mom || {}).reduce((s,v)=>s+v,0);
+        const v = formatVariacao(totalGeralQtd, totalAnterior);
+        totalComparativoHtml += `<td style="border-left:2px solid rgba(255,255,255,0.3)">${totalAnterior.toLocaleString('pt-BR')} <span style="font-size:10px">${v.texto}</span></td>`;
+      }
+    }
+    if (prodExibirTRI) {
+      if (comparativo.triErro) {
+        totalComparativoHtml += `<td class="prod-cell-zero"${!prodExibirMOM ? ' style="border-left:2px solid rgba(255,255,255,0.3)"' : ''}>—</td>`;
+      } else {
+        const totalAnterior = Object.values(comparativo.tri || {}).reduce((s,v)=>s+v,0);
+        const v = formatVariacao(totalGeralQtd, totalAnterior);
+        totalComparativoHtml += `<td${!prodExibirMOM ? ' style="border-left:2px solid rgba(255,255,255,0.3)"' : ''}>${totalAnterior.toLocaleString('pt-BR',{maximumFractionDigits:1})} <span style="font-size:10px">${v.texto}</span></td>`;
+      }
+    }
+  }
+
+  // Avisos sobre meses não encontrados na planilha
+  const avisos = [];
+  if (mostrarComparativo && prodExibirMOM && comparativo.momErro) avisos.push(`MOM: ${comparativo.momErro}`);
+  if (mostrarComparativo && prodExibirTRI && comparativo.triErro) avisos.push(`TRI: ${comparativo.triErro}`);
+  if (mostrarComparativo && prodExibirTRI && !comparativo.triErro && comparativo.triMeses < 3) {
+    avisos.push(`TRI: média calculada com ${comparativo.triMeses} de 3 meses disponíveis`);
+  }
+  const avisoHtml = avisos.length
+    ? `<div class="prod-empty" style="margin-bottom:10px;font-size:11px;color:var(--red-sem)">${avisos.join(' · ')}</div>`
+    : '';
+
+  const badgeComparativo = mostrarComparativo
+    ? ` · comparando contra ${prodExibirMOM ? 'mês anterior' : ''}${prodExibirMOM && prodExibirTRI ? ' e ' : ''}${prodExibirTRI ? `média do trimestre (${comparativo.triMeses} meses)` : ''}`
+    : '';
+
   resultArea.innerHTML = `
+    ${avisoHtml}
     <div class="section-header">
       <span class="section-title">Produção por Unidade</span>
-      <span class="count-badge">${colsFinal.length} status · ${totalGeralQtd.toLocaleString('pt-BR')} registros</span>
+      <span class="count-badge">${colsFinal.length} status · ${totalGeralQtd.toLocaleString('pt-BR')} registros${badgeComparativo}</span>
     </div>
     <div class="prod-table-wrap"><div class="prod-table-scroll">
       <table>
@@ -2518,6 +2829,7 @@ function renderProducao() {
           <tr>
             <th rowspan="${prodExibirReceita ? 2 : 1}" style="vertical-align:middle;text-align:left">Unidade</th>
             ${thStatus}
+            ${thComparativo}
             ${thTotal}
           </tr>
           ${prodExibirReceita ? `<tr>${thSub}<th style="font-size:9px;border-left:2px solid rgba(255,255,255,0.3)">Qtd</th><th style="font-size:9px">Receita</th></tr>` : ''}
@@ -2531,6 +2843,7 @@ function renderProducao() {
                    <td class="${c.rec === 0 ? 'prod-cell-zero' : ''}" style="font-size:11px">${c.rec === 0 ? '—' : fmtRec(c.rec)}</td>`
                 : `<td class="${c.qtd === 0 ? 'prod-cell-zero' : 'prod-cell-val'}">${c.qtd === 0 ? '—' : c.qtd.toLocaleString('pt-BR')}</td>`
               ).join('')}
+              ${linhaComparativo(r)}
               <td class="prod-cell-total">${r.totalQtd === 0 ? '—' : r.totalQtd.toLocaleString('pt-BR')}</td>
               ${prodExibirReceita ? `<td class="prod-cell-total" style="font-size:11px">${r.totalRec === 0 ? '—' : fmtRec(r.totalRec)}</td>` : ''}
             </tr>`).join('')}
@@ -2542,6 +2855,7 @@ function renderProducao() {
               ? `<td>${c.qtd.toLocaleString('pt-BR')}</td><td style="font-size:11px">${fmtRec(c.rec)}</td>`
               : `<td>${c.qtd.toLocaleString('pt-BR')}</td>`
             ).join('')}
+            ${totalComparativoHtml}
             <td class="prod-cell-total">${totalGeralQtd.toLocaleString('pt-BR')}</td>
             ${prodExibirReceita ? `<td class="prod-cell-total" style="font-size:11px">${fmtRec(totalGeralRec)}</td>` : ''}
           </tr>
