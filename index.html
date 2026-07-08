@@ -1420,7 +1420,7 @@ async function carregarAbas() {
       });
 
     // Guarda lista de abas históricas disponíveis (usado pelo comparativo MOM/TRI)
-    window.ABAS_HISTORICO = historico;
+    window.ABAS_HISTORICO = historico.map(a => parseAba(a));
 
     const sel = document.getElementById('mes-selector');
     const valorAtual = sel.value;
