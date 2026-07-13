@@ -1171,23 +1171,30 @@
           <table id="disc-tabela">
             <thead>
               <tr>
-                <th style="text-align:left;">Consultor</th>
-                <th>Grupo</th>
-                <th>Fila</th>
-                <th>Total ligações</th>
-                <th>Atendidas</th>
-                <th>Produtivas (+1min)</th>
-                <th>% Produtividade</th>
-                <th>TMA geral</th>
-                <th>TMA +1min</th>
+                <th style="text-align:left; vertical-align: top; width: 22%;">
+                  <div style="display:flex; flex-direction:column; gap:6px;">
+                    <span class="th-sort" onclick="setDiscSort('nome')" style="cursor:pointer; white-space:nowrap;">CONSULTOR <span class="sort-arrow" id="dsort-nome"></span></span>
+                    <select id="disc-header-consultor" multiple size="3" style="width:100%; font-size:10px; color:var(--text); background:var(--surface); border:1px solid rgba(0,0,0,0.1); border-radius:4px; outline:none; padding:2px;" onchange="discadoraRender()"></select>
+                  </div>
+                </th>
+                <th style="vertical-align: top; width: 18%;">
+                  <div style="display:flex; flex-direction:column; gap:6px; align-items:center;">
+                    <span class="th-sort" onclick="setDiscSort('grupo')" style="cursor:pointer; white-space:nowrap;">GRUPO <span class="sort-arrow" id="dsort-grupo"></span></span>
+                    <select id="disc-header-grupo" multiple size="3" style="width:100%; font-size:10px; color:var(--text); background:var(--surface); border:1px solid rgba(0,0,0,0.1); border-radius:4px; outline:none; padding:2px;" onchange="discadoraRender()"></select>
+                  </div>
+                </th>
+                <th class="th-sort center" onclick="setDiscSort('fila')" style="vertical-align: top; cursor:pointer">FILA <span class="sort-arrow" id="dsort-fila"></span></th>
+                <th class="th-sort center" onclick="setDiscSort('total')" style="vertical-align: top; cursor:pointer">TOTAL LIGAÇÕES <span class="sort-arrow" id="dsort-total"></span></th>
+                <th class="th-sort center" onclick="setDiscSort('atendidas')" style="vertical-align: top; cursor:pointer">ATENDIDAS <span class="sort-arrow" id="dsort-atendidas"></span></th>
+                <th class="th-sort center" onclick="setDiscSort('produtivas')" style="vertical-align: top; cursor:pointer">PRODUTIVAS (+1MIN) <span class="sort-arrow" id="dsort-produtivas"></span></th>
+                <th class="th-sort center" onclick="setDiscSort('pctProd')" style="vertical-align: top; cursor:pointer">% PRODUTIVIDADE <span class="sort-arrow" id="dsort-pctProd"></span></th>
+                <th class="th-sort center" onclick="setDiscSort('tmaGeral')" style="vertical-align: top; cursor:pointer">TMA GERAL <span class="sort-arrow" id="dsort-tmaGeral"></span></th>
+                <th class="th-sort center" onclick="setDiscSort('tmaProd')" style="vertical-align: top; cursor:pointer">TMA +1MIN <span class="sort-arrow" id="dsort-tmaProd"></span></th>
               </tr>
             </thead>
             <tbody id="disc-tbody"></tbody>
             <tfoot id="disc-tfoot"></tfoot>
           </table>
-        </div>
-      </div>
-    </div>
 
     <!-- TABELA POR HORA -->
     <div>
@@ -3593,26 +3600,70 @@ function discProdColor(pct) {
   return '#dc2626';
 }
 
+// VARIÁVEIS E FUNÇÕES DE ORDENAÇÃO DA DISCADORA
+let discSortCol = 'produtivas';
+let discSortAsc = false;
+
+function setDiscSort(col) {
+  if (discSortCol === col) {
+    discSortAsc = !discSortAsc;
+  } else {
+    discSortCol = col;
+    discSortAsc = false;
+  }
+  discadoraRender();
+}
+
+function getMultiSelectValues(id) {
+  const el = document.getElementById(id);
+  if (!el) return [];
+  return Array.from(el.selectedOptions).map(opt => opt.value).filter(v => v !== '');
+}
+
 function discadoraRender() {
-  const grupoFiltro     = document.getElementById('disc-grupo').value;
-  const filaFiltro      = document.getElementById('disc-fila').value;
-  const consultorFiltro = document.getElementById('disc-consultor').value;
+  // 1. Lê os filtros da barra branca superior (Originais)
+  const grupoFiltro     = document.getElementById('disc-grupo') ? document.getElementById('disc-grupo').value : '';
+  const filaFiltro      = document.getElementById('disc-fila') ? document.getElementById('disc-fila').value : '';
+  const consultorFiltro = document.getElementById('disc-consultor') ? document.getElementById('disc-consultor').value : '';
+
+  // 2. Lê os filtros múltiplos do cabeçalho vermelho
+  const gruposHeader = getMultiSelectValues('disc-header-grupo');
+  const consultoresHeader = getMultiSelectValues('disc-header-consultor');
 
   const grupos      = [...new Set(_discDados.map(r => r.grupo && r.grupo.nome).filter(Boolean))].sort();
   const filas       = [...new Set(_discDados.map(r => r.fila && r.fila.nome).filter(Boolean))].sort();
   const consultores = [...new Set(_discDados.map(r => r.usuario && r.usuario.nome).filter(Boolean))].sort();
 
-  document.getElementById('disc-grupo').innerHTML =
-    '<option value="">Todos</option>' + grupos.map(g => '<option value="' + g + '"' + (g===grupoFiltro?' selected':'') + '>' + g + '</option>').join('');
-  document.getElementById('disc-fila').innerHTML =
-    '<option value="">Todas</option>' + filas.map(f => '<option value="' + f + '"' + (f===filaFiltro?' selected':'') + '>' + f + '</option>').join('');
-  document.getElementById('disc-consultor').innerHTML =
-    '<option value="">Todos</option>' + consultores.map(c => '<option value="' + c + '"' + (c===consultorFiltro?' selected':'') + '>' + c + '</option>').join('');
+  // Popula os selects da barra branca superior
+  if(document.getElementById('disc-grupo')) {
+    document.getElementById('disc-grupo').innerHTML = '<option value="">Todos</option>' + grupos.map(g => '<option value="' + g + '"' + (g===grupoFiltro?' selected':'') + '>' + g + '</option>').join('');
+  }
+  if(document.getElementById('disc-fila')) {
+    document.getElementById('disc-fila').innerHTML = '<option value="">Todas</option>' + filas.map(f => '<option value="' + f + '"' + (f===filaFiltro?' selected':'') + '>' + f + '</option>').join('');
+  }
+  if(document.getElementById('disc-consultor')) {
+    document.getElementById('disc-consultor').innerHTML = '<option value="">Todos</option>' + consultores.map(c => '<option value="' + c + '"' + (c===consultorFiltro?' selected':'') + '>' + c + '</option>').join('');
+  }
 
+  // Popula os selects múltiplos do cabeçalho vermelho
+  if(document.getElementById('disc-header-grupo')) {
+    document.getElementById('disc-header-grupo').innerHTML = grupos.map(g => `<option value="${g}" ${gruposHeader.includes(g) ? 'selected' : ''}>${g}</option>`).join('');
+  }
+  if(document.getElementById('disc-header-consultor')) {
+    document.getElementById('disc-header-consultor').innerHTML = consultores.map(c => `<option value="${c}" ${consultoresHeader.includes(c) ? 'selected' : ''}>${c}</option>`).join('');
+  }
+
+  // Aplica as filtragens
   let dados = _discDados;
+  
+  // A) Filtra pela barra superior
   if (grupoFiltro)     dados = dados.filter(r => r.grupo && r.grupo.nome === grupoFiltro);
   if (filaFiltro)      dados = dados.filter(r => r.fila && r.fila.nome === filaFiltro);
   if (consultorFiltro) dados = dados.filter(r => r.usuario && r.usuario.nome === consultorFiltro);
+  
+  // B) Filtra localmente pelos campos múltiplos do cabeçalho vermelho
+  if (gruposHeader.length > 0) dados = dados.filter(r => r.grupo && gruposHeader.includes(r.grupo.nome));
+  if (consultoresHeader.length > 0) dados = dados.filter(r => r.usuario && consultoresHeader.includes(r.usuario.nome));
 
   const porConsultor = {};
   dados.forEach(function(r) {
@@ -3642,31 +3693,36 @@ function discadoraRender() {
 
   var _pctClass = pctProd >= 15 ? 'disc-green' : pctProd >= 8 ? 'disc-amber' : 'disc-red';
   document.getElementById('disc-kpi-area').innerHTML =
-    '<div class="disc-kpi-card">' +
-      '<div class="disc-kpi-label">Total ligações</div>' +
-      '<div class="disc-kpi-value">' + totalLig + '</div></div>' +
-    '<div class="disc-kpi-card">' +
-      '<div class="disc-kpi-label">Atendidas</div>' +
-      '<div class="disc-kpi-value">' + totalAtend + '</div></div>' +
-    '<div class="disc-kpi-card disc-highlight">' +
-      '<div class="disc-kpi-label">Produtivas +1 min</div>' +
-      '<div class="disc-kpi-value">' + totalProd + '</div></div>' +
-    '<div class="disc-kpi-card disc-highlight">' +
-      '<div class="disc-kpi-label">% Produtividade</div>' +
-      '<div class="disc-kpi-value ' + _pctClass + '">' + pctProd + '%</div></div>' +
-    '<div class="disc-kpi-card">' +
-      '<div class="disc-kpi-label">TMA geral</div>' +
-      '<div class="disc-kpi-value">' + discFmt(tmaGlobal) + '</div></div>' +
-    '<div class="disc-kpi-card">' +
-      '<div class="disc-kpi-label">TMA +1 min</div>' +
-      '<div class="disc-kpi-value">' + discFmt(tmaProd) + '</div></div>';
+    '<div class="disc-kpi-card"><div class="disc-kpi-label">Total ligações</div><div class="disc-kpi-value">' + totalLig + '</div></div>' +
+    '<div class="disc-kpi-card"><div class="disc-kpi-label">Atendidas</div><div class="disc-kpi-value">' + totalAtend + '</div></div>' +
+    '<div class="disc-kpi-card disc-highlight"><div class="disc-kpi-label">Produtivas +1 min</div><div class="disc-kpi-value">' + totalProd + '</div></div>' +
+    '<div class="disc-kpi-card disc-highlight"><div class="disc-kpi-label">% Produtividade</div><div class="disc-kpi-value ' + _pctClass + '">' + pctProd + '%</div></div>' +
+    '<div class="disc-kpi-card"><div class="disc-kpi-label">TMA geral</div><div class="disc-kpi-value">' + discFmt(tmaGlobal) + '</div></div>' +
+    '<div class="disc-kpi-card"><div class="disc-kpi-label">TMA +1 min</div><div class="disc-kpi-value">' + discFmt(tmaProd) + '</div></div>';
 
-  const rows = Object.values(porConsultor).sort(function(a,b){ return b.produtivas - a.produtivas; });
+  // Prepara as linhas com as métricas calculadas para ordenação
+  let rows = Object.values(porConsultor).map(r => {
+    r.pctProd = r.atendidas > 0 ? Math.round(r.produtivas / r.atendidas * 100) : 0;
+    r.tmaGeral = r.atendidas > 0 ? Math.round(r.durTotal / r.atendidas) : 0;
+    r.tmaProd = r.produtivas > 0 ? Math.round(r.durProd / r.produtivas) : 0;
+    return r;
+  });
+
+  // Aplica a ordenação clicada pelo usuário
+  rows.sort((a, b) => {
+    const va = a[discSortCol];
+    const vb = b[discSortCol];
+    if (typeof va === 'string') return discSortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+    return discSortAsc ? va - vb : vb - va;
+  });
+
+  // Atualiza as setas (↑ / ↓) no cabeçalho
+  ['nome', 'grupo', 'fila', 'total', 'atendidas', 'produtivas', 'pctProd', 'tmaGeral', 'tmaProd'].forEach(col => {
+    const span = document.getElementById('dsort-' + col);
+    if(span) span.innerText = discSortCol === col ? (discSortAsc ? ' ↑' : ' ↓') : ' ↕';
+  });
 
   document.getElementById('disc-tbody').innerHTML = rows.map(function(r) {
-    const tmaR  = r.atendidas  > 0 ? Math.round(r.durTotal / r.atendidas)  : 0;
-    const tmaP  = r.produtivas > 0 ? Math.round(r.durProd  / r.produtivas) : 0;
-    const pctR  = r.atendidas  > 0 ? Math.round(r.produtivas / r.atendidas * 100) : 0;
     return '<tr>' +
       '<td style="text-align:left;font-weight:500;">' + r.nome + '</td>' +
       '<td>' + r.grupo + '</td>' +
@@ -3674,9 +3730,9 @@ function discadoraRender() {
       '<td>' + r.total + '</td>' +
       '<td>' + r.atendidas + '</td>' +
       '<td>' + r.produtivas + '</td>' +
-      '<td style="color:' + discProdColor(pctR) + ';font-weight:600;">' + pctR + '%</td>' +
-      '<td>' + discFmt(tmaR) + '</td>' +
-      '<td>' + (r.produtivas > 0 ? discFmt(tmaP) : '-') + '</td>' +
+      '<td style="color:' + discProdColor(r.pctProd) + ';font-weight:600;">' + r.pctProd + '%</td>' +
+      '<td>' + discFmt(r.tmaGeral) + '</td>' +
+      '<td>' + (r.produtivas > 0 ? discFmt(r.tmaProd) : '-') + '</td>' +
     '</tr>';
   }).join('');
 
@@ -3691,6 +3747,7 @@ function discadoraRender() {
       '<td>' + discFmt(tmaProd) + '</td>' +
     '</tr>';
 
+  // --- Parte final mantida intacta ---
   const hrIniVal = parseInt((document.getElementById('disc-hr-ini').value || '08:00').split(':')[0]);
   const hrFimVal = parseInt((document.getElementById('disc-hr-fim').value || '22:00').split(':')[0]);
   const horas = [];
@@ -3720,7 +3777,6 @@ function discadoraRender() {
     return '<tr><td style="text-align:left;font-weight:500;">' + String(h).padStart(2,'0') + 'h</td>' + celulas + '<td style="font-weight:600;">' + (total || '') + '</td></tr>';
   }).join('');
 }
-
 
 </script>
 <script>
