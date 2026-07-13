@@ -3351,7 +3351,7 @@ function aplicarPermissoes() {
         selC.style.pointerEvents = 'none';
       }
       render();
-    } else if (p === 'gestor' && USUARIO_ATUAL.gestor_ref) {
+    } else if ((p === 'gestor' || p === 'gestor_senior') && USUARIO_ATUAL.gestor_ref) {
       // Trava filtro de gestor
       const selG = document.getElementById('f-gestor');
       if (selG) {
