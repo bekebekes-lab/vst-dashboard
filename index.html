@@ -3634,41 +3634,77 @@ function discProdColor(pct) {
   return '#dc2626';
 }
 
-// VARIÁVEIS E FUNÇÕES DE ORDENAÇÃO DA DISCADORA
+// VARIÁVEIS E FUNÇÕES DE ORDENAÇÃO E DROPDOWN
 let discSortCol = 'produtivas';
 let discSortAsc = false;
 
 function setDiscSort(col) {
-  if (discSortCol === col) {
-    discSortAsc = !discSortAsc;
-  } else {
-    discSortCol = col;
-    discSortAsc = false;
-  }
+  if (discSortCol === col) { discSortAsc = !discSortAsc; } 
+  else { discSortCol = col; discSortAsc = false; }
   discadoraRender();
 }
 
-function getMultiSelectValues(id) {
-  const el = document.getElementById(id);
-  if (!el) return [];
-  return Array.from(el.selectedOptions).map(opt => opt.value).filter(v => v !== '');
+// Abre/Fecha o dropdown customizado
+function toggleDropdown(id) {
+  document.querySelectorAll('.dropdown-content').forEach(el => {
+    if (el.id !== id) el.classList.remove('show');
+  });
+  document.getElementById(id).classList.toggle('show');
+}
+
+// Fecha dropdown se clicar fora
+document.addEventListener('click', function(event) {
+  if (!event.target.closest('.custom-dropdown')) {
+    document.querySelectorAll('.dropdown-content').forEach(el => el.classList.remove('show'));
+  }
+});
+
+// Lê quais checkboxes estão marcados no dropdown
+function getCheckedValues(containerId) {
+  const container = document.getElementById(containerId);
+  if (!container) return [];
+  return Array.from(container.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
 }
 
 function discadoraRender() {
-  // 1. Lê os filtros da barra branca superior (Originais)
+  // Lê filtros da barra superior
   const grupoFiltro     = document.getElementById('disc-grupo') ? document.getElementById('disc-grupo').value : '';
   const filaFiltro      = document.getElementById('disc-fila') ? document.getElementById('disc-fila').value : '';
   const consultorFiltro = document.getElementById('disc-consultor') ? document.getElementById('disc-consultor').value : '';
 
-  // 2. Lê os filtros múltiplos do cabeçalho vermelho
-  const gruposHeader = getMultiSelectValues('disc-header-grupo');
-  const consultoresHeader = getMultiSelectValues('disc-header-consultor');
+  // Lê filtros dos checkboxes no cabeçalho
+  const gruposHeader = getCheckedValues('dd-content-grupo');
+  const consultoresHeader = getCheckedValues('dd-content-consultor');
 
   const grupos      = [...new Set(_discDados.map(r => r.grupo && r.grupo.nome).filter(Boolean))].sort();
   const filas       = [...new Set(_discDados.map(r => r.fila && r.fila.nome).filter(Boolean))].sort();
   const consultores = [...new Set(_discDados.map(r => r.usuario && r.usuario.nome).filter(Boolean))].sort();
 
-  // Popula os selects da barra branca superior
+  // Atualiza HTML dos checkboxes (Grupo)
+  if(document.getElementById('dd-content-grupo')) {
+    document.getElementById('dd-content-grupo').innerHTML = grupos.map(g => `
+      <label class="dropdown-item">
+        <input type="checkbox" value="${g}" ${gruposHeader.includes(g) ? 'checked' : ''} onchange="discadoraRender()">
+        ${g}
+      </label>
+    `).join('');
+    const btn = document.querySelector('#dd-grupo .dropdown-btn');
+    if(btn) btn.innerHTML = gruposHeader.length > 0 ? `${gruposHeader.length} selecionados <span>▼</span>` : 'Selecionar... <span>▼</span>';
+  }
+
+  // Atualiza HTML dos checkboxes (Consultor)
+  if(document.getElementById('dd-content-consultor')) {
+    document.getElementById('dd-content-consultor').innerHTML = consultores.map(c => `
+      <label class="dropdown-item">
+        <input type="checkbox" value="${c}" ${consultoresHeader.includes(c) ? 'checked' : ''} onchange="discadoraRender()">
+        ${c}
+      </label>
+    `).join('');
+    const btn = document.querySelector('#dd-consultor .dropdown-btn');
+    if(btn) btn.innerHTML = consultoresHeader.length > 0 ? `${consultoresHeader.length} selecionados <span>▼</span>` : 'Selecionar... <span>▼</span>';
+  }
+
+  // Popula os selects antigos da barra superior (se existirem)
   if(document.getElementById('disc-grupo')) {
     document.getElementById('disc-grupo').innerHTML = '<option value="">Todos</option>' + grupos.map(g => '<option value="' + g + '"' + (g===grupoFiltro?' selected':'') + '>' + g + '</option>').join('');
   }
@@ -3679,23 +3715,13 @@ function discadoraRender() {
     document.getElementById('disc-consultor').innerHTML = '<option value="">Todos</option>' + consultores.map(c => '<option value="' + c + '"' + (c===consultorFiltro?' selected':'') + '>' + c + '</option>').join('');
   }
 
-  // Popula os selects múltiplos do cabeçalho vermelho
-  if(document.getElementById('disc-header-grupo')) {
-    document.getElementById('disc-header-grupo').innerHTML = grupos.map(g => `<option value="${g}" ${gruposHeader.includes(g) ? 'selected' : ''}>${g}</option>`).join('');
-  }
-  if(document.getElementById('disc-header-consultor')) {
-    document.getElementById('disc-header-consultor').innerHTML = consultores.map(c => `<option value="${c}" ${consultoresHeader.includes(c) ? 'selected' : ''}>${c}</option>`).join('');
-  }
-
-  // Aplica as filtragens
+  // Filtra os dados
   let dados = _discDados;
   
-  // A) Filtra pela barra superior
-  if (grupoFiltro)     dados = dados.filter(r => r.grupo && r.grupo.nome === grupoFiltro);
-  if (filaFiltro)      dados = dados.filter(r => r.fila && r.fila.nome === filaFiltro);
+  if (grupoFiltro) dados = dados.filter(r => r.grupo && r.grupo.nome === grupoFiltro);
+  if (filaFiltro)  dados = dados.filter(r => r.fila && r.fila.nome === filaFiltro);
   if (consultorFiltro) dados = dados.filter(r => r.usuario && r.usuario.nome === consultorFiltro);
   
-  // B) Filtra localmente pelos campos múltiplos do cabeçalho vermelho
   if (gruposHeader.length > 0) dados = dados.filter(r => r.grupo && gruposHeader.includes(r.grupo.nome));
   if (consultoresHeader.length > 0) dados = dados.filter(r => r.usuario && consultoresHeader.includes(r.usuario.nome));
 
@@ -3734,7 +3760,6 @@ function discadoraRender() {
     '<div class="disc-kpi-card"><div class="disc-kpi-label">TMA geral</div><div class="disc-kpi-value">' + discFmt(tmaGlobal) + '</div></div>' +
     '<div class="disc-kpi-card"><div class="disc-kpi-label">TMA +1 min</div><div class="disc-kpi-value">' + discFmt(tmaProd) + '</div></div>';
 
-  // Prepara as linhas com as métricas calculadas para ordenação
   let rows = Object.values(porConsultor).map(r => {
     r.pctProd = r.atendidas > 0 ? Math.round(r.produtivas / r.atendidas * 100) : 0;
     r.tmaGeral = r.atendidas > 0 ? Math.round(r.durTotal / r.atendidas) : 0;
@@ -3742,7 +3767,6 @@ function discadoraRender() {
     return r;
   });
 
-  // Aplica a ordenação clicada pelo usuário
   rows.sort((a, b) => {
     const va = a[discSortCol];
     const vb = b[discSortCol];
@@ -3750,14 +3774,15 @@ function discadoraRender() {
     return discSortAsc ? va - vb : vb - va;
   });
 
-  // Atualiza as setas (↑ / ↓) no cabeçalho
   ['nome', 'grupo', 'fila', 'total', 'atendidas', 'produtivas', 'pctProd', 'tmaGeral', 'tmaProd'].forEach(col => {
     const span = document.getElementById('dsort-' + col);
     if(span) span.innerText = discSortCol === col ? (discSortAsc ? ' ↑' : ' ↓') : ' ↕';
   });
 
-  document.getElementById('disc-tbody').innerHTML = rows.map(function(r) {
+  // Renderiza o Corpo com a numeração no parâmetro (index + 1)
+  document.getElementById('disc-tbody').innerHTML = rows.map(function(r, index) {
     return '<tr>' +
+      '<td style="text-align:center; font-weight:700; color:var(--text3); font-size:11px;">' + (index + 1) + '</td>' +
       '<td style="text-align:left;font-weight:500;">' + r.nome + '</td>' +
       '<td>' + r.grupo + '</td>' +
       '<td>' + r.fila + '</td>' +
@@ -3770,9 +3795,10 @@ function discadoraRender() {
     '</tr>';
   }).join('');
 
+  // Atualiza o rodapé com colspan="4" para cobrir a coluna #
   document.getElementById('disc-tfoot').innerHTML =
     '<tr>' +
-      '<td style="text-align:left;" colspan="3">TOTAL</td>' +
+      '<td style="text-align:left;" colspan="4">TOTAL</td>' +
       '<td>' + totalLig + '</td>' +
       '<td>' + totalAtend + '</td>' +
       '<td>' + totalProd + '</td>' +
@@ -3781,7 +3807,7 @@ function discadoraRender() {
       '<td>' + discFmt(tmaProd) + '</td>' +
     '</tr>';
 
-  // --- Parte final mantida intacta ---
+  // --- O restante da renderização das horas permanece inalterado ---
   const hrIniVal = parseInt((document.getElementById('disc-hr-ini').value || '08:00').split(':')[0]);
   const hrFimVal = parseInt((document.getElementById('disc-hr-fim').value || '22:00').split(':')[0]);
   const horas = [];
