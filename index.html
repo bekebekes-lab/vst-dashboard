@@ -1168,6 +1168,27 @@
     <div style="margin-bottom:16px;">
       <div class="prod-table-wrap">
         <div class="prod-table-scroll">
+          <style>
+  /* ESTILOS PARA O DROPDOWN COM CHECKBOX */
+  .custom-dropdown { position: relative; width: 100%; margin-top: 6px; font-family: 'DM Sans', sans-serif; }
+  .dropdown-btn { 
+    width: 100%; text-align: left; background: var(--surface); border: 1px solid rgba(0,0,0,0.15); 
+    border-radius: 4px; padding: 6px 8px; font-size: 10px; font-weight: 500; color: var(--text); 
+    cursor: pointer; display: flex; justify-content: space-between; align-items: center; 
+  }
+  .dropdown-content { 
+    display: none; position: absolute; z-index: 999; top: 100%; left: 0; width: 100%; min-width: 160px;
+    max-height: 220px; overflow-y: auto; background: var(--surface); border: 1px solid var(--border); 
+    border-radius: 4px; box-shadow: var(--shadow-md); margin-top: 4px; padding: 6px 0; text-align: left;
+  }
+  .dropdown-content.show { display: block; }
+  .dropdown-item { 
+    padding: 6px 10px; display: flex; align-items: center; gap: 8px; 
+    font-size: 11px; font-weight: 500; color: var(--text); cursor: pointer; text-transform: none;
+  }
+  .dropdown-item:hover { background: var(--surface-2); }
+  .dropdown-item input { cursor: pointer; margin: 0; width: 14px; height: 14px; accent-color: var(--brand); }
+</style>
           <table id="disc-tabela">
             <thead>
               <tr>
