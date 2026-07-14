@@ -1192,16 +1192,29 @@
           <table id="disc-tabela">
             <thead>
               <tr>
+                <th style="width: 3%; text-align: center; vertical-align: top;">#</th>
                 <th style="text-align:left; vertical-align: top; width: 22%;">
                   <div style="display:flex; flex-direction:column; gap:6px;">
                     <span class="th-sort" onclick="setDiscSort('nome')" style="cursor:pointer; white-space:nowrap;">CONSULTOR <span class="sort-arrow" id="dsort-nome"></span></span>
-                    <select id="disc-header-consultor" multiple size="3" style="width:100%; font-size:10px; color:var(--text); background:var(--surface); border:1px solid rgba(0,0,0,0.1); border-radius:4px; outline:none; padding:2px;" onchange="discadoraRender()"></select>
+                    
+                    <!-- Novo Dropdown Consultor -->
+                    <div class="custom-dropdown" id="dd-consultor">
+                      <button class="dropdown-btn" onclick="toggleDropdown('dd-content-consultor')">Selecionar... <span>▼</span></button>
+                      <div class="dropdown-content" id="dd-content-consultor"></div>
+                    </div>
+
                   </div>
                 </th>
                 <th style="vertical-align: top; width: 18%;">
                   <div style="display:flex; flex-direction:column; gap:6px; align-items:center;">
                     <span class="th-sort" onclick="setDiscSort('grupo')" style="cursor:pointer; white-space:nowrap;">GRUPO <span class="sort-arrow" id="dsort-grupo"></span></span>
-                    <select id="disc-header-grupo" multiple size="3" style="width:100%; font-size:10px; color:var(--text); background:var(--surface); border:1px solid rgba(0,0,0,0.1); border-radius:4px; outline:none; padding:2px;" onchange="discadoraRender()"></select>
+                    
+                    <!-- Novo Dropdown Grupo -->
+                    <div class="custom-dropdown" id="dd-grupo">
+                      <button class="dropdown-btn" onclick="toggleDropdown('dd-content-grupo')">Selecionar... <span>▼</span></button>
+                      <div class="dropdown-content" id="dd-content-grupo"></div>
+                    </div>
+
                   </div>
                 </th>
                 <th class="th-sort center" onclick="setDiscSort('fila')" style="vertical-align: top; cursor:pointer">FILA <span class="sort-arrow" id="dsort-fila"></span></th>
