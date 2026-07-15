@@ -2426,9 +2426,12 @@ async function fetchAbaDados(sheetName) {
   return data;
 }
 
-// Conta, por tag de unidade, quantos registros estavam Ativo/Instalado com
-// DATA REF <= cutoffDate, respeitando os mesmos filtros da tela.
-function contarAtivoPorTag(rows, filtros, cutoffDate) {
+// Conta, por tag de unidade, quantos registros estavam no(s) status selecionado(s)
+// (Ativo/Instalado e/ou Aguardando Instalação) até a data de corte, respeitando
+// os mesmos filtros da tela. A data de referência usada varia por status:
+//   - Ativo/Instalado      -> coluna DATA REF
+//   - Aguardando Instalação -> coluna CADASTRO
+function contarStatusPorTag(rows, filtros, statusSelecionados, cutoffDate) {
   const tagsMap = MAPEAMENTO_TAGS;
   const gruposExcluidos = new Set(['VOZ - Novo', 'VOZ - Portabilidade', 'APARELHO']);
   const out = {};
@@ -2439,10 +2442,13 @@ function contarAtivoPorTag(rows, filtros, cutoffDate) {
     const fila    = r['FILA'] || '';
     const tag     = r['TAGS ATIVIDADE'] || '';
     const qtd     = parseInt(r['QUANTIDADE']) || 1;
-    const dataRef = parseDataRefBR(r['DATA REF']);
 
-    if (fila !== 'Ativo/Instalado') return;
+    if (!statusSelecionados.has(fila)) return;
     if (!tagsMap[tag]) return;
+
+    const dataRef = fila === 'Aguardando Instalação'
+      ? parseDataRefBR(r['CADASTRO'])
+      : parseDataRefBR(r['DATA REF']);
     if (!dataRef || dataRef.getTime() > cutoffDate.getTime()) return;
 
     const est = EQUIPES_ESTADOS[equipe] || '';
@@ -2464,6 +2470,7 @@ async function calcularComparativos(filtros) {
   const resultado = { mom: null, tri: null, momErro: null, triErro: null, triMeses: 0 };
   const mesRef = getMesReferenciaSelecionado();
   const diaCorteBase = getDiaCorteBase();
+  const statusSelecionados = new Set(prodStatusSelecionados);
 
   if (prodExibirMOM) {
     const alvo = mesAnterior(mesRef.mm, mesRef.yyyy, 1);
@@ -2474,7 +2481,7 @@ async function calcularComparativos(filtros) {
         const rows = await fetchAbaDados(nomeAba(alvo.mm, alvo.yyyy));
         const cutoffDia = Math.min(diaCorteBase, diasNoMes(alvo.mm, alvo.yyyy));
         const cutoff = new Date(parseInt(alvo.yyyy), parseInt(alvo.mm) - 1, cutoffDia, 23, 59, 59, 999);
-        resultado.mom = contarAtivoPorTag(rows, filtros, cutoff);
+        resultado.mom = contarStatusPorTag(rows, filtros, statusSelecionados, cutoff);
       } catch (e) {
         resultado.momErro = 'erro ao buscar dados do mês anterior';
       }
@@ -2491,7 +2498,7 @@ async function calcularComparativos(filtros) {
         const rows = await fetchAbaDados(nomeAba(alvo.mm, alvo.yyyy));
         const cutoffDia = Math.min(diaCorteBase, diasNoMes(alvo.mm, alvo.yyyy));
         const cutoff = new Date(parseInt(alvo.yyyy), parseInt(alvo.mm) - 1, cutoffDia, 23, 59, 59, 999);
-        const mapa = contarAtivoPorTag(rows, filtros, cutoff);
+        const mapa = contarStatusPorTag(rows, filtros, statusSelecionados, cutoff);
         Object.keys(mapa).forEach(tag => { somaPorTag[tag] = (somaPorTag[tag] || 0) + mapa[tag]; });
         mesesValidos++;
       } catch (e) { /* ignora este mês em caso de erro de rede */ }
@@ -2539,9 +2546,15 @@ function toggleTRI() {
   renderProducao();
 }
 
-// Só habilita MOM/TRI quando o ÚNICO status selecionado for "Ativo/Instalado"
+// Habilita MOM/TRI quando a seleção de status for um subconjunto não vazio de
+// {Ativo/Instalado, Aguardando Instalação} — sozinhos ou combinados.
+const STATUS_ELEGIVEIS_MOM_TRI = new Set(['Ativo/Instalado', 'Aguardando Instalação']);
 function apenasAtivoSelecionado() {
-  return prodStatusSelecionados.size === 1 && prodStatusSelecionados.has('Ativo/Instalado');
+  if (prodStatusSelecionados.size === 0) return false;
+  for (const s of prodStatusSelecionados) {
+    if (!STATUS_ELEGIVEIS_MOM_TRI.has(s)) return false;
+  }
+  return true;
 }
 
 function atualizarVisibilidadeMomTri() {
@@ -2766,7 +2779,7 @@ async function renderProducao() {
 
   const fmtRec = v => 'R$ ' + (v/100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-  // ─── Comparativo MOM/TRI (só quando o único status ativo é Ativo/Instalado) ─
+  // ─── Comparativo MOM/TRI (só quando a seleção de status é Ativo/Instalado e/ou Aguardando Instalação) ─
   const mostrarComparativo = apenasAtivoSelecionado() && (prodExibirMOM || prodExibirTRI);
   let comparativo = { mom: null, tri: null, momErro: null, triErro: null, triMeses: 0 };
 
