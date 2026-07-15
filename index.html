@@ -1193,7 +1193,7 @@
             <thead>
               <tr>
                 <th style="width: 40px; min-width: 40px; max-width: 40px; text-align: center; vertical-align: top; padding: 10px 5px;">#</th>
-                <th style="text-align:left; vertical-align: top; width: 22%;">
+                <th style="text-align:left; vertical-align: top; width: 13%; max-width: 130px;">
                   <div style="display:flex; flex-direction:column; gap:6px;">
                     <span class="th-sort" onclick="setDiscSort('nome')" style="cursor:pointer; white-space:nowrap;">CONSULTOR <span class="sort-arrow" id="dsort-nome"></span></span>
                     
@@ -1205,7 +1205,7 @@
 
                   </div>
                 </th>
-                <th style="vertical-align: top; width: 18%;">
+                <th style="vertical-align: top; width: 10%; max-width: 100px;">
                   <div style="display:flex; flex-direction:column; gap:6px; align-items:center;">
                     <span class="th-sort" onclick="setDiscSort('grupo')" style="cursor:pointer; white-space:nowrap;">GRUPO <span class="sort-arrow" id="dsort-grupo"></span></span>
                     
@@ -3785,8 +3785,8 @@ function discadoraRender() {
   document.getElementById('disc-tbody').innerHTML = rows.map(function(r, index) {
     return '<tr>' +
       '<td style="width: 40px; min-width: 40px; max-width: 40px; text-align:center; font-weight:700; color:var(--text3); font-size:11px;">' + (index + 1) + '</td>' +
-      '<td style="text-align:left;font-weight:500;">' + r.nome + '</td>' +
-      '<td>' + r.grupo + '</td>' +
+      '<td style="text-align:left;font-weight:500;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + r.nome + '">' + r.nome + '</td>' +
+      '<td style="max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + r.grupo + '">' + r.grupo + '</td>' +
       '<td>' + r.fila + '</td>' +
       '<td>' + r.total + '</td>' +
       '<td>' + r.atendidas + '</td>' +
