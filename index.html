@@ -2426,14 +2426,20 @@ async function fetchAbaDados(sheetName) {
   return data;
 }
 
-// Conta, por tag de unidade, quantos registros estavam no(s) status selecionado(s)
-// (Ativo/Instalado e/ou Aguardando Instalação) até a data de corte, respeitando
-// os mesmos filtros da tela. A data de referência usada varia por status:
-//   - Ativo/Instalado      -> coluna DATA REF
-//   - Aguardando Instalação -> coluna CADASTRO
+// Conta, por tag de unidade, quantos registros entram no comparativo até a
+// data de corte, respeitando os mesmos filtros da tela. A regra varia por status:
+//   - Ativo/Instalado:       filtra FILA === 'Ativo/Instalado' e usa a coluna DATA REF
+//   - Aguardando Instalação: IGNORA a fila/status (pois nas abas antigas o registro
+//                             já evoluiu para outro status) e usa a coluna CADASTRO
+//                             sobre TODOS os registros, como proxy de "total cadastrado
+//                             até aquele dia"
+// Quando os dois estão selecionados juntos, os resultados são somados (um mesmo
+// registro pode contar nas duas contagens).
 function contarStatusPorTag(rows, filtros, statusSelecionados, cutoffDate) {
   const tagsMap = MAPEAMENTO_TAGS;
   const gruposExcluidos = new Set(['VOZ - Novo', 'VOZ - Portabilidade', 'APARELHO']);
+  const usarAtivo      = statusSelecionados.has('Ativo/Instalado');
+  const usarAguardando = statusSelecionados.has('Aguardando Instalação');
   const out = {};
   rows.forEach(r => {
     const equipe  = r['EQUIPE'] || '';
@@ -2443,13 +2449,7 @@ function contarStatusPorTag(rows, filtros, statusSelecionados, cutoffDate) {
     const tag     = r['TAGS ATIVIDADE'] || '';
     const qtd     = parseInt(r['QUANTIDADE']) || 1;
 
-    if (!statusSelecionados.has(fila)) return;
     if (!tagsMap[tag]) return;
-
-    const dataRef = fila === 'Aguardando Instalação'
-      ? parseDataRefBR(r['CADASTRO'])
-      : parseDataRefBR(r['DATA REF']);
-    if (!dataRef || dataRef.getTime() > cutoffDate.getTime()) return;
 
     const est = EQUIPES_ESTADOS[equipe] || '';
     const ges = EQUIPES_GESTORES[equipe] || '';
@@ -2460,7 +2460,19 @@ function contarStatusPorTag(rows, filtros, statusSelecionados, cutoffDate) {
     if (filtros.grupo === 'Geral' && gruposExcluidos.has(grupo)) return;
     if (filtros.grupo !== 'Geral' && grupo !== filtros.grupo) return;
 
-    out[tag] = (out[tag] || 0) + qtd;
+    if (usarAtivo && fila === 'Ativo/Instalado') {
+      const dataRef = parseDataRefBR(r['DATA REF']);
+      if (dataRef && dataRef.getTime() <= cutoffDate.getTime()) {
+        out[tag] = (out[tag] || 0) + qtd;
+      }
+    }
+
+    if (usarAguardando) {
+      const dataCad = parseDataRefBR(r['CADASTRO']);
+      if (dataCad && dataCad.getTime() <= cutoffDate.getTime()) {
+        out[tag] = (out[tag] || 0) + qtd;
+      }
+    }
   });
   return out;
 }
