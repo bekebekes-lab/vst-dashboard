@@ -984,7 +984,7 @@
       </div>
       <div class="prod-filter-group" style="min-width:180px">
         <label>Grupo de Produto</label>
-        <select id="prod-grupo" onchange="renderProducao()">
+        <select id="prod-grupo" onchange="atualizarVisibilidadeMomTri(); renderProducao()">
           <option value="Geral">Geral</option>
         </select>
       </div>
@@ -2427,18 +2427,20 @@ async function fetchAbaDados(sheetName) {
 }
 
 // Conta, por tag de unidade, quantos registros entram no comparativo até a
-// data de corte, respeitando os mesmos filtros da tela. A regra varia por status:
-//   - Ativo/Instalado:       filtra FILA === 'Ativo/Instalado' e usa a coluna DATA REF
-//   - Aguardando Instalação: IGNORA a fila/status (pois nas abas antigas o registro
-//                             já evoluiu para outro status) e usa a coluna CADASTRO
-//                             sobre TODOS os registros, como proxy de "total cadastrado
-//                             até aquele dia"
-// Quando os dois estão selecionados juntos, os resultados são somados (um mesmo
-// registro pode contar nas duas contagens).
+// data de corte, respeitando os mesmos filtros da tela. A regra varia conforme
+// a combinação de status selecionados:
+//   - Ativo/Instalado SOZINHO: filtra FILA === 'Ativo/Instalado' e usa DATA REF
+//     (comportamento original, inalterado).
+//   - Aguardando Instalação (sozinho OU junto com Ativo/Instalado): IGNORA a
+//     fila/status por completo (pois nas abas antigas o registro já pode ter
+//     evoluído para outro status) e usa a coluna CADASTRO sobre TODOS os
+//     registros, como proxy de "total cadastrado até aquele dia". Isso vale
+//     mesmo quando Ativo/Instalado também está marcado — nesse caso o Ativo
+//     deixa de olhar DATA REF e passa a entrar nessa mesma contagem por CADASTRO.
+//     A contagem é única (não soma duplicado entre os dois status).
 function contarStatusPorTag(rows, filtros, statusSelecionados, cutoffDate) {
   const tagsMap = MAPEAMENTO_TAGS;
   const gruposExcluidos = new Set(['VOZ - Novo', 'VOZ - Portabilidade', 'APARELHO']);
-  const usarAtivo      = statusSelecionados.has('Ativo/Instalado');
   const usarAguardando = statusSelecionados.has('Aguardando Instalação');
   const out = {};
   rows.forEach(r => {
@@ -2460,17 +2462,20 @@ function contarStatusPorTag(rows, filtros, statusSelecionados, cutoffDate) {
     if (filtros.grupo === 'Geral' && gruposExcluidos.has(grupo)) return;
     if (filtros.grupo !== 'Geral' && grupo !== filtros.grupo) return;
 
-    if (usarAtivo && fila === 'Ativo/Instalado') {
-      const dataRef = parseDataRefBR(r['DATA REF']);
-      if (dataRef && dataRef.getTime() <= cutoffDate.getTime()) {
-        out[tag] = (out[tag] || 0) + qtd;
-      }
-    }
-
     if (usarAguardando) {
+      // Aguardando Instalação sozinho OU combinado com Ativo/Instalado:
+      // contagem única por CADASTRO, sem olhar a fila.
       const dataCad = parseDataRefBR(r['CADASTRO']);
       if (dataCad && dataCad.getTime() <= cutoffDate.getTime()) {
         out[tag] = (out[tag] || 0) + qtd;
+      }
+    } else {
+      // Só Ativo/Instalado selecionado: comportamento original com DATA REF.
+      if (fila === 'Ativo/Instalado') {
+        const dataRef = parseDataRefBR(r['DATA REF']);
+        if (dataRef && dataRef.getTime() <= cutoffDate.getTime()) {
+          out[tag] = (out[tag] || 0) + qtd;
+        }
       }
     }
   });
@@ -2560,11 +2565,19 @@ function toggleTRI() {
 
 // Habilita MOM/TRI quando a seleção de status for um subconjunto não vazio de
 // {Ativo/Instalado, Aguardando Instalação} — sozinhos ou combinados.
+// Quando "Aguardando Instalação" fizer parte da seleção (sozinho ou junto com
+// Ativo/Instalado), o comparativo só fica habilitado se o Grupo de Produto
+// selecionado for exatamente "NET PJ - VIRTUA". Ativo/Instalado sozinho
+// continua funcionando com qualquer grupo, sem essa restrição.
 const STATUS_ELEGIVEIS_MOM_TRI = new Set(['Ativo/Instalado', 'Aguardando Instalação']);
 function apenasAtivoSelecionado() {
   if (prodStatusSelecionados.size === 0) return false;
   for (const s of prodStatusSelecionados) {
     if (!STATUS_ELEGIVEIS_MOM_TRI.has(s)) return false;
+  }
+  if (prodStatusSelecionados.has('Aguardando Instalação')) {
+    const grupoAtual = document.getElementById('prod-grupo')?.value || 'Geral';
+    if (grupoAtual !== 'NET PJ - VIRTUA') return false;
   }
   return true;
 }
