@@ -2904,7 +2904,7 @@ async function renderProducao() {
       if (comparativo.momErro) {
         totalComparativoHtml += `<td class="prod-cell-zero" style="border-left:2px solid rgba(255,255,255,0.3)">—</td>`;
       } else {
-        const totalAnterior = Object.values(comparativo.mom || {}).reduce((s,v)=>s+v,0);
+        const totalAnterior = linhas.reduce((s, r) => s + (comparativo.mom?.[r.tag] || 0), 0);
         const v = formatVariacao(totalGeralQtd, totalAnterior);
         totalComparativoHtml += `<td style="border-left:2px solid rgba(255,255,255,0.3)">${totalAnterior.toLocaleString('pt-BR')} <span style="font-size:10px">${v.texto}</span></td>`;
       }
@@ -2913,7 +2913,7 @@ async function renderProducao() {
       if (comparativo.triErro) {
         totalComparativoHtml += `<td class="prod-cell-zero"${!prodExibirMOM ? ' style="border-left:2px solid rgba(255,255,255,0.3)"' : ''}>—</td>`;
       } else {
-        const totalAnterior = Object.values(comparativo.tri || {}).reduce((s,v)=>s+v,0);
+        const totalAnterior = linhas.reduce((s, r) => s + (comparativo.tri?.[r.tag] || 0), 0);
         const v = formatVariacao(totalGeralQtd, totalAnterior);
         totalComparativoHtml += `<td${!prodExibirMOM ? ' style="border-left:2px solid rgba(255,255,255,0.3)"' : ''}>${totalAnterior.toLocaleString('pt-BR',{maximumFractionDigits:1})} <span style="font-size:10px">${v.texto}</span></td>`;
       }
