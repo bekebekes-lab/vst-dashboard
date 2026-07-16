@@ -988,6 +988,13 @@
           <option value="Geral">Geral</option>
         </select>
       </div>
+      <div class="prod-filter-group" style="min-width:200px">
+        <label>Tag de Unidade</label>
+        <div class="custom-dropdown" id="dd-prod-tag">
+          <button class="dropdown-btn" onclick="toggleDropdown('dd-content-prod-tag')">Todas <span>▼</span></button>
+          <div class="dropdown-content" id="dd-content-prod-tag"></div>
+        </div>
+      </div>
       <div class="prod-toggle-group">
         <label class="top-label">Receita</label>
         <div class="prod-toggle" id="prod-toggle-receita" onclick="toggleReceita()">
@@ -2629,6 +2636,28 @@ function atualizarContadorStatus() {
   document.getElementById('prod-status-count').textContent = n > 0 ? `(${n} selecionados)` : '(nenhum selecionado)';
 }
 
+// Popula o dropdown de checkboxes "Tag de Unidade" com a lista fixa de unidades.
+// Nenhum marcado = sem filtro (mostra todas). Preserva seleção ao repopular.
+function popularDropdownTagUnidade() {
+  const cont = document.getElementById('dd-content-prod-tag');
+  if (!cont) return;
+  const selecionadasAntes = new Set(getCheckedValues('dd-content-prod-tag'));
+  cont.innerHTML = Object.entries(MAPEAMENTO_TAGS).sort((a, b) => a[1].localeCompare(b[1])).map(([tag, nome]) => `
+    <label class="dropdown-item">
+      <input type="checkbox" value="${tag}" ${selecionadasAntes.has(tag) ? 'checked' : ''} onchange="atualizarBotaoTagUnidade(); renderProducao()">
+      ${nome}
+    </label>
+  `).join('');
+  atualizarBotaoTagUnidade();
+}
+
+function atualizarBotaoTagUnidade() {
+  const selecionadas = getCheckedValues('dd-content-prod-tag');
+  const btn = document.querySelector('#dd-prod-tag .dropdown-btn');
+  if (!btn) return;
+  btn.innerHTML = selecionadas.length > 0 ? `${selecionadas.length} selecionada(s) <span>▼</span>` : 'Todas <span>▼</span>';
+}
+
 function initProducao() {
   if (!ALL_DATA.length) return;
 
@@ -2667,6 +2696,10 @@ function initProducao() {
     if (sel) prodStatusSelecionados.add(s);
     return `<div class="prod-chip${sel ? ' selected' : ''}" data-status="${s}" onclick="toggleStatusChip('${s}',this)">${s}</div>`;
   }).join('');
+
+  // Popula dropdown de Tag de Unidade (lista fixa, preserva seleção existente)
+  popularDropdownTagUnidade();
+
   atualizarContadorStatus();
   atualizarVisibilidadeMomTri();
   renderProducao();
@@ -2733,7 +2766,10 @@ async function renderProducao() {
 
   // Agrega: tag → status → { qtd, receita }
   const agg = {};
-  const tagsMap = { ...MAPEAMENTO_TAGS };
+  const tagsFiltro = getCheckedValues('dd-content-prod-tag'); // vazio = sem filtro (todas)
+  const tagsMap = tagsFiltro.length > 0
+    ? Object.fromEntries(Object.entries(MAPEAMENTO_TAGS).filter(([tag]) => tagsFiltro.includes(tag)))
+    : { ...MAPEAMENTO_TAGS };
   Object.keys(tagsMap).forEach(tag => {
     agg[tag] = {};
     statusArr.forEach(s => agg[tag][s] = { qtd: 0, rec: 0 });
