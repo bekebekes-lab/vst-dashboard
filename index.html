@@ -3878,17 +3878,19 @@ function discadoraRender() {
     var prodCell = r.produtivas > 0
       ? '<span class="disc-drill-link" data-nome="' + nomeEsc + '" style="cursor:pointer;color:var(--brand);font-weight:700;text-decoration:underline;text-underline-offset:2px;" title="Ver ligações produtivas">' + r.produtivas + '</span>'
       : '0';
+    var tdBase = 'style="text-align:left;text-transform:uppercase;font-size:11px;"';
+    var tdNum  = 'style="text-align:left;font-family:monospace;"';
     return '<tr>' +
-      '<td style="width: 40px; min-width: 40px; max-width: 40px; text-align:center; font-weight:700; color:var(--text3); font-size:11px;">' + (index + 1) + '</td>' +
-      '<td style="text-align:left;font-weight:500;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + nomeCell + '</td>' +
-      '<td style="max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + r.grupo + '">' + r.grupo + '</td>' +
-      '<td>' + r.fila + '</td>' +
-      '<td>' + r.total + '</td>' +
-      '<td>' + r.atendidas + '</td>' +
-      '<td>' + prodCell + '</td>' +
-      '<td style="color:' + discProdColor(r.pctProd) + ';font-weight:600;">' + r.pctProd + '%</td>' +
-      '<td>' + discFmt(r.tmaGeral) + '</td>' +
-      '<td>' + (r.produtivas > 0 ? discFmt(r.tmaProd) : '-') + '</td>' +
+      '<td style="width:40px;min-width:40px;max-width:40px;text-align:center;font-weight:700;color:var(--text3);font-size:11px;">' + (index + 1) + '</td>' +
+      '<td style="text-align:left;font-weight:600;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-transform:uppercase;">' + nomeCell + '</td>' +
+      '<td style="text-align:left;text-transform:uppercase;font-size:11px;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + r.grupo + '">' + r.grupo + '</td>' +
+      '<td style="text-align:left;text-transform:uppercase;font-size:11px;">' + r.fila + '</td>' +
+      '<td style="text-align:left;font-family:monospace;">' + r.total + '</td>' +
+      '<td style="text-align:left;font-family:monospace;">' + r.atendidas + '</td>' +
+      '<td style="text-align:left;font-family:monospace;">' + prodCell + '</td>' +
+      '<td style="text-align:left;color:' + discProdColor(r.pctProd) + ';font-weight:600;">' + r.pctProd + '%</td>' +
+      '<td style="text-align:left;font-family:monospace;">' + discFmt(r.tmaGeral) + '</td>' +
+      '<td style="text-align:left;font-family:monospace;">' + (r.produtivas > 0 ? discFmt(r.tmaProd) : '-') + '</td>' +
     '</tr>';
   }).join('');
 
@@ -3896,13 +3898,13 @@ function discadoraRender() {
   document.getElementById('disc-tfoot').innerHTML =
     '<tr>' +
       '<td></td>' +
-      '<td style="text-align:left;" colspan="3">TOTAL</td>' +
-      '<td>' + totalLig + '</td>' +
-      '<td>' + totalAtend + '</td>' +
-      '<td>' + totalProd + '</td>' +
-      '<td style="color:' + discProdColor(pctProd) + ';font-weight:700;">' + pctProd + '%</td>' +
-      '<td>' + discFmt(tmaGlobal) + '</td>' +
-      '<td>' + discFmt(tmaProd) + '</td>' +
+      '<td style="text-align:left;text-transform:uppercase;font-weight:700;" colspan="3">TOTAL</td>' +
+      '<td style="text-align:left;font-family:monospace;">' + totalLig + '</td>' +
+      '<td style="text-align:left;font-family:monospace;">' + totalAtend + '</td>' +
+      '<td style="text-align:left;font-family:monospace;">' + totalProd + '</td>' +
+      '<td style="text-align:left;color:' + discProdColor(pctProd) + ';font-weight:700;">' + pctProd + '%</td>' +
+      '<td style="text-align:left;font-family:monospace;">' + discFmt(tmaGlobal) + '</td>' +
+      '<td style="text-align:left;font-family:monospace;">' + discFmt(tmaProd) + '</td>' +
     '</tr>';
 
   // --- O restante da renderização das horas permanece inalterado ---
