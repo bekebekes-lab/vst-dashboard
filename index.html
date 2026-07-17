@@ -3582,6 +3582,11 @@ function discDataHoje() {
 function initDiscadora() {
   if (_discIniciado) return;
   _discIniciado = true;
+  // Event delegation para drill-down
+  document.getElementById('disc-tbody').addEventListener('click', function(e) {
+    var el = e.target.closest('.disc-drill-link');
+    if (el) discDrillDown(el.getAttribute('data-nome'));
+  });
   const hoje = discDataHoje();
   document.getElementById('disc-dt-ini').value = hoje;
   document.getElementById('disc-dt-fim').value = hoje;
@@ -3602,6 +3607,8 @@ function discProgressSet(pct, label) {
   lbl.textContent = label || 'Carregando...';
 }
 
+const DISC_GRAVACAO_BASE = 'https://vipsul.gvctelecom.com.br';
+
 async function discadoraBuscarPagina(pagina) {
   const query = `{
     listar_historico_contato(
@@ -3613,6 +3620,10 @@ async function discadoraBuscarPagina(pagina) {
       duracao
       telefonia
       localizado
+      dddTelefone
+      documento
+      urlLigacao
+      lead { nome }
       usuario { nome }
       grupo { nome }
       fila { nome }
@@ -3806,7 +3817,7 @@ function discadoraRender() {
     const nome  = (r.usuario && r.usuario.nome) || 'Desconhecido';
     const grupo = (r.grupo && r.grupo.nome) || '-';
     const fila  = (r.fila && r.fila.nome) || '-';
-    if (!porConsultor[nome]) porConsultor[nome] = { nome: nome, grupo: grupo, fila: fila, total: 0, atendidas: 0, produtivas: 0, durTotal: 0, durProd: 0 };
+    if (!porConsultor[nome]) porConsultor[nome] = { nome: nome, grupo: grupo, fila: fila, total: 0, atendidas: 0, produtivas: 0, durTotal: 0, durProd: 0, ligsProd: [] };
     porConsultor[nome].total++;
     if (r.duracao !== null && r.duracao !== undefined) {
       porConsultor[nome].atendidas++;
@@ -3815,6 +3826,7 @@ function discadoraRender() {
     if ((r.duracao || 0) > 60) {
       porConsultor[nome].produtivas++;
       porConsultor[nome].durProd += r.duracao;
+      porConsultor[nome].ligsProd.push(r);
     }
   });
 
@@ -3857,14 +3869,21 @@ function discadoraRender() {
 
   // Renderiza o Corpo com a numeração na lateral esquerda (#)
   document.getElementById('disc-tbody').innerHTML = rows.map(function(r, index) {
+    var nomeEsc = r.nome.replace(/&/g,'&amp;').replace(/"/g,'&quot;');
+    var nomeCell = r.produtivas > 0
+      ? '<span class="disc-drill-link" data-nome="' + nomeEsc + '" style="cursor:pointer;color:var(--brand);font-weight:600;text-decoration:underline;text-underline-offset:2px;" title="Ver ligações produtivas">' + r.nome + '</span>'
+      : '<span>' + r.nome + '</span>';
+    var prodCell = r.produtivas > 0
+      ? '<span class="disc-drill-link" data-nome="' + nomeEsc + '" style="cursor:pointer;color:var(--brand);font-weight:700;text-decoration:underline;text-underline-offset:2px;" title="Ver ligações produtivas">' + r.produtivas + '</span>'
+      : '0';
     return '<tr>' +
       '<td style="width: 40px; min-width: 40px; max-width: 40px; text-align:center; font-weight:700; color:var(--text3); font-size:11px;">' + (index + 1) + '</td>' +
-      '<td style="text-align:left;font-weight:500;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + r.nome + '">' + r.nome + '</td>' +
+      '<td style="text-align:left;font-weight:500;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + nomeCell + '</td>' +
       '<td style="max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + r.grupo + '">' + r.grupo + '</td>' +
       '<td>' + r.fila + '</td>' +
       '<td>' + r.total + '</td>' +
       '<td>' + r.atendidas + '</td>' +
-      '<td>' + r.produtivas + '</td>' +
+      '<td>' + prodCell + '</td>' +
       '<td style="color:' + discProdColor(r.pctProd) + ';font-weight:600;">' + r.pctProd + '%</td>' +
       '<td>' + discFmt(r.tmaGeral) + '</td>' +
       '<td>' + (r.produtivas > 0 ? discFmt(r.tmaProd) : '-') + '</td>' +
@@ -3913,6 +3932,93 @@ function discadoraRender() {
     const total = filasCols.reduce(function(s,f){ return s + ((porHoraFila[h] && porHoraFila[h][f]) || 0); }, 0);
     return '<tr><td style="text-align:left;font-weight:500;">' + String(h).padStart(2,'0') + 'h</td>' + celulas + '<td style="font-weight:600;">' + (total || '') + '</td></tr>';
   }).join('');
+}
+
+// ─── DISCADORA DRILL DOWN ────────────────────────────────────────────────────
+function discDrillDown(nomeConsultor) {
+  // Busca as ligações produtivas do consultor nos dados filtrados
+  var modal = document.getElementById('disc-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'disc-modal';
+    modal.style.cssText = 'position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.5);display:flex;align-items:flex-start;justify-content:center;padding:40px 20px;overflow-y:auto;';
+    modal.onclick = function(e) { if (e.target === modal) discDrillClose(); };
+    document.body.appendChild(modal);
+  }
+
+  // Pegar ligações produtivas do consultor do dataset atual
+  var grupoFiltro     = document.getElementById('disc-grupo').value;
+  var filaFiltro      = document.getElementById('disc-fila').value;
+  var dados = _discDados.filter(function(r) {
+    var nome = (r.usuario && r.usuario.nome) || '';
+    if (nome !== nomeConsultor) return false;
+    if (grupoFiltro && (r.grupo && r.grupo.nome) !== grupoFiltro) return false;
+    if (filaFiltro && (r.fila && r.fila.nome) !== filaFiltro) return false;
+    return (r.duracao || 0) > 60;
+  });
+
+  dados.sort(function(a,b){ return new Date(b.dataRegistro) - new Date(a.dataRegistro); });
+
+  var rows = dados.map(function(r) {
+    var dt = new Date(r.dataRegistro);
+    var hora = dt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    var data = dt.toLocaleDateString('pt-BR');
+    var cliente = (r.lead && r.lead.nome) ? r.lead.nome.replace(/^\d+\s*/, '') : '-';
+    var cnpj = r.documento || '-';
+    var fone = r.dddTelefone ? String(r.dddTelefone) : '-';
+    var foneFmt = fone.length >= 10 ? '(' + fone.slice(0,2) + ') ' + fone.slice(2) : fone;
+    var fila = (r.fila && r.fila.nome) || '-';
+    var dur = discFmt(r.duracao);
+    var playBtn = r.urlLigacao
+      ? '<a href="' + DISC_GRAVACAO_BASE + r.urlLigacao + '" target="_blank" title="Ouvir gravação" style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:var(--brand);color:#fff;text-decoration:none;font-size:12px;">▶</a>'
+      : '<span style="color:var(--text4);font-size:11px;">–</span>';
+    return '<tr>' +
+      '<td style="white-space:nowrap;">' + data + ' ' + hora + '</td>' +
+      '<td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left;" title="' + cliente + '">' + cliente + '</td>' +
+      '<td style="font-family:'DM Mono',monospace;font-size:11px;">' + cnpj + '</td>' +
+      '<td style="font-family:'DM Mono',monospace;">' + foneFmt + '</td>' +
+      '<td>' + fila + '</td>' +
+      '<td style="font-weight:600;color:var(--green);">' + dur + '</td>' +
+      '<td style="text-align:center;">' + playBtn + '</td>' +
+    '</tr>';
+  }).join('');
+
+  modal.innerHTML =
+    '<div style="background:var(--surface);border-radius:var(--radius-xl);width:100%;max-width:900px;box-shadow:0 24px 60px rgba(0,0,0,.3);overflow:hidden;">' +
+      '<div style="background:var(--brand);padding:16px 20px;display:flex;align-items:center;justify-content:space-between;">' +
+        '<div>' +
+          '<div style="font-size:11px;color:rgba(255,255,255,.7);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px;">Ligações Produtivas (+1 min)</div>' +
+          '<div style="font-size:16px;font-weight:700;color:#fff;">' + nomeConsultor + '</div>' +
+        '</div>' +
+        '<div style="display:flex;align-items:center;gap:12px;">' +
+          '<span style="background:rgba(255,255,255,.15);color:#fff;padding:4px 12px;border-radius:20px;font-size:13px;font-weight:600;">' + dados.length + ' ligações</span>' +
+          '<button onclick="discDrillClose()" style="background:rgba(255,255,255,.15);border:none;color:#fff;width:32px;height:32px;border-radius:50%;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;">×</button>' +
+        '</div>' +
+      '</div>' +
+      '<div style="overflow-x:auto;max-height:70vh;overflow-y:auto;">' +
+        '<table style="width:100%;border-collapse:collapse;font-size:12px;">' +
+          '<thead><tr style="background:var(--surface-3);position:sticky;top:0;">' +
+            '<th style="padding:10px 12px;text-align:left;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--text-2);border-bottom:1px solid var(--border);">Data/Hora</th>' +
+            '<th style="padding:10px 12px;text-align:left;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--text-2);border-bottom:1px solid var(--border);">Cliente</th>' +
+            '<th style="padding:10px 12px;text-align:center;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--text-2);border-bottom:1px solid var(--border);">CNPJ</th>' +
+            '<th style="padding:10px 12px;text-align:center;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--text-2);border-bottom:1px solid var(--border);">Telefone</th>' +
+            '<th style="padding:10px 12px;text-align:center;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--text-2);border-bottom:1px solid var(--border);">Fila</th>' +
+            '<th style="padding:10px 12px;text-align:center;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--text-2);border-bottom:1px solid var(--border);">Duração</th>' +
+            '<th style="padding:10px 12px;text-align:center;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--text-2);border-bottom:1px solid var(--border);">Gravação</th>' +
+          '</tr></thead>' +
+          '<tbody>' + (rows || '<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text-3);">Nenhuma ligação encontrada</td></tr>') + '</tbody>' +
+        '</table>' +
+      '</div>' +
+    '</div>';
+
+  modal.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+
+function discDrillClose() {
+  var modal = document.getElementById('disc-modal');
+  if (modal) modal.style.display = 'none';
+  document.body.style.overflow = '';
 }
 
 </script>
