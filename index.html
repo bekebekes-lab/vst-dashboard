@@ -3843,7 +3843,9 @@ function discadoraRender() {
   document.getElementById('disc-kpi-area').innerHTML =
     '<div class="disc-kpi-card"><div class="disc-kpi-label">Total ligações</div><div class="disc-kpi-value">' + totalLig + '</div></div>' +
     '<div class="disc-kpi-card"><div class="disc-kpi-label">Atendidas</div><div class="disc-kpi-value">' + totalAtend + '</div></div>' +
-    '<div class="disc-kpi-card disc-highlight"><div class="disc-kpi-label">Produtivas +1 min</div><div class="disc-kpi-value">' + totalProd + '</div></div>' +
+    '<div class="disc-kpi-card disc-highlight" onclick="discExportarProdutivas()" style="cursor:pointer;" title="Clique para exportar CSV">' +
+      '<div class="disc-kpi-label">Produtivas +1 min <span style="font-size:9px;color:var(--text-3);margin-left:4px;">↓ CSV</span></div>' +
+      '<div class="disc-kpi-value">' + totalProd + '</div></div>' +
     '<div class="disc-kpi-card disc-highlight"><div class="disc-kpi-label">% Produtividade</div><div class="disc-kpi-value ' + _pctClass + '">' + pctProd + '%</div></div>' +
     '<div class="disc-kpi-card"><div class="disc-kpi-label">TMA geral</div><div class="disc-kpi-value">' + discFmt(tmaGlobal) + '</div></div>' +
     '<div class="disc-kpi-card"><div class="disc-kpi-label">TMA +1 min</div><div class="disc-kpi-value">' + discFmt(tmaProd) + '</div></div>';
@@ -4013,6 +4015,56 @@ function discDrillDown(nomeConsultor) {
 
   modal.style.display = 'flex';
   document.body.style.overflow = 'hidden';
+}
+
+// ─── DISCADORA EXPORT CSV ────────────────────────────────────────────────────
+function discExportarProdutivas() {
+  var grupoFiltro     = document.getElementById('disc-grupo').value;
+  var filaFiltro      = document.getElementById('disc-fila').value;
+  var consultorFiltro = document.getElementById('disc-consultor').value;
+
+  var dados = _discDados.filter(function(r) {
+    if ((r.duracao || 0) <= 60) return false;
+    if (grupoFiltro && (r.grupo && r.grupo.nome) !== grupoFiltro) return false;
+    if (filaFiltro && (r.fila && r.fila.nome) !== filaFiltro) return false;
+    if (consultorFiltro && (r.usuario && r.usuario.nome) !== consultorFiltro) return false;
+    return true;
+  });
+
+  if (!dados.length) { alert('Nenhuma ligação produtiva no período selecionado.'); return; }
+
+  dados.sort(function(a, b) { return new Date(b.dataRegistro) - new Date(a.dataRegistro); });
+
+  var header = ['Data/Hora', 'Consultor', 'Grupo', 'Fila', 'Cliente', 'CNPJ', 'Telefone', 'Duração (seg)', 'Duração (mm:ss)', 'URL Gravação'];
+
+  var rows = dados.map(function(r) {
+    var dt = new Date(r.dataRegistro);
+    var dataHora = dt.toLocaleDateString('pt-BR') + ' ' + dt.toLocaleTimeString('pt-BR');
+    var consultor = (r.usuario && r.usuario.nome) || '';
+    var grupo = (r.grupo && r.grupo.nome) || '';
+    var fila = (r.fila && r.fila.nome) || '';
+    var cliente = (r.lead && r.lead.nome) ? r.lead.nome.replace(/^\d+\s*/, '') : '';
+    var cnpj = r.documento || '';
+    var fone = r.dddTelefone ? String(r.dddTelefone) : '';
+    var durSeg = r.duracao || 0;
+    var durFmt = discFmt(durSeg);
+    var url = r.urlLigacao ? (DISC_GRAVACAO_BASE + r.urlLigacao) : '';
+    return [dataHora, consultor, grupo, fila, cliente, cnpj, fone, durSeg, durFmt, url]
+      .map(function(v) { return '"' + String(v).replace(/"/g, '""') + '"'; }).join(',');
+  });
+
+  var csv = '\uFEFF' + header.map(function(h){ return '"' + h + '"'; }).join(',') + '\n' + rows.join('\n');
+  var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  var dtIni = document.getElementById('disc-dt-ini').value || 'hoje';
+  var dtFim = document.getElementById('disc-dt-fim').value || 'hoje';
+  a.href = url;
+  a.download = 'produtivas_' + dtIni + (dtIni !== dtFim ? '_a_' + dtFim : '') + '.csv';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 function discDrillClose() {
