@@ -966,11 +966,12 @@
           <option value="Todos">Todos</option>
         </select>
       </div>
-      <div class="prod-filter-group">
+      <div class="prod-filter-group" style="min-width:200px">
         <label>Equipe</label>
-        <select id="prod-equipe" onchange="renderProducao()">
-          <option value="Todas">Todas</option>
-        </select>
+        <div class="custom-dropdown" id="dd-prod-equipe">
+          <button class="dropdown-btn" onclick="toggleDropdown('dd-content-prod-equipe')">Todas <span>&#9660;</span></button>
+          <div class="dropdown-content" id="dd-content-prod-equipe"></div>
+        </div>
       </div>
       <div class="prod-filter-group">
         <label>UF</label>
@@ -2712,6 +2713,28 @@ function fillProdSelect(id, opts) {
   if (opts.includes(cur)) sel.value = cur;
 }
 
+function popularDropdownEquipe(equipes) {
+  const cont = document.getElementById('dd-content-prod-equipe');
+  if (!cont) return;
+  const selecionadasAntes = new Set(getCheckedValues('dd-content-prod-equipe'));
+  cont.innerHTML = equipes.map(eq => `
+    <label class="dropdown-item">
+      <input type="checkbox" value="${eq}" ${selecionadasAntes.has(eq) ? 'checked' : ''} onchange="atualizarBotaoEquipe(); renderProducao()">
+      ${eq}
+    </label>
+  `).join('');
+  atualizarBotaoEquipe();
+}
+
+function atualizarBotaoEquipe() {
+  const selecionadas = getCheckedValues('dd-content-prod-equipe');
+  const btn = document.querySelector('#dd-prod-equipe .dropdown-btn');
+  if (!btn) return;
+  btn.innerHTML = selecionadas.length > 0
+    ? `${selecionadas.length} selecionada(s) <span>&#9660;</span>`
+    : 'Todas <span>&#9660;</span>';
+}
+
 function onProdFilterChange(level) {
   const estado = document.getElementById('prod-estado').value;
   const gestor = document.getElementById('prod-gestor').value;
@@ -2733,9 +2756,9 @@ function onProdFilterChange(level) {
 
   if (level === 'estado') {
     fillProdSelect('prod-gestor', ['Todos', ...[...gestores].sort()]);
-    fillProdSelect('prod-equipe', ['Todas', ...[...equipes].sort()]);
+    popularDropdownEquipe([...equipes].sort());
   } else if (level === 'gestor') {
-    fillProdSelect('prod-equipe', ['Todas', ...[...equipes].sort()]);
+    popularDropdownEquipe([...equipes].sort());
   }
   renderProducao();
 }
@@ -2752,7 +2775,7 @@ async function renderProducao() {
 
   const filtroEstado = document.getElementById('prod-estado')?.value || 'Todos';
   const filtroGestor = document.getElementById('prod-gestor')?.value || 'Todos';
-  const filtroEquipe = document.getElementById('prod-equipe')?.value || 'Todas';
+  const equipesChecked = getCheckedValues('dd-content-prod-equipe'); // vazio = todas
   const filtroUF     = document.getElementById('prod-uf').value;
   const filtroGrupo  = document.getElementById('prod-grupo').value;
   const statusArr    = [...prodStatusSelecionados];
@@ -2789,7 +2812,7 @@ async function renderProducao() {
     const ges = EQUIPES_GESTORES[equipe] || '';
     if (filtroEstado !== 'Todos' && est !== filtroEstado) return;
     if (filtroGestor !== 'Todos' && ges !== filtroGestor) return;
-    if (filtroEquipe !== 'Todas' && equipe !== filtroEquipe) return;
+    if (equipesChecked.length > 0 && !equipesChecked.includes(equipe)) return;
 
     // Filtro UF
     if (!checkUF(filtroUF, uf)) return;
