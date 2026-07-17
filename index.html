@@ -2465,7 +2465,7 @@ function contarStatusPorTag(rows, filtros, statusSelecionados, cutoffDate) {
     const ges = EQUIPES_GESTORES[equipe] || '';
     if (filtros.estado !== 'Todos' && est !== filtros.estado) return;
     if (filtros.gestor !== 'Todos' && ges !== filtros.gestor) return;
-    if (filtros.equipe !== 'Todas' && equipe !== filtros.equipe) return;
+    if (filtros.equipes && filtros.equipes.length > 0 && !filtros.equipes.includes(equipe)) return;
     if (!checkUF(filtros.uf, uf)) return;
     if (filtros.grupo === 'Geral' && gruposExcluidos.has(grupo)) return;
     if (filtros.grupo !== 'Geral' && grupo !== filtros.grupo) return;
@@ -2869,7 +2869,7 @@ async function renderProducao() {
 
   if (mostrarComparativo) {
     resultArea.innerHTML = '<div class="prod-empty">Calculando comparativo MOM/TRI...</div>';
-    const filtros = { estado: filtroEstado, gestor: filtroGestor, equipe: filtroEquipe, uf: filtroUF, grupo: filtroGrupo };
+    const filtros = { estado: filtroEstado, gestor: filtroGestor, equipes: equipesChecked, uf: filtroUF, grupo: filtroGrupo };
     const idRequisicao = ++prodComparativoReqId;
     comparativo = await calcularComparativos(filtros);
     if (idRequisicao !== prodComparativoReqId) return; // uma nova chamada substituiu esta
