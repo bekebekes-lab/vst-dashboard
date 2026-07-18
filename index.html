@@ -2639,24 +2639,79 @@ function atualizarContadorStatus() {
 
 // Popula o dropdown de checkboxes "Tag de Unidade" com a lista fixa de unidades.
 // Nenhum marcado = sem filtro (mostra todas). Preserva seleção ao repopular.
-function popularDropdownTagUnidade() {
-  const cont = document.getElementById('dd-content-prod-tag');
+
+// ─── DROPDOWN GENÉRICO COM BUSCA E TODOS ─────────────────────────────────────
+function popularDropdownGenerico(contId, itens, onChangeFn, labelBotaoId) {
+  const cont = document.getElementById(contId);
   if (!cont) return;
-  const selecionadasAntes = new Set(getCheckedValues('dd-content-prod-tag'));
-  cont.innerHTML = Object.entries(MAPEAMENTO_TAGS).sort((a, b) => a[1].localeCompare(b[1])).map(([tag, nome]) => `
-    <label class="dropdown-item">
-      <input type="checkbox" value="${tag}" ${selecionadasAntes.has(tag) ? 'checked' : ''} onchange="atualizarBotaoTagUnidade(); renderProducao()">
-      ${nome}
-    </label>
-  `).join('');
-  atualizarBotaoTagUnidade();
+  const selecionadosAntes = new Set(getCheckedValues(contId));
+
+  // Verifica se todos estavam marcados (para preservar estado do "Todos")
+  const todosChecked = selecionadosAntes.size === 0; // sem seleção = "Todos"
+
+  cont.innerHTML =
+    // Campo de busca
+    `<div style="padding:6px 8px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface);z-index:1;">
+      <input type="text" placeholder="Buscar..." oninput="filtrarDropdown('${contId}', this.value)"
+        style="width:100%;padding:5px 8px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:12px;outline:none;font-family:'DM Sans',sans-serif;">
+    </div>` +
+    // Opção Todos
+    `<label class="dropdown-item dd-todos-item" style="font-weight:600;border-bottom:1px solid var(--border);">
+      <input type="checkbox" data-todos="true" ${todosChecked ? 'checked' : ''} onchange="toggleTodosDropdown('${contId}', this, ${onChangeFn})">
+      Todos
+    </label>` +
+    // Itens
+    itens.map(item => `
+      <label class="dropdown-item">
+        <input type="checkbox" value="${item.replace(/"/g,'&quot;')}" ${selecionadosAntes.has(item) ? 'checked' : ''} onchange="desmarcaTodos('${contId}'); (${onChangeFn})()">
+        ${item}
+      </label>
+    `).join('');
+
+  atualizarBotaoDropdown(contId, labelBotaoId);
 }
 
-function atualizarBotaoTagUnidade() {
-  const selecionadas = getCheckedValues('dd-content-prod-tag');
-  const btn = document.querySelector('#dd-prod-tag .dropdown-btn');
+function filtrarDropdown(contId, busca) {
+  const cont = document.getElementById(contId);
+  if (!cont) return;
+  const termo = busca.toLowerCase();
+  cont.querySelectorAll('.dropdown-item:not(.dd-todos-item)').forEach(label => {
+    const txt = label.textContent.toLowerCase();
+    label.style.display = txt.includes(termo) ? '' : 'none';
+  });
+}
+
+function toggleTodosDropdown(contId, cbTodos, onChangeFn) {
+  const cont = document.getElementById(contId);
+  if (!cont) return;
+  // Se marcou Todos: desmarca todos os itens individuais
+  cont.querySelectorAll('input[type="checkbox"]:not([data-todos])').forEach(cb => {
+    cb.checked = false;
+  });
+  if (typeof onChangeFn === 'function') onChangeFn();
+  else if (typeof onChangeFn === 'string') eval(onChangeFn + '()');
+}
+
+function desmarcaTodos(contId) {
+  const cont = document.getElementById(contId);
+  if (!cont) return;
+  const cbTodos = cont.querySelector('input[data-todos]');
+  if (cbTodos) cbTodos.checked = false;
+}
+
+function atualizarBotaoDropdown(contId, labelBotaoId) {
+  // labelBotaoId = seletor CSS do botão pai ex: '#dd-prod-equipe .dropdown-btn'
+  const selecionados = getCheckedValues(contId);
+  const btn = document.querySelector(labelBotaoId);
   if (!btn) return;
-  btn.innerHTML = selecionadas.length > 0 ? `${selecionadas.length} selecionada(s) <span>▼</span>` : 'Todas <span>▼</span>';
+  btn.innerHTML = selecionados.length > 0
+    ? `${selecionados.length} selecionado(s) <span>&#9660;</span>`
+    : 'Todos <span>&#9660;</span>';
+}
+
+function popularDropdownTagUnidade() {
+  const itens = Object.entries(MAPEAMENTO_TAGS).sort((a, b) => a[1].localeCompare(b[1])).map(([tag]) => tag);
+  popularDropdownGenerico('dd-content-prod-tag', itens, function(){ atualizarBotaoDropdown('dd-content-prod-tag','#dd-prod-tag .dropdown-btn'); renderProducao(); }, '#dd-prod-tag .dropdown-btn');
 }
 
 function initProducao() {
@@ -2714,25 +2769,7 @@ function fillProdSelect(id, opts) {
 }
 
 function popularDropdownEquipe(equipes) {
-  const cont = document.getElementById('dd-content-prod-equipe');
-  if (!cont) return;
-  const selecionadasAntes = new Set(getCheckedValues('dd-content-prod-equipe'));
-  cont.innerHTML = equipes.map(eq => `
-    <label class="dropdown-item">
-      <input type="checkbox" value="${eq}" ${selecionadasAntes.has(eq) ? 'checked' : ''} onchange="atualizarBotaoEquipe(); renderProducao()">
-      ${eq}
-    </label>
-  `).join('');
-  atualizarBotaoEquipe();
-}
-
-function atualizarBotaoEquipe() {
-  const selecionadas = getCheckedValues('dd-content-prod-equipe');
-  const btn = document.querySelector('#dd-prod-equipe .dropdown-btn');
-  if (!btn) return;
-  btn.innerHTML = selecionadas.length > 0
-    ? `${selecionadas.length} selecionada(s) <span>&#9660;</span>`
-    : 'Todas <span>&#9660;</span>';
+  popularDropdownGenerico('dd-content-prod-equipe', equipes, function(){ atualizarBotaoDropdown('dd-content-prod-equipe','#dd-prod-equipe .dropdown-btn'); renderProducao(); }, '#dd-prod-equipe .dropdown-btn');
 }
 
 function onProdFilterChange(level) {
@@ -3790,28 +3827,12 @@ function discadoraRender() {
   const filas       = [...new Set(_discDados.map(r => r.fila && r.fila.nome).filter(Boolean))].sort();
   const consultores = [...new Set(_discDados.map(r => r.usuario && r.usuario.nome).filter(Boolean))].sort();
 
-  // Atualiza HTML dos checkboxes (Grupo)
+  // Atualiza dropdowns Grupo e Consultor com busca + Todos
   if(document.getElementById('dd-content-grupo')) {
-    document.getElementById('dd-content-grupo').innerHTML = grupos.map(g => `
-      <label class="dropdown-item">
-        <input type="checkbox" value="${g}" ${gruposHeader.includes(g) ? 'checked' : ''} onchange="discadoraRender()">
-        ${g}
-      </label>
-    `).join('');
-    const btn = document.querySelector('#dd-grupo .dropdown-btn');
-    if(btn) btn.innerHTML = gruposHeader.length > 0 ? `${gruposHeader.length} selecionados <span>▼</span>` : 'Selecionar... <span>▼</span>';
+    popularDropdownGenerico('dd-content-grupo', grupos, function(){ atualizarBotaoDropdown('dd-content-grupo','#dd-grupo .dropdown-btn'); discadoraRender(); }, '#dd-grupo .dropdown-btn');
   }
-
-  // Atualiza HTML dos checkboxes (Consultor)
   if(document.getElementById('dd-content-consultor')) {
-    document.getElementById('dd-content-consultor').innerHTML = consultores.map(c => `
-      <label class="dropdown-item">
-        <input type="checkbox" value="${c}" ${consultoresHeader.includes(c) ? 'checked' : ''} onchange="discadoraRender()">
-        ${c}
-      </label>
-    `).join('');
-    const btn = document.querySelector('#dd-consultor .dropdown-btn');
-    if(btn) btn.innerHTML = consultoresHeader.length > 0 ? `${consultoresHeader.length} selecionados <span>▼</span>` : 'Selecionar... <span>▼</span>';
+    popularDropdownGenerico('dd-content-consultor', consultores, function(){ atualizarBotaoDropdown('dd-content-consultor','#dd-consultor .dropdown-btn'); discadoraRender(); }, '#dd-consultor .dropdown-btn');
   }
 
   // Popula os selects antigos da barra superior (se existirem)
