@@ -2639,24 +2639,114 @@ function atualizarContadorStatus() {
 
 // Popula o dropdown de checkboxes "Tag de Unidade" com a lista fixa de unidades.
 // Nenhum marcado = sem filtro (mostra todas). Preserva seleção ao repopular.
-function popularDropdownTagUnidade() {
-  const cont = document.getElementById('dd-content-prod-tag');
+
+// ─── DROPDOWN GENÉRICO COM BUSCA E TODOS ─────────────────────────────────────
+// Estado persistente dos dropdowns (sobrevive ao repopulate)
+const _ddState = {}; // { contId: Set de valores selecionados, ou null = todos }
+
+function popularDropdownGenerico(contId, itens, onChangeFn, labelBotaoId) {
+  const cont = document.getElementById(contId);
   if (!cont) return;
-  const selecionadasAntes = new Set(getCheckedValues('dd-content-prod-tag'));
-  cont.innerHTML = Object.entries(MAPEAMENTO_TAGS).sort((a, b) => a[1].localeCompare(b[1])).map(([tag, nome]) => `
-    <label class="dropdown-item">
-      <input type="checkbox" value="${tag}" ${selecionadasAntes.has(tag) ? 'checked' : ''} onchange="atualizarBotaoTagUnidade(); renderProducao()">
-      ${nome}
-    </label>
-  `).join('');
-  atualizarBotaoTagUnidade();
+
+  // Lê estado persistente — null = "Todos" (nenhum selecionado individualmente)
+  if (!_ddState[contId]) _ddState[contId] = null; // null = Todos
+  const sel = _ddState[contId]; // Set ou null
+  const todosChecked = sel === null;
+
+  cont.innerHTML =
+    `<div style="padding:6px 8px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface);z-index:1;">
+      <input type="text" placeholder="Buscar..." oninput="filtrarDropdown('${contId}', this.value)"
+        onclick="event.stopPropagation()"
+        style="width:100%;padding:5px 8px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:12px;outline:none;font-family:sans-serif;">
+    </div>` +
+    `<label class="dropdown-item dd-todos-item" style="font-weight:600;border-bottom:1px solid var(--border);">
+      <input type="checkbox" data-todos="true" ${todosChecked ? 'checked' : ''}
+        onchange="toggleTodosDropdown('${contId}', this, '${labelBotaoId}', _ddOnChange_${contId.replace(/-/g,'_')})">
+      Todos
+    </label>` +
+    itens.map(item => {
+      const esc = item.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+      const checked = sel !== null && sel.has(item) ? 'checked' : '';
+      return `<label class="dropdown-item">
+        <input type="checkbox" value="${esc}" ${checked}
+          onchange="onDdItemChange('${contId}', this, '${labelBotaoId}', _ddOnChange_${contId.replace(/-/g,'_')})">
+        ${item}
+      </label>`;
+    }).join('');
+
+  atualizarBotaoDropdown(contId, labelBotaoId);
 }
 
-function atualizarBotaoTagUnidade() {
-  const selecionadas = getCheckedValues('dd-content-prod-tag');
-  const btn = document.querySelector('#dd-prod-tag .dropdown-btn');
+// Registra callbacks por dropdown
+const _ddCallbacks = {};
+function ddRegisterCallback(contId, fn) { _ddCallbacks[contId] = fn; }
+
+function onDdItemChange(contId, cb, labelBotaoId, fn) {
+  if (!_ddState[contId]) _ddState[contId] = new Set();
+  if (cb.checked) _ddState[contId].add(cb.value);
+  else _ddState[contId].delete(cb.value);
+  // Se ficou vazio, volta para "Todos"
+  if (_ddState[contId].size === 0) _ddState[contId] = null;
+  // Atualiza checkbox Todos
+  const cont = document.getElementById(contId);
+  if (cont) {
+    const cbTodos = cont.querySelector('input[data-todos]');
+    if (cbTodos) cbTodos.checked = _ddState[contId] === null;
+  }
+  atualizarBotaoDropdown(contId, labelBotaoId);
+  if (typeof fn === 'function') fn();
+  else if (_ddCallbacks[contId]) _ddCallbacks[contId]();
+}
+
+function toggleTodosDropdown(contId, cbTodos, labelBotaoId, fn) {
+  const cont = document.getElementById(contId);
+  if (!cont) return;
+  if (cbTodos.checked) {
+    // Marcou Todos: limpa seleção individual
+    _ddState[contId] = null;
+    cont.querySelectorAll('input[type="checkbox"]:not([data-todos])').forEach(cb => cb.checked = false);
+  } else {
+    // Desmarcou Todos: seleciona todos individualmente
+    _ddState[contId] = new Set();
+    cont.querySelectorAll('input[type="checkbox"]:not([data-todos])').forEach(cb => {
+      cb.checked = true;
+      _ddState[contId].add(cb.value);
+    });
+  }
+  atualizarBotaoDropdown(contId, labelBotaoId);
+  if (typeof fn === 'function') fn();
+  else if (_ddCallbacks[contId]) _ddCallbacks[contId]();
+}
+
+function filtrarDropdown(contId, busca) {
+  const cont = document.getElementById(contId);
+  if (!cont) return;
+  const termo = busca.toLowerCase();
+  cont.querySelectorAll('.dropdown-item:not(.dd-todos-item)').forEach(label => {
+    label.style.display = label.textContent.toLowerCase().includes(termo) ? '' : 'none';
+  });
+}
+
+function atualizarBotaoDropdown(contId, labelBotaoId) {
+  const btn = document.querySelector(labelBotaoId);
   if (!btn) return;
-  btn.innerHTML = selecionadas.length > 0 ? `${selecionadas.length} selecionada(s) <span>▼</span>` : 'Todas <span>▼</span>';
+  const sel = _ddState[contId];
+  btn.innerHTML = (sel === null || sel.size === 0)
+    ? 'Todos <span>&#9660;</span>'
+    : `${sel.size} selecionado(s) <span>&#9660;</span>`;
+}
+
+function getCheckedValuesDd(contId) {
+  const sel = _ddState[contId];
+  if (!sel || sel.size === 0) return []; // vazio = todos
+  return Array.from(sel);
+}
+
+function popularDropdownTagUnidade() {
+  const itens = Object.entries(MAPEAMENTO_TAGS).sort((a, b) => a[1].localeCompare(b[1])).map(([tag]) => tag);
+  ddRegisterCallback('dd-content-prod-tag', function(){ atualizarBotaoDropdown('dd-content-prod-tag','#dd-prod-tag .dropdown-btn'); renderProducao(); });
+  window._ddOnChange_dd_content_prod_tag = function(){ atualizarBotaoDropdown('dd-content-prod-tag','#dd-prod-tag .dropdown-btn'); renderProducao(); };
+  popularDropdownGenerico('dd-content-prod-tag', itens, function(){ atualizarBotaoDropdown('dd-content-prod-tag','#dd-prod-tag .dropdown-btn'); renderProducao(); }, '#dd-prod-tag .dropdown-btn');
 }
 
 function initProducao() {
@@ -2714,25 +2804,9 @@ function fillProdSelect(id, opts) {
 }
 
 function popularDropdownEquipe(equipes) {
-  const cont = document.getElementById('dd-content-prod-equipe');
-  if (!cont) return;
-  const selecionadasAntes = new Set(getCheckedValues('dd-content-prod-equipe'));
-  cont.innerHTML = equipes.map(eq => `
-    <label class="dropdown-item">
-      <input type="checkbox" value="${eq}" ${selecionadasAntes.has(eq) ? 'checked' : ''} onchange="atualizarBotaoEquipe(); renderProducao()">
-      ${eq}
-    </label>
-  `).join('');
-  atualizarBotaoEquipe();
-}
-
-function atualizarBotaoEquipe() {
-  const selecionadas = getCheckedValues('dd-content-prod-equipe');
-  const btn = document.querySelector('#dd-prod-equipe .dropdown-btn');
-  if (!btn) return;
-  btn.innerHTML = selecionadas.length > 0
-    ? `${selecionadas.length} selecionada(s) <span>&#9660;</span>`
-    : 'Todas <span>&#9660;</span>';
+  ddRegisterCallback('dd-content-prod-equipe', function(){ atualizarBotaoDropdown('dd-content-prod-equipe','#dd-prod-equipe .dropdown-btn'); renderProducao(); });
+  window._ddOnChange_dd_content_prod_equipe = function(){ atualizarBotaoDropdown('dd-content-prod-equipe','#dd-prod-equipe .dropdown-btn'); renderProducao(); };
+  popularDropdownGenerico('dd-content-prod-equipe', equipes, function(){ atualizarBotaoDropdown('dd-content-prod-equipe','#dd-prod-equipe .dropdown-btn'); renderProducao(); }, '#dd-prod-equipe .dropdown-btn');
 }
 
 function onProdFilterChange(level) {
@@ -2775,7 +2849,7 @@ async function renderProducao() {
 
   const filtroEstado = document.getElementById('prod-estado')?.value || 'Todos';
   const filtroGestor = document.getElementById('prod-gestor')?.value || 'Todos';
-  const equipesChecked = getCheckedValues('dd-content-prod-equipe'); // vazio = todas
+  const equipesChecked = getCheckedValuesDd('dd-content-prod-equipe'); // vazio = todas
   const filtroUF     = document.getElementById('prod-uf').value;
   const filtroGrupo  = document.getElementById('prod-grupo').value;
   const statusArr    = [...prodStatusSelecionados];
@@ -2789,7 +2863,7 @@ async function renderProducao() {
 
   // Agrega: tag → status → { qtd, receita }
   const agg = {};
-  const tagsFiltro = getCheckedValues('dd-content-prod-tag'); // vazio = sem filtro (todas)
+  const tagsFiltro = getCheckedValuesDd('dd-content-prod-tag'); // vazio = todas
   const tagsMap = tagsFiltro.length > 0
     ? Object.fromEntries(Object.entries(MAPEAMENTO_TAGS).filter(([tag]) => tagsFiltro.includes(tag)))
     : { ...MAPEAMENTO_TAGS };
@@ -3783,35 +3857,27 @@ function discadoraRender() {
   const consultorFiltro = document.getElementById('disc-consultor') ? document.getElementById('disc-consultor').value : '';
 
   // Lê filtros dos checkboxes no cabeçalho
-  const gruposHeader = getCheckedValues('dd-content-grupo');
-  const consultoresHeader = getCheckedValues('dd-content-consultor');
+  const gruposHeader = getCheckedValuesDd('dd-content-grupo');
+  const consultoresHeader = getCheckedValuesDd('dd-content-consultor');
 
   const grupos      = [...new Set(_discDados.map(r => r.grupo && r.grupo.nome).filter(Boolean))].sort();
   const filas       = [...new Set(_discDados.map(r => r.fila && r.fila.nome).filter(Boolean))].sort();
   const consultores = [...new Set(_discDados.map(r => r.usuario && r.usuario.nome).filter(Boolean))].sort();
 
-  // Atualiza HTML dos checkboxes (Grupo)
-  if(document.getElementById('dd-content-grupo')) {
-    document.getElementById('dd-content-grupo').innerHTML = grupos.map(g => `
-      <label class="dropdown-item">
-        <input type="checkbox" value="${g}" ${gruposHeader.includes(g) ? 'checked' : ''} onchange="discadoraRender()">
-        ${g}
-      </label>
-    `).join('');
-    const btn = document.querySelector('#dd-grupo .dropdown-btn');
-    if(btn) btn.innerHTML = gruposHeader.length > 0 ? `${gruposHeader.length} selecionados <span>▼</span>` : 'Selecionar... <span>▼</span>';
+  // Atualiza dropdowns Grupo e Consultor — só recria se os itens mudaram
+  const _gruposStr = grupos.join('|');
+  const _consStr = consultores.join('|');
+  if(document.getElementById('dd-content-grupo') && document.getElementById('dd-content-grupo').dataset.itens !== _gruposStr) {
+    window._ddOnChange_dd_content_grupo = function(){ atualizarBotaoDropdown('dd-content-grupo','#dd-grupo .dropdown-btn'); discadoraRender(); };
+    ddRegisterCallback('dd-content-grupo', window._ddOnChange_dd_content_grupo);
+    popularDropdownGenerico('dd-content-grupo', grupos, window._ddOnChange_dd_content_grupo, '#dd-grupo .dropdown-btn');
+    document.getElementById('dd-content-grupo').dataset.itens = _gruposStr;
   }
-
-  // Atualiza HTML dos checkboxes (Consultor)
-  if(document.getElementById('dd-content-consultor')) {
-    document.getElementById('dd-content-consultor').innerHTML = consultores.map(c => `
-      <label class="dropdown-item">
-        <input type="checkbox" value="${c}" ${consultoresHeader.includes(c) ? 'checked' : ''} onchange="discadoraRender()">
-        ${c}
-      </label>
-    `).join('');
-    const btn = document.querySelector('#dd-consultor .dropdown-btn');
-    if(btn) btn.innerHTML = consultoresHeader.length > 0 ? `${consultoresHeader.length} selecionados <span>▼</span>` : 'Selecionar... <span>▼</span>';
+  if(document.getElementById('dd-content-consultor') && document.getElementById('dd-content-consultor').dataset.itens !== _consStr) {
+    window._ddOnChange_dd_content_consultor = function(){ atualizarBotaoDropdown('dd-content-consultor','#dd-consultor .dropdown-btn'); discadoraRender(); };
+    ddRegisterCallback('dd-content-consultor', window._ddOnChange_dd_content_consultor);
+    popularDropdownGenerico('dd-content-consultor', consultores, window._ddOnChange_dd_content_consultor, '#dd-consultor .dropdown-btn');
+    document.getElementById('dd-content-consultor').dataset.itens = _consStr;
   }
 
   // Popula os selects antigos da barra superior (se existirem)
