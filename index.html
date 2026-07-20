@@ -1214,6 +1214,15 @@
     <!-- KPI CARDS -->
     <div id="disc-kpi-area"></div>
 
+    <!-- SPRINT 1: FUNIL DE DURAÇÃO -->
+    <div class="disc-section-wrap">
+      <div class="disc-section-header">
+        <span class="disc-section-title">Funil de Duração de Chamada</span>
+        <span class="disc-section-sub" id="disc-funil-sub">Diagnóstico da qualidade da operação</span>
+      </div>
+      <div class="disc-funil-grid" id="disc-funil-grid"></div>
+    </div>
+
     <!-- TABELA POR CONSULTOR -->
     <div style="margin-bottom:16px;">
       <div class="prod-table-wrap">
@@ -1281,15 +1290,6 @@
           </table>
         </div>
       </div>
-    </div>
-
-    <!-- SPRINT 1: FUNIL DE DURAÇÃO -->
-    <div class="disc-section-wrap">
-      <div class="disc-section-header">
-        <span class="disc-section-title">Funil de Duração de Chamada</span>
-        <span class="disc-section-sub" id="disc-funil-sub">Diagnóstico da qualidade da operação</span>
-      </div>
-      <div class="disc-funil-grid" id="disc-funil-grid"></div>
     </div>
 
     <!-- SPRINT 1: HEATMAP EVOLUÍDO -->
@@ -4064,8 +4064,8 @@ function discadoraRender() {
     { label: '0–3s',    desc: 'Falha de conexão',         cor: '#EF4444', min: 0,  max: 3  },
     { label: '4–15s',   desc: 'Barreira / Gatekeeper',    cor: '#F97316', min: 4,  max: 15 },
     { label: '16–59s',  desc: 'Apresentação falha',       cor: '#EAB308', min: 16, max: 59 },
-    { label: '+1 min',  desc: 'Ligação produtiva',        cor: '#22C55E', min: 60, max: 179 },
-    { label: '+3 min',  desc: 'Negociação real',          cor: '#16A34A', min: 180, max: 99999 }
+    { label: '+1 min',  desc: 'Ligação produtiva',        cor: '#22C55E', min: 61, max: 180 },
+    { label: '+3 min',  desc: 'Negociação real',          cor: '#16A34A', min: 181, max: 99999 }
   ];
   var totalAtend2 = dados.filter(function(r){ return r.duracao !== null && r.duracao !== undefined; }).length;
   var faixaCounts = faixas.map(function(fx) {
