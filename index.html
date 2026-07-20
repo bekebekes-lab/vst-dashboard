@@ -848,6 +848,48 @@
     #disc-kpi-area { grid-template-columns: 1fr 1fr; }
   }
 
+
+  /* ─── SPRINT 1: FUNIL DE DURAÇÃO + HEATMAP EVOLUÍDO ──────────────────────── */
+  .disc-section-wrap {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-lg); overflow: hidden;
+    box-shadow: var(--shadow-xs); margin-bottom: 16px;
+  }
+  .disc-section-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 16px; border-bottom: 1px solid var(--border);
+    background: var(--surface-2);
+  }
+  .disc-section-title { font-size: 11px; font-weight: 700; color: var(--text-2); text-transform: uppercase; letter-spacing: .06em; }
+  .disc-section-sub   { font-size: 11px; color: var(--text-3); }
+
+  /* Funil */
+  .disc-funil-grid { display: grid; grid-template-columns: repeat(5,1fr); gap: 0; }
+  .disc-funil-col { padding: 16px 12px; border-right: 1px solid var(--border); text-align: center; }
+  .disc-funil-col:last-child { border-right: none; }
+  .disc-funil-bar-wrap { height: 80px; display: flex; align-items: flex-end; justify-content: center; margin-bottom: 8px; }
+  .disc-funil-bar { width: 48px; border-radius: 4px 4px 0 0; transition: height .4s ease; min-height: 4px; }
+  .disc-funil-pct  { font-size: 20px; font-weight: 700; font-family: 'DM Mono', monospace; line-height: 1; }
+  .disc-funil-qty  { font-size: 11px; color: var(--text-3); margin: 2px 0 6px; font-family: 'DM Mono', monospace; }
+  .disc-funil-label{ font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
+  .disc-funil-desc { font-size: 10px; color: var(--text-3); margin-top: 4px; line-height: 1.3; }
+
+  /* Heatmap evoluído */
+  .disc-heatmap-wrap { overflow-x: auto; }
+  .disc-heatmap-wrap table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  .disc-heatmap-wrap th {
+    padding: 8px 10px; background: var(--brand); color: #fff;
+    font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em;
+    white-space: nowrap; text-align: center;
+  }
+  .disc-heatmap-wrap th:first-child { text-align: left; }
+  .disc-heatmap-wrap td { padding: 7px 10px; border-bottom: 1px solid var(--border); text-align: center; vertical-align: middle; }
+  .disc-heatmap-wrap td:first-child { text-align: left; font-weight: 600; font-size: 11px; color: var(--text-2); }
+  .disc-hm-cell { display: flex; flex-direction: column; align-items: center; gap: 1px; line-height: 1.2; }
+  .disc-hm-vol  { font-size: 12px; font-weight: 600; font-family: 'DM Mono', monospace; }
+  .disc-hm-pct  { font-size: 9px; font-weight: 600; opacity: .85; }
+  .disc-hm-golden { outline: 2px solid #F59E0B; outline-offset: -2px; border-radius: 2px; }
+
   /* ─── PWA safe area ──────────────────────────────────────── */
   @supports (padding-top: env(safe-area-inset-top)) {
     .topbar {
@@ -1241,20 +1283,26 @@
       </div>
     </div>
 
-    <!-- TABELA POR HORA -->
-    <div>
-      <div class="section-header" style="margin-bottom:10px;">
-        <span class="section-title">Produção por hora</span>
+    <!-- SPRINT 1: FUNIL DE DURAÇÃO -->
+    <div class="disc-section-wrap">
+      <div class="disc-section-header">
+        <span class="disc-section-title">Funil de Duração de Chamada</span>
+        <span class="disc-section-sub" id="disc-funil-sub">Diagnóstico da qualidade da operação</span>
       </div>
-      <div class="prod-table-wrap">
-        <div class="prod-table-scroll">
-          <table id="disc-hora-tabela">
-            <thead>
-              <tr id="disc-hora-header"></tr>
-            </thead>
-            <tbody id="disc-hora-tbody"></tbody>
-          </table>
-        </div>
+      <div class="disc-funil-grid" id="disc-funil-grid"></div>
+    </div>
+
+    <!-- SPRINT 1: HEATMAP EVOLUÍDO -->
+    <div class="disc-section-wrap">
+      <div class="disc-section-header">
+        <span class="disc-section-title">Mapa de Calor — Produção por Hora</span>
+        <span class="disc-section-sub">Volume · % produtividade · <span style="color:#F59E0B;font-weight:700;">★</span> Golden Hour</span>
+      </div>
+      <div class="disc-heatmap-wrap">
+        <table id="disc-hora-tabela">
+          <thead><tr id="disc-hora-header"></tr></thead>
+          <tbody id="disc-hora-tbody"></tbody>
+        </table>
       </div>
     </div>
   </div>
@@ -4011,19 +4059,117 @@ function discadoraRender() {
     porHoraFila[h][f] = (porHoraFila[h][f] || 0) + 1;
   });
 
+  // ── SPRINT 1A: FUNIL DE DURAÇÃO ───────────────────────────────────────────
+  var faixas = [
+    { label: '0–3s',    desc: 'Falha de conexão',         cor: '#EF4444', min: 0,  max: 3  },
+    { label: '4–15s',   desc: 'Barreira / Gatekeeper',    cor: '#F97316', min: 4,  max: 15 },
+    { label: '16–59s',  desc: 'Apresentação falha',       cor: '#EAB308', min: 16, max: 59 },
+    { label: '+1 min',  desc: 'Ligação produtiva',        cor: '#22C55E', min: 60, max: 179 },
+    { label: '+3 min',  desc: 'Negociação real',          cor: '#16A34A', min: 180, max: 99999 }
+  ];
+  var totalAtend2 = dados.filter(function(r){ return r.duracao !== null && r.duracao !== undefined; }).length;
+  var faixaCounts = faixas.map(function(fx) {
+    return dados.filter(function(r){
+      var d = r.duracao;
+      return d !== null && d !== undefined && d >= fx.min && d <= fx.max;
+    }).length;
+  });
+  var maxCount = Math.max.apply(null, faixaCounts) || 1;
+
+  document.getElementById('disc-funil-grid').innerHTML = faixas.map(function(fx, i) {
+    var cnt  = faixaCounts[i];
+    var pct  = totalAtend2 > 0 ? Math.round(cnt / totalAtend2 * 100) : 0;
+    var barH = Math.max(Math.round(cnt / maxCount * 76), cnt > 0 ? 4 : 0);
+    return '<div class="disc-funil-col">' +
+      '<div class="disc-funil-bar-wrap">' +
+        '<div class="disc-funil-bar" style="height:' + barH + 'px;background:' + fx.cor + ';"></div>' +
+      '</div>' +
+      '<div class="disc-funil-pct" style="color:' + fx.cor + ';">' + pct + '%</div>' +
+      '<div class="disc-funil-qty">' + cnt + ' lig.</div>' +
+      '<div class="disc-funil-label" style="color:' + fx.cor + ';">' + fx.label + '</div>' +
+      '<div class="disc-funil-desc">' + fx.desc + '</div>' +
+    '</div>';
+  }).join('');
+
+  // ── SPRINT 1B: HEATMAP EVOLUÍDO (2 layers: volume + % produtividade) ───────
+  // Monta por hora/fila: volume total e produtivas
+  var porHoraFilaVol  = {}; // total ligações atendidas
+  var porHoraFilaProd = {}; // produtivas +1min
+  dados.forEach(function(r) {
+    var h = new Date(r.dataRegistro).getHours();
+    var f = (r.fila && r.fila.nome) || '–';
+    if (!porHoraFilaVol[h])  porHoraFilaVol[h]  = {};
+    if (!porHoraFilaProd[h]) porHoraFilaProd[h] = {};
+    if (r.duracao !== null && r.duracao !== undefined) {
+      porHoraFilaVol[h][f] = (porHoraFilaVol[h][f] || 0) + 1;
+    }
+    if ((r.duracao || 0) > 60) {
+      porHoraFilaProd[h][f] = (porHoraFilaProd[h][f] || 0) + 1;
+    }
+  });
+
+  // Calcula % produtividade por hora (total, todas as filas) para achar Golden Hours
+  var pctPorHora = {};
+  horas.forEach(function(h) {
+    var vol  = filasCols.reduce(function(s,f){ return s + ((porHoraFilaVol[h]  && porHoraFilaVol[h][f])  || 0); }, 0);
+    var prod = filasCols.reduce(function(s,f){ return s + ((porHoraFilaProd[h] && porHoraFilaProd[h][f]) || 0); }, 0);
+    pctPorHora[h] = vol > 0 ? Math.round(prod / vol * 100) : 0;
+  });
+
+  // Golden Hour = hora com maior % produtividade (mínimo 5 ligações)
+  var goldenHour = null;
+  var maxPct = 0;
+  horas.forEach(function(h) {
+    var vol = filasCols.reduce(function(s,f){ return s + ((porHoraFilaVol[h] && porHoraFilaVol[h][f]) || 0); }, 0);
+    if (vol >= 5 && pctPorHora[h] > maxPct) { maxPct = pctPorHora[h]; goldenHour = h; }
+  });
+
+  // Cor de fundo baseada em % produtividade
+  function hmBg(pct, vol) {
+    if (vol === 0) return '';
+    if (pct === 0) return 'background:#F1F5F9;';
+    if (pct < 5)  return 'background:#FEF9C3;';
+    if (pct < 10) return 'background:#FED7AA;';
+    if (pct < 15) return 'background:#BBF7D0;';
+    return 'background:#86EFAC;';
+  }
+
   document.getElementById('disc-hora-header').innerHTML =
-    '<th style="text-align:left;background:var(--red);color:#fff;">Hora</th>' +
-    filasCols.map(function(f){ return '<th style="background:var(--red);color:#fff;">' + f + '</th>'; }).join('') +
-    '<th style="background:var(--red);color:#fff;">Total</th>';
+    '<th>Hora</th>' +
+    filasCols.map(function(f){ return '<th>' + f + '</th>'; }).join('') +
+    '<th>Total</th><th>% Prod.</th>';
 
   document.getElementById('disc-hora-tbody').innerHTML = horas.map(function(h) {
-    const celulas = filasCols.map(function(f) {
-      const v = (porHoraFila[h] && porHoraFila[h][f]) || 0;
-      const bg = v === 0 ? '' : v < 5 ? 'background:#fef9c3' : v < 10 ? 'background:#fed7aa' : 'background:#bbf7d0';
-      return '<td style="' + bg + '">' + (v || '') + '</td>';
+    var totalVol  = filasCols.reduce(function(s,f){ return s + ((porHoraFilaVol[h]  && porHoraFilaVol[h][f])  || 0); }, 0);
+    var totalProd2= filasCols.reduce(function(s,f){ return s + ((porHoraFilaProd[h] && porHoraFilaProd[h][f]) || 0); }, 0);
+    var pctH = pctPorHora[h];
+    var isGolden = h === goldenHour;
+    var rowStyle = isGolden ? ' style="outline:2px solid #F59E0B;outline-offset:-1px;position:relative;"' : '';
+
+    var celulas = filasCols.map(function(f) {
+      var vol  = (porHoraFilaVol[h]  && porHoraFilaVol[h][f])  || 0;
+      var prod = (porHoraFilaProd[h] && porHoraFilaProd[h][f]) || 0;
+      var pctC = vol > 0 ? Math.round(prod / vol * 100) : 0;
+      var bg   = hmBg(pctC, vol);
+      if (vol === 0) return '<td></td>';
+      return '<td style="' + bg + 'padding:5px 8px;">' +
+        '<div class="disc-hm-cell">' +
+          '<span class="disc-hm-vol">' + vol + '</span>' +
+          '<span class="disc-hm-pct" style="color:' + (pctC >= 10 ? '#16a34a' : pctC >= 5 ? '#ca8a04' : '#94a3b8') + ';">' + (prod > 0 ? pctC + '%' : '') + '</span>' +
+        '</div></td>';
     }).join('');
-    const total = filasCols.reduce(function(s,f){ return s + ((porHoraFila[h] && porHoraFila[h][f]) || 0); }, 0);
-    return '<tr><td style="text-align:left;font-weight:500;">' + String(h).padStart(2,'0') + 'h</td>' + celulas + '<td style="font-weight:600;">' + (total || '') + '</td></tr>';
+
+    var horaLabel = String(h).padStart(2,'0') + 'h' + (isGolden ? ' <span style="color:#F59E0B;font-size:12px;" title="Golden Hour">★</span>' : '');
+    var pctCell = totalVol > 0
+      ? '<td style="font-weight:700;color:' + (pctH >= 10 ? '#16a34a' : pctH >= 5 ? '#ca8a04' : '#64748b') + ';font-family:monospace;">' + pctH + '%</td>'
+      : '<td style="color:var(--text-4);">–</td>';
+
+    return '<tr' + rowStyle + '>' +
+      '<td>' + horaLabel + '</td>' +
+      celulas +
+      '<td style="font-weight:700;font-family:monospace;">' + (totalVol || '') + '</td>' +
+      pctCell +
+    '</tr>';
   }).join('');
 }
 
