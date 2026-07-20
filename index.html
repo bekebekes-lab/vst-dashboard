@@ -849,6 +849,47 @@
   }
 
 
+
+  /* ─── SPRINT 2: KPIs DE EFICIÊNCIA ──────────────────────────────────────── */
+  .disc-kpi2-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius-lg); padding: 14px 16px;
+    box-shadow: var(--shadow-xs); transition: box-shadow .15s;
+    position: relative;
+  }
+  .disc-kpi2-card:hover { box-shadow: var(--shadow-sm); }
+  .disc-kpi2-label {
+    font-size: 10px; font-weight: 600; color: var(--text-3);
+    text-transform: uppercase; letter-spacing: .07em; margin-bottom: 6px;
+  }
+  .disc-kpi2-value {
+    font-size: 22px; font-weight: 700;
+    font-family: 'DM Mono', monospace; color: var(--text); line-height: 1;
+    margin-bottom: 4px;
+  }
+  .disc-kpi2-sub {
+    font-size: 10px; color: var(--text-3); line-height: 1.4;
+  }
+  .disc-kpi2-badge {
+    position: absolute; top: 10px; right: 10px;
+    font-size: 9px; font-weight: 700; padding: 2px 6px;
+    border-radius: 10px; text-transform: uppercase; letter-spacing: .04em;
+  }
+  .disc-kpi2-badge.good { background: var(--green-bg); color: var(--green); }
+  .disc-kpi2-badge.warn { background: var(--amber-bg); color: var(--amber); }
+  .disc-kpi2-badge.bad  { background: var(--red-sem-bg); color: var(--red-sem); }
+  .disc-reap-list {
+    margin-top: 6px; max-height: 120px; overflow-y: auto;
+    border-top: 1px solid var(--border); padding-top: 6px;
+  }
+  .disc-reap-item {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 3px 0; font-size: 11px; border-bottom: 1px solid var(--border);
+  }
+  .disc-reap-item:last-child { border-bottom: none; }
+  .disc-reap-cnpj { color: var(--text-2); font-family: monospace; font-size: 10px; }
+  .disc-reap-count { font-weight: 700; color: var(--amber); font-family: monospace; }
+
   /* ─── SPRINT 1: FUNIL DE DURAÇÃO + HEATMAP EVOLUÍDO ──────────────────────── */
   .disc-section-wrap {
     background: var(--surface); border: 1px solid var(--border);
@@ -1211,8 +1252,14 @@
       </div>
     </div>
 
-    <!-- KPI CARDS -->
+    <!-- KPI CARDS — Linha 1: Volume -->
     <div id="disc-kpi-area"></div>
+
+    <!-- KPI CARDS — Linha 2: Eficiência Operacional -->
+    <div style="margin-bottom:16px;">
+      <div style="font-size:10px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px;padding-left:2px;">Eficiência Operacional</div>
+      <div id="disc-kpi-eficiencia" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;"></div>
+    </div>
 
     <!-- SPRINT 1: FUNIL DE DURAÇÃO -->
     <div class="disc-section-wrap">
@@ -3986,6 +4033,87 @@ function discadoraRender() {
     '<div class="disc-kpi-card disc-highlight"><div class="disc-kpi-label">% Produtividade</div><div class="disc-kpi-value ' + _pctClass + '">' + pctProd + '%</div></div>' +
     '<div class="disc-kpi-card"><div class="disc-kpi-label">TMA geral</div><div class="disc-kpi-value">' + discFmt(tmaGlobal) + '</div></div>' +
     '<div class="disc-kpi-card"><div class="disc-kpi-label">TMA +1 min</div><div class="disc-kpi-value">' + discFmt(tmaProd) + '</div></div>';
+
+  // ── SPRINT 2: KPIs DE EFICIÊNCIA OPERACIONAL ────────────────────────────────
+
+  // Connect Rate: ligações com duracao > 3s / total
+  var connectCount = dados.filter(function(r){ return (r.duracao || 0) > 3; }).length;
+  var connectRate  = totalLig > 0 ? Math.round(connectCount / totalLig * 100) : 0;
+  var connectClass = connectRate >= 70 ? 'good' : connectRate >= 50 ? 'warn' : 'bad';
+  var connectLabel = connectRate >= 70 ? 'Boa' : connectRate >= 50 ? 'Regular' : 'Baixa';
+
+  // Ociosidade estimada: gap médio entre ligações consecutivas por consultor
+  var gapsTotais = 0; var gapsCount = 0;
+  var porConsultorTemporal = {};
+  dados.forEach(function(r) {
+    var nome = (r.usuario && r.usuario.nome) || '';
+    if (!porConsultorTemporal[nome]) porConsultorTemporal[nome] = [];
+    porConsultorTemporal[nome].push(new Date(r.dataRegistro).getTime());
+  });
+  Object.values(porConsultorTemporal).forEach(function(ts) {
+    ts.sort(function(a,b){ return a - b; });
+    for (var i = 1; i < ts.length; i++) {
+      var gap = (ts[i] - ts[i-1]) / 1000; // em segundos
+      if (gap > 0 && gap < 600) { // ignora gaps > 10min (pausa/almoço)
+        gapsTotais += gap; gapsCount++;
+      }
+    }
+  });
+  var ociosidadeMedia = gapsCount > 0 ? Math.round(gapsTotais / gapsCount) : 0;
+  var ociosidadeClass = ociosidadeMedia < 30 ? 'good' : ociosidadeMedia < 90 ? 'warn' : 'bad';
+  var ociosidadeLabel = ociosidadeMedia < 30 ? 'Ótimo' : ociosidadeMedia < 90 ? 'Regular' : 'Alto';
+
+  // Índice de Reaproveitamento: CNPJs discados mais de 1x
+  var cnpjFreq = {};
+  dados.forEach(function(r) {
+    var cnpj = (r.documento || '').replace(/[^0-9]/g, '');
+    if (cnpj) cnpjFreq[cnpj] = (cnpjFreq[cnpj] || 0) + 1;
+  });
+  var reaproveitados = Object.values(cnpjFreq).filter(function(v){ return v > 1; }).length;
+  var reapRate = Object.keys(cnpjFreq).length > 0 ? Math.round(reaproveitados / Object.keys(cnpjFreq).length * 100) : 0;
+  // Top 5 CNPJs mais discados
+  var topReap = Object.entries(cnpjFreq)
+    .filter(function(e){ return e[1] > 1; })
+    .sort(function(a,b){ return b[1] - a[1]; })
+    .slice(0, 5);
+
+  // Ligações por consultor ativo (pace médio)
+  var consultoresAtivos = Object.keys(porConsultorTemporal).length;
+  var ligPorConsultor   = consultoresAtivos > 0 ? Math.round(totalLig / consultoresAtivos) : 0;
+
+  // Renderizar segunda linha de KPIs
+  var reapListHtml = topReap.length > 0
+    ? '<div class="disc-reap-list">' +
+        topReap.map(function(e){
+          return '<div class="disc-reap-item"><span class="disc-reap-cnpj">' + e[0] + '</span><span class="disc-reap-count">' + e[1] + 'x</span></div>';
+        }).join('') +
+      '</div>'
+    : '';
+
+  document.getElementById('disc-kpi-eficiencia').innerHTML =
+    '<div class="disc-kpi2-card">' +
+      '<span class="disc-kpi2-badge ' + connectClass + '">' + connectLabel + '</span>' +
+      '<div class="disc-kpi2-label">Connect Rate</div>' +
+      '<div class="disc-kpi2-value" style="color:' + (connectRate >= 70 ? 'var(--green)' : connectRate >= 50 ? 'var(--amber)' : 'var(--red-sem)') + ';">' + connectRate + '%</div>' +
+      '<div class="disc-kpi2-sub">' + connectCount + ' de ' + totalLig + ' ligações conectaram</div>' +
+    '</div>' +
+    '<div class="disc-kpi2-card">' +
+      '<span class="disc-kpi2-badge ' + ociosidadeClass + '">' + ociosidadeLabel + '</span>' +
+      '<div class="disc-kpi2-label">Ociosidade Estimada</div>' +
+      '<div class="disc-kpi2-value" style="color:' + (ociosidadeMedia < 30 ? 'var(--green)' : ociosidadeMedia < 90 ? 'var(--amber)' : 'var(--red-sem)') + ';">' + discFmt(ociosidadeMedia) + '</div>' +
+      '<div class="disc-kpi2-sub">Gap médio entre ligações consecutivas</div>' +
+    '</div>' +
+    '<div class="disc-kpi2-card">' +
+      '<div class="disc-kpi2-label">Reaproveitamento de Mailing</div>' +
+      '<div class="disc-kpi2-value" style="color:' + (reapRate > 20 ? 'var(--amber)' : 'var(--text)') + ';">' + reapRate + '%</div>' +
+      '<div class="disc-kpi2-sub">' + reaproveitados + ' CNPJs discados mais de 1x' + '</div>' +
+      reapListHtml +
+    '</div>' +
+    '<div class="disc-kpi2-card">' +
+      '<div class="disc-kpi2-label">Pace — Lig. por Consultor</div>' +
+      '<div class="disc-kpi2-value">' + ligPorConsultor + '</div>' +
+      '<div class="disc-kpi2-sub">' + consultoresAtivos + ' consultor(es) ativo(s) no período</div>' +
+    '</div>';
 
   let rows = Object.values(porConsultor).map(r => {
     r.pctProd = r.atendidas > 0 ? Math.round(r.produtivas / r.atendidas * 100) : 0;
