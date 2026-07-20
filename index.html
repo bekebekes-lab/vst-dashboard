@@ -850,6 +850,47 @@
 
 
 
+
+  /* ─── SPRINT 3: RAIO-X DO CONSULTOR ─────────────────────────────────────── */
+  .raiox-tabs { display: flex; border-bottom: 1px solid rgba(255,255,255,.2); padding: 0 20px; }
+  .raiox-tab {
+    padding: 10px 16px; font-size: 12px; font-weight: 500; color: rgba(255,255,255,.6);
+    cursor: pointer; border-bottom: 2px solid transparent; transition: all .15s;
+    white-space: nowrap;
+  }
+  .raiox-tab:hover { color: rgba(255,255,255,.9); }
+  .raiox-tab.active { color: #fff; border-bottom-color: #fff; font-weight: 700; }
+  .raiox-pane { display: none; padding: 16px; overflow-y: auto; max-height: 65vh; }
+  .raiox-pane.active { display: block; }
+
+  /* Funil individual */
+  .raiox-funil { display: grid; grid-template-columns: repeat(5,1fr); gap: 8px; margin-bottom: 12px; }
+  .raiox-funil-col { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 8px; text-align: center; }
+  .raiox-funil-pct { font-size: 18px; font-weight: 700; font-family: monospace; line-height: 1; }
+  .raiox-funil-qty { font-size: 10px; color: var(--text-3); margin: 2px 0 4px; }
+  .raiox-funil-lbl { font-size: 10px; font-weight: 700; text-transform: uppercase; }
+  .raiox-funil-cmp { font-size: 9px; color: var(--text-3); margin-top: 3px; }
+
+  /* Golden Hours mini heatmap */
+  .raiox-hm table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  .raiox-hm th { padding: 6px 8px; background: var(--brand); color: #fff; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; text-align: center; }
+  .raiox-hm th:first-child { text-align: left; }
+  .raiox-hm td { padding: 6px 8px; border-bottom: 1px solid var(--border); text-align: center; font-size: 11px; }
+  .raiox-hm td:first-child { text-align: left; font-weight: 600; color: var(--text-2); }
+
+  /* Pace chart */
+  .raiox-pace { display: grid; grid-template-columns: repeat(auto-fill, minmax(60px,1fr)); gap: 6px; }
+  .raiox-pace-col { text-align: center; }
+  .raiox-pace-bar-wrap { height: 60px; display: flex; align-items: flex-end; justify-content: center; }
+  .raiox-pace-bar { width: 36px; border-radius: 3px 3px 0 0; background: var(--brand); min-height: 2px; transition: height .3s; }
+  .raiox-pace-val { font-size: 11px; font-weight: 700; font-family: monospace; color: var(--text); }
+  .raiox-pace-hora { font-size: 9px; color: var(--text-3); }
+
+  /* Stats chips no topo */
+  .raiox-stats { display: flex; gap: 8px; flex-wrap: wrap; padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,.15); }
+  .raiox-stat { background: rgba(255,255,255,.12); border-radius: 20px; padding: 4px 12px; font-size: 11px; color: rgba(255,255,255,.9); }
+  .raiox-stat strong { color: #fff; }
+
   /* ─── SPRINT 2: KPIs DE EFICIÊNCIA ──────────────────────────────────────── */
   .disc-kpi2-card {
     background: var(--surface); border: 1px solid var(--border);
@@ -4303,42 +4344,41 @@ function discadoraRender() {
 
 // ─── DISCADORA DRILL DOWN ────────────────────────────────────────────────────
 function discDrillDown(nomeConsultor) {
-  // Monta índice CNPJ → status da BaseCRM
+  // ── Índice CNPJ → status CRM ───────────────────────────────────────────────
   var cnpjIndex = {};
   if (typeof ALL_DATA !== 'undefined' && ALL_DATA) {
     ALL_DATA.forEach(function(row) {
       var cnpj = (row['CPF/CNPJ'] || '').replace(/[^0-9]/g, '');
       var fila = row['FILA'] || '';
-      if (cnpj && fila) {
-        // Se já existe, mantém o mais recente (array já ordenado por data desc geralmente)
-        if (!cnpjIndex[cnpj]) cnpjIndex[cnpj] = fila;
-      }
+      if (cnpj && fila && !cnpjIndex[cnpj]) cnpjIndex[cnpj] = fila;
     });
   }
 
-  var modal = document.getElementById('disc-modal');
-  if (!modal) {
-    modal = document.createElement('div');
-    modal.id = 'disc-modal';
-    modal.style.cssText = 'position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.5);display:flex;align-items:flex-start;justify-content:center;padding:40px 20px;overflow-y:auto;';
-    modal.onclick = function(e) { if (e.target === modal) discDrillClose(); };
-    document.body.appendChild(modal);
-  }
-
-  // Pegar ligações produtivas do consultor do dataset atual
-  var grupoFiltro     = document.getElementById('disc-grupo').value;
-  var filaFiltro      = document.getElementById('disc-fila').value;
-  var dados = _discDados.filter(function(r) {
+  // ── Dados do consultor (todos, não só produtivos) ──────────────────────────
+  var grupoFiltro = document.getElementById('disc-grupo').value;
+  var filaFiltro  = document.getElementById('disc-fila').value;
+  var todosDoConsultor = _discDados.filter(function(r) {
     var nome = (r.usuario && r.usuario.nome) || '';
     if (nome !== nomeConsultor) return false;
     if (grupoFiltro && (r.grupo && r.grupo.nome) !== grupoFiltro) return false;
-    if (filaFiltro && (r.fila && r.fila.nome) !== filaFiltro) return false;
-    return (r.duracao || 0) > 60;
+    if (filaFiltro  && (r.fila  && r.fila.nome)  !== filaFiltro)  return false;
+    return true;
   });
+  var produtivos = todosDoConsultor.filter(function(r){ return (r.duracao || 0) > 60; });
+  produtivos.sort(function(a,b){ return new Date(b.dataRegistro) - new Date(a.dataRegistro); });
 
-  dados.sort(function(a,b){ return new Date(b.dataRegistro) - new Date(a.dataRegistro); });
+  // ── Stats rápidos ──────────────────────────────────────────────────────────
+  var totalC   = todosDoConsultor.length;
+  var atendC   = todosDoConsultor.filter(function(r){ return r.duracao !== null && r.duracao !== undefined; }).length;
+  var prodC    = produtivos.length;
+  var pctC     = atendC > 0 ? Math.round(prodC / atendC * 100) : 0;
+  var durSum   = produtivos.reduce(function(s,r){ return s + (r.duracao||0); }, 0);
+  var tmaProd  = prodC > 0 ? Math.round(durSum / prodC) : 0;
+  var connectC = todosDoConsultor.filter(function(r){ return (r.duracao||0) > 3; }).length;
+  var crateC   = totalC > 0 ? Math.round(connectC / totalC * 100) : 0;
 
-  var rows = dados.map(function(r) {
+  // ── ABA 1: Gravações ───────────────────────────────────────────────────────
+  var gravRows = produtivos.map(function(r) {
     var dt = new Date(r.dataRegistro);
     var hora = dt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
     var data = dt.toLocaleDateString('pt-BR');
@@ -4349,9 +4389,8 @@ function discDrillDown(nomeConsultor) {
     var fila = (r.fila && r.fila.nome) || '-';
     var dur = discFmt(r.duracao);
     var playBtn = r.urlLigacao
-      ? '<a href="' + DISC_GRAVACAO_BASE + r.urlLigacao + '" target="_blank" title="Ouvir gravação" style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:var(--brand);color:#fff;text-decoration:none;font-size:12px;">▶</a>'
-      : '<span style="color:var(--text4);font-size:11px;">–</span>';
-    // Busca status no CRM pelo CNPJ
+      ? '<a href="' + DISC_GRAVACAO_BASE + r.urlLigacao + '" target="_blank" style="display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:var(--brand);color:#fff;text-decoration:none;font-size:11px;">▶</a>'
+      : '<span style="color:var(--text-4);">–</span>';
     var cnpjLimpo = cnpj.replace(/[^0-9]/g, '');
     var statusCRM = cnpjIndex[cnpjLimpo] || '';
     var statusColor = '';
@@ -4365,49 +4404,188 @@ function discDrillDown(nomeConsultor) {
     var statusCell = statusCRM
       ? '<span style="' + statusColor + 'font-size:11px;text-transform:uppercase;">' + statusCRM + '</span>'
       : '<span style="color:var(--text-4);font-size:11px;">–</span>';
-    return '<tr>' +
-      '<td style="white-space:nowrap;">' + data + ' ' + hora + '</td>' +
-      '<td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left;" title="' + cliente + '">' + cliente + '</td>' +
-      '<td style="font-family:monospace;font-size:11px;">' + cnpj + '</td>' +
-      '<td style="font-family:monospace;">' + foneFmt + '</td>' +
-      '<td>' + fila + '</td>' +
-      '<td style="font-weight:600;color:var(--green);">' + dur + '</td>' +
-      '<td style="text-align:center;">' + playBtn + '</td>' +
-      '<td style="text-align:left;">' + statusCell + '</td>' +
+    return '<tr style="border-bottom:1px solid var(--border);">' +
+      '<td style="padding:8px 10px;white-space:nowrap;font-size:11px;">' + data + ' ' + hora + '</td>' +
+      '<td style="padding:8px 10px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + cliente + '">' + cliente + '</td>' +
+      '<td style="padding:8px 10px;font-family:monospace;font-size:10px;">' + cnpj + '</td>' +
+      '<td style="padding:8px 10px;font-family:monospace;font-size:11px;">' + foneFmt + '</td>' +
+      '<td style="padding:8px 10px;font-size:11px;">' + fila + '</td>' +
+      '<td style="padding:8px 10px;font-weight:600;color:var(--green);font-family:monospace;">' + dur + '</td>' +
+      '<td style="padding:8px 10px;text-align:center;">' + playBtn + '</td>' +
+      '<td style="padding:8px 10px;">' + statusCell + '</td>' +
     '</tr>';
   }).join('');
 
+  var thStyle = 'padding:8px 10px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--text-2);border-bottom:2px solid var(--border);background:var(--surface-2);position:sticky;top:0;';
+  var pane1 = '<table style="width:100%;border-collapse:collapse;font-size:12px;">' +
+    '<thead><tr>' +
+      '<th style="' + thStyle + 'text-align:left;">Data/Hora</th>' +
+      '<th style="' + thStyle + 'text-align:left;">Cliente</th>' +
+      '<th style="' + thStyle + '">CNPJ</th>' +
+      '<th style="' + thStyle + '">Telefone</th>' +
+      '<th style="' + thStyle + '">Fila</th>' +
+      '<th style="' + thStyle + '">Duração</th>' +
+      '<th style="' + thStyle + '">▶</th>' +
+      '<th style="' + thStyle + 'text-align:left;">Status CRM</th>' +
+    '</tr></thead>' +
+    '<tbody>' + (gravRows || '<tr><td colspan="8" style="padding:40px;text-align:center;color:var(--text-3);">Nenhuma ligação produtiva</td></tr>') + '</tbody>' +
+  '</table>';
+
+  // ── ABA 2: Golden Hours individuais ────────────────────────────────────────
+  var hmHoras = Array.from({length: 14}, function(_,i){ return i + 8; });
+  var hmVol = {}, hmProd = {};
+  todosDoConsultor.forEach(function(r) {
+    var h = new Date(r.dataRegistro).getHours();
+    if (r.duracao !== null && r.duracao !== undefined) hmVol[h] = (hmVol[h] || 0) + 1;
+    if ((r.duracao||0) > 60) hmProd[h] = (hmProd[h] || 0) + 1;
+  });
+  var goldenH = null, maxPctH = 0;
+  hmHoras.forEach(function(h) {
+    var v = hmVol[h] || 0;
+    var p = hmProd[h] || 0;
+    var pct = v >= 3 ? Math.round(p/v*100) : 0;
+    if (pct > maxPctH) { maxPctH = pct; goldenH = h; }
+  });
+  var hmRows = hmHoras.filter(function(h){ return (hmVol[h]||0) > 0; }).map(function(h) {
+    var v = hmVol[h] || 0; var p = hmProd[h] || 0;
+    var pct = v > 0 ? Math.round(p/v*100) : 0;
+    var bg = pct === 0 ? '' : pct < 5 ? 'background:#FEF9C3;' : pct < 10 ? 'background:#FED7AA;' : pct < 15 ? 'background:#BBF7D0;' : 'background:#86EFAC;';
+    var isG = h === goldenH;
+    return '<tr style="border-bottom:1px solid var(--border);' + (isG ? 'outline:2px solid #F59E0B;outline-offset:-2px;' : '') + '">' +
+      '<td style="padding:7px 10px;font-weight:600;color:var(--text-2);">' + String(h).padStart(2,'0') + 'h' + (isG ? ' <span style="color:#F59E0B;">★</span>' : '') + '</td>' +
+      '<td style="padding:7px 10px;text-align:center;font-family:monospace;font-weight:600;">' + v + '</td>' +
+      '<td style="padding:7px 10px;text-align:center;font-family:monospace;font-weight:600;color:var(--green);">' + p + '</td>' +
+      '<td style="padding:7px 10px;text-align:center;' + bg + 'font-weight:700;color:' + (pct>=10?'#16a34a':pct>=5?'#ca8a04':'#94a3b8') + ';font-family:monospace;">' + pct + '%</td>' +
+    '</tr>';
+  }).join('');
+  var pane2 = '<div style="max-width:400px;margin:0 auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;">' +
+    '<thead><tr style="background:var(--brand);">' +
+      '<th style="padding:8px 10px;color:#fff;font-size:10px;font-weight:600;text-transform:uppercase;text-align:left;">Hora</th>' +
+      '<th style="padding:8px 10px;color:#fff;font-size:10px;font-weight:600;text-transform:uppercase;">Ligações</th>' +
+      '<th style="padding:8px 10px;color:#fff;font-size:10px;font-weight:600;text-transform:uppercase;">Produtivas</th>' +
+      '<th style="padding:8px 10px;color:#fff;font-size:10px;font-weight:600;text-transform:uppercase;">% Prod.</th>' +
+    '</tr></thead>' +
+    '<tbody>' + (hmRows || '<tr><td colspan="4" style="padding:30px;text-align:center;color:var(--text-3);">Sem dados</td></tr>') + '</tbody>' +
+  '</table></div>';
+
+  // ── ABA 3: Funil individual vs equipe ─────────────────────────────────────
+  var faixasDef = [
+    {label:'0–3s',  min:0,   max:3,   cor:'#EF4444'},
+    {label:'4–15s', min:4,   max:15,  cor:'#F97316'},
+    {label:'16–59s',min:16,  max:59,  cor:'#EAB308'},
+    {label:'+1min', min:61,  max:180, cor:'#22C55E'},
+    {label:'+3min', min:181, max:99999,cor:'#16A34A'}
+  ];
+  // Dados da equipe toda (do dataset filtrado atual)
+  var dadosEquipe = _discDados.filter(function(r){
+    if (grupoFiltro && (r.grupo && r.grupo.nome) !== grupoFiltro) return false;
+    if (filaFiltro  && (r.fila  && r.fila.nome)  !== filaFiltro)  return false;
+    return r.duracao !== null && r.duracao !== undefined;
+  });
+  var totalEquipe = dadosEquipe.length || 1;
+  var totalCons   = atendC || 1;
+  var pane3 = '<div class="raiox-funil">' + faixasDef.map(function(fx) {
+    var cntC = todosDoConsultor.filter(function(r){ var d=r.duracao; return d!==null&&d!==undefined&&d>=fx.min&&d<=fx.max; }).length;
+    var cntE = dadosEquipe.filter(function(r){ var d=r.duracao; return d!==null&&d!==undefined&&d>=fx.min&&d<=fx.max; }).length;
+    var pctC2 = Math.round(cntC/totalCons*100);
+    var pctE  = Math.round(cntE/totalEquipe*100);
+    var diff  = pctC2 - pctE;
+    var diffStr = diff === 0 ? '= média' : (diff > 0 ? '+' + diff + 'pp vs equipe' : diff + 'pp vs equipe');
+    var diffCol = diff === 0 ? 'var(--text-3)' : (diff > 0 ? '#16a34a' : '#dc2626');
+    // Para faixas ruins (0-3s, 4-15s, 16-59s), acima da média é ruim
+    var isFaixaRuim = fx.min < 60;
+    if (isFaixaRuim) diffCol = diff === 0 ? 'var(--text-3)' : (diff > 0 ? '#dc2626' : '#16a34a');
+    return '<div class="raiox-funil-col">' +
+      '<div class="raiox-funil-pct" style="color:' + fx.cor + ';">' + pctC2 + '%</div>' +
+      '<div class="raiox-funil-qty">' + cntC + ' lig.</div>' +
+      '<div class="raiox-funil-lbl" style="color:' + fx.cor + ';">' + fx.label + '</div>' +
+      '<div class="raiox-funil-cmp" style="color:' + diffCol + ';">' + diffStr + '</div>' +
+    '</div>';
+  }).join('') + '</div>' +
+  '<div style="font-size:11px;color:var(--text-3);text-align:center;margin-top:4px;">Comparativo com a média da equipe no mesmo período</div>';
+
+  // ── ABA 4: Ritmo (Pace) ────────────────────────────────────────────────────
+  var paceHoras = {};
+  todosDoConsultor.forEach(function(r) {
+    var h = new Date(r.dataRegistro).getHours();
+    paceHoras[h] = (paceHoras[h] || 0) + 1;
+  });
+  var maxPace = Math.max.apply(null, Object.values(paceHoras).concat([1]));
+  var horasComDados = Array.from({length: 14}, function(_,i){ return i + 8; }).filter(function(h){ return (paceHoras[h]||0) > 0; });
+  var pane4 = '<div>' +
+    '<div style="font-size:11px;color:var(--text-3);margin-bottom:12px;text-align:center;">Ligações realizadas por hora — mostra o ritmo e consistência ao longo do dia</div>' +
+    '<div class="raiox-pace">' +
+      horasComDados.map(function(h) {
+        var v = paceHoras[h] || 0;
+        var barH = Math.max(Math.round(v/maxPace*56), 2);
+        var cor = v >= maxPace * 0.8 ? '#16a34a' : v >= maxPace * 0.5 ? '#ca8a04' : '#94a3b8';
+        return '<div class="raiox-pace-col">' +
+          '<div class="raiox-pace-bar-wrap"><div class="raiox-pace-bar" style="height:' + barH + 'px;background:' + cor + ';"></div></div>' +
+          '<div class="raiox-pace-val">' + v + '</div>' +
+          '<div class="raiox-pace-hora">' + String(h).padStart(2,'0') + 'h</div>' +
+        '</div>';
+      }).join('') +
+    '</div>' +
+  '</div>';
+
+  // ── Monta modal ────────────────────────────────────────────────────────────
+  var modal = document.getElementById('disc-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'disc-modal';
+    modal.style.cssText = 'position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.5);display:flex;align-items:flex-start;justify-content:center;padding:40px 20px;overflow-y:auto;';
+    modal.onclick = function(e) { if (e.target === modal) discDrillClose(); };
+    document.body.appendChild(modal);
+  }
+
   modal.innerHTML =
-    '<div style="background:var(--surface);border-radius:var(--radius-xl);width:100%;max-width:900px;box-shadow:0 24px 60px rgba(0,0,0,.3);overflow:hidden;">' +
-      '<div style="background:var(--brand);padding:16px 20px;display:flex;align-items:center;justify-content:space-between;">' +
-        '<div>' +
-          '<div style="font-size:11px;color:rgba(255,255,255,.7);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px;">Ligações Produtivas (+1 min)</div>' +
-          '<div style="font-size:16px;font-weight:700;color:#fff;">' + nomeConsultor + '</div>' +
-        '</div>' +
-        '<div style="display:flex;align-items:center;gap:12px;">' +
-          '<span style="background:rgba(255,255,255,.15);color:#fff;padding:4px 12px;border-radius:20px;font-size:13px;font-weight:600;">' + dados.length + ' ligações</span>' +
+    '<div style="background:var(--surface);border-radius:var(--radius-xl);width:100%;max-width:960px;box-shadow:0 24px 60px rgba(0,0,0,.3);overflow:hidden;">' +
+      // Header
+      '<div style="background:var(--brand);">' +
+        '<div style="padding:16px 20px;display:flex;align-items:center;justify-content:space-between;">' +
+          '<div>' +
+            '<div style="font-size:10px;color:rgba(255,255,255,.65);text-transform:uppercase;letter-spacing:.07em;margin-bottom:2px;">Raio-X do Consultor</div>' +
+            '<div style="font-size:18px;font-weight:700;color:#fff;">' + nomeConsultor + '</div>' +
+          '</div>' +
           '<button onclick="discDrillClose()" style="background:rgba(255,255,255,.15);border:none;color:#fff;width:32px;height:32px;border-radius:50%;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;">×</button>' +
         '</div>' +
+        // Stats rápidos
+        '<div class="raiox-stats">' +
+          '<span class="raiox-stat">Total: <strong>' + totalC + '</strong></span>' +
+          '<span class="raiox-stat">Atendidas: <strong>' + atendC + '</strong></span>' +
+          '<span class="raiox-stat">Produtivas: <strong>' + prodC + '</strong></span>' +
+          '<span class="raiox-stat">% Prod.: <strong>' + pctC + '%</strong></span>' +
+          '<span class="raiox-stat">TMA +1min: <strong>' + discFmt(tmaProd) + '</strong></span>' +
+          '<span class="raiox-stat">Connect Rate: <strong>' + crateC + '%</strong></span>' +
+          (goldenH !== null ? '<span class="raiox-stat">★ Golden Hour: <strong>' + String(goldenH).padStart(2,'0') + 'h</strong></span>' : '') +
+        '</div>' +
+        // Tabs
+        '<div class="raiox-tabs">' +
+          '<div class="raiox-tab active" onclick="raixoTab(this,0)">📋 Gravações (' + prodC + ')</div>' +
+          '<div class="raiox-tab" onclick="raixoTab(this,1)">⭐ Golden Hours</div>' +
+          '<div class="raiox-tab" onclick="raixoTab(this,2)">📊 Funil Individual</div>' +
+          '<div class="raiox-tab" onclick="raixoTab(this,3)">⚡ Ritmo (Pace)</div>' +
+        '</div>' +
       '</div>' +
-      '<div style="overflow-x:auto;max-height:70vh;overflow-y:auto;">' +
-        '<table style="width:100%;border-collapse:collapse;font-size:12px;">' +
-          '<thead><tr style="background:var(--surface-3);position:sticky;top:0;">' +
-            '<th style="padding:10px 12px;text-align:left;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--text-2);border-bottom:1px solid var(--border);">Data/Hora</th>' +
-            '<th style="padding:10px 12px;text-align:left;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--text-2);border-bottom:1px solid var(--border);">Cliente</th>' +
-            '<th style="padding:10px 12px;text-align:center;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--text-2);border-bottom:1px solid var(--border);">CNPJ</th>' +
-            '<th style="padding:10px 12px;text-align:center;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--text-2);border-bottom:1px solid var(--border);">Telefone</th>' +
-            '<th style="padding:10px 12px;text-align:center;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--text-2);border-bottom:1px solid var(--border);">Fila</th>' +
-            '<th style="padding:10px 12px;text-align:center;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--text-2);border-bottom:1px solid var(--border);">Duração</th>' +
-            '<th style="padding:10px 12px;text-align:center;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--text-2);border-bottom:1px solid var(--border);">Gravação</th>' +
-            '<th style="padding:10px 12px;text-align:left;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--text-2);border-bottom:1px solid var(--border);">Status CRM</th>' +
-          '</tr></thead>' +
-          '<tbody>' + (rows || '<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text-3);">Nenhuma ligação encontrada</td></tr>') + '</tbody>' +
-        '</table>' +
-      '</div>' +
+      // Panes
+      '<div id="raiox-pane-0" class="raiox-pane active">' + pane1 + '</div>' +
+      '<div id="raiox-pane-1" class="raiox-pane raiox-hm">' + pane2 + '</div>' +
+      '<div id="raiox-pane-2" class="raiox-pane">' + pane3 + '</div>' +
+      '<div id="raiox-pane-3" class="raiox-pane">' + pane4 + '</div>' +
     '</div>';
 
   modal.style.display = 'flex';
   document.body.style.overflow = 'hidden';
+}
+
+function raixoTab(el, idx) {
+  el.parentElement.querySelectorAll('.raiox-tab').forEach(function(t){ t.classList.remove('active'); });
+  el.classList.add('active');
+  var modal = document.getElementById('disc-modal');
+  [0,1,2,3].forEach(function(i){
+    var p = modal.querySelector('#raiox-pane-' + i);
+    if (p) p.classList.toggle('active', i === idx);
+  });
 }
 
 // ─── DISCADORA EXPORT CSV ────────────────────────────────────────────────────
