@@ -1158,7 +1158,7 @@
   <button class="tab-btn" onclick="switchTab('gerencial', this)">📊 Gerencial</button>
   <button class="tab-btn" onclick="switchTab('producao', this)">🏭 Produção</button>
   <button class="tab-btn" id="tab-btn-discadora" onclick="switchTab('discadora', this)">📞 Discadora</button>
-  <button class="tab-btn" id="tab-btn-simulador2" onclick="switchTab('simulador2', this)">🧮 Simulador 2.0 (EM CONSTRUÇÃO)</button>
+  <button class="tab-btn" id="tab-btn-simulador2" onclick="switchTab('simulador2', this)">🧮 Simulador 2.0</button>
 </div>
 
 <!-- CONTENT -->
@@ -1389,7 +1389,7 @@
          só que calculado com a nova política (teto por Categoria+Faixa CNPJ/HC em vez de 40%/R$2,60 fixo). -->
     <div class="s2-secao">
       <div class="s2-secao-titulo"><span class="s2-secao-num">01</span> Recebimento de Carteira por Unidade</div>
-      <div class="s2-secao-desc">Todos os números vêm automaticamente do BaseCRM (mesma planilha/API do Simulador de Carteira) — nada aqui é digitado manualmente, exceto o Net Adds por unidade (não existe na planilha) e os parâmetros de política ao lado.</div>
+      <div class="s2-secao-desc">A Comissão de Ativação vem automaticamente do BaseCRM (mesma planilha/API do Simulador de Carteira). Já as Linhas da Carteira e o Net Adds são digitados manualmente por unidade — a Claro reporta esses números via demonstrativo próprio de Comissionamento (item 2.6.1-vii), eles não estão na planilha BaseCRM da VST.</div>
 
       <div class="s2-params-bar">
         <div class="s2-field">
@@ -1455,13 +1455,13 @@
           <tfoot><tr id="s2-recebimento-total"></tr></tfoot>
         </table>
       </div>
-      <div class="s2-hint">Net Adds é a única coluna editável (não existe na planilha). Positivo usa o unitário da Faixa CNPJ/HC; negativo usa o unitário fixo da Categoria (item 2.6.4). O Teto é a Comissão de Ativação × % de liberação (Categoria × Faixa, item 2.6.5); a Carteira Recebida nunca ultrapassa o Teto.</div>
+      <div class="s2-hint">Linhas da Carteira e Net Adds são as colunas editáveis (não existem no BaseCRM). Net Adds positivo usa o unitário da Faixa CNPJ/HC; negativo usa o unitário fixo da Categoria (item 2.6.4) — não há mais R$2,60 fixo, o unitário varia pela política nova. O Teto é a Comissão de Ativação × % de liberação (Categoria × Faixa, item 2.6.5) — não há mais 40% fixo; a Carteira Recebida nunca ultrapassa o Teto.</div>
     </div>
 
     <!-- SEÇÃO 04 — BÔNUS PRODUTIVIDADE -->
     <div class="s2-secao">
       <div class="s2-secao-titulo"><span class="s2-secao-num">04</span> Bônus Produtividade</div>
-      <div class="s2-secao-desc">Exclusivo para modalidade Elite, com mínimo de 4 vendedores cadastrados (item 2.7). Vendedores recém-contratados têm meta reduzida por rampa (0/25/25/50/50/75/100% do 1º ao 7º mês+). Informe quantos vendedores estão em cada estágio de rampa e o desempenho agregado do grupo.</div>
+      <div class="s2-secao-desc">Exclusivo para modalidade Elite, com mínimo de 4 vendedores cadastrados (item 2.7). Vendedores recém-contratados têm meta reduzida por rampa (0/25/25/50/50/75/100% do 1º ao 7º mês+). Informe quantos vendedores estão em cada estágio — o % de meta atingida é calculado automaticamente a partir do Realizado (Voz e BL vêm do BaseCRM, mesmo escopo da Comissão de Ativação; SD ainda é manual).</div>
 
       <div class="s2-table-wrap">
         <table class="s2-table" id="s2-tabela-rampa">
@@ -1473,19 +1473,29 @@
 
       <div class="s2-params-bar" style="margin-top:14px">
         <div class="s2-field">
-          <label>% Atingido — Móvel Voz</label>
-          <input type="number" id="s2-prod-movel" value="0" min="0" step="0.01" onchange="renderSimulador2()">
-          <div class="s2-hint">% do realizado do grupo sobre a meta ponderada pela rampa (Pedido Novo/Incremento/Portabilidade de Voz).</div>
+          <label>Meta p/ ativar 1 HC — Voz (linhas)</label>
+          <input type="number" id="s2-meta-voz" value="18" min="0" step="1" onchange="renderSimulador2()">
+          <div class="s2-hint">Produção de 1 HC a 100% da rampa. Ex: 4 consultores a 25% da rampa equivalem à meta de 1 HC completo.</div>
         </div>
         <div class="s2-field">
-          <label>% Atingido — Fixa Básica BL</label>
-          <input type="number" id="s2-prod-fixa" value="0" min="0" step="0.01" onchange="renderSimulador2()">
+          <label>Meta p/ ativar 1 HC — BL (linhas)</label>
+          <input type="number" id="s2-meta-bl" value="6" min="0" step="1" onchange="renderSimulador2()">
         </div>
         <div class="s2-field">
-          <label>% Atingido — Solução Digital</label>
-          <input type="number" id="s2-prod-sd" value="0" min="0" step="0.01" onchange="renderSimulador2()">
-          <div class="s2-hint">Se &lt;100%, retroage 1 faixa no bônus (item 2.7-iii-6). Não atingir e estar na Faixa 1 torna o parceiro inelegível (Faixa 0).</div>
+          <label>Meta p/ ativar 1 HC — Solução Digital (R$)</label>
+          <input type="number" id="s2-meta-sd" value="50" min="0" step="1" onchange="renderSimulador2()">
         </div>
+        <div class="s2-field">
+          <label>Receita SD realizada no mês (R$)</label>
+          <input type="number" id="s2-real-sd" value="0" min="0" step="0.01" onchange="renderSimulador2()">
+          <div class="s2-hint">Manual enquanto a produção de Soluções Digitais não é integrada via API.</div>
+        </div>
+      </div>
+
+      <div class="s2-kpi-grid" style="grid-template-columns:repeat(3,1fr);margin-top:14px">
+        <div class="s2-kpi-card"><div class="s2-kpi-label">Móvel Voz — Realizado / Meta ponderada</div><div class="s2-kpi-value" id="s2-prod-movel-num">0 / 0</div><div class="s2-hint"><b id="s2-prod-movel-pct">0%</b> atingido</div></div>
+        <div class="s2-kpi-card"><div class="s2-kpi-label">Fixa Básica BL — Realizado / Meta ponderada</div><div class="s2-kpi-value" id="s2-prod-fixa-num">0 / 0</div><div class="s2-hint"><b id="s2-prod-fixa-pct">0%</b> atingido</div></div>
+        <div class="s2-kpi-card"><div class="s2-kpi-label">Solução Digital — Realizado / Meta ponderada</div><div class="s2-kpi-value" id="s2-prod-sd-num">R$ 0 / R$ 0</div><div class="s2-hint"><b id="s2-prod-sd-pct">0%</b> atingido — se &lt;100% retroage 1 faixa (item 2.7-iii-6)</div></div>
       </div>
 
       <div class="s2-kpi-grid" style="margin-top:14px">
@@ -1865,6 +1875,10 @@ async function loadData() {
     render();
     renderSimulador();
     renderProducao();
+    // Simulador 2.0: atualiza a Comissão de Ativação (e o Realizado de Voz/BL do Bônus
+    // Produtividade) sempre que os dados do BaseCRM forem (re)carregados — mesmo que a
+    // aba ainda não tenha sido aberta nesta sessão.
+    if (typeof s2PuxarDadosSheet === 'function') s2PuxarDadosSheet();
     // Reaplica permissões sempre que os dados carregarem
     if (USUARIO_ATUAL) {
       setTimeout(() => aplicarPermissoes(), 500);
@@ -3848,20 +3862,18 @@ function s2SetVisao(v, el) {
 // e preenche os campos de Ativação (seção 01) e Linhas Ativas de Carteira (seção 02).
 // Os campos continuam editáveis manualmente após o "puxar", caso precise de ajuste.
 function s2PuxarDadosSheet() {
-  if (!window.ALL_DATA || !ALL_DATA.length) {
+  if (!ALL_DATA || !ALL_DATA.length) {
     console.warn('Simulador 2.0: ALL_DATA ainda não carregado — clique em Atualizar e tente novamente.');
     return;
   }
   const filasPermitidas = FILAS_POR_VISAO[s2Visao];
   const produtosAlvo = ['NET PJ - VIRTUA', 'VOZ - Novo', 'VOZ - Portabilidade'];
 
-  // Comissão de ativação usa o escopo selecionado (Ativo/+Ativação/+Aprovados/Geral).
-  // Carteira (linhas ativas reais) sempre usa a fila "Ativo/Instalado", independente do escopo acima.
-  const aggAtivacao = {}, aggCarteira = {};
-  CODIGOS_AACE2.forEach(({ tag }) => {
-    aggAtivacao[tag] = { virtua: 0, vozNovo: 0, vozPort: 0 };
-    aggCarteira[tag] = 0;
-  });
+  // Comissão de ativação (e o "Realizado" do Bônus Produtividade) usam o escopo
+  // selecionado (Ativo/+Ativação/+Aprovados/Geral). Linhas da Carteira e Net Adds
+  // continuam manuais (a Claro reporta isso via demonstrativo próprio, não está no BaseCRM).
+  const aggAtivacao = {};
+  CODIGOS_AACE2.forEach(({ tag }) => { aggAtivacao[tag] = { virtua: 0, vozNovo: 0, vozPort: 0 }; });
 
   ALL_DATA.forEach(r => {
     const tag   = r['TAGS ATIVIDADE'] || '';
@@ -3870,19 +3882,18 @@ function s2PuxarDadosSheet() {
     const qtd   = parseInt(r['QUANTIDADE']) || 1;
     if (!aggAtivacao[tag]) return;
     if (!produtosAlvo.includes(grupo)) return;
+    if (!filasPermitidas.includes(fila)) return;
 
-    if (filasPermitidas.includes(fila)) {
-      if (grupo === 'NET PJ - VIRTUA') aggAtivacao[tag].virtua += qtd;
-      else if (grupo === 'VOZ - Novo') aggAtivacao[tag].vozNovo += qtd;
-      else if (grupo === 'VOZ - Portabilidade') aggAtivacao[tag].vozPort += qtd;
-    }
-    if (fila === 'Ativo/Instalado') aggCarteira[tag] += qtd;
+    if (grupo === 'NET PJ - VIRTUA') aggAtivacao[tag].virtua += qtd;
+    else if (grupo === 'VOZ - Novo') aggAtivacao[tag].vozNovo += qtd;
+    else if (grupo === 'VOZ - Portabilidade') aggAtivacao[tag].vozPort += qtd;
   });
 
-  // Guarda os dados puxados — não há mais inputs manuais de linhas; tudo vem do Sheets.
-  window._s2SheetData = { ativacao: aggAtivacao, carteira: aggCarteira };
+  window._s2SheetData = { ativacao: aggAtivacao };
 
-  renderSimulador2();
+  // Só renderiza se a aba já foi montada (evita erro caso o BaseCRM carregue antes
+  // de o usuário nunca ter aberto a aba Simulador 2.0 nesta sessão).
+  if (document.getElementById('s2-recebimento-body')?.children.length) renderSimulador2();
 }
 
 // Item 2.6.4-ii — Faixa CNPJ/HC (tabela definitiva, a partir de set/26)
@@ -3950,7 +3961,8 @@ function s2FaixaPorCnpjHc(razao) {
 
 function initSimulador2() {
   // Monta a linha de recebimento por unidade apenas na primeira vez.
-  // Net Adds é o ÚNICO campo editável — todo o resto é calculado/puxado do Sheets.
+  // Net Adds e Linhas da Carteira são os ÚNICOS campos editáveis — a Claro reporta
+  // a carteira via demonstrativo próprio (item 2.6.1-vii), isso não está no BaseCRM/Sheets.
   if (!document.getElementById('s2-recebimento-body').children.length) {
     document.getElementById('s2-recebimento-body').innerHTML = CODIGOS_AACE2.map(({ tag, nome }) => { const sid = s2Sid(tag); return `
       <tr data-tag="${tag}">
@@ -3958,7 +3970,7 @@ function initSimulador2() {
         <td id="s2-rec-ativacao-${sid}">R$ 0,00</td>
         <td id="s2-rec-tetopct-${sid}">—</td>
         <td id="s2-rec-teto-${sid}">R$ 0,00</td>
-        <td id="s2-rec-linhas-${sid}">0</td>
+        <td><input type="number" min="0" value="0" id="s2-cart-linhas-${sid}" onchange="renderSimulador2()" style="width:80px"></td>
         <td><input type="number" value="0" id="s2-cart-netadds-${sid}" onchange="renderSimulador2()" style="width:70px"></td>
         <td id="s2-rec-unit-${sid}">—</td>
         <td id="s2-rec-bruto-${sid}">R$ 0,00</td>
@@ -4011,12 +4023,12 @@ function renderSimulador2() {
 
   const comissaoAtivacao = {}, valorPagoCarteira = {}; // por tag — usados também nas seções 05/06
   let totalAtivacaoGeral = 0, totalBrutoCarteira = 0, totalTeto = 0, totalPagoCarteira = 0,
-      totalNaoRecebida = 0, totalMesa = 0, totalLinhasVoz = 0, totalLinhasVirtua = 0;
+      totalNaoRecebida = 0, totalMesa = 0, totalLinhasVoz = 0, totalLinhasVirtua = 0, totalLinhasCarteira = 0;
 
   CODIGOS_AACE2.forEach(({ tag }) => {
     const sid = s2Sid(tag);
     const dAt = sheet.ativacao[tag] || { virtua: 0, vozNovo: 0, vozPort: 0 };
-    const linhasCarteira = sheet.carteira?.[tag] || 0;
+    const linhasCarteira = s2num('s2-cart-linhas-' + sid); // manual — carteira reportada pela Claro, não está no BaseCRM
     const netAdds = s2num('s2-cart-netadds-' + sid);
 
     const comissao = dAt.virtua * fVirtua + dAt.vozNovo * fVozNovo + dAt.vozPort * fVozPort;
@@ -4032,12 +4044,11 @@ function renderSimulador2() {
 
     totalAtivacaoGeral += comissao; totalBrutoCarteira += bruto; totalTeto += teto;
     totalPagoCarteira += recebida; totalNaoRecebida += naoRecebida; totalMesa += mesa;
-    totalLinhasVoz += dAt.vozNovo + dAt.vozPort; totalLinhasVirtua += dAt.virtua;
+    totalLinhasVoz += dAt.vozNovo + dAt.vozPort; totalLinhasVirtua += dAt.virtua; totalLinhasCarteira += linhasCarteira;
 
     document.getElementById('s2-rec-ativacao-' + sid).textContent = s2fmt(comissao);
     document.getElementById('s2-rec-tetopct-' + sid).textContent = (pctLiberacao * 100).toFixed(0) + '%';
     document.getElementById('s2-rec-teto-' + sid).textContent = s2fmt(teto);
-    document.getElementById('s2-rec-linhas-' + sid).textContent = linhasCarteira.toLocaleString('pt-BR');
     document.getElementById('s2-rec-unit-' + sid).textContent = 'R$ ' + unit.toFixed(2) + (netAdds < 0 ? ' (Net−)' : ' (Net+)');
     document.getElementById('s2-rec-bruto-' + sid).textContent = s2fmt(bruto);
     document.getElementById('s2-rec-recebida-' + sid).textContent = s2fmt(recebida);
@@ -4049,7 +4060,7 @@ function renderSimulador2() {
 
   document.getElementById('s2-recebimento-total').innerHTML =
     `<td>TOTAL GERAL</td><td>${s2fmt(totalAtivacaoGeral)}</td><td>${(pctLiberacao*100).toFixed(0)}%</td><td>${s2fmt(totalTeto)}</td>` +
-    `<td>${(totalLinhasVoz+totalLinhasVirtua).toLocaleString('pt-BR')}</td><td></td><td></td>` +
+    `<td>${totalLinhasCarteira.toLocaleString('pt-BR')}</td><td></td><td></td>` +
     `<td>${s2fmt(totalBrutoCarteira)}</td><td>${s2fmt(totalPagoCarteira)}</td><td>${s2fmt(totalNaoRecebida)}</td><td>${s2fmt(totalMesa)}</td>`;
 
   // ── KPIs do topo do painel
@@ -4065,9 +4076,33 @@ function renderSimulador2() {
   document.getElementById('s2-kpi-teto-sub').textContent = `% liberação: ${(pctLiberacao*100).toFixed(0)}% (${catLabel} · ${faixaObj.faixa})`;
 
   // ── SEÇÃO 04 — Bônus Produtividade
-  let totalVendedores = 0;
-  RAMPA_PRODUTIVIDADE.forEach((r, i) => { totalVendedores += s2num('s2-rampa-qtd-' + i); });
-  const pctMovel = s2num('s2-prod-movel'), pctFixa = s2num('s2-prod-fixa'), pctSd = s2num('s2-prod-sd');
+  let totalVendedores = 0, metaHcPonderada = 0;
+  RAMPA_PRODUTIVIDADE.forEach((r, i) => {
+    const qtd = s2num('s2-rampa-qtd-' + i);
+    totalVendedores += qtd;
+    metaHcPonderada += qtd * r.pct; // "produção equivalente" de HCs completos, ponderada pela rampa
+  });
+
+  const metaVozUnit = s2num('s2-meta-voz'), metaBlUnit = s2num('s2-meta-bl'), metaSdUnit = s2num('s2-meta-sd');
+  const metaVozPonderada = metaHcPonderada * metaVozUnit;
+  const metaBlPonderada  = metaHcPonderada * metaBlUnit;
+  const metaSdPonderada  = metaHcPonderada * metaSdUnit;
+
+  // Realizado de Voz e BL vem do mesmo escopo do BaseCRM usado na Comissão de Ativação (seção 01).
+  const realizadoVoz = totalLinhasVoz, realizadoBl = totalLinhasVirtua;
+  const realizadoSd = s2num('s2-real-sd');
+
+  const pctMovel = metaVozPonderada > 0 ? (realizadoVoz / metaVozPonderada) * 100 : 0;
+  const pctFixa  = metaBlPonderada  > 0 ? (realizadoBl  / metaBlPonderada)  * 100 : 0;
+  const pctSd    = metaSdPonderada  > 0 ? (realizadoSd  / metaSdPonderada)  * 100 : 0;
+
+  document.getElementById('s2-prod-movel-num').textContent = `${realizadoVoz.toLocaleString('pt-BR')} / ${metaVozPonderada.toFixed(1)}`;
+  document.getElementById('s2-prod-movel-pct').textContent = pctMovel.toFixed(1) + '%';
+  document.getElementById('s2-prod-fixa-num').textContent = `${realizadoBl.toLocaleString('pt-BR')} / ${metaBlPonderada.toFixed(1)}`;
+  document.getElementById('s2-prod-fixa-pct').textContent = pctFixa.toFixed(1) + '%';
+  document.getElementById('s2-prod-sd-num').textContent = `${s2fmt(realizadoSd)} / ${s2fmt(metaSdPonderada)}`;
+  document.getElementById('s2-prod-sd-pct').textContent = pctSd.toFixed(1) + '%';
+
   const travaOk = totalVendedores >= 4 && pctMovel >= 60 && pctFixa >= 60;
   document.getElementById('s2-prod-trava').textContent = totalVendedores < 4 ? 'Inelegível (<4 vend.)' : (travaOk ? 'OK' : 'Reprovada (<60%)');
   document.getElementById('s2-prod-trava').className = 's2-kpi-value ' + (travaOk ? 'green' : 'red');
@@ -4134,12 +4169,14 @@ function s2CamposParaSalvar() {
     'fator-vozport': s2num('s2-fator-vozport'),
     'total-cnpjs': s2num('s2-total-cnpjs'),
     'total-hcs': s2num('s2-total-hcs'),
-    'prod-movel': s2num('s2-prod-movel'),
-    'prod-fixa': s2num('s2-prod-fixa'),
-    'prod-sd': s2num('s2-prod-sd'),
+    'meta-voz': s2num('s2-meta-voz'),
+    'meta-bl': s2num('s2-meta-bl'),
+    'meta-sd': s2num('s2-meta-sd'),
+    'real-sd': s2num('s2-real-sd'),
   };
   CODIGOS_AACE2.forEach(({ tag }) => {
     const sid = s2Sid(tag);
+    campos['cart-linhas-' + sid] = s2num('s2-cart-linhas-' + sid);
     campos['cart-netadds-' + sid] = s2num('s2-cart-netadds-' + sid);
   });
   RAMPA_PRODUTIVIDADE.forEach((r, i) => { campos['rampa-qtd-' + i] = s2num('s2-rampa-qtd-' + i); });
