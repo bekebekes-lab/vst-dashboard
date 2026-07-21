@@ -1384,126 +1384,78 @@
     </div>
 
     <!-- SEÇÃO 01 — COMISSÃO DE ATIVAÇÃO -->
+    <!-- PAINEL DE RECEBIMENTO DE CARTEIRA (substitui as antigas seções 01+02+03) -->
+    <!-- Mesma essência do Simulador de Carteira atual: quanto vou receber, quanto fica na mesa —
+         só que calculado com a nova política (teto por Categoria+Faixa CNPJ/HC em vez de 40%/R$2,60 fixo). -->
     <div class="s2-secao">
-      <div class="s2-secao-titulo"><span class="s2-secao-num">01</span> Comissão de Ativação</div>
-      <div class="s2-secao-desc">Remunera as vendas NOVAS do mês (ativações), por código/unidade AACE. As quantidades de linhas são puxadas automaticamente do BaseCRM (mesma planilha/API do Simulador de Carteira) conforme o escopo escolhido — mas continuam editáveis manualmente se precisar ajustar. O total por código alimenta o Teto de Carteira (seção 03) e o Bônus Categoria (seção 05).</div>
+      <div class="s2-secao-titulo"><span class="s2-secao-num">01</span> Recebimento de Carteira por Unidade</div>
+      <div class="s2-secao-desc">Todos os números vêm automaticamente do BaseCRM (mesma planilha/API do Simulador de Carteira) — nada aqui é digitado manualmente, exceto o Net Adds por unidade (não existe na planilha) e os parâmetros de política ao lado.</div>
 
       <div class="s2-params-bar">
         <div class="s2-field">
-          <label>Escopo (fonte: BaseCRM)</label>
+          <label>Escopo — Comissão de Ativação (fonte: BaseCRM)</label>
           <div class="sim-visoes" id="s2-visoes">
             <button class="sim-visao-btn active" onclick="s2SetVisao('ativo',this)">Ativo</button>
             <button class="sim-visao-btn" onclick="s2SetVisao('ativacao',this)">+ Ativação</button>
             <button class="sim-visao-btn" onclick="s2SetVisao('aprovados',this)">+ Aprovados</button>
             <button class="sim-visao-btn" onclick="s2SetVisao('geral',this)">Geral</button>
           </div>
-          <div class="s2-hint">Mesmos escopos do Simulador de Carteira (item FILAS_POR_VISAO): define quais status/filas do BaseCRM entram na contagem de linhas ativadas.</div>
+          <div class="s2-hint">Mesmos escopos do Simulador de Carteira: define quais status/filas do BaseCRM entram na contagem de linhas ativadas no mês (o resto do painel usa sempre "Ativo/Instalado" como base real da carteira).</div>
+        </div>
+        <div class="s2-field"><label>&nbsp;</label><button class="sim-btn-discrete sim-btn-save" onclick="s2PuxarDadosSheet()">↻ Atualizar do Sheets</button></div>
+        <div class="s2-field">
+          <label>Fator VIRTUA · VOZ Novo · VOZ Portab. (R$/linha)</label>
+          <div style="display:flex;gap:6px">
+            <input type="number" id="s2-fator-virtua" value="4" step="0.1" min="0" onchange="renderSimulador2()" style="width:70px">
+            <input type="number" id="s2-fator-voznovo" value="5.5" step="0.1" min="0" onchange="renderSimulador2()" style="width:70px">
+            <input type="number" id="s2-fator-vozport" value="7.5" step="0.1" min="0" onchange="renderSimulador2()" style="width:70px">
+          </div>
         </div>
         <div class="s2-field">
-          <label>&nbsp;</label>
-          <button class="sim-btn-discrete sim-btn-save" onclick="s2PuxarDadosSheet()">↻ Puxar do Sheets</button>
+          <label>Total CNPJs · Total HCs</label>
+          <div style="display:flex;gap:6px">
+            <input type="number" id="s2-total-cnpjs" value="0" min="0" onchange="renderSimulador2()" style="width:80px" title="Total de CNPJs na carteira">
+            <input type="number" id="s2-total-hcs" value="1" min="1" onchange="renderSimulador2()" style="width:70px" title="Total de HCs ativos declarados">
+          </div>
+          <div class="s2-hint">CNPJ/HC: <b id="s2-cnpjhc-resultado">—</b> · Faixa: <b id="s2-faixa-resultado">—</b></div>
         </div>
       </div>
 
-      <div class="s2-params-bar">
-        <div class="s2-field">
-          <label>Fator NET PJ - VIRTUA (R$/linha)</label>
-          <input type="number" id="s2-fator-virtua" value="4" step="0.1" min="0" onchange="renderSimulador2()">
-        </div>
-        <div class="s2-field">
-          <label>Fator VOZ - Novo (R$/linha)</label>
-          <input type="number" id="s2-fator-voznovo" value="5.5" step="0.1" min="0" onchange="renderSimulador2()">
-        </div>
-        <div class="s2-field">
-          <label>Fator VOZ - Portabilidade (R$/linha)</label>
-          <input type="number" id="s2-fator-vozport" value="7.5" step="0.1" min="0" onchange="renderSimulador2()">
-        </div>
+      <div class="s2-kpi-grid" style="grid-template-columns:repeat(4,1fr);margin-top:16px">
+        <div class="s2-kpi-card"><div class="s2-kpi-label">Dinheiro da Carteira</div><div class="s2-kpi-value" id="s2-kpi-bruto">R$ 0,00</div><div class="s2-hint" id="s2-kpi-bruto-sub"></div></div>
+        <div class="s2-kpi-card"><div class="s2-kpi-label">Carteira Recebida</div><div class="s2-kpi-value green" id="s2-kpi-recebida">R$ 0,00</div></div>
+        <div class="s2-kpi-card"><div class="s2-kpi-label">Carteira Não Recebida</div><div class="s2-kpi-value red" id="s2-kpi-naorecebida">R$ 0,00</div><div class="s2-hint">Acima do teto — precisa de mais comissão de ativação para liberar</div></div>
+        <div class="s2-kpi-card"><div class="s2-kpi-label">Deixado na Mesa</div><div class="s2-kpi-value" id="s2-kpi-mesa" style="color:#B45309">R$ 0,00</div><div class="s2-hint">Teto maior que a carteira — poderia ter mais linhas/CNPJs</div></div>
+      </div>
+      <div class="s2-kpi-grid" style="grid-template-columns:repeat(4,1fr);margin-top:12px">
+        <div class="s2-kpi-card"><div class="s2-kpi-label">Linhas Ativas — Voz</div><div class="s2-kpi-value" id="s2-kpi-linhasvoz">0</div></div>
+        <div class="s2-kpi-card"><div class="s2-kpi-label">Linhas Ativas — Virtua</div><div class="s2-kpi-value" id="s2-kpi-linhasvirtua">0</div></div>
+        <div class="s2-kpi-card"><div class="s2-kpi-label">Comissão de Ativação (total)</div><div class="s2-kpi-value" id="s2-kpi-ativacao">R$ 0,00</div></div>
+        <div class="s2-kpi-card"><div class="s2-kpi-label">Teto de Carteira (total)</div><div class="s2-kpi-value" id="s2-kpi-teto">R$ 0,00</div><div class="s2-hint" id="s2-kpi-teto-sub"></div></div>
       </div>
 
-      <div class="s2-table-wrap">
-        <table class="s2-table" id="s2-tabela-ativacao">
+      <div class="s2-table-wrap" style="margin-top:16px">
+        <table class="s2-table" id="s2-tabela-recebimento">
           <thead>
             <tr>
-              <th>Código AACE / Unidade</th>
-              <th>Linhas VIRTUA</th>
-              <th>Linhas VOZ Novo</th>
-              <th>Linhas VOZ Portab.</th>
-              <th>Comissão Ativação (R$)</th>
-            </tr>
-          </thead>
-          <tbody id="s2-ativacao-body"></tbody>
-          <tfoot><tr id="s2-ativacao-total"></tr></tfoot>
-        </table>
-      </div>
-    </div>
-
-    <!-- SEÇÃO 02 — HEADCOUNT E CARTEIRA -->
-    <div class="s2-secao">
-      <div class="s2-secao-titulo"><span class="s2-secao-num">02</span> Headcount e Carteira</div>
-      <div class="s2-secao-desc">Mede o dimensionamento da carteira (CNPJ/HC — item 2.6.3) e apura o Net Adds por código (item 2.6.2), que juntos definem o unitário de manutenção de base.</div>
-
-      <div class="s2-params-bar">
-        <div class="s2-field">
-          <label>Total de CNPJs na carteira</label>
-          <input type="number" id="s2-total-cnpjs" value="0" min="0" onchange="renderSimulador2()">
-          <div class="s2-hint">Total de CNPJs sob responsabilidade do AACE no final do mês (todos os códigos somados).</div>
-        </div>
-        <div class="s2-field">
-          <label>Total de HCs ativos declarados</label>
-          <input type="number" id="s2-total-hcs" value="1" min="1" onchange="renderSimulador2()">
-          <div class="s2-hint">Vendedores declarados e ativos na monitoria trabalhista, base do cálculo CNPJ/HC.</div>
-        </div>
-        <div class="s2-field">
-          <label>CNPJ / HC apurado</label>
-          <input type="text" id="s2-cnpjhc-resultado" value="—" disabled style="font-family:'DM Mono',monospace;font-weight:700;background:var(--surface-2)">
-        </div>
-        <div class="s2-field">
-          <label>Faixa enquadrada</label>
-          <input type="text" id="s2-faixa-resultado" value="—" disabled style="font-family:'DM Mono',monospace;font-weight:700;background:var(--surface-2)">
-        </div>
-      </div>
-
-      <div class="s2-table-wrap">
-        <table class="s2-table" id="s2-tabela-carteira">
-          <thead>
-            <tr>
-              <th>Código AACE / Unidade</th>
-              <th>Linhas ativas (carteira)</th>
-              <th>Net Adds (+/−)</th>
-              <th>Unitário aplicável</th>
-              <th>Valor bruto de carteira (R$)</th>
-            </tr>
-          </thead>
-          <tbody id="s2-carteira-body"></tbody>
-          <tfoot><tr id="s2-carteira-total"></tr></tfoot>
-        </table>
-      </div>
-      <div class="s2-hint">Net Adds positivo usa o unitário da Faixa CNPJ/HC (tabela 2.6.4-ii). Net Adds negativo usa o unitário fixo por Categoria (tabela 2.6.4-i), independente da faixa.</div>
-    </div>
-
-    <!-- SEÇÃO 03 — TETO DE CARTEIRA -->
-    <div class="s2-secao">
-      <div class="s2-secao-titulo"><span class="s2-secao-num">03</span> Teto de Carteira</div>
-      <div class="s2-secao-desc">Limita o valor de manutenção de carteira (seção 02) com base na comissão de ativação do mesmo código (seção 01) × % de liberação, definido por Categoria e Faixa CNPJ/HC (item 2.6.5). Calculado por código individualmente.</div>
-
-      <div class="s2-table-wrap">
-        <table class="s2-table" id="s2-tabela-teto">
-          <thead>
-            <tr>
-              <th>Código AACE / Unidade</th>
-              <th>Comissão Ativação (R$)</th>
-              <th>% Liberação</th>
+              <th>Unidade</th>
+              <th>Comissão Ativação</th>
+              <th>% Teto</th>
               <th>Teto (R$)</th>
-              <th>Bruto Carteira (R$)</th>
-              <th>Pago Carteira (R$)</th>
-              <th>Situação</th>
+              <th>Linhas Carteira</th>
+              <th>Net Adds</th>
+              <th>Unitário</th>
+              <th>Dinheiro Carteira</th>
+              <th>Cart. Recebida</th>
+              <th>Cart. Não Recebida</th>
+              <th>Deixado na Mesa</th>
             </tr>
           </thead>
-          <tbody id="s2-teto-body"></tbody>
-          <tfoot><tr id="s2-teto-total"></tr></tfoot>
+          <tbody id="s2-recebimento-body"></tbody>
+          <tfoot><tr id="s2-recebimento-total"></tr></tfoot>
         </table>
       </div>
-      <div class="s2-hint">Se o valor bruto de carteira for maior que o teto, o pagamento é limitado ao teto (item 2.6.5-iv). Caso contrário, paga-se o bruto integralmente.</div>
+      <div class="s2-hint">Net Adds é a única coluna editável (não existe na planilha). Positivo usa o unitário da Faixa CNPJ/HC; negativo usa o unitário fixo da Categoria (item 2.6.4). O Teto é a Comissão de Ativação × % de liberação (Categoria × Faixa, item 2.6.5); a Carteira Recebida nunca ultrapassa o Teto.</div>
     </div>
 
     <!-- SEÇÃO 04 — BÔNUS PRODUTIVIDADE -->
@@ -3903,7 +3855,8 @@ function s2PuxarDadosSheet() {
   const filasPermitidas = FILAS_POR_VISAO[s2Visao];
   const produtosAlvo = ['NET PJ - VIRTUA', 'VOZ - Novo', 'VOZ - Portabilidade'];
 
-  // agregação para a seção 01 (escopo selecionado) e seção 02 (sempre "Ativo/Instalado" = base real)
+  // Comissão de ativação usa o escopo selecionado (Ativo/+Ativação/+Aprovados/Geral).
+  // Carteira (linhas ativas reais) sempre usa a fila "Ativo/Instalado", independente do escopo acima.
   const aggAtivacao = {}, aggCarteira = {};
   CODIGOS_AACE2.forEach(({ tag }) => {
     aggAtivacao[tag] = { virtua: 0, vozNovo: 0, vozPort: 0 };
@@ -3923,21 +3876,11 @@ function s2PuxarDadosSheet() {
       else if (grupo === 'VOZ - Novo') aggAtivacao[tag].vozNovo += qtd;
       else if (grupo === 'VOZ - Portabilidade') aggAtivacao[tag].vozPort += qtd;
     }
-    // Carteira = base ativa real, sempre pela fila "Ativo/Instalado" independente do escopo escolhido acima
     if (fila === 'Ativo/Instalado') aggCarteira[tag] += qtd;
   });
 
-  CODIGOS_AACE2.forEach(({ tag }) => {
-    const sid = s2Sid(tag);
-    const vv = document.getElementById('s2-at-virtua-' + sid);
-    const vn = document.getElementById('s2-at-voznovo-' + sid);
-    const vp = document.getElementById('s2-at-vozport-' + sid);
-    const cl = document.getElementById('s2-cart-linhas-' + sid);
-    if (vv) vv.value = aggAtivacao[tag].virtua;
-    if (vn) vn.value = aggAtivacao[tag].vozNovo;
-    if (vp) vp.value = aggAtivacao[tag].vozPort;
-    if (cl) cl.value = aggCarteira[tag];
-  });
+  // Guarda os dados puxados — não há mais inputs manuais de linhas; tudo vem do Sheets.
+  window._s2SheetData = { ativacao: aggAtivacao, carteira: aggCarteira };
 
   renderSimulador2();
 }
@@ -4006,35 +3949,22 @@ function s2FaixaPorCnpjHc(razao) {
 }
 
 function initSimulador2() {
-  // Monta linhas das tabelas por código (unidade) apenas na primeira vez
-  if (!document.getElementById('s2-ativacao-body').children.length) {
-    document.getElementById('s2-ativacao-body').innerHTML = CODIGOS_AACE2.map(({ tag, nome }) => { const sid = s2Sid(tag); return `
+  // Monta a linha de recebimento por unidade apenas na primeira vez.
+  // Net Adds é o ÚNICO campo editável — todo o resto é calculado/puxado do Sheets.
+  if (!document.getElementById('s2-recebimento-body').children.length) {
+    document.getElementById('s2-recebimento-body').innerHTML = CODIGOS_AACE2.map(({ tag, nome }) => { const sid = s2Sid(tag); return `
       <tr data-tag="${tag}">
         <td>${nome}</td>
-        <td><input type="number" min="0" value="0" id="s2-at-virtua-${sid}" onchange="renderSimulador2()"></td>
-        <td><input type="number" min="0" value="0" id="s2-at-voznovo-${sid}" onchange="renderSimulador2()"></td>
-        <td><input type="number" min="0" value="0" id="s2-at-vozport-${sid}" onchange="renderSimulador2()"></td>
-        <td id="s2-at-comissao-${sid}">R$ 0,00</td>
-      </tr>`; }).join('');
-
-    document.getElementById('s2-carteira-body').innerHTML = CODIGOS_AACE2.map(({ tag, nome }) => { const sid = s2Sid(tag); return `
-      <tr data-tag="${tag}">
-        <td>${nome}</td>
-        <td><input type="number" min="0" value="0" id="s2-cart-linhas-${sid}" onchange="renderSimulador2()"></td>
-        <td><input type="number" value="0" id="s2-cart-netadds-${sid}" onchange="renderSimulador2()"></td>
-        <td id="s2-cart-unit-${sid}">—</td>
-        <td id="s2-cart-bruto-${sid}">R$ 0,00</td>
-      </tr>`; }).join('');
-
-    document.getElementById('s2-teto-body').innerHTML = CODIGOS_AACE2.map(({ tag, nome }) => { const sid = s2Sid(tag); return `
-      <tr data-tag="${tag}">
-        <td>${nome}</td>
-        <td id="s2-teto-comissao-${sid}">R$ 0,00</td>
-        <td id="s2-teto-pct-${sid}">—</td>
-        <td id="s2-teto-valor-${sid}">R$ 0,00</td>
-        <td id="s2-teto-bruto-${sid}">R$ 0,00</td>
-        <td id="s2-teto-pago-${sid}">R$ 0,00</td>
-        <td id="s2-teto-situacao-${sid}">—</td>
+        <td id="s2-rec-ativacao-${sid}">R$ 0,00</td>
+        <td id="s2-rec-tetopct-${sid}">—</td>
+        <td id="s2-rec-teto-${sid}">R$ 0,00</td>
+        <td id="s2-rec-linhas-${sid}">0</td>
+        <td><input type="number" value="0" id="s2-cart-netadds-${sid}" onchange="renderSimulador2()" style="width:70px"></td>
+        <td id="s2-rec-unit-${sid}">—</td>
+        <td id="s2-rec-bruto-${sid}">R$ 0,00</td>
+        <td id="s2-rec-recebida-${sid}">R$ 0,00</td>
+        <td id="s2-rec-naorecebida-${sid}">R$ 0,00</td>
+        <td id="s2-rec-mesa-${sid}">R$ 0,00</td>
       </tr>`; }).join('');
 
     document.getElementById('s2-rampa-body').innerHTML = RAMPA_PRODUTIVIDADE.map((r, i) => `
@@ -4066,72 +3996,73 @@ function renderSimulador2() {
   const cores = { bronze: 's2-cat-bronze', prata: 's2-cat-prata', ouro: 's2-cat-ouro', safira: 's2-cat-safira', diamante: 's2-cat-diamante' };
   const catLabel = categoria.charAt(0).toUpperCase() + categoria.slice(1);
 
-  // ── SEÇÃO 01 — Comissão de Ativação por código (unidade)
+  // ── PAINEL DE RECEBIMENTO — Comissão de Ativação + Carteira + Teto, tudo por unidade
   const fVirtua = s2num('s2-fator-virtua'), fVozNovo = s2num('s2-fator-voznovo'), fVozPort = s2num('s2-fator-vozport');
-  const comissaoAtivacao = {}; // por tag
-  let totalAtivacaoGeral = 0;
+  const sheet = window._s2SheetData || { ativacao: {}, carteira: {} };
 
-  CODIGOS_AACE2.forEach(({ tag }) => {
-    const sid = s2Sid(tag);
-    const lv = s2num('s2-at-virtua-' + sid), ln = s2num('s2-at-voznovo-' + sid), lp = s2num('s2-at-vozport-' + sid);
-    const comissao = lv * fVirtua + ln * fVozNovo + lp * fVozPort;
-    comissaoAtivacao[tag] = comissao;
-    document.getElementById('s2-at-comissao-' + sid).textContent = s2fmt(comissao);
-    totalAtivacaoGeral += comissao;
-  });
-  document.getElementById('s2-ativacao-total').innerHTML =
-    `<td>TOTAL GERAL</td><td colspan="3"></td><td>${s2fmt(totalAtivacaoGeral)}</td>`;
-
-  // ── SEÇÃO 02 — Headcount e Carteira
   const totalCnpjs = s2num('s2-total-cnpjs'), totalHcs = Math.max(s2num('s2-total-hcs'), 1);
   const razaoCnpjHc = totalCnpjs / totalHcs;
   const faixaObj = s2FaixaPorCnpjHc(razaoCnpjHc);
-  document.getElementById('s2-cnpjhc-resultado').value = razaoCnpjHc.toFixed(1);
-  document.getElementById('s2-faixa-resultado').value = faixaObj.faixa;
-
+  document.getElementById('s2-cnpjhc-resultado').textContent = razaoCnpjHc.toFixed(1);
+  document.getElementById('s2-faixa-resultado').textContent = faixaObj.faixa;
   const faixaIdx = s2FaixasCnpjHc().findIndex(f => f.faixa === faixaObj.faixa);
   const unitNegativo = UNITARIO_NETADDS_NEGATIVO[categoria];
-  const valorBrutoCarteira = {}; // por tag
-  let totalBrutoCarteira = 0;
-
-  CODIGOS_AACE2.forEach(({ tag }) => {
-    const sid = s2Sid(tag);
-    const linhas = s2num('s2-cart-linhas-' + sid);
-    const netAdds = s2num('s2-cart-netadds-' + sid);
-    const unit = netAdds < 0 ? unitNegativo : faixaObj.unitario;
-    const bruto = linhas * unit;
-    valorBrutoCarteira[tag] = bruto;
-    totalBrutoCarteira += bruto;
-    document.getElementById('s2-cart-unit-' + sid).textContent = 'R$ ' + unit.toFixed(2) + (netAdds < 0 ? ' (Net− / categoria)' : ' (Net+ / faixa)');
-    document.getElementById('s2-cart-bruto-' + sid).textContent = s2fmt(bruto);
-  });
-  document.getElementById('s2-carteira-total').innerHTML =
-    `<td>TOTAL GERAL</td><td colspan="2"></td><td></td><td>${s2fmt(totalBrutoCarteira)}</td>`;
-
-  // ── SEÇÃO 03 — Teto de Carteira (por código)
   const pctLiberacao = TETO_LIBERACAO[categoria][faixaIdx] ?? TETO_LIBERACAO[categoria][3];
-  const valorPagoCarteira = {}; // por tag, pós-teto
-  let totalTeto = 0, totalPagoCarteira = 0;
+
+  const comissaoAtivacao = {}, valorPagoCarteira = {}; // por tag — usados também nas seções 05/06
+  let totalAtivacaoGeral = 0, totalBrutoCarteira = 0, totalTeto = 0, totalPagoCarteira = 0,
+      totalNaoRecebida = 0, totalMesa = 0, totalLinhasVoz = 0, totalLinhasVirtua = 0;
 
   CODIGOS_AACE2.forEach(({ tag }) => {
     const sid = s2Sid(tag);
-    const comissao = comissaoAtivacao[tag];
+    const dAt = sheet.ativacao[tag] || { virtua: 0, vozNovo: 0, vozPort: 0 };
+    const linhasCarteira = sheet.carteira?.[tag] || 0;
+    const netAdds = s2num('s2-cart-netadds-' + sid);
+
+    const comissao = dAt.virtua * fVirtua + dAt.vozNovo * fVozNovo + dAt.vozPort * fVozPort;
+    const unit = netAdds < 0 ? unitNegativo : faixaObj.unitario;
+    const bruto = linhasCarteira * unit;
     const teto = comissao * pctLiberacao;
-    const bruto = valorBrutoCarteira[tag];
-    const pago = Math.min(bruto, teto);
-    valorPagoCarteira[tag] = pago;
-    totalTeto += teto; totalPagoCarteira += pago;
-    document.getElementById('s2-teto-comissao-' + sid).textContent = s2fmt(comissao);
-    document.getElementById('s2-teto-pct-' + sid).textContent = (pctLiberacao * 100).toFixed(0) + '%';
-    document.getElementById('s2-teto-valor-' + sid).textContent = s2fmt(teto);
-    document.getElementById('s2-teto-bruto-' + sid).textContent = s2fmt(bruto);
-    document.getElementById('s2-teto-pago-' + sid).textContent = s2fmt(pago);
-    const situacaoEl = document.getElementById('s2-teto-situacao-' + sid);
-    if (bruto > teto) { situacaoEl.textContent = 'Teto aplicado'; situacaoEl.className = 's2-teto-estourou'; }
-    else { situacaoEl.textContent = 'Pago integral'; situacaoEl.className = 's2-teto-ok'; }
+    const recebida = Math.min(bruto, teto);
+    const naoRecebida = Math.max(0, bruto - teto);
+    const mesa = Math.max(0, teto - bruto);
+
+    comissaoAtivacao[tag] = comissao;
+    valorPagoCarteira[tag] = recebida;
+
+    totalAtivacaoGeral += comissao; totalBrutoCarteira += bruto; totalTeto += teto;
+    totalPagoCarteira += recebida; totalNaoRecebida += naoRecebida; totalMesa += mesa;
+    totalLinhasVoz += dAt.vozNovo + dAt.vozPort; totalLinhasVirtua += dAt.virtua;
+
+    document.getElementById('s2-rec-ativacao-' + sid).textContent = s2fmt(comissao);
+    document.getElementById('s2-rec-tetopct-' + sid).textContent = (pctLiberacao * 100).toFixed(0) + '%';
+    document.getElementById('s2-rec-teto-' + sid).textContent = s2fmt(teto);
+    document.getElementById('s2-rec-linhas-' + sid).textContent = linhasCarteira.toLocaleString('pt-BR');
+    document.getElementById('s2-rec-unit-' + sid).textContent = 'R$ ' + unit.toFixed(2) + (netAdds < 0 ? ' (Net−)' : ' (Net+)');
+    document.getElementById('s2-rec-bruto-' + sid).textContent = s2fmt(bruto);
+    document.getElementById('s2-rec-recebida-' + sid).textContent = s2fmt(recebida);
+    const naoRecEl = document.getElementById('s2-rec-naorecebida-' + sid);
+    naoRecEl.textContent = s2fmt(naoRecebida); naoRecEl.className = naoRecebida > 0 ? 's2-teto-estourou' : '';
+    const mesaEl = document.getElementById('s2-rec-mesa-' + sid);
+    mesaEl.textContent = s2fmt(mesa); mesaEl.style.color = mesa > 0 ? '#B45309' : '';
   });
-  document.getElementById('s2-teto-total').innerHTML =
-    `<td>TOTAL GERAL</td><td>${s2fmt(totalAtivacaoGeral)}</td><td>${(pctLiberacao*100).toFixed(0)}%</td><td>${s2fmt(totalTeto)}</td><td>${s2fmt(totalBrutoCarteira)}</td><td>${s2fmt(totalPagoCarteira)}</td><td></td>`;
+
+  document.getElementById('s2-recebimento-total').innerHTML =
+    `<td>TOTAL GERAL</td><td>${s2fmt(totalAtivacaoGeral)}</td><td>${(pctLiberacao*100).toFixed(0)}%</td><td>${s2fmt(totalTeto)}</td>` +
+    `<td>${(totalLinhasVoz+totalLinhasVirtua).toLocaleString('pt-BR')}</td><td></td><td></td>` +
+    `<td>${s2fmt(totalBrutoCarteira)}</td><td>${s2fmt(totalPagoCarteira)}</td><td>${s2fmt(totalNaoRecebida)}</td><td>${s2fmt(totalMesa)}</td>`;
+
+  // ── KPIs do topo do painel
+  document.getElementById('s2-kpi-bruto').textContent = s2fmt(totalBrutoCarteira);
+  document.getElementById('s2-kpi-bruto-sub').textContent = totalBrutoCarteira ? `${(totalBrutoCarteira/1).toLocaleString('pt-BR',{minimumFractionDigits:0})} calculado pela faixa/categoria` : '';
+  document.getElementById('s2-kpi-recebida').textContent = s2fmt(totalPagoCarteira);
+  document.getElementById('s2-kpi-naorecebida').textContent = s2fmt(totalNaoRecebida);
+  document.getElementById('s2-kpi-mesa').textContent = s2fmt(totalMesa);
+  document.getElementById('s2-kpi-linhasvoz').textContent = totalLinhasVoz.toLocaleString('pt-BR');
+  document.getElementById('s2-kpi-linhasvirtua').textContent = totalLinhasVirtua.toLocaleString('pt-BR');
+  document.getElementById('s2-kpi-ativacao').textContent = s2fmt(totalAtivacaoGeral);
+  document.getElementById('s2-kpi-teto').textContent = s2fmt(totalTeto);
+  document.getElementById('s2-kpi-teto-sub').textContent = `% liberação: ${(pctLiberacao*100).toFixed(0)}% (${catLabel} · ${faixaObj.faixa})`;
 
   // ── SEÇÃO 04 — Bônus Produtividade
   let totalVendedores = 0;
@@ -4209,10 +4140,6 @@ function s2CamposParaSalvar() {
   };
   CODIGOS_AACE2.forEach(({ tag }) => {
     const sid = s2Sid(tag);
-    campos['at-virtua-' + sid] = s2num('s2-at-virtua-' + sid);
-    campos['at-voznovo-' + sid] = s2num('s2-at-voznovo-' + sid);
-    campos['at-vozport-' + sid] = s2num('s2-at-vozport-' + sid);
-    campos['cart-linhas-' + sid] = s2num('s2-cart-linhas-' + sid);
     campos['cart-netadds-' + sid] = s2num('s2-cart-netadds-' + sid);
   });
   RAMPA_PRODUTIVIDADE.forEach((r, i) => { campos['rampa-qtd-' + i] = s2num('s2-rampa-qtd-' + i); });
@@ -4283,15 +4210,14 @@ function exportarSimulador2() {
     ['CNPJ/HC apurado', r.razaoCnpjHc.toFixed(2)],
     ['% Liberação Teto', (r.pctLiberacao * 100).toFixed(0) + '%'],
     [''],
-    ['Código', 'Comissão Ativação', 'Manutenção Carteira (pago)', 'Total'],
+    ['Código', 'Comissão Ativação', 'Cart. Recebida', 'Cart. Não Recebida', 'Deixado na Mesa'],
     ...CODIGOS_AACE2.map(({ tag, nome }) => {
       const sid = s2Sid(tag);
-      const at = s2num('s2-at-virtua-' + sid) * s2num('s2-fator-virtua')
-               + s2num('s2-at-voznovo-' + sid) * s2num('s2-fator-voznovo')
-               + s2num('s2-at-vozport-' + sid) * s2num('s2-fator-vozport');
-      const cartEl = document.getElementById('s2-teto-pago-' + sid);
-      const cart = cartEl ? cartEl.textContent : 'R$ 0,00';
-      return [nome, at.toFixed(2), cart, ''];
+      const at    = document.getElementById('s2-rec-ativacao-' + sid)?.textContent || 'R$ 0,00';
+      const rec   = document.getElementById('s2-rec-recebida-' + sid)?.textContent || 'R$ 0,00';
+      const naoRc = document.getElementById('s2-rec-naorecebida-' + sid)?.textContent || 'R$ 0,00';
+      const mesa  = document.getElementById('s2-rec-mesa-' + sid)?.textContent || 'R$ 0,00';
+      return [nome, at, rec, naoRc, mesa];
     }),
     [''],
     ['Total Ativação', r.totalAtivacaoGeral.toFixed(2)],
