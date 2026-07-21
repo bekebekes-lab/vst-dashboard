@@ -1386,7 +1386,24 @@
     <!-- SEÇÃO 01 — COMISSÃO DE ATIVAÇÃO -->
     <div class="s2-secao">
       <div class="s2-secao-titulo"><span class="s2-secao-num">01</span> Comissão de Ativação</div>
-      <div class="s2-secao-desc">Remunera as vendas NOVAS do mês (ativações), por código AACE. Informe a quantidade de linhas ativadas de cada tipo e o fator (R$/linha) aplicável — mesma lógica de multiplicadores do Simulador de Carteira atual. O total por código alimenta o Teto de Carteira (seção 03) e o Bônus Categoria (seção 05).</div>
+      <div class="s2-secao-desc">Remunera as vendas NOVAS do mês (ativações), por código/unidade AACE. As quantidades de linhas são puxadas automaticamente do BaseCRM (mesma planilha/API do Simulador de Carteira) conforme o escopo escolhido — mas continuam editáveis manualmente se precisar ajustar. O total por código alimenta o Teto de Carteira (seção 03) e o Bônus Categoria (seção 05).</div>
+
+      <div class="s2-params-bar">
+        <div class="s2-field">
+          <label>Escopo (fonte: BaseCRM)</label>
+          <div class="sim-visoes" id="s2-visoes">
+            <button class="sim-visao-btn active" onclick="s2SetVisao('ativo',this)">Ativo</button>
+            <button class="sim-visao-btn" onclick="s2SetVisao('ativacao',this)">+ Ativação</button>
+            <button class="sim-visao-btn" onclick="s2SetVisao('aprovados',this)">+ Aprovados</button>
+            <button class="sim-visao-btn" onclick="s2SetVisao('geral',this)">Geral</button>
+          </div>
+          <div class="s2-hint">Mesmos escopos do Simulador de Carteira (item FILAS_POR_VISAO): define quais status/filas do BaseCRM entram na contagem de linhas ativadas.</div>
+        </div>
+        <div class="s2-field">
+          <label>&nbsp;</label>
+          <button class="sim-btn-discrete sim-btn-save" onclick="s2PuxarDadosSheet()">↻ Puxar do Sheets</button>
+        </div>
+      </div>
 
       <div class="s2-params-bar">
         <div class="s2-field">
@@ -1407,7 +1424,7 @@
         <table class="s2-table" id="s2-tabela-ativacao">
           <thead>
             <tr>
-              <th>Código AACE</th>
+              <th>Código AACE / Unidade</th>
               <th>Linhas VIRTUA</th>
               <th>Linhas VOZ Novo</th>
               <th>Linhas VOZ Portab.</th>
@@ -1418,7 +1435,6 @@
           <tfoot><tr id="s2-ativacao-total"></tr></tfoot>
         </table>
       </div>
-      <div class="s2-hint">Edite os nomes dos códigos diretamente no array CODIGOS_AACE2 no código-fonte, caso não correspondam aos códigos reais da VST.</div>
     </div>
 
     <!-- SEÇÃO 02 — HEADCOUNT E CARTEIRA -->
@@ -1451,7 +1467,7 @@
         <table class="s2-table" id="s2-tabela-carteira">
           <thead>
             <tr>
-              <th>Código AACE</th>
+              <th>Código AACE / Unidade</th>
               <th>Linhas ativas (carteira)</th>
               <th>Net Adds (+/−)</th>
               <th>Unitário aplicável</th>
@@ -1474,7 +1490,7 @@
         <table class="s2-table" id="s2-tabela-teto">
           <thead>
             <tr>
-              <th>Código AACE</th>
+              <th>Código AACE / Unidade</th>
               <th>Comissão Ativação (R$)</th>
               <th>% Liberação</th>
               <th>Teto (R$)</th>
@@ -1547,7 +1563,7 @@
 
       <div class="s2-table-wrap">
         <table class="s2-table" id="s2-tabela-resumo">
-          <thead><tr><th>Código AACE</th><th>Comissão Ativação</th><th>Manutenção Carteira</th><th>Total por código</th></tr></thead>
+          <thead><tr><th>Código AACE / Unidade</th><th>Comissão Ativação</th><th>Manutenção Carteira</th><th>Total por código</th></tr></thead>
           <tbody id="s2-resumo-body"></tbody>
         </table>
       </div>
@@ -3857,8 +3873,74 @@ async function salvarConfigSimulador() {
 // Baseado no Anexo III (PL-RCC-004) e Anexo IV (Metas Bônus Categoria).
 // ═══════════════════════════════════════════════════════════════════════════
 
-// Códigos AACE fixos da VST. AJUSTE ESTA LISTA para os códigos reais.
-const CODIGOS_AACE2 = ['Código 1','Código 2','Código 3','Código 4','Código 5','Código 6','Código 7','Código 8'];
+// Códigos AACE = as mesmas unidades/tags já usadas no Simulador de Carteira (MAPEAMENTO_TAGS).
+// Cada item vira { tag: '#1EWV', nome: '#1EWV - CASCAVEL' }.
+const CODIGOS_AACE2 = Object.entries(MAPEAMENTO_TAGS)
+  .sort((a, b) => a[1].localeCompare(b[1]))
+  .map(([tag, nome]) => ({ tag, nome }));
+
+// sufixo seguro para usar em id="" (remove caracteres especiais do código, ex: '#1EWV' -> '1EWV')
+function s2Sid(tag) { return tag.replace(/[^a-zA-Z0-9]/g, ''); }
+
+let s2Visao = 'ativo'; // escopo ativo: ativo | ativacao | aprovados | geral (reaproveita FILAS_POR_VISAO)
+
+function s2SetVisao(v, el) {
+  s2Visao = v;
+  document.querySelectorAll('#s2-visoes .sim-visao-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  s2PuxarDadosSheet();
+}
+
+// Puxa do ALL_DATA (mesma fonte/planilha do Simulador 1.0) as quantidades de linhas
+// por unidade/código, filtrando pelo escopo selecionado (Ativo/+Ativação/+Aprovados/Geral)
+// e preenche os campos de Ativação (seção 01) e Linhas Ativas de Carteira (seção 02).
+// Os campos continuam editáveis manualmente após o "puxar", caso precise de ajuste.
+function s2PuxarDadosSheet() {
+  if (!window.ALL_DATA || !ALL_DATA.length) {
+    console.warn('Simulador 2.0: ALL_DATA ainda não carregado — clique em Atualizar e tente novamente.');
+    return;
+  }
+  const filasPermitidas = FILAS_POR_VISAO[s2Visao];
+  const produtosAlvo = ['NET PJ - VIRTUA', 'VOZ - Novo', 'VOZ - Portabilidade'];
+
+  // agregação para a seção 01 (escopo selecionado) e seção 02 (sempre "Ativo/Instalado" = base real)
+  const aggAtivacao = {}, aggCarteira = {};
+  CODIGOS_AACE2.forEach(({ tag }) => {
+    aggAtivacao[tag] = { virtua: 0, vozNovo: 0, vozPort: 0 };
+    aggCarteira[tag] = 0;
+  });
+
+  ALL_DATA.forEach(r => {
+    const tag   = r['TAGS ATIVIDADE'] || '';
+    const grupo = r['GRUPO'] || '';
+    const fila  = r['FILA'] || '';
+    const qtd   = parseInt(r['QUANTIDADE']) || 1;
+    if (!aggAtivacao[tag]) return;
+    if (!produtosAlvo.includes(grupo)) return;
+
+    if (filasPermitidas.includes(fila)) {
+      if (grupo === 'NET PJ - VIRTUA') aggAtivacao[tag].virtua += qtd;
+      else if (grupo === 'VOZ - Novo') aggAtivacao[tag].vozNovo += qtd;
+      else if (grupo === 'VOZ - Portabilidade') aggAtivacao[tag].vozPort += qtd;
+    }
+    // Carteira = base ativa real, sempre pela fila "Ativo/Instalado" independente do escopo escolhido acima
+    if (fila === 'Ativo/Instalado') aggCarteira[tag] += qtd;
+  });
+
+  CODIGOS_AACE2.forEach(({ tag }) => {
+    const sid = s2Sid(tag);
+    const vv = document.getElementById('s2-at-virtua-' + sid);
+    const vn = document.getElementById('s2-at-voznovo-' + sid);
+    const vp = document.getElementById('s2-at-vozport-' + sid);
+    const cl = document.getElementById('s2-cart-linhas-' + sid);
+    if (vv) vv.value = aggAtivacao[tag].virtua;
+    if (vn) vn.value = aggAtivacao[tag].vozNovo;
+    if (vp) vp.value = aggAtivacao[tag].vozPort;
+    if (cl) cl.value = aggCarteira[tag];
+  });
+
+  renderSimulador2();
+}
 
 // Item 2.6.4-ii — Faixa CNPJ/HC (tabela definitiva, a partir de set/26)
 const FAIXAS_CNPJHC_DEFINITIVA = [
@@ -3924,36 +4006,36 @@ function s2FaixaPorCnpjHc(razao) {
 }
 
 function initSimulador2() {
-  // Monta linhas das tabelas por código apenas na primeira vez
+  // Monta linhas das tabelas por código (unidade) apenas na primeira vez
   if (!document.getElementById('s2-ativacao-body').children.length) {
-    document.getElementById('s2-ativacao-body').innerHTML = CODIGOS_AACE2.map((c, i) => `
-      <tr data-codigo="${i}">
-        <td>${c}</td>
-        <td><input type="number" min="0" value="0" id="s2-at-virtua-${i}" onchange="renderSimulador2()"></td>
-        <td><input type="number" min="0" value="0" id="s2-at-voznovo-${i}" onchange="renderSimulador2()"></td>
-        <td><input type="number" min="0" value="0" id="s2-at-vozport-${i}" onchange="renderSimulador2()"></td>
-        <td id="s2-at-comissao-${i}">R$ 0,00</td>
-      </tr>`).join('');
+    document.getElementById('s2-ativacao-body').innerHTML = CODIGOS_AACE2.map(({ tag, nome }) => { const sid = s2Sid(tag); return `
+      <tr data-tag="${tag}">
+        <td>${nome}</td>
+        <td><input type="number" min="0" value="0" id="s2-at-virtua-${sid}" onchange="renderSimulador2()"></td>
+        <td><input type="number" min="0" value="0" id="s2-at-voznovo-${sid}" onchange="renderSimulador2()"></td>
+        <td><input type="number" min="0" value="0" id="s2-at-vozport-${sid}" onchange="renderSimulador2()"></td>
+        <td id="s2-at-comissao-${sid}">R$ 0,00</td>
+      </tr>`; }).join('');
 
-    document.getElementById('s2-carteira-body').innerHTML = CODIGOS_AACE2.map((c, i) => `
-      <tr data-codigo="${i}">
-        <td>${c}</td>
-        <td><input type="number" min="0" value="0" id="s2-cart-linhas-${i}" onchange="renderSimulador2()"></td>
-        <td><input type="number" value="0" id="s2-cart-netadds-${i}" onchange="renderSimulador2()"></td>
-        <td id="s2-cart-unit-${i}">—</td>
-        <td id="s2-cart-bruto-${i}">R$ 0,00</td>
-      </tr>`).join('');
+    document.getElementById('s2-carteira-body').innerHTML = CODIGOS_AACE2.map(({ tag, nome }) => { const sid = s2Sid(tag); return `
+      <tr data-tag="${tag}">
+        <td>${nome}</td>
+        <td><input type="number" min="0" value="0" id="s2-cart-linhas-${sid}" onchange="renderSimulador2()"></td>
+        <td><input type="number" value="0" id="s2-cart-netadds-${sid}" onchange="renderSimulador2()"></td>
+        <td id="s2-cart-unit-${sid}">—</td>
+        <td id="s2-cart-bruto-${sid}">R$ 0,00</td>
+      </tr>`; }).join('');
 
-    document.getElementById('s2-teto-body').innerHTML = CODIGOS_AACE2.map((c, i) => `
-      <tr data-codigo="${i}">
-        <td>${c}</td>
-        <td id="s2-teto-comissao-${i}">R$ 0,00</td>
-        <td id="s2-teto-pct-${i}">—</td>
-        <td id="s2-teto-valor-${i}">R$ 0,00</td>
-        <td id="s2-teto-bruto-${i}">R$ 0,00</td>
-        <td id="s2-teto-pago-${i}">R$ 0,00</td>
-        <td id="s2-teto-situacao-${i}">—</td>
-      </tr>`).join('');
+    document.getElementById('s2-teto-body').innerHTML = CODIGOS_AACE2.map(({ tag, nome }) => { const sid = s2Sid(tag); return `
+      <tr data-tag="${tag}">
+        <td>${nome}</td>
+        <td id="s2-teto-comissao-${sid}">R$ 0,00</td>
+        <td id="s2-teto-pct-${sid}">—</td>
+        <td id="s2-teto-valor-${sid}">R$ 0,00</td>
+        <td id="s2-teto-bruto-${sid}">R$ 0,00</td>
+        <td id="s2-teto-pago-${sid}">R$ 0,00</td>
+        <td id="s2-teto-situacao-${sid}">—</td>
+      </tr>`; }).join('');
 
     document.getElementById('s2-rampa-body').innerHTML = RAMPA_PRODUTIVIDADE.map((r, i) => `
       <tr>
@@ -3968,9 +4050,14 @@ function initSimulador2() {
     document.getElementById('s2-competencia').value = hoje.toISOString().slice(0, 7);
   }
 
-  carregarSimulador2().then(renderSimulador2);
+  // Carrega config salva da competência (se houver) e, na sequência, tenta puxar
+  // os números direto do BaseCRM (ALL_DATA) — mesma fonte do Simulador de Carteira.
+  carregarSimulador2().then(() => {
+    s2PuxarDadosSheet();
+  });
   carregarHistoricoListaSimulador2();
 }
+
 
 function renderSimulador2() {
   const categoria = document.getElementById('s2-categoria').value;
@@ -3979,17 +4066,17 @@ function renderSimulador2() {
   const cores = { bronze: 's2-cat-bronze', prata: 's2-cat-prata', ouro: 's2-cat-ouro', safira: 's2-cat-safira', diamante: 's2-cat-diamante' };
   const catLabel = categoria.charAt(0).toUpperCase() + categoria.slice(1);
 
-  // ── SEÇÃO 01 — Comissão de Ativação por código
+  // ── SEÇÃO 01 — Comissão de Ativação por código (unidade)
   const fVirtua = s2num('s2-fator-virtua'), fVozNovo = s2num('s2-fator-voznovo'), fVozPort = s2num('s2-fator-vozport');
-  const comissaoAtivacao = []; // por código
-  let totalAtivacaoVirtua = 0, totalAtivacaoVozNovo = 0, totalAtivacaoVozPort = 0, totalAtivacaoGeral = 0;
+  const comissaoAtivacao = {}; // por tag
+  let totalAtivacaoGeral = 0;
 
-  CODIGOS_AACE2.forEach((c, i) => {
-    const lv = s2num('s2-at-virtua-' + i), ln = s2num('s2-at-voznovo-' + i), lp = s2num('s2-at-vozport-' + i);
+  CODIGOS_AACE2.forEach(({ tag }) => {
+    const sid = s2Sid(tag);
+    const lv = s2num('s2-at-virtua-' + sid), ln = s2num('s2-at-voznovo-' + sid), lp = s2num('s2-at-vozport-' + sid);
     const comissao = lv * fVirtua + ln * fVozNovo + lp * fVozPort;
-    comissaoAtivacao[i] = comissao;
-    document.getElementById('s2-at-comissao-' + i).textContent = s2fmt(comissao);
-    totalAtivacaoVirtua += lv * fVirtua; totalAtivacaoVozNovo += ln * fVozNovo; totalAtivacaoVozPort += lp * fVozPort;
+    comissaoAtivacao[tag] = comissao;
+    document.getElementById('s2-at-comissao-' + sid).textContent = s2fmt(comissao);
     totalAtivacaoGeral += comissao;
   });
   document.getElementById('s2-ativacao-total').innerHTML =
@@ -4004,40 +4091,42 @@ function renderSimulador2() {
 
   const faixaIdx = s2FaixasCnpjHc().findIndex(f => f.faixa === faixaObj.faixa);
   const unitNegativo = UNITARIO_NETADDS_NEGATIVO[categoria];
-  const valorBrutoCarteira = []; // por código
+  const valorBrutoCarteira = {}; // por tag
   let totalBrutoCarteira = 0;
 
-  CODIGOS_AACE2.forEach((c, i) => {
-    const linhas = s2num('s2-cart-linhas-' + i);
-    const netAdds = s2num('s2-cart-netadds-' + i);
+  CODIGOS_AACE2.forEach(({ tag }) => {
+    const sid = s2Sid(tag);
+    const linhas = s2num('s2-cart-linhas-' + sid);
+    const netAdds = s2num('s2-cart-netadds-' + sid);
     const unit = netAdds < 0 ? unitNegativo : faixaObj.unitario;
     const bruto = linhas * unit;
-    valorBrutoCarteira[i] = bruto;
+    valorBrutoCarteira[tag] = bruto;
     totalBrutoCarteira += bruto;
-    document.getElementById('s2-cart-unit-' + i).textContent = 'R$ ' + unit.toFixed(2) + (netAdds < 0 ? ' (Net− / categoria)' : ' (Net+ / faixa)');
-    document.getElementById('s2-cart-bruto-' + i).textContent = s2fmt(bruto);
+    document.getElementById('s2-cart-unit-' + sid).textContent = 'R$ ' + unit.toFixed(2) + (netAdds < 0 ? ' (Net− / categoria)' : ' (Net+ / faixa)');
+    document.getElementById('s2-cart-bruto-' + sid).textContent = s2fmt(bruto);
   });
   document.getElementById('s2-carteira-total').innerHTML =
     `<td>TOTAL GERAL</td><td colspan="2"></td><td></td><td>${s2fmt(totalBrutoCarteira)}</td>`;
 
   // ── SEÇÃO 03 — Teto de Carteira (por código)
   const pctLiberacao = TETO_LIBERACAO[categoria][faixaIdx] ?? TETO_LIBERACAO[categoria][3];
-  const valorPagoCarteira = []; // por código, pós-teto
+  const valorPagoCarteira = {}; // por tag, pós-teto
   let totalTeto = 0, totalPagoCarteira = 0;
 
-  CODIGOS_AACE2.forEach((c, i) => {
-    const comissao = comissaoAtivacao[i];
+  CODIGOS_AACE2.forEach(({ tag }) => {
+    const sid = s2Sid(tag);
+    const comissao = comissaoAtivacao[tag];
     const teto = comissao * pctLiberacao;
-    const bruto = valorBrutoCarteira[i];
+    const bruto = valorBrutoCarteira[tag];
     const pago = Math.min(bruto, teto);
-    valorPagoCarteira[i] = pago;
+    valorPagoCarteira[tag] = pago;
     totalTeto += teto; totalPagoCarteira += pago;
-    document.getElementById('s2-teto-comissao-' + i).textContent = s2fmt(comissao);
-    document.getElementById('s2-teto-pct-' + i).textContent = (pctLiberacao * 100).toFixed(0) + '%';
-    document.getElementById('s2-teto-valor-' + i).textContent = s2fmt(teto);
-    document.getElementById('s2-teto-bruto-' + i).textContent = s2fmt(bruto);
-    document.getElementById('s2-teto-pago-' + i).textContent = s2fmt(pago);
-    const situacaoEl = document.getElementById('s2-teto-situacao-' + i);
+    document.getElementById('s2-teto-comissao-' + sid).textContent = s2fmt(comissao);
+    document.getElementById('s2-teto-pct-' + sid).textContent = (pctLiberacao * 100).toFixed(0) + '%';
+    document.getElementById('s2-teto-valor-' + sid).textContent = s2fmt(teto);
+    document.getElementById('s2-teto-bruto-' + sid).textContent = s2fmt(bruto);
+    document.getElementById('s2-teto-pago-' + sid).textContent = s2fmt(pago);
+    const situacaoEl = document.getElementById('s2-teto-situacao-' + sid);
     if (bruto > teto) { situacaoEl.textContent = 'Teto aplicado'; situacaoEl.className = 's2-teto-estourou'; }
     else { situacaoEl.textContent = 'Pago integral'; situacaoEl.className = 's2-teto-ok'; }
   });
@@ -4045,12 +4134,8 @@ function renderSimulador2() {
     `<td>TOTAL GERAL</td><td>${s2fmt(totalAtivacaoGeral)}</td><td>${(pctLiberacao*100).toFixed(0)}%</td><td>${s2fmt(totalTeto)}</td><td>${s2fmt(totalBrutoCarteira)}</td><td>${s2fmt(totalPagoCarteira)}</td><td></td>`;
 
   // ── SEÇÃO 04 — Bônus Produtividade
-  let totalVendedores = 0, metaPonderada = 0;
-  RAMPA_PRODUTIVIDADE.forEach((r, i) => {
-    const qtd = s2num('s2-rampa-qtd-' + i);
-    totalVendedores += qtd;
-    metaPonderada += qtd * r.pct;
-  });
+  let totalVendedores = 0;
+  RAMPA_PRODUTIVIDADE.forEach((r, i) => { totalVendedores += s2num('s2-rampa-qtd-' + i); });
   const pctMovel = s2num('s2-prod-movel'), pctFixa = s2num('s2-prod-fixa'), pctSd = s2num('s2-prod-sd');
   const travaOk = totalVendedores >= 4 && pctMovel >= 60 && pctFixa >= 60;
   document.getElementById('s2-prod-trava').textContent = totalVendedores < 4 ? 'Inelegível (<4 vend.)' : (travaOk ? 'OK' : 'Reprovada (<60%)');
@@ -4082,12 +4167,12 @@ function renderSimulador2() {
   document.getElementById('s2-cat-total').textContent = s2fmt(totalBonusCategoria);
 
   // ── SEÇÃO 06 — Resumo
-  document.getElementById('s2-resumo-body').innerHTML = CODIGOS_AACE2.map((c, i) => `
+  document.getElementById('s2-resumo-body').innerHTML = CODIGOS_AACE2.map(({ tag, nome }) => `
     <tr>
-      <td>${c}</td>
-      <td>${s2fmt(comissaoAtivacao[i])}</td>
-      <td>${s2fmt(valorPagoCarteira[i])}</td>
-      <td>${s2fmt(comissaoAtivacao[i] + valorPagoCarteira[i])}</td>
+      <td>${nome}</td>
+      <td>${s2fmt(comissaoAtivacao[tag])}</td>
+      <td>${s2fmt(valorPagoCarteira[tag])}</td>
+      <td>${s2fmt(comissaoAtivacao[tag] + valorPagoCarteira[tag])}</td>
     </tr>`).join('');
 
   const totalGeralCompetencia = totalAtivacaoGeral + totalPagoCarteira + totalBonusProdutividade + totalBonusCategoria;
@@ -4122,12 +4207,13 @@ function s2CamposParaSalvar() {
     'prod-fixa': s2num('s2-prod-fixa'),
     'prod-sd': s2num('s2-prod-sd'),
   };
-  CODIGOS_AACE2.forEach((c, i) => {
-    campos['at-virtua-' + i] = s2num('s2-at-virtua-' + i);
-    campos['at-voznovo-' + i] = s2num('s2-at-voznovo-' + i);
-    campos['at-vozport-' + i] = s2num('s2-at-vozport-' + i);
-    campos['cart-linhas-' + i] = s2num('s2-cart-linhas-' + i);
-    campos['cart-netadds-' + i] = s2num('s2-cart-netadds-' + i);
+  CODIGOS_AACE2.forEach(({ tag }) => {
+    const sid = s2Sid(tag);
+    campos['at-virtua-' + sid] = s2num('s2-at-virtua-' + sid);
+    campos['at-voznovo-' + sid] = s2num('s2-at-voznovo-' + sid);
+    campos['at-vozport-' + sid] = s2num('s2-at-vozport-' + sid);
+    campos['cart-linhas-' + sid] = s2num('s2-cart-linhas-' + sid);
+    campos['cart-netadds-' + sid] = s2num('s2-cart-netadds-' + sid);
   });
   RAMPA_PRODUTIVIDADE.forEach((r, i) => { campos['rampa-qtd-' + i] = s2num('s2-rampa-qtd-' + i); });
   return campos;
@@ -4198,13 +4284,14 @@ function exportarSimulador2() {
     ['% Liberação Teto', (r.pctLiberacao * 100).toFixed(0) + '%'],
     [''],
     ['Código', 'Comissão Ativação', 'Manutenção Carteira (pago)', 'Total'],
-    ...CODIGOS_AACE2.map((c, i) => {
-      const at = s2num('s2-at-virtua-' + i) * s2num('s2-fator-virtua')
-               + s2num('s2-at-voznovo-' + i) * s2num('s2-fator-voznovo')
-               + s2num('s2-at-vozport-' + i) * s2num('s2-fator-vozport');
-      const cartEl = document.getElementById('s2-teto-pago-' + i);
+    ...CODIGOS_AACE2.map(({ tag, nome }) => {
+      const sid = s2Sid(tag);
+      const at = s2num('s2-at-virtua-' + sid) * s2num('s2-fator-virtua')
+               + s2num('s2-at-voznovo-' + sid) * s2num('s2-fator-voznovo')
+               + s2num('s2-at-vozport-' + sid) * s2num('s2-fator-vozport');
+      const cartEl = document.getElementById('s2-teto-pago-' + sid);
       const cart = cartEl ? cartEl.textContent : 'R$ 0,00';
-      return [c, at.toFixed(2), cart, ''];
+      return [nome, at.toFixed(2), cart, ''];
     }),
     [''],
     ['Total Ativação', r.totalAtivacaoGeral.toFixed(2)],
