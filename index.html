@@ -3857,10 +3857,10 @@ function s2SetVisao(v, el) {
   s2PuxarDadosSheet();
 }
 
-// Puxa do ALL_DATA (mesma fonte/planilha do Simulador 1.0) as quantidades de linhas
-// por unidade/código, filtrando pelo escopo selecionado (Ativo/+Ativação/+Aprovados/Geral)
-// e preenche os campos de Ativação (seção 01) e Linhas Ativas de Carteira (seção 02).
-// Os campos continuam editáveis manualmente após o "puxar", caso precise de ajuste.
+// Puxa do ALL_DATA (mesma fonte/planilha do Simulador 1.0) a receita vendida real
+// (coluna VALOR UNIT) por unidade/código, filtrando pelo escopo selecionado
+// (Ativo/+Ativação/+Aprovados/Geral). A Comissão de Ativação = receita real × fator
+// multiplicador — igual ao Simulador de Carteira, não é "quantidade × fator".
 function s2PuxarDadosSheet() {
   if (!ALL_DATA || !ALL_DATA.length) {
     console.warn('Simulador 2.0: ALL_DATA ainda não carregado — clique em Atualizar e tente novamente.');
@@ -3873,20 +3873,36 @@ function s2PuxarDadosSheet() {
   // selecionado (Ativo/+Ativação/+Aprovados/Geral). Linhas da Carteira e Net Adds
   // continuam manuais (a Claro reporta isso via demonstrativo próprio, não está no BaseCRM).
   const aggAtivacao = {};
-  CODIGOS_AACE2.forEach(({ tag }) => { aggAtivacao[tag] = { virtua: 0, vozNovo: 0, vozPort: 0 }; });
+  CODIGOS_AACE2.forEach(({ tag }) => {
+    aggAtivacao[tag] = {
+      virtua:  { qtd: 0, rec: 0 },
+      vozNovo: { qtd: 0, rec: 0 },
+      vozPort: { qtd: 0, rec: 0 },
+    };
+  });
 
   ALL_DATA.forEach(r => {
     const tag   = r['TAGS ATIVIDADE'] || '';
     const grupo = r['GRUPO'] || '';
     const fila  = r['FILA'] || '';
     const qtd   = parseInt(r['QUANTIDADE']) || 1;
+    const valor = parseFloat((r['VALOR UNIT'] || '0').toString().replace(',', '.')) || 0;
     if (!aggAtivacao[tag]) return;
     if (!produtosAlvo.includes(grupo)) return;
     if (!filasPermitidas.includes(fila)) return;
 
-    if (grupo === 'NET PJ - VIRTUA') aggAtivacao[tag].virtua += qtd;
-    else if (grupo === 'VOZ - Novo') aggAtivacao[tag].vozNovo += qtd;
-    else if (grupo === 'VOZ - Portabilidade') aggAtivacao[tag].vozPort += qtd;
+    const recCents = Math.round(valor * 100);
+
+    if (grupo === 'NET PJ - VIRTUA') {
+      aggAtivacao[tag].virtua.qtd += qtd;
+      aggAtivacao[tag].virtua.rec += qtd * recCents;  // NET PJ = qtd × valor unit
+    } else if (grupo === 'VOZ - Novo') {
+      aggAtivacao[tag].vozNovo.qtd += qtd;
+      aggAtivacao[tag].vozNovo.rec += recCents;       // VOZ = 1 linha = 1 valor unit
+    } else if (grupo === 'VOZ - Portabilidade') {
+      aggAtivacao[tag].vozPort.qtd += qtd;
+      aggAtivacao[tag].vozPort.rec += recCents;
+    }
   });
 
   window._s2SheetData = { ativacao: aggAtivacao };
@@ -4027,11 +4043,13 @@ function renderSimulador2() {
 
   CODIGOS_AACE2.forEach(({ tag }) => {
     const sid = s2Sid(tag);
-    const dAt = sheet.ativacao[tag] || { virtua: 0, vozNovo: 0, vozPort: 0 };
+    const dAt = sheet.ativacao[tag] || { virtua: { qtd: 0, rec: 0 }, vozNovo: { qtd: 0, rec: 0 }, vozPort: { qtd: 0, rec: 0 } };
     const linhasCarteira = s2num('s2-cart-linhas-' + sid); // manual — carteira reportada pela Claro, não está no BaseCRM
     const netAdds = s2num('s2-cart-netadds-' + sid);
 
-    const comissao = dAt.virtua * fVirtua + dAt.vozNovo * fVozNovo + dAt.vozPort * fVozPort;
+    // Comissão = receita real vendida (rec, em centavos) × fator multiplicador — igual ao Simulador 1.0.
+    const comissaoCents = Math.round(dAt.virtua.rec * fVirtua) + Math.round(dAt.vozNovo.rec * fVozNovo) + Math.round(dAt.vozPort.rec * fVozPort);
+    const comissao = comissaoCents / 100;
     const unit = netAdds < 0 ? unitNegativo : faixaObj.unitario;
     const bruto = linhasCarteira * unit;
     const teto = comissao * pctLiberacao;
@@ -4044,7 +4062,7 @@ function renderSimulador2() {
 
     totalAtivacaoGeral += comissao; totalBrutoCarteira += bruto; totalTeto += teto;
     totalPagoCarteira += recebida; totalNaoRecebida += naoRecebida; totalMesa += mesa;
-    totalLinhasVoz += dAt.vozNovo + dAt.vozPort; totalLinhasVirtua += dAt.virtua; totalLinhasCarteira += linhasCarteira;
+    totalLinhasVoz += dAt.vozNovo.qtd + dAt.vozPort.qtd; totalLinhasVirtua += dAt.virtua.qtd; totalLinhasCarteira += linhasCarteira;
 
     document.getElementById('s2-rec-ativacao-' + sid).textContent = s2fmt(comissao);
     document.getElementById('s2-rec-tetopct-' + sid).textContent = (pctLiberacao * 100).toFixed(0) + '%';
