@@ -1438,44 +1438,43 @@
         <table class="s2-table" id="s2-tabela-recebimento">
           <thead>
             <tr>
-              <th>Unidade</th>
-              <th>Comissão Ativação</th>
-              <th>% Teto</th>
-              <th>Teto (R$)</th>
-              <th>Linhas Carteira</th>
-              <th>Net Adds</th>
-              <th>Unitário</th>
-              <th>Dinheiro Carteira</th>
-              <th>Cart. Recebida</th>
-              <th>Cart. Não Recebida</th>
-              <th>Deixado na Mesa</th>
+              <th rowspan="2" style="vertical-align:middle">Unidade</th>
+              <th colspan="3" style="text-align:center;border-bottom:1px solid rgba(255,255,255,0.25)">Comissão de Ativação</th>
+              <th colspan="3" style="text-align:center;border-bottom:1px solid rgba(255,255,255,0.25)">Linhas</th>
+              <th colspan="4" style="text-align:center;border-bottom:1px solid rgba(255,255,255,0.25)">Carteira (R$/linha variável — política 2.6.4)</th>
+              <th colspan="2" style="text-align:center;border-bottom:1px solid rgba(255,255,255,0.25)">Dinheiro Não Recebido</th>
+            </tr>
+            <tr>
+              <th style="text-align:center;font-size:10px">Comissão</th>
+              <th style="text-align:center;font-size:10px">% Teto</th>
+              <th style="text-align:center;font-size:10px">Teto (R$)</th>
+              <th style="text-align:center;font-size:10px">Potencial</th>
+              <th style="text-align:center;font-size:10px">Carteira</th>
+              <th style="text-align:center;font-size:10px">Net Adds</th>
+              <th style="text-align:center;font-size:10px">Unitário</th>
+              <th style="text-align:center;font-size:10px">Lin. Recebidas</th>
+              <th style="text-align:center;font-size:10px">Din. Carteira</th>
+              <th style="text-align:center;font-size:10px">Cart. Recebida</th>
+              <th style="text-align:center;font-size:10px">Cart. Não Recebida</th>
+              <th style="text-align:center;font-size:10px">Deixado na Mesa</th>
             </tr>
           </thead>
           <tbody id="s2-recebimento-body"></tbody>
           <tfoot><tr id="s2-recebimento-total"></tr></tfoot>
         </table>
       </div>
-      <div class="s2-hint">Linhas da Carteira e Net Adds são as colunas editáveis (não existem no BaseCRM). Net Adds positivo usa o unitário da Faixa CNPJ/HC; negativo usa o unitário fixo da Categoria (item 2.6.4) — não há mais R$2,60 fixo, o unitário varia pela política nova. O Teto é a Comissão de Ativação × % de liberação (Categoria × Faixa, item 2.6.5) — não há mais 40% fixo; a Carteira Recebida nunca ultrapassa o Teto.</div>
+      <div class="s2-hint">Linhas da Carteira e Net Adds são as colunas editáveis (não existem no BaseCRM). Potencial = Teto ÷ Unitário (quantas linhas o Teto sustenta). Linhas Recebidas = MIN(Potencial, Carteira). Cart. Não Recebida = Potencial &lt; Carteira (faturou pouco, precisa de mais comissão de ativação). Deixado na Mesa = Potencial &gt; Carteira (teto sobra, poderia ter mais linhas/CNPJs). Net Adds positivo usa o unitário da Faixa CNPJ/HC; negativo usa o unitário fixo da Categoria (item 2.6.4) — não há mais R$2,60 fixo. O Teto é a Comissão de Ativação × % de liberação (Categoria × Faixa, item 2.6.5) — não há mais 40% fixo.</div>
     </div>
 
     <!-- SEÇÃO 04 — BÔNUS PRODUTIVIDADE -->
     <div class="s2-secao">
       <div class="s2-secao-titulo"><span class="s2-secao-num">04</span> Bônus Produtividade</div>
-      <div class="s2-secao-desc">Exclusivo para modalidade Elite, com mínimo de 4 vendedores cadastrados (item 2.7). Vendedores recém-contratados têm meta reduzida por rampa (0/25/25/50/50/75/100% do 1º ao 7º mês+). Informe quantos vendedores estão em cada estágio — o % de meta atingida é calculado automaticamente a partir do Realizado (Voz e BL vêm do BaseCRM, mesmo escopo da Comissão de Ativação; SD ainda é manual).</div>
+      <div class="s2-secao-desc">Exclusivo para modalidade Elite, com mínimo de 4 vendedores cadastrados (item 2.7). Informe quantos HCs você TEM disponíveis em cada estágio de rampa (0/25/25/50/50/75/100% do 1º ao 7º mês+) — a coluna "Sugestão a Declarar" calcula quantos declarar em cada estágio para maximizar o total de HCs sem cair abaixo de 100% em Voz e BL (o que reduziria a faixa de bônus de todo mundo, não só do excedente). Estágio de 1º mês (0% de meta) é "grátis" — sempre vale declarar todo mundo que estiver nele.</div>
 
-      <div class="s2-table-wrap">
-        <table class="s2-table" id="s2-tabela-rampa">
-          <thead><tr><th>Estágio (meses de casa)</th><th>% meta exigida</th><th>Qtd. vendedores</th></tr></thead>
-          <tbody id="s2-rampa-body"></tbody>
-          <tfoot><tr id="s2-rampa-total"></tr></tfoot>
-        </table>
-      </div>
-
-      <div class="s2-params-bar" style="margin-top:14px">
+      <div class="s2-params-bar" style="margin-top:2px;margin-bottom:10px">
         <div class="s2-field">
           <label>Meta p/ ativar 1 HC — Voz (linhas)</label>
           <input type="number" id="s2-meta-voz" value="18" min="0" step="1" onchange="renderSimulador2()">
-          <div class="s2-hint">Produção de 1 HC a 100% da rampa. Ex: 4 consultores a 25% da rampa equivalem à meta de 1 HC completo.</div>
         </div>
         <div class="s2-field">
           <label>Meta p/ ativar 1 HC — BL (linhas)</label>
@@ -1488,9 +1487,24 @@
         <div class="s2-field">
           <label>Receita SD realizada no mês (R$)</label>
           <input type="number" id="s2-real-sd" value="0" min="0" step="0.01" onchange="renderSimulador2()">
-          <div class="s2-hint">Manual enquanto a produção de Soluções Digitais não é integrada via API.</div>
         </div>
       </div>
+
+      <div class="s2-kpi-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:10px">
+        <div class="s2-kpi-card"><div class="s2-kpi-label">Capacidade máx. — Voz (Realizado÷Meta)</div><div class="s2-kpi-value" id="s2-cap-voz">0</div></div>
+        <div class="s2-kpi-card"><div class="s2-kpi-label">Capacidade máx. — BL (Realizado÷Meta)</div><div class="s2-kpi-value" id="s2-cap-bl">0</div></div>
+        <div class="s2-kpi-card"><div class="s2-kpi-label">Capacidade limitante (peso ponderado)</div><div class="s2-kpi-value" id="s2-cap-limitante">0</div><div class="s2-hint" id="s2-cap-limitante-sub"></div></div>
+        <div class="s2-kpi-card"><div class="s2-kpi-label">HCs disponíveis × Sugeridos</div><div class="s2-kpi-value" id="s2-cap-heads">0 / 0</div></div>
+      </div>
+
+      <div class="s2-table-wrap">
+        <table class="s2-table" id="s2-tabela-rampa">
+          <thead><tr><th>Estágio (meses de casa)</th><th>% meta exigida</th><th>Disponível (tenho)</th><th>Sugestão a Declarar</th></tr></thead>
+          <tbody id="s2-rampa-body"></tbody>
+          <tfoot><tr id="s2-rampa-total"></tr></tfoot>
+        </table>
+      </div>
+      <div class="s2-hint">"Disponível" é o total de HCs que você tem naquele estágio (input). "Sugestão a Declarar" é calculada automaticamente: preenche do estágio mais barato (menor %) para o mais caro até esgotar a Capacidade Limitante — isso é o que efetivamente entra no cálculo de % atingido e do Bônus Produtividade abaixo.</div>
 
       <div class="s2-kpi-grid" style="grid-template-columns:repeat(3,1fr);margin-top:14px">
         <div class="s2-kpi-card"><div class="s2-kpi-label">Móvel Voz — Realizado / Meta ponderada</div><div class="s2-kpi-value" id="s2-prod-movel-num">0 / 0</div><div class="s2-hint"><b id="s2-prod-movel-pct">0%</b> atingido</div></div>
@@ -1518,18 +1532,8 @@
       </div>
     </div>
 
-    <!-- SEÇÃO 06 — RESUMO -->
+    <!-- TOTAL GERAL + AÇÕES (persistência) -->
     <div class="s2-secao">
-      <div class="s2-secao-titulo"><span class="s2-secao-num">06</span> Resumo Consolidado</div>
-      <div class="s2-secao-desc">Somatório de todas as remunerações simuladas para a competência selecionada.</div>
-
-      <div class="s2-table-wrap">
-        <table class="s2-table" id="s2-tabela-resumo">
-          <thead><tr><th>Código AACE / Unidade</th><th>Comissão Ativação</th><th>Manutenção Carteira</th><th>Total por código</th></tr></thead>
-          <tbody id="s2-resumo-body"></tbody>
-        </table>
-      </div>
-
       <div class="s2-resumo-total">
         <span class="s2-resumo-total-label">TOTAL GERAL DA COMPETÊNCIA (Ativação + Carteira + Produtividade + Categoria)</span>
         <span class="s2-resumo-total-value" id="s2-resumo-geral">R$ 0,00</span>
@@ -3986,9 +3990,11 @@ function initSimulador2() {
         <td id="s2-rec-ativacao-${sid}">R$ 0,00</td>
         <td id="s2-rec-tetopct-${sid}">—</td>
         <td id="s2-rec-teto-${sid}">R$ 0,00</td>
+        <td id="s2-rec-potencial-${sid}">0</td>
         <td><input type="number" min="0" value="0" id="s2-cart-linhas-${sid}" onchange="renderSimulador2()" style="width:80px"></td>
         <td><input type="number" value="0" id="s2-cart-netadds-${sid}" onchange="renderSimulador2()" style="width:70px"></td>
         <td id="s2-rec-unit-${sid}">—</td>
+        <td id="s2-rec-linhasrec-${sid}">0</td>
         <td id="s2-rec-bruto-${sid}">R$ 0,00</td>
         <td id="s2-rec-recebida-${sid}">R$ 0,00</td>
         <td id="s2-rec-naorecebida-${sid}">R$ 0,00</td>
@@ -3999,7 +4005,8 @@ function initSimulador2() {
       <tr>
         <td>${r.label}</td>
         <td>${(r.pct * 100).toFixed(0)}%</td>
-        <td><input type="number" min="0" value="0" id="s2-rampa-qtd-${i}" onchange="renderSimulador2()"></td>
+        <td><input type="number" min="0" value="0" id="s2-rampa-disp-${i}" onchange="renderSimulador2()"></td>
+        <td id="s2-rampa-sugestao-${i}" style="font-weight:700;color:var(--green)">0</td>
       </tr>`).join('');
   }
 
@@ -4039,7 +4046,8 @@ function renderSimulador2() {
 
   const comissaoAtivacao = {}, valorPagoCarteira = {}; // por tag — usados também nas seções 05/06
   let totalAtivacaoGeral = 0, totalBrutoCarteira = 0, totalTeto = 0, totalPagoCarteira = 0,
-      totalNaoRecebida = 0, totalMesa = 0, totalLinhasVoz = 0, totalLinhasVirtua = 0, totalLinhasCarteira = 0;
+      totalNaoRecebida = 0, totalMesa = 0, totalLinhasVoz = 0, totalLinhasVirtua = 0, totalLinhasCarteira = 0,
+      totalPotencial = 0, totalLinhasRecebidas = 0;
 
   CODIGOS_AACE2.forEach(({ tag }) => {
     const sid = s2Sid(tag);
@@ -4051,14 +4059,20 @@ function renderSimulador2() {
     const comissaoCents = Math.round(dAt.virtua.rec * fVirtua) + Math.round(dAt.vozNovo.rec * fVozNovo) + Math.round(dAt.vozPort.rec * fVozPort);
     const comissao = comissaoCents / 100;
     const unit = netAdds < 0 ? unitNegativo : faixaObj.unitario;
-    const bruto = linhasCarteira * unit;
     const teto = comissao * pctLiberacao;
-    const recebida = Math.min(bruto, teto);
-    const naoRecebida = Math.max(0, bruto - teto);
-    const mesa = Math.max(0, teto - bruto);
+
+    // Mesma mecânica do Simulador 1.0 (potLinhas/meta/linhasReceb), só trocando
+    // 40%fat→Teto e R$2,60 fixo→unitário variável da política nova (item 2.6.4/2.6.5).
+    const potencial = unit > 0 ? Math.floor(teto / unit) : 0;
+    const linhasRecebidas = Math.min(potencial, linhasCarteira);
+    const bruto = linhasCarteira * unit;            // Dinheiro da Carteira (teórico, se tudo fosse pago)
+    const recebida = linhasRecebidas * unit;         // Carteira Recebida (efetivamente paga)
+    const naoRecebida = potencial < linhasCarteira ? (linhasCarteira - potencial) * unit : 0; // faturou pouco p/ carteira
+    const mesa        = potencial > linhasCarteira ? (potencial - linhasCarteira) * unit : 0; // teto sobrando
 
     comissaoAtivacao[tag] = comissao;
     valorPagoCarteira[tag] = recebida;
+    totalPotencial += potencial; totalLinhasRecebidas += linhasRecebidas;
 
     totalAtivacaoGeral += comissao; totalBrutoCarteira += bruto; totalTeto += teto;
     totalPagoCarteira += recebida; totalNaoRecebida += naoRecebida; totalMesa += mesa;
@@ -4067,7 +4081,9 @@ function renderSimulador2() {
     document.getElementById('s2-rec-ativacao-' + sid).textContent = s2fmt(comissao);
     document.getElementById('s2-rec-tetopct-' + sid).textContent = (pctLiberacao * 100).toFixed(0) + '%';
     document.getElementById('s2-rec-teto-' + sid).textContent = s2fmt(teto);
+    document.getElementById('s2-rec-potencial-' + sid).textContent = potencial.toLocaleString('pt-BR');
     document.getElementById('s2-rec-unit-' + sid).textContent = 'R$ ' + unit.toFixed(2) + (netAdds < 0 ? ' (Net−)' : ' (Net+)');
+    document.getElementById('s2-rec-linhasrec-' + sid).textContent = linhasRecebidas.toLocaleString('pt-BR');
     document.getElementById('s2-rec-bruto-' + sid).textContent = s2fmt(bruto);
     document.getElementById('s2-rec-recebida-' + sid).textContent = s2fmt(recebida);
     const naoRecEl = document.getElementById('s2-rec-naorecebida-' + sid);
@@ -4078,8 +4094,8 @@ function renderSimulador2() {
 
   document.getElementById('s2-recebimento-total').innerHTML =
     `<td>TOTAL GERAL</td><td>${s2fmt(totalAtivacaoGeral)}</td><td>${(pctLiberacao*100).toFixed(0)}%</td><td>${s2fmt(totalTeto)}</td>` +
-    `<td>${totalLinhasCarteira.toLocaleString('pt-BR')}</td><td></td><td></td>` +
-    `<td>${s2fmt(totalBrutoCarteira)}</td><td>${s2fmt(totalPagoCarteira)}</td><td>${s2fmt(totalNaoRecebida)}</td><td>${s2fmt(totalMesa)}</td>`;
+    `<td>${totalPotencial.toLocaleString('pt-BR')}</td><td>${totalLinhasCarteira.toLocaleString('pt-BR')}</td><td></td><td></td>` +
+    `<td>${totalLinhasRecebidas.toLocaleString('pt-BR')}</td><td>${s2fmt(totalBrutoCarteira)}</td><td>${s2fmt(totalPagoCarteira)}</td><td>${s2fmt(totalNaoRecebida)}</td><td>${s2fmt(totalMesa)}</td>`;
 
   // ── KPIs do topo do painel
   document.getElementById('s2-kpi-bruto').textContent = s2fmt(totalBrutoCarteira);
@@ -4094,21 +4110,56 @@ function renderSimulador2() {
   document.getElementById('s2-kpi-teto-sub').textContent = `% liberação: ${(pctLiberacao*100).toFixed(0)}% (${catLabel} · ${faixaObj.faixa})`;
 
   // ── SEÇÃO 04 — Bônus Produtividade
-  let totalVendedores = 0, metaHcPonderada = 0;
-  RAMPA_PRODUTIVIDADE.forEach((r, i) => {
-    const qtd = s2num('s2-rampa-qtd-' + i);
-    totalVendedores += qtd;
-    metaHcPonderada += qtd * r.pct; // "produção equivalente" de HCs completos, ponderada pela rampa
-  });
-
   const metaVozUnit = s2num('s2-meta-voz'), metaBlUnit = s2num('s2-meta-bl'), metaSdUnit = s2num('s2-meta-sd');
-  const metaVozPonderada = metaHcPonderada * metaVozUnit;
-  const metaBlPonderada  = metaHcPonderada * metaBlUnit;
-  const metaSdPonderada  = metaHcPonderada * metaSdUnit;
 
   // Realizado de Voz e BL vem do mesmo escopo do BaseCRM usado na Comissão de Ativação (seção 01).
   const realizadoVoz = totalLinhasVoz, realizadoBl = totalLinhasVirtua;
   const realizadoSd = s2num('s2-real-sd');
+
+  // Capacidade máxima (peso ponderado) que a produção atual sustenta mantendo 100% nos dois
+  // indicadores. É o teto de "HCs equivalentes" que dá pra declarar sem cair de faixa.
+  const capVoz = metaVozUnit > 0 ? realizadoVoz / metaVozUnit : Infinity;
+  const capBl  = metaBlUnit  > 0 ? realizadoBl  / metaBlUnit  : Infinity;
+  const capLimitante = Math.min(capVoz, capBl);
+  const limitanteLabel = capVoz <= capBl ? 'Voz' : 'BL';
+
+  // Sugestão a Declarar por estágio: preenche do mais barato (menor %) pro mais caro até
+  // esgotar a capacidade — maximiza a QUANTIDADE de HCs declarados. Estágio de 0% é grátis.
+  let capRestante = capLimitante, totalDisponivel = 0;
+  const sugestaoPorEstagio = [];
+  RAMPA_PRODUTIVIDADE.forEach((r, i) => {
+    const disp = s2num('s2-rampa-disp-' + i);
+    totalDisponivel += disp;
+    let sugerido;
+    if (r.pct === 0) {
+      sugerido = disp; // não consome capacidade
+    } else {
+      const maxPossivel = capRestante === Infinity ? disp : Math.floor(capRestante / r.pct + 1e-9);
+      sugerido = Math.max(0, Math.min(disp, maxPossivel));
+      capRestante -= sugerido * r.pct;
+      if (capRestante < 0) capRestante = 0;
+    }
+    sugestaoPorEstagio[i] = sugerido;
+    document.getElementById('s2-rampa-sugestao-' + i).textContent = sugerido.toLocaleString('pt-BR');
+  });
+
+  let totalVendedores = 0, metaHcPonderada = 0;
+  RAMPA_PRODUTIVIDADE.forEach((r, i) => {
+    totalVendedores += sugestaoPorEstagio[i];
+    metaHcPonderada += sugestaoPorEstagio[i] * r.pct; // "produção equivalente" de HCs completos, ponderada pela rampa
+  });
+
+  document.getElementById('s2-rampa-total').innerHTML =
+    `<td>Total</td><td></td><td>${totalDisponivel.toLocaleString('pt-BR')}</td><td style="font-weight:700">${totalVendedores.toLocaleString('pt-BR')}</td>`;
+  document.getElementById('s2-cap-voz').textContent = (capVoz === Infinity ? '—' : capVoz.toFixed(1));
+  document.getElementById('s2-cap-bl').textContent = (capBl === Infinity ? '—' : capBl.toFixed(1));
+  document.getElementById('s2-cap-limitante').textContent = (capLimitante === Infinity ? '—' : capLimitante.toFixed(1));
+  document.getElementById('s2-cap-limitante-sub').textContent = `Indicador limitante: ${limitanteLabel} (o outro tem folga)`;
+  document.getElementById('s2-cap-heads').textContent = `${totalDisponivel.toLocaleString('pt-BR')} / ${totalVendedores.toLocaleString('pt-BR')}`;
+
+  const metaVozPonderada = metaHcPonderada * metaVozUnit;
+  const metaBlPonderada  = metaHcPonderada * metaBlUnit;
+  const metaSdPonderada  = metaHcPonderada * metaSdUnit;
 
   const pctMovel = metaVozPonderada > 0 ? (realizadoVoz / metaVozPonderada) * 100 : 0;
   const pctFixa  = metaBlPonderada  > 0 ? (realizadoBl  / metaBlPonderada)  * 100 : 0;
@@ -4150,15 +4201,7 @@ function renderSimulador2() {
   document.getElementById('s2-cat-base').textContent = s2fmt(totalAtivacaoGeral);
   document.getElementById('s2-cat-total').textContent = s2fmt(totalBonusCategoria);
 
-  // ── SEÇÃO 06 — Resumo
-  document.getElementById('s2-resumo-body').innerHTML = CODIGOS_AACE2.map(({ tag, nome }) => `
-    <tr>
-      <td>${nome}</td>
-      <td>${s2fmt(comissaoAtivacao[tag])}</td>
-      <td>${s2fmt(valorPagoCarteira[tag])}</td>
-      <td>${s2fmt(comissaoAtivacao[tag] + valorPagoCarteira[tag])}</td>
-    </tr>`).join('');
-
+  // ── TOTAL GERAL DA COMPETÊNCIA
   const totalGeralCompetencia = totalAtivacaoGeral + totalPagoCarteira + totalBonusProdutividade + totalBonusCategoria;
   document.getElementById('s2-resumo-geral').textContent = s2fmt(totalGeralCompetencia);
 
@@ -4197,7 +4240,7 @@ function s2CamposParaSalvar() {
     campos['cart-linhas-' + sid] = s2num('s2-cart-linhas-' + sid);
     campos['cart-netadds-' + sid] = s2num('s2-cart-netadds-' + sid);
   });
-  RAMPA_PRODUTIVIDADE.forEach((r, i) => { campos['rampa-qtd-' + i] = s2num('s2-rampa-qtd-' + i); });
+  RAMPA_PRODUTIVIDADE.forEach((r, i) => { campos['rampa-disp-' + i] = s2num('s2-rampa-disp-' + i); });
   return campos;
 }
 
@@ -4214,8 +4257,10 @@ async function salvarSimulador2() {
     btn.textContent = '✅ Salvo!';
     carregarHistoricoListaSimulador2();
   } catch (e) {
-    console.warn('Erro ao salvar Simulador 2.0 (verifique se a tabela config_simulador2 existe no Supabase):', e.message);
+    console.warn('Erro ao salvar Simulador 2.0:', e);
     btn.textContent = '❌ Erro ao salvar';
+    alert('Não foi possível salvar no Supabase.\n\nMotivo: ' + (e.message || e) +
+      '\n\nVerifique se a tabela "config_simulador2" existe (SQL no código-fonte, logo acima desta função) e se as permissões (RLS) da tabela permitem INSERT/UPDATE para o usuário logado.');
   } finally {
     setTimeout(() => { btn.textContent = '💾 Salvar competência'; btn.disabled = false; }, 2000);
   }
@@ -4225,13 +4270,14 @@ async function carregarSimulador2(periodoAlvo) {
   const periodo = periodoAlvo || document.getElementById('s2-competencia').value || new Date().toISOString().slice(0, 7);
   try {
     const { data, error } = await supa.from('config_simulador2').select('*').eq('periodo', periodo);
-    if (error || !data || !data.length) return;
+    if (error) { console.warn('Simulador 2.0: erro ao consultar config_simulador2 —', error.message, error); return; }
+    if (!data || !data.length) return;
     data.forEach(({ chave, valor }) => {
       const el = document.getElementById('s2-' + chave);
       if (el) el.value = valor;
     });
   } catch (e) {
-    console.warn('Simulador 2.0: config_simulador2 indisponível ainda —', e.message);
+    console.warn('Simulador 2.0: config_simulador2 indisponível ainda —', e.message, e);
   }
 }
 
