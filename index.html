@@ -1400,9 +1400,8 @@
             <button class="sim-visao-btn" onclick="s2SetVisao('aprovados',this)">+ Aprovados</button>
             <button class="sim-visao-btn" onclick="s2SetVisao('geral',this)">Geral</button>
           </div>
-          <div class="s2-hint">Mesmos escopos do Simulador de Carteira: define quais status/filas do BaseCRM entram na contagem de linhas ativadas no mês (o resto do painel usa sempre "Ativo/Instalado" como base real da carteira).</div>
+          <div class="s2-hint">Mesmos escopos do Simulador de Carteira: define quais status/filas do BaseCRM entram na contagem de linhas ativadas no mês (o resto do painel usa sempre "Ativo/Instalado" como base real da carteira). Atualiza automaticamente ao trocar o escopo ou ao clicar em "Atualizar" na barra superior.</div>
         </div>
-        <div class="s2-field"><label>&nbsp;</label><button class="sim-btn-discrete sim-btn-save" onclick="s2PuxarDadosSheet()">↻ Atualizar do Sheets</button></div>
         <div class="s2-field">
           <label>Fator VIRTUA · VOZ Novo · VOZ Portab. (R$/linha)</label>
           <div style="display:flex;gap:6px">
@@ -1490,12 +1489,12 @@
         </div>
       </div>
 
-      <div class="s2-kpi-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:10px">
-        <div class="s2-kpi-card"><div class="s2-kpi-label">Capacidade máx. — Voz (Realizado÷Meta)</div><div class="s2-kpi-value" id="s2-cap-voz">0</div></div>
-        <div class="s2-kpi-card"><div class="s2-kpi-label">Capacidade máx. — BL (Realizado÷Meta)</div><div class="s2-kpi-value" id="s2-cap-bl">0</div></div>
-        <div class="s2-kpi-card"><div class="s2-kpi-label">Capacidade limitante (peso ponderado)</div><div class="s2-kpi-value" id="s2-cap-limitante">0</div><div class="s2-hint" id="s2-cap-limitante-sub"></div></div>
-        <div class="s2-kpi-card"><div class="s2-kpi-label">HCs disponíveis × Sugeridos</div><div class="s2-kpi-value" id="s2-cap-heads">0 / 0</div></div>
+      <div class="s2-kpi-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:6px">
+        <div class="s2-kpi-card"><div class="s2-kpi-label">Capacidade máx. — Voz (em HC 100%)</div><div class="s2-kpi-value" id="s2-cap-voz">0</div><div class="s2-hint" id="s2-cap-voz-sub"></div></div>
+        <div class="s2-kpi-card"><div class="s2-kpi-label">Capacidade máx. — BL (em HC 100%)</div><div class="s2-kpi-value" id="s2-cap-bl">0</div><div class="s2-hint" id="s2-cap-bl-sub"></div></div>
+        <div class="s2-kpi-card"><div class="s2-kpi-label">HCs disponíveis × Sugeridos p/ declarar</div><div class="s2-kpi-value" id="s2-cap-heads">0 / 0</div></div>
       </div>
+      <div class="s2-hint" style="margin-bottom:14px">"Em HC 100%" = quantos HCs a produção sustentaria SE todos estivessem no último estágio da rampa (100% da meta) — não é uma contagem real de cabeças, é uma unidade de referência para achar o gargalo. A contagem real de HCs, já considerando o mix de estágios que você tem, está na coluna "Sugestão a Declarar" da tabela abaixo.</div>
 
       <div class="s2-table-wrap">
         <table class="s2-table" id="s2-tabela-rampa">
@@ -1507,9 +1506,9 @@
       <div class="s2-hint">"Disponível" é o total de HCs que você tem naquele estágio (input). "Sugestão a Declarar" é calculada automaticamente: preenche do estágio mais barato (menor %) para o mais caro até esgotar a Capacidade Limitante — isso é o que efetivamente entra no cálculo de % atingido e do Bônus Produtividade abaixo.</div>
 
       <div class="s2-kpi-grid" style="grid-template-columns:repeat(3,1fr);margin-top:14px">
-        <div class="s2-kpi-card"><div class="s2-kpi-label">Móvel Voz — Realizado / Meta ponderada</div><div class="s2-kpi-value" id="s2-prod-movel-num">0 / 0</div><div class="s2-hint"><b id="s2-prod-movel-pct">0%</b> atingido</div></div>
-        <div class="s2-kpi-card"><div class="s2-kpi-label">Fixa Básica BL — Realizado / Meta ponderada</div><div class="s2-kpi-value" id="s2-prod-fixa-num">0 / 0</div><div class="s2-hint"><b id="s2-prod-fixa-pct">0%</b> atingido</div></div>
-        <div class="s2-kpi-card"><div class="s2-kpi-label">Solução Digital — Realizado / Meta ponderada</div><div class="s2-kpi-value" id="s2-prod-sd-num">R$ 0 / R$ 0</div><div class="s2-hint"><b id="s2-prod-sd-pct">0%</b> atingido — se &lt;100% retroage 1 faixa (item 2.7-iii-6)</div></div>
+        <div class="s2-kpi-card"><div class="s2-kpi-label">Móvel Voz — Realizado / Meta ponderada</div><div class="s2-kpi-value" id="s2-prod-movel-num">0 / 0</div><div class="s2-hint"><b id="s2-prod-movel-pct">0%</b> atingido · Meta máx. se declarar TODOS disponíveis: <b id="s2-prod-movel-metamax">0</b></div></div>
+        <div class="s2-kpi-card"><div class="s2-kpi-label">Fixa Básica BL — Realizado / Meta ponderada</div><div class="s2-kpi-value" id="s2-prod-fixa-num">0 / 0</div><div class="s2-hint"><b id="s2-prod-fixa-pct">0%</b> atingido · Meta máx. se declarar TODOS disponíveis: <b id="s2-prod-fixa-metamax">0</b></div></div>
+        <div class="s2-kpi-card"><div class="s2-kpi-label">Solução Digital — Realizado / Meta ponderada</div><div class="s2-kpi-value" id="s2-prod-sd-num">R$ 0 / R$ 0</div><div class="s2-hint"><b id="s2-prod-sd-pct">0%</b> atingido · Meta máx. se declarar TODOS: <b id="s2-prod-sd-metamax">R$ 0</b> — se &lt;100% retroage 1 faixa (item 2.7-iii-6)</div></div>
       </div>
 
       <div class="s2-kpi-grid" style="margin-top:14px">
@@ -4125,11 +4124,14 @@ function renderSimulador2() {
 
   // Sugestão a Declarar por estágio: preenche do mais barato (menor %) pro mais caro até
   // esgotar a capacidade — maximiza a QUANTIDADE de HCs declarados. Estágio de 0% é grátis.
-  let capRestante = capLimitante, totalDisponivel = 0;
+  // Em paralelo, soma o peso de TODOS os disponíveis (sem limitar), para calcular a
+  // "meta máxima se declarar todo mundo" — mostrando o tamanho do gap com a produção atual.
+  let capRestante = capLimitante, totalDisponivel = 0, pesoTotalDisponivel = 0;
   const sugestaoPorEstagio = [];
   RAMPA_PRODUTIVIDADE.forEach((r, i) => {
     const disp = s2num('s2-rampa-disp-' + i);
     totalDisponivel += disp;
+    pesoTotalDisponivel += disp * r.pct;
     let sugerido;
     if (r.pct === 0) {
       sugerido = disp; // não consome capacidade
@@ -4151,15 +4153,22 @@ function renderSimulador2() {
 
   document.getElementById('s2-rampa-total').innerHTML =
     `<td>Total</td><td></td><td>${totalDisponivel.toLocaleString('pt-BR')}</td><td style="font-weight:700">${totalVendedores.toLocaleString('pt-BR')}</td>`;
+
   document.getElementById('s2-cap-voz').textContent = (capVoz === Infinity ? '—' : capVoz.toFixed(1));
+  document.getElementById('s2-cap-voz-sub').textContent = limitanteLabel === 'Voz' ? '⚠ é o gargalo' : 'tem folga';
   document.getElementById('s2-cap-bl').textContent = (capBl === Infinity ? '—' : capBl.toFixed(1));
-  document.getElementById('s2-cap-limitante').textContent = (capLimitante === Infinity ? '—' : capLimitante.toFixed(1));
-  document.getElementById('s2-cap-limitante-sub').textContent = `Indicador limitante: ${limitanteLabel} (o outro tem folga)`;
+  document.getElementById('s2-cap-bl-sub').textContent = limitanteLabel === 'BL' ? '⚠ é o gargalo' : 'tem folga';
   document.getElementById('s2-cap-heads').textContent = `${totalDisponivel.toLocaleString('pt-BR')} / ${totalVendedores.toLocaleString('pt-BR')}`;
 
   const metaVozPonderada = metaHcPonderada * metaVozUnit;
   const metaBlPonderada  = metaHcPonderada * metaBlUnit;
   const metaSdPonderada  = metaHcPonderada * metaSdUnit;
+
+  // Meta que seria exigida se TODOS os HCs disponíveis (sem limitar pela capacidade) fossem declarados —
+  // referência de quão longe a produção atual está de sustentar a rampa inteira.
+  const metaVozMaxTodos = pesoTotalDisponivel * metaVozUnit;
+  const metaBlMaxTodos  = pesoTotalDisponivel * metaBlUnit;
+  const metaSdMaxTodos  = pesoTotalDisponivel * metaSdUnit;
 
   const pctMovel = metaVozPonderada > 0 ? (realizadoVoz / metaVozPonderada) * 100 : 0;
   const pctFixa  = metaBlPonderada  > 0 ? (realizadoBl  / metaBlPonderada)  * 100 : 0;
@@ -4167,10 +4176,13 @@ function renderSimulador2() {
 
   document.getElementById('s2-prod-movel-num').textContent = `${realizadoVoz.toLocaleString('pt-BR')} / ${metaVozPonderada.toFixed(1)}`;
   document.getElementById('s2-prod-movel-pct').textContent = pctMovel.toFixed(1) + '%';
+  document.getElementById('s2-prod-movel-metamax').textContent = metaVozMaxTodos.toFixed(1);
   document.getElementById('s2-prod-fixa-num').textContent = `${realizadoBl.toLocaleString('pt-BR')} / ${metaBlPonderada.toFixed(1)}`;
   document.getElementById('s2-prod-fixa-pct').textContent = pctFixa.toFixed(1) + '%';
+  document.getElementById('s2-prod-fixa-metamax').textContent = metaBlMaxTodos.toFixed(1);
   document.getElementById('s2-prod-sd-num').textContent = `${s2fmt(realizadoSd)} / ${s2fmt(metaSdPonderada)}`;
   document.getElementById('s2-prod-sd-pct').textContent = pctSd.toFixed(1) + '%';
+  document.getElementById('s2-prod-sd-metamax').textContent = s2fmt(metaSdMaxTodos);
 
   const travaOk = totalVendedores >= 4 && pctMovel >= 60 && pctFixa >= 60;
   document.getElementById('s2-prod-trava').textContent = totalVendedores < 4 ? 'Inelegível (<4 vend.)' : (travaOk ? 'OK' : 'Reprovada (<60%)');
@@ -4191,7 +4203,6 @@ function renderSimulador2() {
 
   const totalBonusProdutividade = travaOk ? faixaFinal.valor * totalVendedores : 0;
   document.getElementById('s2-prod-total').textContent = s2fmt(totalBonusProdutividade);
-  document.getElementById('s2-rampa-total').innerHTML = `<td>Total vendedores</td><td></td><td>${totalVendedores}</td>`;
 
   // ── SEÇÃO 05 — Bônus Categoria
   const pctCategoria = BONUS_CATEGORIA_PCT[categoria];
