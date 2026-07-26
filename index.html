@@ -37,7 +37,7 @@
     --brand-muted:  #FECACA;
 
     /* Neutrals — slate scale */
-    --bg:           #FAFAFA;
+    --bg:           #F8FAFC;
     --bg-subtle:    #F2F3F5;
     --surface:      #FFFFFF;
     --surface-2:    #FAFAFB;
@@ -77,6 +77,10 @@
 
     /* Glass (topbar) */
     --glass-blur: blur(20px) saturate(180%);
+
+    /* Hero — split background (Painel Corporativo Avançado) */
+    --hero-grad:      linear-gradient(135deg, #450a0a 0%, #7f1d1d 100%);
+    --hero-card-grad: linear-gradient(to bottom, #7f1d1d 0%, #450a0a 100%);
 
     /* Legacy aliases (manter compatibilidade JS) */
     --red:       var(--brand);
@@ -198,15 +202,11 @@
 
   /* ─── TOPBAR ─────────────────────────────────────────────── */
   .topbar {
-    background: rgba(127,29,29,.68);
-    background-image: linear-gradient(90deg, rgba(127,29,29,.72) 0%, rgba(185,28,28,.68) 100%);
-    -webkit-backdrop-filter: var(--glass-blur);
-    backdrop-filter: var(--glass-blur);
+    background: var(--hero-grad);
     color: #fff; padding: 0 28px;
     display: flex; align-items: center; justify-content: space-between;
-    height: 56px; position: sticky; top: 0; z-index: 100;
-    border-bottom: 1px solid rgba(255,255,255,.08);
-    box-shadow: 0 1px 24px rgba(0,0,0,.04);
+    height: 60px; position: sticky; top: 0; z-index: 100;
+    border-bottom: 1px solid rgba(255,255,255,.07);
   }
   .topbar-left  { display: flex; align-items: center; gap: 14px; }
   .topbar h1    { font-size: 14px; font-weight: 600; letter-spacing: -.2px; }
@@ -265,18 +265,16 @@
 
   /* ─── TABS NAV ───────────────────────────────────────────── */
   .tabs-nav {
-    background: rgba(255,255,255,.75);
-    -webkit-backdrop-filter: blur(12px);
-    backdrop-filter: blur(12px);
-    border-bottom: 1px solid var(--border);
+    background: var(--hero-grad);
+    border-bottom: 1px solid rgba(255,255,255,.08);
     padding: 0 28px;
     display: flex; gap: 4px;
-    position: sticky; top: 56px; z-index: 99;
+    position: sticky; top: 60px; z-index: 99;
   }
   .tab-btn {
     padding: 16px 20px;
     font-size: 13px; font-weight: 500;
-    color: var(--text-3);
+    color: rgba(255,255,255,.55);
     border-bottom: 2px solid transparent;
     cursor: pointer; transition: all .15s;
     white-space: nowrap;
@@ -284,13 +282,85 @@
     border-left: none; border-right: none; border-top: none;
     font-family: 'DM Sans', sans-serif;
   }
-  .tab-btn:hover { color: var(--text-2); }
-  .tab-btn.active { color: var(--brand); border-bottom-color: var(--brand); font-weight: 600; }
+  .tab-btn:hover { color: rgba(255,255,255,.85); }
+  .tab-btn.active { color: #fff; border-bottom-color: #fff; font-weight: 600; }
 
   /* ─── CONTENT ────────────────────────────────────────────── */
-  .content { padding: 32px 40px 48px; max-width: 1440px; margin: 0 auto; }
+  .content { padding: 0 40px 48px; max-width: 1440px; margin: 0 auto; }
   .tab-panel { display: none; }
   .tab-panel.active { display: block; }
+
+  /* ─── HERO PANEL — zona escura full-bleed (topo do "painel corporativo") ───
+     Contém filtros + metade superior dos KPIs, flutuando sobre o gradiente.
+     Técnica de "breakout": quebra o max-width/padding do .content pai. */
+  .hero-panel {
+    background: var(--hero-grad);
+    position: relative;
+    width: 100vw;
+    left: 50%; right: 50%;
+    margin-left: -50vw; margin-right: -50vw;
+    padding: 28px 0 68px;
+  }
+  .hero-panel-inner {
+    max-width: 1440px; margin: 0 auto; padding: 0 40px;
+  }
+  .hero-panel .filters-bar,
+  .hero-panel .prod-filters,
+  .hero-panel .sim-controls-bar { margin-bottom: 0; padding-bottom: 0; }
+
+  /* Pílulas translúcidas — filtros sobre o fundo escuro */
+  .hero-panel .filter-group,
+  .hero-panel .prod-filter-group,
+  .hero-panel .prod-toggle,
+  .hero-panel .sim-visao-btn,
+  .hero-panel .sim-btn-discrete {
+    background: rgba(255,255,255,.1);
+    border: 1px solid rgba(255,255,255,.2);
+    color: #fff;
+    box-shadow: none;
+  }
+  .hero-panel .filter-group:hover,
+  .hero-panel .prod-filter-group:hover { background: rgba(255,255,255,.14); box-shadow: none; }
+  .hero-panel .filter-group:focus-within { border-color: rgba(255,255,255,.4); }
+  .hero-panel .filter-group label,
+  .hero-panel .prod-filter-group label,
+  .hero-panel .sim-section-label,
+  .hero-panel .top-label { color: rgba(255,255,255,.6) !important; }
+  .hero-panel .filter-group select,
+  .hero-panel .prod-filter-group select,
+  .hero-panel .filter-group input[type="date"],
+  .hero-panel .filter-group input[type="time"] {
+    color: #fff; background-color: transparent;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  }
+  .hero-panel .filter-group select option,
+  .hero-panel .prod-filter-group select option { color: var(--text); }
+  .hero-panel .prod-toggle-dot { border-color: rgba(255,255,255,.45); }
+  .hero-panel .prod-toggle span { color: #fff; }
+  .hero-panel .prod-toggle.active { background: #fff; border-color: #fff; }
+  .hero-panel .prod-toggle.active span { color: var(--brand-deeper); }
+  .hero-panel .prod-toggle.active .prod-toggle-dot { background: var(--brand-deeper); border-color: var(--brand-deeper); }
+  .hero-panel .sim-visao-btn:hover { border-color: rgba(255,255,255,.4); color: #fff; }
+  .hero-panel .sim-visao-btn.active { background: #fff; border-color: #fff; color: var(--brand-deeper); }
+  .hero-panel .sim-mult-item label { color: rgba(255,255,255,.6); }
+  .hero-panel .sim-mult-item input,
+  .hero-panel .sim-meta-item input {
+    background: rgba(255,255,255,.12) !important; border-color: rgba(255,255,255,.25); color: #fff;
+  }
+  .hero-panel .sim-mult-item label,
+  .hero-panel .sim-meta-item label { color: rgba(255,255,255,.6) !important; }
+  .hero-panel .sim-btn-discrete:hover { border-color: rgba(255,255,255,.5); color: #fff; }
+  .hero-panel .stat-chip {
+    background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.2); color: rgba(255,255,255,.85);
+  }
+  .hero-panel .stat-chip strong { color: #fff; }
+  .hero-panel .disc-btn-buscar { box-shadow: 0 8px 20px rgba(0,0,0,.3); }
+  #disc-progress-wrap.hero-progress {
+    background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.18);
+    box-shadow: none;
+  }
+  #disc-progress-wrap.hero-progress #disc-progress-label { color: rgba(255,255,255,.8); }
+  #disc-progress-wrap.hero-progress .disc-progress-track { background: rgba(255,255,255,.15); }
 
   /* ─── FILTERS BAR — menu de pílulas flutuantes ──────────────── */
   .filters-bar {
@@ -340,40 +410,50 @@
     display: grid;
     grid-template-columns: repeat(6, 1fr);
     gap: 16px; margin-bottom: 24px;
+    position: relative; z-index: 5;
+    margin-top: -48px;
   }
   .metric-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
+    background: var(--hero-card-grad);
+    border: none;
     border-radius: var(--radius-lg);
     padding: 24px;
-    box-shadow: var(--shadow-xs);
-    transition: box-shadow .2s;
+    box-shadow: 0 16px 32px rgba(0,0,0,.32), 0 2px 6px rgba(0,0,0,.18);
+    transition: transform .2s, box-shadow .2s;
   }
-  .metric-card:hover { box-shadow: var(--shadow-sm); }
+  .metric-card:hover { transform: translateY(-3px); box-shadow: 0 20px 40px rgba(0,0,0,.38), 0 2px 6px rgba(0,0,0,.2); }
   .metric-card.highlight {
-    border-color: var(--brand-muted);
-    border-top: 3px solid var(--brand);
+    border-color: transparent;
+    border-top: 3px solid rgba(255,255,255,.35);
   }
   .metric-label {
-    font-size: 10px; color: var(--text-3);
+    font-size: 10px; color: rgba(255,255,255,.6);
     text-transform: uppercase; letter-spacing: .07em;
     font-weight: 600; margin-bottom: 8px;
   }
+  .metric-value-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; }
   .metric-value {
     font-size: 26px; font-weight: 700;
-    color: var(--brand); line-height: 1;
+    color: #fff; line-height: 1;
     margin-bottom: 4px; font-family: 'DM Mono', monospace;
   }
-  .metric-avg { font-size: 11px; color: var(--text-3); margin-bottom: 10px; }
+  .kpi-spark { display: flex; align-items: flex-end; gap: 2.5px; height: 26px; flex-shrink: 0; }
+  .kpi-spark span {
+    width: 4px; border-radius: 2px 2px 0 0;
+    background: rgba(255,255,255,.3);
+    min-height: 3px;
+  }
+  .kpi-spark span:last-child { background: #fff; }
+  .metric-avg { font-size: 11px; color: rgba(255,255,255,.55); margin-bottom: 10px; }
   .filas-list {
-    border-top: 1px solid var(--border);
+    border-top: 1px solid rgba(255,255,255,.15);
     padding-top: 8px; max-height: 220px; overflow-y: auto;
   }
   .fila-name {
-    color: var(--text-2); flex: 1; min-width: 0;
+    color: rgba(255,255,255,.75); flex: 1; min-width: 0;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-right: 6px;
   }
-  .fila-count { font-weight: 600; color: var(--text); font-family: 'DM Mono', monospace; flex-shrink: 0; }
+  .fila-count { font-weight: 600; color: #fff; font-family: 'DM Mono', monospace; flex-shrink: 0; }
 
   /* ─── SECTION HEADER ─────────────────────────────────────── */
   .section-header {
@@ -392,17 +472,17 @@
 
   /* ─── TABLE (Gerencial) ──────────────────────────────────── */
   .table-wrap {
-    background: var(--surface);
-    border: 1px solid var(--border);
+    background: #fff;
+    border: none;
     border-radius: var(--radius-lg);
     overflow: hidden;
-    box-shadow: var(--shadow-sm);
+    box-shadow: 0 4px 20px rgba(0,0,0,.05);
   }
   .table-scroll { overflow-x: auto; }
   table { width: 100%; border-collapse: collapse; font-size: 12px; }
-  thead tr { background: var(--surface-2); }
+  thead tr { background: #fff; }
   th {
-    color: var(--text-3); padding: 14px 18px;
+    color: var(--text-3); padding: 16px 18px;
     text-align: left; font-weight: 600;
     font-size: 9.5px; text-transform: uppercase;
     letter-spacing: .1em; white-space: nowrap;
@@ -479,9 +559,9 @@
     padding: 4px 4px; font-size: 11px; cursor: pointer;
     border-radius: var(--radius-sm); transition: background .12s;
   }
-  .fila-item:hover { background: var(--brand-light); }
-  .fila-item:hover .fila-name { color: var(--brand); }
-  .fila-item:hover .fila-count { color: var(--brand); }
+  .fila-item:hover { background: rgba(255,255,255,.1); }
+  .fila-item:hover .fila-name { color: #fff; }
+  .fila-item:hover .fila-count { color: #fff; }
 
   /* ─── DRILL DOWN ─────────────────────────────────────────── */
   .detail-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
@@ -598,11 +678,11 @@
 
   /* Tabela Produção */
   .prod-table-wrap {
-    background: var(--surface); border: 1px solid var(--border);
-    border-radius: var(--radius-lg); overflow: hidden; box-shadow: var(--shadow-xs);
+    background: #fff; border: none;
+    border-radius: var(--radius-lg); overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,.05);
   }
   .prod-table-scroll { overflow-x: auto; }
-  .prod-table-wrap table thead tr { background: var(--surface-2); }
+  .prod-table-wrap table thead tr { background: #fff; }
   .prod-table-wrap table th {
     color: var(--text-3); padding: 14px 16px; font-size: 9.5px;
     font-weight: 600; text-transform: uppercase; letter-spacing: .1em;
@@ -618,15 +698,14 @@
   .prod-table-wrap table tbody tr:last-child td { border-bottom: none; }
   .prod-table-wrap table tbody tr:hover td { background: #F8FAFC; }
   .prod-table-wrap table tfoot tr td {
-    background: var(--surface-3); font-weight: 700;
-    border-top: 2px solid var(--border);
+    background: var(--surface-2); font-weight: 700;
+    border-top: 1px solid var(--border);
   }
   .prod-cell-zero { color: var(--text-4); font-size: 11px; }
   .prod-cell-val { font-family: 'DM Mono', monospace; font-weight: 600; }
   .prod-cell-total {
     background: var(--surface-2); font-weight: 700;
     font-family: 'DM Mono', monospace;
-    border-left: 2px solid var(--border) !important;
   }
   .prod-empty { padding: 40px; text-align: center; color: var(--text-3); font-size: 13px; }
 
@@ -724,8 +803,8 @@
 
   /* Tabela simulador */
   .sim-table-wrap {
-    background: var(--surface); border: 1px solid var(--border);
-    border-radius: var(--radius-lg); overflow: hidden; box-shadow: var(--shadow-xs);
+    background: #fff; border: none;
+    border-radius: var(--radius-lg); overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,.05);
   }
   .sim-table-scroll { overflow-x: auto; }
   .sim-na-mesa { color: var(--red-sem); font-weight: 600; }
@@ -884,25 +963,30 @@
     display: grid;
     grid-template-columns: repeat(6, 1fr);
     gap: 16px; margin-bottom: 24px;
+    position: relative; z-index: 5;
+    margin-top: -48px;
   }
   .disc-kpi-card {
-    background: var(--surface); border: 1px solid var(--border);
+    background: var(--hero-card-grad); border: none;
     border-radius: var(--radius-lg); padding: 22px;
-    box-shadow: var(--shadow-xs); transition: box-shadow .2s;
+    box-shadow: 0 16px 32px rgba(0,0,0,.32), 0 2px 6px rgba(0,0,0,.18);
+    transition: transform .2s, box-shadow .2s;
   }
-  .disc-kpi-card:hover { box-shadow: var(--shadow-sm); }
-  .disc-kpi-card.disc-highlight { border-top: 3px solid var(--brand); }
+  .disc-kpi-card:hover { transform: translateY(-3px); box-shadow: 0 20px 40px rgba(0,0,0,.38), 0 2px 6px rgba(0,0,0,.2); }
+  .disc-kpi-card.disc-highlight { border-top: 3px solid rgba(255,255,255,.35); }
   .disc-kpi-label {
-    font-size: 10px; font-weight: 600; color: var(--text-3);
+    font-size: 10px; font-weight: 600; color: rgba(255,255,255,.6);
     text-transform: uppercase; letter-spacing: .06em; margin-bottom: 8px;
   }
+  .disc-kpi-value-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; }
   .disc-kpi-value {
     font-size: 26px; font-weight: 700;
-    font-family: 'DM Mono', monospace; color: var(--text); line-height: 1;
+    font-family: 'DM Mono', monospace; color: #fff; line-height: 1;
   }
-  .disc-kpi-value.disc-green { color: var(--green); }
-  .disc-kpi-value.disc-amber { color: var(--amber); }
-  .disc-kpi-value.disc-red   { color: var(--red-sem); }
+  .disc-kpi-value.disc-green { color: #4ADE80; }
+  .disc-kpi-value.disc-amber { color: #FBBF24; }
+  .disc-kpi-value.disc-red   { color: #FCA5A5; }
+  .disc-kpi-value-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; }
 
   /* Tabelas discadora — herdam prod-table-wrap */
 
@@ -920,7 +1004,7 @@
 
   @media (max-width: 768px) {
     input, select, textarea { font-size: 16px !important; }
-    .topbar { padding: 0 14px; height: 48px; }
+    .topbar { padding: 0 14px; height: 52px; }
     .topbar h1 { font-size: 13px; }
     .topbar-badge, .last-update, .clock { display: none; }
     .btn-refresh { padding: 5px 10px; font-size: 12px; min-height: 36px; }
@@ -929,16 +1013,22 @@
     .user-avatar { width: 28px; height: 28px; font-size: 11px; }
     .mes-label { display: none; }
     .mes-select { font-size: 12px !important; padding: 5px 8px; }
-    .tabs-nav { padding: 0 10px; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+    .tabs-nav { padding: 0 10px; top: 52px; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
     .tabs-nav::-webkit-scrollbar { display: none; }
     .tab-btn { padding: 13px 16px; font-size: 12px; white-space: nowrap; min-height: 44px; }
-    .content { padding: 12px; }
-    .filters-bar { grid-template-columns: 1fr 1fr; gap: 8px; padding: 10px 12px; }
-    .prod-filters { gap: 8px; padding: 12px; }
+    .content { padding: 0 14px 24px; }
+    .hero-panel { padding: 18px 0 40px; }
+    .hero-panel-inner { padding: 0 14px; }
+    .filters-bar { gap: 8px; }
+    .prod-filters { gap: 8px; }
     .prod-filter-group { min-width: calc(50% - 4px); flex: 1 1 calc(50% - 4px); }
-    .metrics-grid { grid-template-columns: repeat(3, 1fr); gap: 8px; }
-    .metric-value { font-size: 22px; }
-    .metric-card { padding: 12px; }
+    .metrics-grid { grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: -24px; }
+    #disc-kpi-area { grid-template-columns: repeat(2, 1fr); margin-top: -24px; }
+    .metric-value { font-size: 20px; }
+    .metric-card { padding: 14px; }
+    .kpi-spark { height: 20px; }
+    .disc-kpi-value { font-size: 20px; }
+    .disc-kpi-card { padding: 14px; }
     .sim-kpi-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
     .sim-kpi-value { font-size: 18px; }
     .sim-kpi-card { padding: 12px; }
@@ -958,21 +1048,22 @@
     .sim-visoes::-webkit-scrollbar { display: none; }
     .sim-metas-grid { gap: 10px; }
     .sim-meta-item input { width: 90px; }
-    #disc-kpi-area { grid-template-columns: repeat(2, 1fr); }
-    #tab-discadora .filters-bar { grid-template-columns: 1fr 1fr; }
   }
 
   @media (max-width: 480px) {
-    .metrics-grid { grid-template-columns: repeat(2, 1fr); }
+    .metrics-grid { grid-template-columns: repeat(2, 1fr); margin-top: -18px; }
+    #disc-kpi-area { grid-template-columns: 1fr 1fr; margin-top: -18px; }
     .sim-kpi-grid { grid-template-columns: 1fr 1fr; }
-    .filters-bar { grid-template-columns: 1fr; }
+    .filters-bar { flex-direction: column; align-items: stretch; }
+    .filter-group { border-radius: 14px; }
     .prod-filter-group { min-width: 100%; flex: 1 1 100%; }
     .topbar { padding: 0 12px; }
     .topbar h1 { font-size: 12px; }
     .btn-refresh { padding: 4px 8px; font-size: 11px; }
     .tab-btn { padding: 12px 14px; font-size: 11px; }
-    .content { padding: 10px; }
-    #disc-kpi-area { grid-template-columns: 1fr 1fr; }
+    .content { padding: 0 10px 20px; }
+    .hero-panel-inner { padding: 0 10px; }
+    .hero-panel { padding: 16px 0 32px; }
   }
 
 
@@ -1187,16 +1278,18 @@
 
   <!-- TAB GERENCIAL -->
   <div class="tab-panel" id="tab-gerencial">
-    <div class="filters-bar">
-      <div class="filter-group"><label>Estado</label><select id="f-estado" onchange="onFilterChange('estado')"><option>Todos</option></select></div>
-      <div class="filter-group"><label>Gestor</label><select id="f-gestor" onchange="onFilterChange('gestor')"><option>Todos</option></select></div>
-      <div class="filter-group"><label>Equipe</label><select id="f-equipe" onchange="onFilterChange('equipe')"><option>Todas</option></select></div>
-      <div class="filter-group"><label>Consultor</label><select id="f-consultor" onchange="render()"><option>Todos</option></select></div>
-      <div class="filter-group"><label>Tag / Unidade</label><select id="f-tag" onchange="render()"><option>Todas</option></select></div>
-    </div>
+    <div class="hero-panel"><div class="hero-panel-inner">
+      <div class="filters-bar">
+        <div class="filter-group"><label>Estado</label><select id="f-estado" onchange="onFilterChange('estado')"><option>Todos</option></select></div>
+        <div class="filter-group"><label>Gestor</label><select id="f-gestor" onchange="onFilterChange('gestor')"><option>Todos</option></select></div>
+        <div class="filter-group"><label>Equipe</label><select id="f-equipe" onchange="onFilterChange('equipe')"><option>Todas</option></select></div>
+        <div class="filter-group"><label>Consultor</label><select id="f-consultor" onchange="render()"><option>Todos</option></select></div>
+        <div class="filter-group"><label>Tag / Unidade</label><select id="f-tag" onchange="render()"><option>Todas</option></select></div>
+      </div>
+      <div id="error-area"></div>
+      <div id="stats-row-area"></div>
+    </div></div>
 
-    <div id="error-area"></div>
-    <div id="stats-row-area"></div>
     <div id="metrics-area"><div class="loading-state"><div class="loading-spinner"></div><p>Carregando dados da BaseCRM...</p></div></div>
     <div id="table-area"></div>
   </div>
@@ -1204,6 +1297,7 @@
   <!-- TAB PRODUÇÃO -->
   <div class="tab-panel" id="tab-producao">
 
+    <div class="hero-panel"><div class="hero-panel-inner">
     <!-- FILTROS PRINCIPAIS -->
     <div class="prod-filters">
       <div class="prod-filter-group">
@@ -1272,9 +1366,10 @@
         </div>
       </div>
     </div>
+    </div></div>
 
     <!-- STATUS CHIPS -->
-    <div class="prod-status-section">
+    <div class="prod-status-section" style="margin-top:24px;">
       <div class="prod-status-label">
         <span>Status de Fila <span id="prod-status-count" style="font-weight:400;color:var(--text3)"></span></span>
         <div style="display:flex;gap:6px">
@@ -1293,6 +1388,7 @@
   <!-- TAB SIMULADOR -->
   <div class="tab-panel active" id="tab-simulador">
 
+    <div class="hero-panel"><div class="hero-panel-inner">
     <!-- CONTROLES TOPO -->
     <div class="sim-controls-bar">
 
@@ -1323,25 +1419,25 @@
             <label>VOZ - Portabilidade</label>
             <input type="number" id="mult-voz-port" value="7.5" step="0.1" min="0" onchange="renderSimulador()">
           </div>
-          <div class="sim-mult-item" style="border-left:2px solid var(--border);padding-left:10px;margin-left:4px">
+          <div class="sim-mult-item" style="border-left:2px solid rgba(255,255,255,.2);padding-left:10px;margin-left:4px">
             <label>R$ por linha (carteira)</label>
-            <input type="number" id="mult-vlr-linha" value="2.60" step="0.10" min="0.01" onchange="renderSimulador()" style="background:#fffbe6">
+            <input type="number" id="mult-vlr-linha" value="2.60" step="0.10" min="0.01" onchange="renderSimulador()">
           </div>
-          <div class="sim-mult-item" style="border-left:2px solid var(--border);padding-left:10px;margin-left:4px">
+          <div class="sim-mult-item" style="border-left:2px solid rgba(255,255,255,.2);padding-left:10px;margin-left:4px">
             <label>Divisor VOZ (incentivo)</label>
-            <input type="number" id="div-voz" value="12" step="1" min="1" onchange="renderSimulador()" style="background:#f0f9ff">
+            <input type="number" id="div-voz" value="12" step="1" min="1" onchange="renderSimulador()">
           </div>
           <div class="sim-mult-item">
             <label>Divisor VIRTUA (incentivo)</label>
-            <input type="number" id="div-virtua" value="3" step="1" min="1" onchange="renderSimulador()" style="background:#f0f9ff">
+            <input type="number" id="div-virtua" value="3" step="1" min="1" onchange="renderSimulador()">
           </div>
-          <div class="sim-mult-item" style="border-left:2px solid var(--border);padding-left:10px;margin-left:4px">
+          <div class="sim-mult-item" style="border-left:2px solid rgba(255,255,255,.2);padding-left:10px;margin-left:4px">
             <label>Divisor VOZ (incentivo 2)</label>
-            <input type="number" id="div-voz2" value="12" step="1" min="1" onchange="renderSimulador()" style="background:#f0fff4">
+            <input type="number" id="div-voz2" value="12" step="1" min="1" onchange="renderSimulador()">
           </div>
           <div class="sim-mult-item">
             <label>Divisor VIRTUA (incentivo 2)</label>
-            <input type="number" id="div-virtua2" value="3" step="1" min="1" onchange="renderSimulador()" style="background:#f0fff4">
+            <input type="number" id="div-virtua2" value="3" step="1" min="1" onchange="renderSimulador()">
           </div>
 
         </div>
@@ -1360,9 +1456,10 @@
       </div>
 
     </div>
+    </div></div>
 
     <!-- KPI SUMMARY -->
-    <div id="sim-kpi-area"></div>
+    <div id="sim-kpi-area" style="margin-top:24px;"></div>
 
     <!-- TABELA RESULTADO -->
     <div id="sim-table-area"></div>
@@ -1572,6 +1669,7 @@
 
   <!-- TAB DISCADORA -->
   <div class="tab-panel" id="tab-discadora">
+    <div class="hero-panel"><div class="hero-panel-inner">
     <div class="filters-bar">
       <div class="filter-group">
         <label>Data início</label>
@@ -1609,18 +1707,19 @@
       </div>
       <div class="filter-group" style="display:flex;flex-direction:column;justify-content:flex-end;gap:4px;">
         <button onclick="discadoraCarregar()" class="disc-btn-buscar">Buscar</button>
-        <span id="disc-ultima-atualizacao"></span>
-        <span id="disc-status"></span>
+        <span id="disc-ultima-atualizacao" style="color:rgba(255,255,255,.6)"></span>
+        <span id="disc-status" style="color:rgba(255,255,255,.6)"></span>
       </div>
     </div>
 
     <!-- PROGRESS BAR -->
-    <div id="disc-progress-wrap" style="display:none;">
+    <div id="disc-progress-wrap" class="hero-progress" style="display:none;">
       <div id="disc-progress-label">Carregando...</div>
       <div class="disc-progress-track">
         <div id="disc-progress-bar" style="width:0%"></div>
       </div>
     </div>
+    </div></div>
 
     <!-- KPI CARDS — Linha 1: Volume -->
     <div id="disc-kpi-area"></div>
@@ -2144,7 +2243,13 @@ function render() {
     const filas = Object.entries(metrics[c].filas).sort((a, b) => b[1] - a[1]);
     return `<div class="metric-card ${i === 0 ? 'highlight' : ''}">
       <div class="metric-label">${c}</div>
-      <div class="metric-value">${metrics[c].total}</div>
+      <div class="metric-value-row">
+        <div class="metric-value">${metrics[c].total}</div>
+        <div class="kpi-spark">${filas.slice(0,6).map(f => {
+          const max = Math.max(1, ...filas.slice(0,6).map(x => x[1]));
+          return `<span style="height:${Math.max(12, Math.round(f[1] / max * 100))}%"></span>`;
+        }).join('')}</div>
+      </div>
       <div class="metric-avg">Média/consultor: ${med}</div>
       <div class="filas-list">${filas.map(([fn, fv]) => `
         <div class="fila-item" onclick="drillFila('${c}','${fn.replace(/'/g,"\\'")}')">
@@ -4909,15 +5014,22 @@ function discadoraRender() {
   const pctProd    = totalAtend > 0 ? Math.round(totalProd / totalAtend * 100) : 0;
 
   var _pctClass = pctProd >= 15 ? 'disc-green' : pctProd >= 8 ? 'disc-amber' : 'disc-red';
+  function _spark(vals) {
+    var max = Math.max(1, vals.reduce(function(a,b){ return Math.max(a,b); }, 0));
+    return '<div class="kpi-spark">' + vals.map(function(v){
+      return '<span style="height:' + Math.max(12, Math.round(v / max * 100)) + '%"></span>';
+    }).join('') + '</div>';
+  }
+  var _funil = [totalLig, totalAtend, totalProd];
   document.getElementById('disc-kpi-area').innerHTML =
-    '<div class="disc-kpi-card"><div class="disc-kpi-label">Total ligações</div><div class="disc-kpi-value">' + totalLig + '</div></div>' +
-    '<div class="disc-kpi-card"><div class="disc-kpi-label">Atendidas</div><div class="disc-kpi-value">' + totalAtend + '</div></div>' +
+    '<div class="disc-kpi-card"><div class="disc-kpi-label">Total ligações</div><div class="disc-kpi-value-row"><div class="disc-kpi-value">' + totalLig + '</div>' + _spark(_funil) + '</div></div>' +
+    '<div class="disc-kpi-card"><div class="disc-kpi-label">Atendidas</div><div class="disc-kpi-value-row"><div class="disc-kpi-value">' + totalAtend + '</div>' + _spark(_funil) + '</div></div>' +
     '<div class="disc-kpi-card disc-highlight" onclick="discExportarProdutivas()" style="cursor:pointer;" title="Clique para exportar CSV">' +
-      '<div class="disc-kpi-label">Produtivas +1 min <span style="font-size:9px;color:var(--text-3);margin-left:4px;">↓ CSV</span></div>' +
-      '<div class="disc-kpi-value">' + totalProd + '</div></div>' +
-    '<div class="disc-kpi-card disc-highlight"><div class="disc-kpi-label">% Produtividade</div><div class="disc-kpi-value ' + _pctClass + '">' + pctProd + '%</div></div>' +
-    '<div class="disc-kpi-card"><div class="disc-kpi-label">TMA geral</div><div class="disc-kpi-value">' + discFmt(tmaGlobal) + '</div></div>' +
-    '<div class="disc-kpi-card"><div class="disc-kpi-label">TMA +1 min</div><div class="disc-kpi-value">' + discFmt(tmaProd) + '</div></div>';
+      '<div class="disc-kpi-label">Produtivas +1 min <span style="font-size:9px;color:rgba(255,255,255,.5);margin-left:4px;">↓ CSV</span></div>' +
+      '<div class="disc-kpi-value-row"><div class="disc-kpi-value">' + totalProd + '</div>' + _spark(_funil) + '</div></div>' +
+    '<div class="disc-kpi-card disc-highlight"><div class="disc-kpi-label">% Produtividade</div><div class="disc-kpi-value-row"><div class="disc-kpi-value ' + _pctClass + '">' + pctProd + '%</div>' + _spark([8,15,pctProd]) + '</div></div>' +
+    '<div class="disc-kpi-card"><div class="disc-kpi-label">TMA geral</div><div class="disc-kpi-value-row"><div class="disc-kpi-value">' + discFmt(tmaGlobal) + '</div>' + _spark([tmaGlobal, tmaProd]) + '</div></div>' +
+    '<div class="disc-kpi-card"><div class="disc-kpi-label">TMA +1 min</div><div class="disc-kpi-value-row"><div class="disc-kpi-value">' + discFmt(tmaProd) + '</div>' + _spark([tmaGlobal, tmaProd]) + '</div></div>';
 
   // ── SPRINT 2: KPIs DE EFICIÊNCIA OPERACIONAL ────────────────────────────────
 
