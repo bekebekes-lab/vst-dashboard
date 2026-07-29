@@ -2307,8 +2307,8 @@ function drillFila(categoria, fila) {
 
   const ctxParts = [];
   if (estado    !== 'Todos') ctxParts.push(estado);
-  if (gestor    !== 'Todos') ctxParts.push(gestor);
-  if (equipe    !== 'Todas') ctxParts.push(equipe);
+  if (gestorSel.length > 0)  ctxParts.push(gestorSel.join(', '));
+  if (equipeSel.length > 0)  ctxParts.push(equipeSel.join(', '));
   if (consultor !== 'Todos') ctxParts.push(consultor);
   const ctxLabel = ctxParts.join(' › ');
 
@@ -4550,6 +4550,39 @@ function aplicarPermissoes() {
     sel.style.pointerEvents = 'none';
   };
 
+  // Restringe as opções de Equipe/Consultor/Tag do Gerencial ao escopo do
+  // gestor(es) ou equipe(s) travados — evita que o usuário selecione algo
+  // fora do seu escopo e veja dado zerado.
+  const restringirListasGerencial = (gestoresLock, equipesLock) => {
+    let equipesPermitidas = null;
+    if (equipesLock && equipesLock.length > 0) {
+      equipesPermitidas = new Set(equipesLock);
+    } else if (gestoresLock && gestoresLock.length > 0) {
+      equipesPermitidas = new Set();
+      Object.entries(EQUIPES_GESTORES).forEach(([eq, ges]) => {
+        if (gestoresLock.includes(ges)) equipesPermitidas.add(eq);
+      });
+    }
+    if (!equipesPermitidas) return;
+
+    const consultores = new Set();
+    const tags = new Set();
+    ALL_DATA.forEach(r => {
+      if (equipesPermitidas.has(r['EQUIPE'])) {
+        if (r['PROPRIETÁRIO DO PEDIDO']) consultores.add(r['PROPRIETÁRIO DO PEDIDO']);
+        if (r['TAGS ATIVIDADE']) tags.add(r['TAGS ATIVIDADE']);
+      }
+    });
+
+    // Só repopula Equipe se ela não estiver travada por equipesLock (senão
+    // travarDropdownMulti já cuidou da seleção exata)
+    if (!equipesLock || equipesLock.length === 0) {
+      popularDropdownFEquipe([...equipesPermitidas].filter(eq => _fEquipeItens.includes(eq)).sort());
+    }
+    fillSelect('f-consultor', ['Todos', ...[...consultores].sort()]);
+    fillSelect('f-tag', ['Todas', ...[...tags].sort()]);
+  };
+
   const aplicarFiltrosGerencial = () => {
     if (p === 'consultor') {
       // Bloqueia todos os filtros — consultor não pode mudar nada
@@ -4572,14 +4605,17 @@ function aplicarPermissoes() {
       const nomesLock = (USUARIO_ATUAL.gestores_ref || []).length > 0 ? USUARIO_ATUAL.gestores_ref : [USUARIO_ATUAL.gestor_ref];
       travarDropdownMulti('dd-content-f-gestor', '#dd-f-gestor .dropdown-btn', nomesLock);
       travarSelectSimples('f-estado');
+      restringirListasGerencial(nomesLock, null);
       render();
     } else if (p === 'gestor_macro2' && (USUARIO_ATUAL.gestores_ref || []).length > 0) {
       // Trava Gerencial em 1+ nomes de gestor
       travarDropdownMulti('dd-content-f-gestor', '#dd-f-gestor .dropdown-btn', USUARIO_ATUAL.gestores_ref);
+      restringirListasGerencial(USUARIO_ATUAL.gestores_ref, null);
       render();
     } else if (p === 'supervisao' && (USUARIO_ATUAL.equipes_ref || []).length > 0) {
       // Trava Gerencial em 1+ equipes (supervisão), sem trava de gestor/estado
       travarDropdownMulti('dd-content-f-equipe', '#dd-f-equipe .dropdown-btn', USUARIO_ATUAL.equipes_ref);
+      restringirListasGerencial(null, USUARIO_ATUAL.equipes_ref);
       render();
     }
   };
@@ -4638,6 +4674,16 @@ function aplicarTravaProducao() {
   const p = USUARIO_ATUAL?.perfil;
   if (p === 'gestor_macro2' && (USUARIO_ATUAL.gestores_ref || []).length > 0 && document.getElementById('dd-content-prod-gestor')) {
     travarDropdownMulti('dd-content-prod-gestor', '#dd-prod-gestor .dropdown-btn', USUARIO_ATUAL.gestores_ref);
+
+    // Restringe a lista de Equipes às equipes desses gestores
+    if (ALL_DATA.length) {
+      const equipesPermitidas = new Set();
+      ALL_DATA.forEach(r => {
+        const eq = r['EQUIPE'];
+        if (eq && USUARIO_ATUAL.gestores_ref.includes(EQUIPES_GESTORES[eq])) equipesPermitidas.add(eq);
+      });
+      if (equipesPermitidas.size > 0) popularDropdownEquipe([...equipesPermitidas].sort());
+    }
   }
 }
 
@@ -4892,8 +4938,11 @@ function discadoraRender() {
   const consultoresHeader = getCheckedValuesDd('dd-content-consultor');
 
   const grupos      = [...new Set(_discDados.map(r => r.grupo && r.grupo.nome).filter(Boolean))].sort();
-  const filas       = [...new Set(_discDados.map(r => r.fila && r.fila.nome).filter(Boolean))].sort();
-  const consultores = [...new Set(_discDados.map(r => r.usuario && r.usuario.nome).filter(Boolean))].sort();
+  // Fila e Consultor são calculados só dentro do escopo travado (grupo/cidade),
+  // pra não listar filas/consultores de outras cidades quando o perfil está preso a um Grupo
+  const _discDadosEscopo = grupoTravado ? _discDados.filter(r => r.grupo && r.grupo.nome === grupoTravado) : _discDados;
+  const filas       = [...new Set(_discDadosEscopo.map(r => r.fila && r.fila.nome).filter(Boolean))].sort();
+  const consultores = [...new Set(_discDadosEscopo.map(r => r.usuario && r.usuario.nome).filter(Boolean))].sort();
 
   // Atualiza dropdowns Grupo e Consultor — só recria se os itens mudaram
   const _gruposStr = grupos.join('|');
