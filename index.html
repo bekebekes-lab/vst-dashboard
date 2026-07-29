@@ -4935,6 +4935,10 @@ function getCheckedValues(containerId) {
 function discadoraRender() {
   // Trava por perfil (Gestor/Supervisão) — não depende do estado do DOM
   const grupoTravado = getGrupoDiscadoraTravado();
+  // Comparação tolerante a maiúsculo/minúsculo e espaços nas pontas — os nomes
+  // de Grupo vêm direto da API do MakeSystem e podem variar em capitalização
+  const _normG = s => (s || '').toString().trim().toUpperCase();
+  const grupoTravadoNorm = _normG(grupoTravado);
 
   // Lê filtros da barra superior
   const grupoFiltro     = grupoTravado || (document.getElementById('disc-grupo') ? document.getElementById('disc-grupo').value : '');
@@ -4948,7 +4952,7 @@ function discadoraRender() {
   const grupos      = [...new Set(_discDados.map(r => r.grupo && r.grupo.nome).filter(Boolean))].sort();
   // Fila e Consultor são calculados só dentro do escopo travado (grupo/cidade),
   // pra não listar filas/consultores de outras cidades quando o perfil está preso a um Grupo
-  const _discDadosEscopo = grupoTravado ? _discDados.filter(r => r.grupo && r.grupo.nome === grupoTravado) : _discDados;
+  const _discDadosEscopo = grupoTravado ? _discDados.filter(r => r.grupo && _normG(r.grupo.nome) === grupoTravadoNorm) : _discDados;
   const filas       = [...new Set(_discDadosEscopo.map(r => r.fila && r.fila.nome).filter(Boolean))].sort();
   const consultores = [...new Set(_discDadosEscopo.map(r => r.usuario && r.usuario.nome).filter(Boolean))].sort();
 
@@ -4982,11 +4986,11 @@ function discadoraRender() {
   // Filtra os dados
   let dados = _discDados;
   
-  if (grupoFiltro) dados = dados.filter(r => r.grupo && r.grupo.nome === grupoFiltro);
+  if (grupoFiltro) dados = dados.filter(r => r.grupo && _normG(r.grupo.nome) === _normG(grupoFiltro));
   if (filaFiltro)  dados = dados.filter(r => r.fila && r.fila.nome === filaFiltro);
   if (consultorFiltro) dados = dados.filter(r => r.usuario && r.usuario.nome === consultorFiltro);
   
-  if (gruposHeader.length > 0) dados = dados.filter(r => r.grupo && gruposHeader.includes(r.grupo.nome));
+  if (gruposHeader.length > 0) { const gh = gruposHeader.map(_normG); dados = dados.filter(r => r.grupo && gh.includes(_normG(r.grupo.nome))); }
   if (consultoresHeader.length > 0) dados = dados.filter(r => r.usuario && consultoresHeader.includes(r.usuario.nome));
 
   const porConsultor = {};
