@@ -4937,7 +4937,7 @@ function discadoraRender() {
   const grupoTravado = getGrupoDiscadoraTravado();
   // Comparação tolerante a maiúsculo/minúsculo e espaços nas pontas — os nomes
   // de Grupo vêm direto da API do MakeSystem e podem variar em capitalização
-  const _normG = s => (s || '').toString().trim().toUpperCase();
+  const _normG = s => (s || '').toString().trim().toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   const grupoTravadoNorm = _normG(grupoTravado);
 
   // Lê filtros da barra superior
