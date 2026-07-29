@@ -1168,8 +1168,20 @@
   <div class="tab-panel" id="tab-gerencial">
     <div class="filters-bar">
       <div class="filter-group"><label>Estado</label><select id="f-estado" onchange="onFilterChange('estado')"><option>Todos</option></select></div>
-      <div class="filter-group"><label>Gestor</label><select id="f-gestor" onchange="onFilterChange('gestor')"><option>Todos</option></select></div>
-      <div class="filter-group"><label>Equipe</label><select id="f-equipe" onchange="onFilterChange('equipe')"><option>Todas</option></select></div>
+      <div class="filter-group" style="min-width:190px">
+        <label>Gestor</label>
+        <div class="custom-dropdown" id="dd-f-gestor">
+          <button class="dropdown-btn" onclick="toggleDropdown('dd-content-f-gestor')">Todos <span>&#9660;</span></button>
+          <div class="dropdown-content" id="dd-content-f-gestor"></div>
+        </div>
+      </div>
+      <div class="filter-group" style="min-width:190px">
+        <label>Equipe</label>
+        <div class="custom-dropdown" id="dd-f-equipe">
+          <button class="dropdown-btn" onclick="toggleDropdown('dd-content-f-equipe')">Todas <span>&#9660;</span></button>
+          <div class="dropdown-content" id="dd-content-f-equipe"></div>
+        </div>
+      </div>
       <div class="filter-group"><label>Consultor</label><select id="f-consultor" onchange="render()"><option>Todos</option></select></div>
       <div class="filter-group"><label>Tag / Unidade</label><select id="f-tag" onchange="render()"><option>Todas</option></select></div>
     </div>
@@ -1191,11 +1203,12 @@
           <option value="Todos">Todos</option>
         </select>
       </div>
-      <div class="prod-filter-group">
+      <div class="prod-filter-group" style="min-width:190px">
         <label>Gestor</label>
-        <select id="prod-gestor" onchange="onProdFilterChange('gestor')">
-          <option value="Todos">Todos</option>
-        </select>
+        <div class="custom-dropdown" id="dd-prod-gestor">
+          <button class="dropdown-btn" onclick="toggleDropdown('dd-content-prod-gestor')">Todos <span>&#9660;</span></button>
+          <div class="dropdown-content" id="dd-content-prod-gestor"></div>
+        </div>
       </div>
       <div class="prod-filter-group" style="min-width:200px">
         <label>Equipe</label>
@@ -1944,6 +1957,11 @@ async function carregarAbas() {
   }
 }
 
+// Listas completas (sem filtro em cascata) usadas para repopular os dropdowns
+// de checkbox de Gestor/Equipe do Gerencial sempre que necessário (ex: travas de perfil)
+let _fGestorItens = [];
+let _fEquipeItens = [];
+
 function buildFilters() {
   const estados = new Set();
   const gestores = new Set();
@@ -1963,10 +1981,44 @@ function buildFilters() {
   });
 
   fillSelect('f-estado', ['Todos', ...[...estados].sort()]);
-  fillSelect('f-gestor', ['Todos', ...[...gestores].sort()]);
-  fillSelect('f-equipe', ['Todas', ...[...equipes].sort()]);
+  _fGestorItens = [...gestores].sort();
+  _fEquipeItens = [...equipes].sort();
+  popularDropdownFGestor(_fGestorItens);
+  popularDropdownFEquipe(_fEquipeItens);
   fillSelect('f-consultor', ['Todos', ...[...consultores].sort()]);
   fillSelect('f-tag', ['Todas', ...[...tags].sort()]);
+}
+
+function popularDropdownFGestor(itens) {
+  window._ddOnChange_dd_content_f_gestor = function(){ atualizarBotaoDropdown('dd-content-f-gestor','#dd-f-gestor .dropdown-btn'); render(); };
+  ddRegisterCallback('dd-content-f-gestor', window._ddOnChange_dd_content_f_gestor);
+  popularDropdownGenerico('dd-content-f-gestor', itens, window._ddOnChange_dd_content_f_gestor, '#dd-f-gestor .dropdown-btn');
+}
+
+function popularDropdownFEquipe(itens) {
+  window._ddOnChange_dd_content_f_equipe = function(){ atualizarBotaoDropdown('dd-content-f-equipe','#dd-f-equipe .dropdown-btn'); render(); };
+  ddRegisterCallback('dd-content-f-equipe', window._ddOnChange_dd_content_f_equipe);
+  popularDropdownGenerico('dd-content-f-equipe', itens, window._ddOnChange_dd_content_f_equipe, '#dd-f-equipe .dropdown-btn');
+}
+
+// Trava genérica: força a seleção do dropdown de checkbox e desabilita a interação
+// (usada apenas pelas travas de permissão em aplicarPermissoes)
+function travarDropdownMulti(contId, labelBotaoSel, valores) {
+  _ddState[contId] = valores && valores.length > 0 ? new Set(valores) : null;
+  atualizarBotaoDropdown(contId, labelBotaoSel);
+  const btn = document.querySelector(labelBotaoSel);
+  const wrap = btn ? btn.closest('.custom-dropdown') : null;
+  if (wrap) { wrap.style.opacity = '0.55'; wrap.style.pointerEvents = 'none'; }
+}
+
+// Limpa a seleção de um dropdown de checkbox sem desabilitar a interação
+// (usada em resets como troca de mês, para perfis sem trava fixa)
+function limparDropdownMulti(contId, labelBotaoSel) {
+  _ddState[contId] = null;
+  atualizarBotaoDropdown(contId, labelBotaoSel);
+  document.querySelectorAll(`#${contId} input[type="checkbox"]`).forEach(cb => {
+    cb.checked = cb.dataset.todos === 'true';
+  });
 }
 
 function fillSelect(id, opts) {
@@ -1977,39 +2029,10 @@ function fillSelect(id, opts) {
 }
 
 function onFilterChange(level) {
-  const estado = document.getElementById('f-estado').value;
-  const gestor = document.getElementById('f-gestor').value;
-  const equipe = document.getElementById('f-equipe').value;
-
-  const gestores = new Set();
-  const equipes = new Set();
-  const consultores = new Set();
-
-  ALL_DATA.forEach(r => {
-    const eq = r['EQUIPE'];
-    const est = EQUIPES_ESTADOS[eq] || '';
-    const ges = EQUIPES_GESTORES[eq] || '';
-    if (estado === 'Todos' || est === estado) {
-      if (ges) gestores.add(ges);
-      if (gestor === 'Todos' || ges === gestor) {
-        if (eq) equipes.add(eq);
-        if (equipe === 'Todas' || eq === equipe) {
-          if (r['PROPRIETÁRIO DO PEDIDO']) consultores.add(r['PROPRIETÁRIO DO PEDIDO']);
-        }
-      }
-    }
-  });
-
-  if (level === 'estado') {
-    fillSelect('f-gestor', ['Todos', ...[...gestores].sort()]);
-    fillSelect('f-equipe', ['Todas', ...[...equipes].sort()]);
-    fillSelect('f-consultor', ['Todos', ...[...consultores].sort()]);
-  } else if (level === 'gestor') {
-    fillSelect('f-equipe', ['Todas', ...[...equipes].sort()]);
-    fillSelect('f-consultor', ['Todos', ...[...consultores].sort()]);
-  } else if (level === 'equipe') {
-    fillSelect('f-consultor', ['Todos', ...[...consultores].sort()]);
-  }
+  // Gestor e Equipe agora são dropdowns de checkbox independentes (não fazem
+  // mais cascata a partir do Estado) — a lista completa já é populada em
+  // buildFilters(). O Consultor continua sendo recalculado com base em todos
+  // os filtros ativos no momento do render().
   render();
 }
 
@@ -2051,17 +2074,19 @@ function render() {
     if (selC && selC.value !== USUARIO_ATUAL.consultor_ref) {
       selC.value = USUARIO_ATUAL.consultor_ref;
     }
-    ['f-estado','f-gestor','f-equipe','f-tag'].forEach(id => {
+    ['f-estado','f-tag'].forEach(id => {
       const sel = document.getElementById(id);
       if (sel && sel.value !== sel.options[0]?.value) sel.value = sel.options[0].value;
     });
+    if (_ddState['dd-content-f-gestor']) _ddState['dd-content-f-gestor'] = null;
+    if (_ddState['dd-content-f-equipe']) _ddState['dd-content-f-equipe'] = null;
   }
 
-  const estado    = document.getElementById('f-estado').value;
-  const gestor    = document.getElementById('f-gestor').value;
-  const equipe    = document.getElementById('f-equipe').value;
-  const consultor = document.getElementById('f-consultor').value;
-  const tag       = document.getElementById('f-tag').value;
+  const estado      = document.getElementById('f-estado').value;
+  const gestorSel   = getCheckedValuesDd('dd-content-f-gestor'); // [] = Todos
+  const equipeSel   = getCheckedValuesDd('dd-content-f-equipe'); // [] = Todas
+  const consultor   = document.getElementById('f-consultor').value;
+  const tag         = document.getElementById('f-tag').value;
 
   const cats = ["GERAL", "GROSS", "RENOVAÇÃO", "BL", "TITULARIDADE", "SERV. DIGITAIS"];
   let metrics = {};
@@ -2080,11 +2105,11 @@ function render() {
     const fila = r['FILA'] || 'Sem Status';
     const grupo = r['GRUPO'] || '';
 
-    if (estado    !== 'Todos' && est  !== estado)    return;
-    if (gestor    !== 'Todos' && ges  !== gestor)    return;
-    if (equipe    !== 'Todas' && eq   !== equipe)    return;
-    if (consultor !== 'Todos' && cons !== consultor) return;
-    if (tag       !== 'Todas' && rtag !== tag)       return;
+    if (estado    !== 'Todos' && est  !== estado)         return;
+    if (gestorSel.length > 0  && !gestorSel.includes(ges)) return;
+    if (equipeSel.length > 0  && !equipeSel.includes(eq))  return;
+    if (consultor !== 'Todos' && cons !== consultor)      return;
+    if (tag       !== 'Todas' && rtag !== tag)            return;
 
     totalRows++;
     nConsSet.add(cons);
@@ -2217,9 +2242,10 @@ function filterByConsultor(name) {
 
 function filterByEquipe(equipe) {
   // zera consultor ao trocar equipe, mantém estado/gestor
-  document.getElementById('f-equipe').value = equipe;
+  _ddState['dd-content-f-equipe'] = new Set([equipe]);
+  popularDropdownFEquipe(_fEquipeItens.length ? _fEquipeItens : [equipe]);
   document.getElementById('f-consultor').value = 'Todos';
-  onFilterChange('equipe');
+  render();
 }
 
 // ─── drill-down de pedidos por fila ─────────────────────────────────────────
@@ -2233,8 +2259,8 @@ function drillFila(categoria, fila) {
   lastDrillArgs = [categoria, fila];
 
   const estado    = document.getElementById('f-estado').value;
-  const gestor    = document.getElementById('f-gestor').value;
-  const equipe    = document.getElementById('f-equipe').value;
+  const gestorSel = getCheckedValuesDd('dd-content-f-gestor'); // [] = Todos
+  const equipeSel = getCheckedValuesDd('dd-content-f-equipe'); // [] = Todas
   const consultor = document.getElementById('f-consultor').value;
   const tag       = document.getElementById('f-tag').value;
 
@@ -2248,11 +2274,11 @@ function drillFila(categoria, fila) {
     const filaR = r['FILA'] || 'Sem Status';
     const grupoKey = getGrupoKey(grupo);
 
-    if (estado    !== 'Todos' && est  !== estado)    return false;
-    if (gestor    !== 'Todos' && ges  !== gestor)    return false;
-    if (equipe    !== 'Todas' && eq   !== equipe)    return false;
-    if (consultor !== 'Todos' && cons !== consultor) return false;
-    if (tag       !== 'Todas' && rtag !== tag)       return false;
+    if (estado    !== 'Todos' && est  !== estado)         return false;
+    if (gestorSel.length > 0  && !gestorSel.includes(ges)) return false;
+    if (equipeSel.length > 0  && !equipeSel.includes(eq))  return false;
+    if (consultor !== 'Todos' && cons !== consultor)      return false;
+    if (tag       !== 'Todas' && rtag !== tag)            return false;
     if (filaR !== fila) return false;
     // sempre restringir aos 4 grupos mapeados
     if (!grupoKey) return false;
@@ -2912,7 +2938,7 @@ function contarStatusPorTag(rows, filtros, statusSelecionados, cutoffDate) {
     const est = EQUIPES_ESTADOS[equipe] || '';
     const ges = EQUIPES_GESTORES[equipe] || '';
     if (filtros.estado !== 'Todos' && est !== filtros.estado) return;
-    if (filtros.gestor !== 'Todos' && ges !== filtros.gestor) return;
+    if (filtros.gestores && filtros.gestores.length > 0 && !filtros.gestores.includes(ges)) return;
     if (filtros.equipes && filtros.equipes.length > 0 && !filtros.equipes.includes(equipe)) return;
     if (!checkUF(filtros.uf, uf)) return;
     if (filtros.grupo === 'Geral' && gruposExcluidos.has(grupo)) return;
@@ -3202,14 +3228,24 @@ function initProducao() {
 
   // Popula Estado
   const estados = new Set();
+  const gestores = new Set();
+  const equipes = new Set();
   ALL_DATA.forEach(r => {
-    const est = EQUIPES_ESTADOS[r['EQUIPE']];
+    const eq  = r['EQUIPE'];
+    const est = EQUIPES_ESTADOS[eq];
+    const ges = EQUIPES_GESTORES[eq];
     if (est) estados.add(est);
+    if (ges) gestores.add(ges);
+    if (eq) equipes.add(eq);
   });
   fillProdSelect('prod-estado', ['Todos', ...[...estados].sort()]);
 
-  // Popula Gestor/Equipe em cascata
-  onProdFilterChange('estado');
+  // Popula Gestor (checkbox multi) e Equipe (checkbox multi), sem cascata
+  popularDropdownProdGestor([...gestores].sort());
+  popularDropdownEquipe([...equipes].sort());
+
+  // Aplica trava de perfil (Gestor Macro 2.0) sobre o filtro de Gestor
+  aplicarTravaProducao();
 
   // Popula grupos (excluindo itens não relevantes)
   const gruposExcluidos = new Set(['VOZ - Novo', 'VOZ - Portabilidade', 'APARELHO']);
@@ -3258,31 +3294,15 @@ function popularDropdownEquipe(equipes) {
 }
 
 function onProdFilterChange(level) {
-  const estado = document.getElementById('prod-estado').value;
-  const gestor = document.getElementById('prod-gestor').value;
-
-  const gestores = new Set();
-  const equipes = new Set();
-
-  ALL_DATA.forEach(r => {
-    const eq  = r['EQUIPE'];
-    const est = EQUIPES_ESTADOS[eq] || '';
-    const ges = EQUIPES_GESTORES[eq] || '';
-    if (estado === 'Todos' || est === estado) {
-      if (ges) gestores.add(ges);
-      if (gestor === 'Todos' || ges === gestor) {
-        if (eq) equipes.add(eq);
-      }
-    }
-  });
-
-  if (level === 'estado') {
-    fillProdSelect('prod-gestor', ['Todos', ...[...gestores].sort()]);
-    popularDropdownEquipe([...equipes].sort());
-  } else if (level === 'gestor') {
-    popularDropdownEquipe([...equipes].sort());
-  }
+  // Gestor (checkbox multi-select) não cascateia mais a partir do Estado —
+  // a lista completa de equipes já é populada em initProducao().
   renderProducao();
+}
+
+function popularDropdownProdGestor(gestores) {
+  window._ddOnChange_dd_content_prod_gestor = function(){ atualizarBotaoDropdown('dd-content-prod-gestor','#dd-prod-gestor .dropdown-btn'); renderProducao(); };
+  ddRegisterCallback('dd-content-prod-gestor', window._ddOnChange_dd_content_prod_gestor);
+  popularDropdownGenerico('dd-content-prod-gestor', gestores, window._ddOnChange_dd_content_prod_gestor, '#dd-prod-gestor .dropdown-btn');
 }
 
 function checkUF(filtro, uf) {
@@ -3296,7 +3316,7 @@ async function renderProducao() {
   if (!ALL_DATA.length) return;
 
   const filtroEstado = document.getElementById('prod-estado')?.value || 'Todos';
-  const filtroGestor = document.getElementById('prod-gestor')?.value || 'Todos';
+  const gestoresChecked = getCheckedValuesDd('dd-content-prod-gestor'); // vazio = todos
   const equipesChecked = getCheckedValuesDd('dd-content-prod-equipe'); // vazio = todas
   const filtroUF     = document.getElementById('prod-uf').value;
   const filtroGrupo  = document.getElementById('prod-grupo').value;
@@ -3333,7 +3353,7 @@ async function renderProducao() {
     const est = EQUIPES_ESTADOS[equipe] || '';
     const ges = EQUIPES_GESTORES[equipe] || '';
     if (filtroEstado !== 'Todos' && est !== filtroEstado) return;
-    if (filtroGestor !== 'Todos' && ges !== filtroGestor) return;
+    if (gestoresChecked.length > 0 && !gestoresChecked.includes(ges)) return;
     if (equipesChecked.length > 0 && !equipesChecked.includes(equipe)) return;
 
     // Filtro UF
@@ -3391,7 +3411,7 @@ async function renderProducao() {
 
   if (mostrarComparativo) {
     resultArea.innerHTML = '<div class="prod-empty">Calculando comparativo MOM/TRI...</div>';
-    const filtros = { estado: filtroEstado, gestor: filtroGestor, equipes: equipesChecked, uf: filtroUF, grupo: filtroGrupo };
+    const filtros = { estado: filtroEstado, gestores: gestoresChecked, equipes: equipesChecked, uf: filtroUF, grupo: filtroGrupo };
     const idRequisicao = ++prodComparativoReqId;
     comparativo = await calcularComparativos(filtros);
     if (idRequisicao !== prodComparativoReqId) return; // uma nova chamada substituiu esta
@@ -3663,7 +3683,7 @@ function _onMetaInput() {
 // Salva ao fechar/recarregar com fetch keepalive
 window.addEventListener('beforeunload', () => {
   if (!_metasSujas || !USUARIO_ATUAL) return;
-  if (!['admin','gestor_macro'].includes(USUARIO_ATUAL.perfil)) return;
+  if (USUARIO_ATUAL.perfil !== 'admin') return;
 
   const periodo = getPeriodoAtivo();
   const rows = [];
@@ -3759,7 +3779,7 @@ async function salvarTudoSimulador(silencioso = false) {
 
 async function salvarMetasNoBanco() {
   if (!USUARIO_ATUAL) return;
-  if (!['admin', 'gestor_macro'].includes(USUARIO_ATUAL.perfil)) {
+  if (USUARIO_ATUAL.perfil !== 'admin') {
     alert('Você não tem permissão para editar metas.');
     return;
   }
@@ -3822,7 +3842,7 @@ async function carregarConfigSimulador() {
 
 async function salvarConfigSimulador() {
   if (!USUARIO_ATUAL) return;
-  if (!['admin', 'gestor_macro'].includes(USUARIO_ATUAL.perfil)) return;
+  if (USUARIO_ATUAL.perfil !== 'admin') return;
   const configs = [
     { chave: 'mult_virtua',   valor: parseFloat(document.getElementById('mult-virtua')?.value)    || 4 },
     { chave: 'mult_voz_novo', valor: parseFloat(document.getElementById('mult-voz-novo')?.value)  || 5.5 },
@@ -4350,7 +4370,7 @@ function exportarSimulador2() {
 // ─── TROCA DE MÊS ────────────────────────────────────────────────────────────
 async function trocarMes() {
   // Salva metas pendentes do período anterior
-  if (_metasSujas && USUARIO_ATUAL && ['admin','gestor_macro'].includes(USUARIO_ATUAL.perfil)) {
+  if (_metasSujas && USUARIO_ATUAL && USUARIO_ATUAL.perfil === 'admin') {
     await salvarMetasNoBanco().catch(e => console.warn('Falha ao salvar ao trocar mês:', e));
     _metasSujas = false;
   }
@@ -4359,13 +4379,20 @@ async function trocarMes() {
   const p = USUARIO_ATUAL?.perfil;
   const filtrosLivres = [];
   if (!['consultor'].includes(p)) filtrosLivres.push('f-consultor');
-  if (!['consultor','gestor','gestor_equipe'].includes(p)) filtrosLivres.push('f-equipe');
-  if (!['consultor','gestor'].includes(p)) filtrosLivres.push('f-tag');
+  if (!['consultor','gestor','gestor_beta','supervisao'].includes(p)) filtrosLivres.push('f-tag');
 
   filtrosLivres.forEach(id => {
     const sel = document.getElementById(id);
     if (sel && !sel.disabled) sel.selectedIndex = 0;
   });
+
+  // Reseta os dropdowns de checkbox (Gestor/Equipe) só para perfis sem trava fixa
+  if (!['gestor_macro','gestor_macro2','gestor','gestor_beta'].includes(p)) {
+    limparDropdownMulti('dd-content-f-gestor', '#dd-f-gestor .dropdown-btn');
+  }
+  if (p !== 'supervisao') {
+    limparDropdownMulti('dd-content-f-equipe', '#dd-f-equipe .dropdown-btn');
+  }
 
   loadData();
   // Aguarda dados carregarem, depois recarrega metas do novo período
@@ -4474,16 +4501,25 @@ async function carregarPerfil(user) {
   }, 600);
 }
 
+// ─── ESQUEMA DE PERFIS (reorganizado) ────────────────────────────────────────
+//  admin          — acesso 100% a tudo
+//  gestor_macro   — Gerencial travado no seu gestor_ref (1 nome) + Discadora total
+//  gestor_macro2  — Gerencial e Produção travados em gestores_ref (1+ nomes) + Discadora total
+//  gestor         — Gerencial travado no seu gestor_ref (1 nome) + Discadora travada no grupo_ref (cidade)
+//  gestor_beta    — igual gestor, mas sem acesso à Discadora
+//  supervisao     — Gerencial travado em equipes_ref (1+ equipes) + Discadora travada no grupo_ref (cidade)
+//  consultor      — nada muda (travado no consultor_ref)
 function aplicarPermissoes() {
   const p = USUARIO_ATUAL.perfil;
 
   // Abas permitidas por perfil
   const abasPermitidas = {
     'admin':          ['simulador', 'gerencial', 'producao', 'discadora', 'simulador2'],
-    'gestor_macro':   ['simulador', 'gerencial', 'producao'],
-    'gestor_senior':  ['gerencial', 'discadora'],
-    'gestor':         ['gerencial'],
-    'gestor_equipe':  ['gerencial'],
+    'gestor_macro':   ['gerencial', 'discadora'],
+    'gestor_macro2':  ['gerencial', 'producao', 'discadora'],
+    'gestor':         ['gerencial', 'discadora'],
+    'gestor_beta':    ['gerencial'],
+    'supervisao':     ['gerencial', 'discadora'],
     'consultor':      ['gerencial']
   };
   const permitidas = abasPermitidas[p] || ['gerencial'];
@@ -4505,18 +4541,22 @@ function aplicarPermissoes() {
     }
   }
 
-  const aplicarFiltros = () => {
+  const travarSelectSimples = (id) => {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    sel.value = sel.options[0]?.value;
+    sel.disabled = true;
+    sel.style.opacity = '0.5';
+    sel.style.pointerEvents = 'none';
+  };
+
+  const aplicarFiltrosGerencial = () => {
     if (p === 'consultor') {
       // Bloqueia todos os filtros — consultor não pode mudar nada
-      ['f-estado','f-gestor','f-equipe','f-tag'].forEach(id => {
-        const sel = document.getElementById(id);
-        if (sel) {
-          sel.value = sel.options[0].value;
-          sel.disabled = true;
-          sel.style.opacity = '0.5';
-          sel.style.pointerEvents = 'none';
-        }
-      });
+      travarSelectSimples('f-estado');
+      travarSelectSimples('f-tag');
+      travarDropdownMulti('dd-content-f-gestor', '#dd-f-gestor .dropdown-btn', []);
+      travarDropdownMulti('dd-content-f-equipe', '#dd-f-equipe .dropdown-btn', []);
       // Trava o filtro de consultor no próprio nome
       const selC = document.getElementById('f-consultor');
       if (selC && USUARIO_ATUAL.consultor_ref) {
@@ -4526,50 +4566,79 @@ function aplicarPermissoes() {
         selC.style.pointerEvents = 'none';
       }
       render();
-    } else if ((p === 'gestor' || p === 'gestor_senior') && USUARIO_ATUAL.gestor_ref) {
-      // Trava filtro de gestor
-      const selG = document.getElementById('f-gestor');
-      if (selG) {
-        selG.value = USUARIO_ATUAL.gestor_ref;
-        selG.disabled = true;
-        selG.style.opacity = '0.5';
-        selG.style.pointerEvents = 'none';
-      }
-      onFilterChange('gestor');
-
-      // Bloqueia apenas estado — gestor pode filtrar equipe e consultor
-      const selE = document.getElementById('f-estado');
-      if (selE) {
-        selE.disabled = true;
-        selE.style.opacity = '0.5';
-        selE.style.pointerEvents = 'none';
-      }
-    } else if (p === 'gestor_equipe' && USUARIO_ATUAL.equipe_ref) {
-      // Trava filtro de equipe — gestor_equipe só vê sua equipe
-      const selEq = document.getElementById('f-equipe');
-      if (selEq) {
-        selEq.value = USUARIO_ATUAL.equipe_ref;
-        selEq.disabled = true;
-        selEq.style.opacity = '0.5';
-        selEq.style.pointerEvents = 'none';
-      }
-      onFilterChange('equipe');
-      // Bloqueia estado e gestor
-      ['f-estado', 'f-gestor'].forEach(id => {
-        const sel = document.getElementById(id);
-        if (sel) {
-          sel.disabled = true;
-          sel.style.opacity = '0.5';
-          sel.style.pointerEvents = 'none';
-        }
-      });
+    } else if ((p === 'gestor_macro' || p === 'gestor' || p === 'gestor_beta') && ((USUARIO_ATUAL.gestores_ref || []).length > 0 || USUARIO_ATUAL.gestor_ref)) {
+      // Trava Gerencial no(s) nome(s) do(s) gestor(es) — usa gestores_ref (1+) se
+      // preenchido, senão cai para o gestor_ref único (comportamento padrão)
+      const nomesLock = (USUARIO_ATUAL.gestores_ref || []).length > 0 ? USUARIO_ATUAL.gestores_ref : [USUARIO_ATUAL.gestor_ref];
+      travarDropdownMulti('dd-content-f-gestor', '#dd-f-gestor .dropdown-btn', nomesLock);
+      travarSelectSimples('f-estado');
+      render();
+    } else if (p === 'gestor_macro2' && (USUARIO_ATUAL.gestores_ref || []).length > 0) {
+      // Trava Gerencial em 1+ nomes de gestor
+      travarDropdownMulti('dd-content-f-gestor', '#dd-f-gestor .dropdown-btn', USUARIO_ATUAL.gestores_ref);
+      render();
+    } else if (p === 'supervisao' && (USUARIO_ATUAL.equipes_ref || []).length > 0) {
+      // Trava Gerencial em 1+ equipes (supervisão), sem trava de gestor/estado
+      travarDropdownMulti('dd-content-f-equipe', '#dd-f-equipe .dropdown-btn', USUARIO_ATUAL.equipes_ref);
+      render();
     }
   };
 
-  // Aplica imediatamente e após os dados carregarem
-  aplicarFiltros();
-  setTimeout(aplicarFiltros, 800);
-  setTimeout(aplicarFiltros, 2000);
+  // Aplica imediatamente e após os dados carregarem (Gerencial + Discadora)
+  const aplicarTudo = () => {
+    aplicarFiltrosGerencial();
+    aplicarTravaDiscadora();
+    aplicarTravaProducao();
+  };
+  aplicarTudo();
+  setTimeout(aplicarTudo, 800);
+  setTimeout(aplicarTudo, 2000);
+}
+
+// ─── TRAVA DA ABA DISCADORA (Gestor e Supervisão — trava por Grupo/cidade) ──
+function aplicarTravaDiscadora() {
+  const p = USUARIO_ATUAL?.perfil;
+  const locked = (p === 'gestor' || p === 'supervisao') && USUARIO_ATUAL.grupo_ref;
+  if (!locked) return;
+
+  const selGrupo = document.getElementById('disc-grupo');
+  if (selGrupo) {
+    if (![...selGrupo.options].some(o => o.value === USUARIO_ATUAL.grupo_ref)) {
+      const opt = document.createElement('option');
+      opt.value = USUARIO_ATUAL.grupo_ref;
+      opt.textContent = USUARIO_ATUAL.grupo_ref;
+      selGrupo.appendChild(opt);
+    }
+    selGrupo.value = USUARIO_ATUAL.grupo_ref;
+    selGrupo.disabled = true;
+    selGrupo.style.opacity = '0.5';
+    selGrupo.style.pointerEvents = 'none';
+  }
+  if (document.getElementById('dd-content-grupo')) {
+    travarDropdownMulti('dd-content-grupo', '#dd-grupo .dropdown-btn', [USUARIO_ATUAL.grupo_ref]);
+  }
+}
+
+// Retorna o Grupo/cidade travado na Discadora para o usuário atual (ou null se sem trava).
+// discadoraRender() usa isso como reforço — não depende só do estado do DOM.
+function getGrupoDiscadoraTravado() {
+  const p = USUARIO_ATUAL?.perfil;
+  if ((p === 'gestor' || p === 'supervisao') && USUARIO_ATUAL?.grupo_ref) return USUARIO_ATUAL.grupo_ref;
+  return null;
+}
+
+// Só admin e gestor_macro podem exportar o CSV de ligações produtivas da Discadora
+function podeExportarDiscadoraCSV() {
+  const p = USUARIO_ATUAL?.perfil;
+  return p === 'admin' || p === 'gestor_macro';
+}
+
+// ─── TRAVA DA ABA PRODUÇÃO (Gestor Macro 2.0 — trava por 1+ gestores) ───────
+function aplicarTravaProducao() {
+  const p = USUARIO_ATUAL?.perfil;
+  if (p === 'gestor_macro2' && (USUARIO_ATUAL.gestores_ref || []).length > 0 && document.getElementById('dd-content-prod-gestor')) {
+    travarDropdownMulti('dd-content-prod-gestor', '#dd-prod-gestor .dropdown-btn', USUARIO_ATUAL.gestores_ref);
+  }
 }
 
 async function triggerBotEAtualizar(btn) {
@@ -4810,8 +4879,11 @@ function getCheckedValues(containerId) {
 }
 
 function discadoraRender() {
+  // Trava por perfil (Gestor/Supervisão) — não depende do estado do DOM
+  const grupoTravado = getGrupoDiscadoraTravado();
+
   // Lê filtros da barra superior
-  const grupoFiltro     = document.getElementById('disc-grupo') ? document.getElementById('disc-grupo').value : '';
+  const grupoFiltro     = grupoTravado || (document.getElementById('disc-grupo') ? document.getElementById('disc-grupo').value : '');
   const filaFiltro      = document.getElementById('disc-fila') ? document.getElementById('disc-fila').value : '';
   const consultorFiltro = document.getElementById('disc-consultor') ? document.getElementById('disc-consultor').value : '';
 
@@ -4888,11 +4960,12 @@ function discadoraRender() {
   const pctProd    = totalAtend > 0 ? Math.round(totalProd / totalAtend * 100) : 0;
 
   var _pctClass = pctProd >= 15 ? 'disc-green' : pctProd >= 8 ? 'disc-amber' : 'disc-red';
+  var _csvOk = podeExportarDiscadoraCSV();
   document.getElementById('disc-kpi-area').innerHTML =
     '<div class="disc-kpi-card"><div class="disc-kpi-label">Total ligações</div><div class="disc-kpi-value">' + totalLig + '</div></div>' +
     '<div class="disc-kpi-card"><div class="disc-kpi-label">Atendidas</div><div class="disc-kpi-value">' + totalAtend + '</div></div>' +
-    '<div class="disc-kpi-card disc-highlight" onclick="discExportarProdutivas()" style="cursor:pointer;" title="Clique para exportar CSV">' +
-      '<div class="disc-kpi-label">Produtivas +1 min <span style="font-size:9px;color:var(--text-3);margin-left:4px;">↓ CSV</span></div>' +
+    '<div class="disc-kpi-card' + (_csvOk ? ' disc-highlight" onclick="discExportarProdutivas()" style="cursor:pointer;" title="Clique para exportar CSV"' : '"') + '>' +
+      '<div class="disc-kpi-label">Produtivas +1 min' + (_csvOk ? ' <span style="font-size:9px;color:var(--text-3);margin-left:4px;">↓ CSV</span>' : '') + '</div>' +
       '<div class="disc-kpi-value">' + totalProd + '</div></div>' +
     '<div class="disc-kpi-card disc-highlight"><div class="disc-kpi-label">% Produtividade</div><div class="disc-kpi-value ' + _pctClass + '">' + pctProd + '%</div></div>' +
     '<div class="disc-kpi-card"><div class="disc-kpi-label">TMA geral</div><div class="disc-kpi-value">' + discFmt(tmaGlobal) + '</div></div>' +
@@ -5413,6 +5486,10 @@ function raixoTab(el, idx) {
 
 // ─── DISCADORA EXPORT CSV ────────────────────────────────────────────────────
 function discExportarProdutivas() {
+  if (!podeExportarDiscadoraCSV()) {
+    alert('Apenas Admin e Gestor Macro podem exportar o CSV da Discadora.');
+    return;
+  }
   var grupoFiltro     = document.getElementById('disc-grupo').value;
   var filaFiltro      = document.getElementById('disc-fila').value;
   var consultorFiltro = document.getElementById('disc-consultor').value;
