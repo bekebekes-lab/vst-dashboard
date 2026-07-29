@@ -1961,6 +1961,10 @@ async function carregarAbas() {
 // de checkbox de Gestor/Equipe do Gerencial sempre que necessário (ex: travas de perfil)
 let _fGestorItens = [];
 let _fEquipeItens = [];
+// Lista de equipes restrita ao escopo do perfil logado (gestor/equipe travados).
+// null = sem restrição (usa _fEquipeItens completa). Usada por filterByEquipe()
+// pra não reabrir o dropdown com TODAS as equipes da empresa.
+let _fEquipeItensEscopo = null;
 
 function buildFilters() {
   const estados = new Set();
@@ -1983,6 +1987,7 @@ function buildFilters() {
   fillSelect('f-estado', ['Todos', ...[...estados].sort()]);
   _fGestorItens = [...gestores].sort();
   _fEquipeItens = [...equipes].sort();
+  _fEquipeItensEscopo = null; // recalculado por aplicarPermissoes() se o perfil tiver trava
   popularDropdownFGestor(_fGestorItens);
   popularDropdownFEquipe(_fEquipeItens);
   fillSelect('f-consultor', ['Todos', ...[...consultores].sort()]);
@@ -2243,7 +2248,8 @@ function filterByConsultor(name) {
 function filterByEquipe(equipe) {
   // zera consultor ao trocar equipe, mantém estado/gestor
   _ddState['dd-content-f-equipe'] = new Set([equipe]);
-  popularDropdownFEquipe(_fEquipeItens.length ? _fEquipeItens : [equipe]);
+  const listaBase = (_fEquipeItensEscopo && _fEquipeItensEscopo.length > 0) ? _fEquipeItensEscopo : _fEquipeItens;
+  popularDropdownFEquipe(listaBase.length ? listaBase : [equipe]);
   document.getElementById('f-consultor').value = 'Todos';
   render();
 }
@@ -4576,8 +4582,10 @@ function aplicarPermissoes() {
 
     // Só repopula Equipe se ela não estiver travada por equipesLock (senão
     // travarDropdownMulti já cuidou da seleção exata)
+    const equipesArr = [...equipesPermitidas].filter(eq => _fEquipeItens.includes(eq)).sort();
+    _fEquipeItensEscopo = equipesArr; // guarda o escopo pra filterByEquipe() respeitar
     if (!equipesLock || equipesLock.length === 0) {
-      popularDropdownFEquipe([...equipesPermitidas].filter(eq => _fEquipeItens.includes(eq)).sort());
+      popularDropdownFEquipe(equipesArr);
     }
     fillSelect('f-consultor', ['Todos', ...[...consultores].sort()]);
     fillSelect('f-tag', ['Todas', ...[...tags].sort()]);
