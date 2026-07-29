@@ -1995,13 +1995,103 @@ function buildFilters() {
 }
 
 function popularDropdownFGestor(itens) {
-  window._ddOnChange_dd_content_f_gestor = function(){ atualizarBotaoDropdown('dd-content-f-gestor','#dd-f-gestor .dropdown-btn'); render(); };
+  window._ddOnChange_dd_content_f_gestor = function(){
+    atualizarBotaoDropdown('dd-content-f-gestor','#dd-f-gestor .dropdown-btn');
+    // Cascata: ao selecionar gestor(es), restringe Equipe e Consultor ao escopo
+    const gestoresSel = getCheckedValuesDd('dd-content-f-gestor'); // [] = Todos
+    if (gestoresSel.length > 0) {
+      // Calcula equipes permitidas para os gestores selecionados
+      const equipesPermitidas = new Set();
+      Object.entries(EQUIPES_GESTORES).forEach(([eq, ges]) => {
+        if (gestoresSel.includes(ges)) equipesPermitidas.add(eq);
+      });
+      const equipesArr = [...equipesPermitidas].filter(eq => _fEquipeItens.includes(eq)).sort();
+      _fEquipeItensEscopo = equipesArr;
+      popularDropdownFEquipe(equipesArr);
+      // Limpa seleção de equipe que ficou fora do escopo
+      const equipeSel = getCheckedValuesDd('dd-content-f-equipe');
+      const equipesFora = equipeSel.filter(e => !equipesPermitidas.has(e));
+      if (equipesFora.length > 0) {
+        _ddState['dd-content-f-equipe'] = null;
+        popularDropdownFEquipe(equipesArr);
+      }
+      // Restringe consultores ao escopo dos gestores selecionados
+      const consultoresSet = new Set();
+      const tagsSet = new Set();
+      ALL_DATA.forEach(r => {
+        if (equipesPermitidas.has(r['EQUIPE'])) {
+          if (r['PROPRIETÁRIO DO PEDIDO']) consultoresSet.add(r['PROPRIETÁRIO DO PEDIDO']);
+          if (r['TAGS ATIVIDADE']) tagsSet.add(r['TAGS ATIVIDADE']);
+        }
+      });
+      fillSelect('f-consultor', ['Todos', ...[...consultoresSet].sort()]);
+      fillSelect('f-tag', ['Todas', ...[...tagsSet].sort()]);
+    } else {
+      // Nenhum gestor selecionado (Todos): restaura listas completas
+      _fEquipeItensEscopo = null;
+      popularDropdownFEquipe(_fEquipeItens);
+      const consultoresAll = new Set();
+      const tagsAll = new Set();
+      ALL_DATA.forEach(r => {
+        if (r['PROPRIETÁRIO DO PEDIDO']) consultoresAll.add(r['PROPRIETÁRIO DO PEDIDO']);
+        if (r['TAGS ATIVIDADE']) tagsAll.add(r['TAGS ATIVIDADE']);
+      });
+      fillSelect('f-consultor', ['Todos', ...[...consultoresAll].sort()]);
+      fillSelect('f-tag', ['Todas', ...[...tagsAll].sort()]);
+    }
+    render();
+  };
   ddRegisterCallback('dd-content-f-gestor', window._ddOnChange_dd_content_f_gestor);
   popularDropdownGenerico('dd-content-f-gestor', itens, window._ddOnChange_dd_content_f_gestor, '#dd-f-gestor .dropdown-btn');
 }
 
 function popularDropdownFEquipe(itens) {
-  window._ddOnChange_dd_content_f_equipe = function(){ atualizarBotaoDropdown('dd-content-f-equipe','#dd-f-equipe .dropdown-btn'); render(); };
+  window._ddOnChange_dd_content_f_equipe = function(){
+    atualizarBotaoDropdown('dd-content-f-equipe','#dd-f-equipe .dropdown-btn');
+    // Cascata: restringe Consultor e Tag às equipes selecionadas
+    const equipesSel = getCheckedValuesDd('dd-content-f-equipe'); // [] = Todas
+    if (equipesSel.length > 0) {
+      const consultoresSet = new Set();
+      const tagsSet = new Set();
+      ALL_DATA.forEach(r => {
+        if (equipesSel.includes(r['EQUIPE'])) {
+          if (r['PROPRIETÁRIO DO PEDIDO']) consultoresSet.add(r['PROPRIETÁRIO DO PEDIDO']);
+          if (r['TAGS ATIVIDADE']) tagsSet.add(r['TAGS ATIVIDADE']);
+        }
+      });
+      fillSelect('f-consultor', ['Todos', ...[...consultoresSet].sort()]);
+      fillSelect('f-tag', ['Todas', ...[...tagsSet].sort()]);
+    } else {
+      // Nenhuma equipe específica: usa escopo do gestor (se tiver) ou tudo
+      const gestoresSel = getCheckedValuesDd('dd-content-f-gestor');
+      if (gestoresSel.length > 0) {
+        const equipesGestor = new Set();
+        Object.entries(EQUIPES_GESTORES).forEach(([eq, ges]) => {
+          if (gestoresSel.includes(ges)) equipesGestor.add(eq);
+        });
+        const consultoresSet = new Set();
+        const tagsSet = new Set();
+        ALL_DATA.forEach(r => {
+          if (equipesGestor.has(r['EQUIPE'])) {
+            if (r['PROPRIETÁRIO DO PEDIDO']) consultoresSet.add(r['PROPRIETÁRIO DO PEDIDO']);
+            if (r['TAGS ATIVIDADE']) tagsSet.add(r['TAGS ATIVIDADE']);
+          }
+        });
+        fillSelect('f-consultor', ['Todos', ...[...consultoresSet].sort()]);
+        fillSelect('f-tag', ['Todas', ...[...tagsSet].sort()]);
+      } else {
+        const consultoresAll = new Set();
+        const tagsAll = new Set();
+        ALL_DATA.forEach(r => {
+          if (r['PROPRIETÁRIO DO PEDIDO']) consultoresAll.add(r['PROPRIETÁRIO DO PEDIDO']);
+          if (r['TAGS ATIVIDADE']) tagsAll.add(r['TAGS ATIVIDADE']);
+        });
+        fillSelect('f-consultor', ['Todos', ...[...consultoresAll].sort()]);
+        fillSelect('f-tag', ['Todas', ...[...tagsAll].sort()]);
+      }
+    }
+    render();
+  };
   ddRegisterCallback('dd-content-f-equipe', window._ddOnChange_dd_content_f_equipe);
   popularDropdownGenerico('dd-content-f-equipe', itens, window._ddOnChange_dd_content_f_equipe, '#dd-f-equipe .dropdown-btn');
 }
@@ -4623,6 +4713,11 @@ function aplicarPermissoes() {
     } else if (p === 'supervisao' && (USUARIO_ATUAL.equipes_ref || []).length > 0) {
       // Trava Gerencial em 1+ equipes (supervisão), sem trava de gestor/estado
       travarDropdownMulti('dd-content-f-equipe', '#dd-f-equipe .dropdown-btn', USUARIO_ATUAL.equipes_ref);
+      // Trava o dropdown de Gestor nas equipes do escopo (impede selecionar gestor fora do escopo)
+      const gestoresDasEquipes = [...new Set(
+        USUARIO_ATUAL.equipes_ref.map(eq => EQUIPES_GESTORES[eq]).filter(Boolean)
+      )];
+      travarDropdownMulti('dd-content-f-gestor', '#dd-f-gestor .dropdown-btn', gestoresDasEquipes);
       restringirListasGerencial(null, USUARIO_ATUAL.equipes_ref);
       render();
     }
