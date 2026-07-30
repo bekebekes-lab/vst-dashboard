@@ -2245,6 +2245,24 @@ function render() {
 
   const nc = nConsSet.size || 1;
 
+  // GROSS: Biometria/Falha Portabilidade viram itens próprios na lista de
+  // filas (não sub-itens) e saem da contagem de "Aguardando Consultor" pra
+  // não duplicar.
+  if (metrics['GROSS']) {
+    ETAPAS_DESTAQUE.forEach(et => {
+      const q = metrics['GROSS'].etapas[et.valor] || 0;
+      if (q > 0) {
+        metrics['GROSS'].filas[et.label] = (metrics['GROSS'].filas[et.label] || 0) + q;
+        if (metrics['GROSS'].filas[NOME_FILA_AGUARDANDO_CONSULTOR]) {
+          metrics['GROSS'].filas[NOME_FILA_AGUARDANDO_CONSULTOR] -= q;
+          if (metrics['GROSS'].filas[NOME_FILA_AGUARDANDO_CONSULTOR] <= 0) {
+            delete metrics['GROSS'].filas[NOME_FILA_AGUARDANDO_CONSULTOR];
+          }
+        }
+      }
+    });
+  }
+
   // Stats row
   document.getElementById('stats-row-area').innerHTML = `<div class="stats-row">
     <div class="stat-chip"><strong>${ALL_DATA.length}</strong> registros na base</div>
@@ -2261,15 +2279,17 @@ function render() {
       <div class="metric-label">${c}</div>
       <div class="metric-value">${metrics[c].total}</div>
       <div class="metric-avg">Média/consultor: ${med}</div>
-      <div class="filas-list">${filas.map(([fn, fv]) => `
-        <div class="fila-item" onclick="drillFila('${c}','${fn.replace(/'/g,"\\'")}')">
+      <div class="filas-list">${filas.map(([fn, fv]) => {
+        const etapaMatch = c === 'GROSS' ? ETAPAS_DESTAQUE.find(et => et.label === fn) : null;
+        const onclickAttr = etapaMatch
+          ? `drillFila('${c}','${NOME_FILA_AGUARDANDO_CONSULTOR}','${etapaMatch.valor.replace(/'/g,"\\'")}')`
+          : `drillFila('${c}','${fn.replace(/'/g,"\\'")}')`;
+        return `
+        <div class="fila-item" onclick="${onclickAttr}">
           <span class="fila-name">${fn}</span>
           <span class="fila-count">${fv}</span>
-        </div>${(c === 'GROSS' && fn === NOME_FILA_AGUARDANDO_CONSULTOR) ? ETAPAS_DESTAQUE.map(et => `
-        <div class="fila-item" style="padding-left:22px;opacity:0.85;border-left:2px solid var(--border,#e5e7eb);cursor:default" title="${et.valor}">
-          <span class="fila-name" style="font-size:11px">↳ ${et.label}</span>
-          <span class="fila-count" style="font-size:11px">${metrics[c].etapas[et.valor] || 0}</span>
-        </div>`).join('') : ''}`).join('')}
+        </div>`;
+      }).join('')}
       </div>
     </div>`;
   }).join('')}</div>`;
@@ -2365,14 +2385,14 @@ function filterByEquipe(equipe) {
 }
 
 // ─── drill-down de pedidos por fila ─────────────────────────────────────────
-function drillFila(categoria, fila) {
+function drillFila(categoria, fila, etapa) {
   if (!ALL_DATA.length) return;
   // Limpa filtros de data ao trocar de fila
-  if (!lastDrillArgs || lastDrillArgs[0] !== categoria || lastDrillArgs[1] !== fila) {
+  if (!lastDrillArgs || lastDrillArgs[0] !== categoria || lastDrillArgs[1] !== fila || lastDrillArgs[2] !== etapa) {
     window._drillDateDe  = '';
     window._drillDateAte = '';
   }
-  lastDrillArgs = [categoria, fila];
+  lastDrillArgs = [categoria, fila, etapa];
 
   const estado    = document.getElementById('f-estado').value;
   const gestorSel = getCheckedValuesDd('dd-content-f-gestor'); // [] = Todos
@@ -2396,6 +2416,7 @@ function drillFila(categoria, fila) {
     if (consultor !== 'Todos' && cons !== consultor)      return false;
     if (tag       !== 'Todas' && rtag !== tag)            return false;
     if (filaR !== fila) return false;
+    if (etapa && (r['ETAPA PEDIDO'] || '') !== etapa) return false;
     // sempre restringir aos 4 grupos mapeados
     if (!grupoKey) return false;
     if (categoria !== 'GERAL' && grupoKey !== categoria) return false;
@@ -3491,21 +3512,26 @@ async function renderProducao() {
     if (!tagsMap[tag]) return;
 
     if (!agg[tag]) agg[tag] = {};
-    if (!agg[tag][fila]) agg[tag][fila] = { qtd: 0, rec: 0 };
 
+    // Pedidos GROSS com etapa destacada (Biometria/Falha Portab.) contam só
+    // na sub-coluna da etapa — não somam no total de "Aguardando Consultor"
+    // pra não duplicar a contagem.
+    if (grupo === 'GROSS' && fila === NOME_FILA_AGUARDANDO_CONSULTOR) {
+      const etapa = r['ETAPA PEDIDO'] || '';
+      if (ETAPAS_DESTAQUE.some(e => e.valor === etapa)) {
+        if (!aggEtapa[tag]) aggEtapa[tag] = {};
+        aggEtapa[tag][etapa] = (aggEtapa[tag][etapa] || 0) + qtd;
+        return;
+      }
+    }
+
+    if (!agg[tag][fila]) agg[tag][fila] = { qtd: 0, rec: 0 };
     agg[tag][fila].qtd += qtd;
     if (prodExibirReceita) {
       const recCents = grupo === 'NET PJ - VIRTUA'
         ? qtd * Math.round(valor * 100)
         : Math.round(valor * 100);
       agg[tag][fila].rec += recCents;
-    }
-    if (grupo === 'GROSS' && fila === NOME_FILA_AGUARDANDO_CONSULTOR) {
-      const etapa = r['ETAPA PEDIDO'] || '';
-      if (ETAPAS_DESTAQUE.some(e => e.valor === etapa)) {
-        if (!aggEtapa[tag]) aggEtapa[tag] = {};
-        aggEtapa[tag][etapa] = (aggEtapa[tag][etapa] || 0) + qtd;
-      }
     }
   });
 
@@ -3560,7 +3586,7 @@ async function renderProducao() {
       : `<th>${s}</th>`;
     if (s === NOME_FILA_AGUARDANDO_CONSULTOR && mostrarEtapasAguardando) {
       html += ETAPAS_DESTAQUE.map(et =>
-        `<th${rowspanReceita} style="font-size:9px;background:rgba(0,0,0,0.03)" title="${et.valor}">↳ ${et.label}</th>`
+        `<th${rowspanReceita} title="${et.valor}">${et.label}</th>`
       ).join('');
     }
     return html;
@@ -3670,7 +3696,7 @@ async function renderProducao() {
                   : `<td class="${c.qtd === 0 ? 'prod-cell-zero' : 'prod-cell-val'}">${c.qtd === 0 ? '—' : c.qtd.toLocaleString('pt-BR')}</td>`;
                 if (colsFinal[ci] === NOME_FILA_AGUARDANDO_CONSULTOR && mostrarEtapasAguardando) {
                   html += r.etapaCells.map(v =>
-                    `<td class="${v === 0 ? 'prod-cell-zero' : 'prod-cell-val'}" style="background:rgba(0,0,0,0.02)">${v === 0 ? '—' : v.toLocaleString('pt-BR')}</td>`
+                    `<td class="${v === 0 ? 'prod-cell-zero' : 'prod-cell-val'}">${v === 0 ? '—' : v.toLocaleString('pt-BR')}</td>`
                   ).join('');
                 }
                 return html;
