@@ -1837,16 +1837,6 @@ function getGrupoKey(g) {
   return null;
 }
 
-// Sub-etapas (coluna Q — "ETAPA PEDIDO") a destacar dentro da fila "Aguardando
-// Consultor" dos pedidos GROSS. No Gerencial viram itens próprios no card GROSS.
-// Na Produção viram "status" próprios e selecionáveis (statusId), independentes
-// da fila real "Aguardando Consultor" — nunca somam nela pra não duplicar.
-const ETAPAS_DESTAQUE = [
-  { valor: 'AGUARDANDO BIOMETRIA (NEOCRM)', label: 'Biometria', statusId: 'GROSS · Biometria' },
-  { valor: 'FALHA NA PORTABILIDADE (NEOCRM)', label: 'Falha Portabilidade', statusId: 'GROSS · Falha Portabilidade' }
-];
-const NOME_FILA_AGUARDANDO_CONSULTOR = 'Aguardando Consultor';
-
 function initials(name) {
   return name.split(' ').slice(0, 2).map(w => w[0] || '').join('').toUpperCase();
 }
@@ -2195,7 +2185,7 @@ function render() {
 
   const cats = ["GERAL", "GROSS", "RENOVAÇÃO", "BL", "TITULARIDADE", "SERV. DIGITAIS"];
   let metrics = {};
-  cats.forEach(c => metrics[c] = { total: 0, filas: {}, etapas: {} });
+  cats.forEach(c => metrics[c] = { total: 0, filas: {} });
   let consMap = {};
   let nConsSet = new Set();
   let totalRows = 0;
@@ -2223,13 +2213,6 @@ function render() {
 
     metrics[key].total += qtd;
     metrics[key].filas[fila] = (metrics[key].filas[fila] || 0) + qtd;
-    // Sub-etapas (coluna ETAPA PEDIDO) dentro de GROSS + Aguardando Consultor
-    if (key === 'GROSS' && fila === NOME_FILA_AGUARDANDO_CONSULTOR) {
-      const etapa = r['ETAPA PEDIDO'] || '';
-      if (ETAPAS_DESTAQUE.some(e => e.valor === etapa)) {
-        metrics[key].etapas[etapa] = (metrics[key].etapas[etapa] || 0) + qtd;
-      }
-    }
     // SERV. DIGITAIS não soma no GERAL
     if (key !== "SERV. DIGITAIS") {
       metrics["GERAL"].total += qtd;
@@ -2245,24 +2228,6 @@ function render() {
   });
 
   const nc = nConsSet.size || 1;
-
-  // GROSS: Biometria/Falha Portabilidade viram itens próprios na lista de
-  // filas (não sub-itens) e saem da contagem de "Aguardando Consultor" pra
-  // não duplicar.
-  if (metrics['GROSS']) {
-    ETAPAS_DESTAQUE.forEach(et => {
-      const q = metrics['GROSS'].etapas[et.valor] || 0;
-      if (q > 0) {
-        metrics['GROSS'].filas[et.label] = (metrics['GROSS'].filas[et.label] || 0) + q;
-        if (metrics['GROSS'].filas[NOME_FILA_AGUARDANDO_CONSULTOR]) {
-          metrics['GROSS'].filas[NOME_FILA_AGUARDANDO_CONSULTOR] -= q;
-          if (metrics['GROSS'].filas[NOME_FILA_AGUARDANDO_CONSULTOR] <= 0) {
-            delete metrics['GROSS'].filas[NOME_FILA_AGUARDANDO_CONSULTOR];
-          }
-        }
-      }
-    });
-  }
 
   // Stats row
   document.getElementById('stats-row-area').innerHTML = `<div class="stats-row">
@@ -2280,17 +2245,11 @@ function render() {
       <div class="metric-label">${c}</div>
       <div class="metric-value">${metrics[c].total}</div>
       <div class="metric-avg">Média/consultor: ${med}</div>
-      <div class="filas-list">${filas.map(([fn, fv]) => {
-        const etapaMatch = c === 'GROSS' ? ETAPAS_DESTAQUE.find(et => et.label === fn) : null;
-        const onclickAttr = etapaMatch
-          ? `drillFila('${c}','${NOME_FILA_AGUARDANDO_CONSULTOR}','${etapaMatch.valor.replace(/'/g,"\\'")}')`
-          : `drillFila('${c}','${fn.replace(/'/g,"\\'")}')`;
-        return `
-        <div class="fila-item" onclick="${onclickAttr}">
+      <div class="filas-list">${filas.map(([fn, fv]) => `
+        <div class="fila-item" onclick="drillFila('${c}','${fn.replace(/'/g,"\\'")}')">
           <span class="fila-name">${fn}</span>
           <span class="fila-count">${fv}</span>
-        </div>`;
-      }).join('')}
+        </div>`).join('')}
       </div>
     </div>`;
   }).join('')}</div>`;
@@ -2386,14 +2345,14 @@ function filterByEquipe(equipe) {
 }
 
 // ─── drill-down de pedidos por fila ─────────────────────────────────────────
-function drillFila(categoria, fila, etapa) {
+function drillFila(categoria, fila) {
   if (!ALL_DATA.length) return;
   // Limpa filtros de data ao trocar de fila
-  if (!lastDrillArgs || lastDrillArgs[0] !== categoria || lastDrillArgs[1] !== fila || lastDrillArgs[2] !== etapa) {
+  if (!lastDrillArgs || lastDrillArgs[0] !== categoria || lastDrillArgs[1] !== fila) {
     window._drillDateDe  = '';
     window._drillDateAte = '';
   }
-  lastDrillArgs = [categoria, fila, etapa];
+  lastDrillArgs = [categoria, fila];
 
   const estado    = document.getElementById('f-estado').value;
   const gestorSel = getCheckedValuesDd('dd-content-f-gestor'); // [] = Todos
@@ -2417,7 +2376,6 @@ function drillFila(categoria, fila, etapa) {
     if (consultor !== 'Todos' && cons !== consultor)      return false;
     if (tag       !== 'Todas' && rtag !== tag)            return false;
     if (filaR !== fila) return false;
-    if (etapa && (r['ETAPA PEDIDO'] || '') !== etapa) return false;
     // sempre restringir aos 4 grupos mapeados
     if (!grupoKey) return false;
     if (categoria !== 'GERAL' && grupoKey !== categoria) return false;
@@ -3398,9 +3356,6 @@ function initProducao() {
   // Popula status chips dinamicamente da base (sempre atualizado)
   const statusSet = new Set();
   ALL_DATA.forEach(r => { if (r['FILA']) statusSet.add(r['FILA']); });
-  // Status "virtuais" (coluna ETAPA PEDIDO, só pra pedidos GROSS) — aparecem
-  // como itens próprios, selecionáveis igual aos demais
-  ETAPAS_DESTAQUE.forEach(et => statusSet.add(et.statusId));
   const statusList = [...statusSet].sort();
 
   const chipsEl = document.getElementById('prod-status-chips');
@@ -3471,8 +3426,6 @@ async function renderProducao() {
   }
 
   // Agrega: tag → status → { qtd, receita }
-  // "status" aqui inclui tanto FILA reais quanto os 2 status virtuais de
-  // etapa (statusId em ETAPAS_DESTAQUE) — ambos tratados da mesma forma.
   const agg = {};
   const tagsFiltro = getCheckedValuesDd('dd-content-prod-tag'); // vazio = todas
   const tagsMap = tagsFiltro.length > 0
@@ -3507,30 +3460,21 @@ async function renderProducao() {
     if (filtroGrupo === 'Geral' && gruposExcluidos.has(grupo)) return;
     if (filtroGrupo !== 'Geral' && grupo !== filtroGrupo) return;
 
+    // Filtro status
+    if (!statusArr.includes(fila)) return;
+
     // Tag nas unidades foco
     if (!tagsMap[tag]) return;
 
-    // Linhas GROSS com etapa destacada (Biometria/Falha Portab.) contam como
-    // seu próprio status virtual — nunca somam na fila real "Aguardando
-    // Consultor", pra não duplicar a contagem entre os dois.
-    const etapaObj = (grupo === 'GROSS' && fila === NOME_FILA_AGUARDANDO_CONSULTOR)
-      ? ETAPAS_DESTAQUE.find(e => e.valor === (r['ETAPA PEDIDO'] || ''))
-      : null;
-
-    const statusEfetivo = etapaObj ? etapaObj.statusId : fila;
-
-    // Filtro status
-    if (!statusArr.includes(statusEfetivo)) return;
-
     if (!agg[tag]) agg[tag] = {};
-    if (!agg[tag][statusEfetivo]) agg[tag][statusEfetivo] = { qtd: 0, rec: 0 };
+    if (!agg[tag][fila]) agg[tag][fila] = { qtd: 0, rec: 0 };
 
-    agg[tag][statusEfetivo].qtd += qtd;
+    agg[tag][fila].qtd += qtd;
     if (prodExibirReceita) {
       const recCents = grupo === 'NET PJ - VIRTUA'
         ? qtd * Math.round(valor * 100)
         : Math.round(valor * 100);
-      agg[tag][statusEfetivo].rec += recCents;
+      agg[tag][fila].rec += recCents;
     }
   });
 
