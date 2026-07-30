@@ -1838,11 +1838,12 @@ function getGrupoKey(g) {
 }
 
 // Sub-etapas (coluna Q — "ETAPA PEDIDO") a destacar dentro da fila "Aguardando
-// Consultor" dos pedidos GROSS. Usado tanto no Gerencial (sub-itens do card)
-// quanto na Produção (sub-colunas da tabela).
+// Consultor" dos pedidos GROSS. No Gerencial viram itens próprios no card GROSS.
+// Na Produção viram "status" próprios e selecionáveis (statusId), independentes
+// da fila real "Aguardando Consultor" — nunca somam nela pra não duplicar.
 const ETAPAS_DESTAQUE = [
-  { valor: 'AGUARDANDO BIOMETRIA (NEOCRM)', label: 'Biometria' },
-  { valor: 'FALHA NA PORTABILIDADE (NEOCRM)', label: 'Falha Portab.' }
+  { valor: 'AGUARDANDO BIOMETRIA (NEOCRM)', label: 'Biometria', statusId: 'GROSS · Biometria' },
+  { valor: 'FALHA NA PORTABILIDADE (NEOCRM)', label: 'Falha Portabilidade', statusId: 'GROSS · Falha Portabilidade' }
 ];
 const NOME_FILA_AGUARDANDO_CONSULTOR = 'Aguardando Consultor';
 
@@ -3397,6 +3398,9 @@ function initProducao() {
   // Popula status chips dinamicamente da base (sempre atualizado)
   const statusSet = new Set();
   ALL_DATA.forEach(r => { if (r['FILA']) statusSet.add(r['FILA']); });
+  // Status "virtuais" (coluna ETAPA PEDIDO, só pra pedidos GROSS) — aparecem
+  // como itens próprios, selecionáveis igual aos demais
+  ETAPAS_DESTAQUE.forEach(et => statusSet.add(et.statusId));
   const statusList = [...statusSet].sort();
 
   const chipsEl = document.getElementById('prod-status-chips');
@@ -3467,9 +3471,9 @@ async function renderProducao() {
   }
 
   // Agrega: tag → status → { qtd, receita }
+  // "status" aqui inclui tanto FILA reais quanto os 2 status virtuais de
+  // etapa (statusId em ETAPAS_DESTAQUE) — ambos tratados da mesma forma.
   const agg = {};
-  // Sub-etapas (coluna ETAPA PEDIDO) dentro de GROSS + Aguardando Consultor: tag → etapa → qtd
-  const aggEtapa = {};
   const tagsFiltro = getCheckedValuesDd('dd-content-prod-tag'); // vazio = todas
   const tagsMap = tagsFiltro.length > 0
     ? Object.fromEntries(Object.entries(MAPEAMENTO_TAGS).filter(([tag]) => tagsFiltro.includes(tag)))
@@ -3477,8 +3481,6 @@ async function renderProducao() {
   Object.keys(tagsMap).forEach(tag => {
     agg[tag] = {};
     statusArr.forEach(s => agg[tag][s] = { qtd: 0, rec: 0 });
-    aggEtapa[tag] = {};
-    ETAPAS_DESTAQUE.forEach(et => aggEtapa[tag][et.valor] = 0);
   });
 
   ALL_DATA.forEach(r => {
@@ -3505,33 +3507,30 @@ async function renderProducao() {
     if (filtroGrupo === 'Geral' && gruposExcluidos.has(grupo)) return;
     if (filtroGrupo !== 'Geral' && grupo !== filtroGrupo) return;
 
-    // Filtro status
-    if (!statusArr.includes(fila)) return;
-
     // Tag nas unidades foco
     if (!tagsMap[tag]) return;
 
+    // Linhas GROSS com etapa destacada (Biometria/Falha Portab.) contam como
+    // seu próprio status virtual — nunca somam na fila real "Aguardando
+    // Consultor", pra não duplicar a contagem entre os dois.
+    const etapaObj = (grupo === 'GROSS' && fila === NOME_FILA_AGUARDANDO_CONSULTOR)
+      ? ETAPAS_DESTAQUE.find(e => e.valor === (r['ETAPA PEDIDO'] || ''))
+      : null;
+
+    const statusEfetivo = etapaObj ? etapaObj.statusId : fila;
+
+    // Filtro status
+    if (!statusArr.includes(statusEfetivo)) return;
+
     if (!agg[tag]) agg[tag] = {};
+    if (!agg[tag][statusEfetivo]) agg[tag][statusEfetivo] = { qtd: 0, rec: 0 };
 
-    // Pedidos GROSS com etapa destacada (Biometria/Falha Portab.) contam só
-    // na sub-coluna da etapa — não somam no total de "Aguardando Consultor"
-    // pra não duplicar a contagem.
-    if (grupo === 'GROSS' && fila === NOME_FILA_AGUARDANDO_CONSULTOR) {
-      const etapa = r['ETAPA PEDIDO'] || '';
-      if (ETAPAS_DESTAQUE.some(e => e.valor === etapa)) {
-        if (!aggEtapa[tag]) aggEtapa[tag] = {};
-        aggEtapa[tag][etapa] = (aggEtapa[tag][etapa] || 0) + qtd;
-        return;
-      }
-    }
-
-    if (!agg[tag][fila]) agg[tag][fila] = { qtd: 0, rec: 0 };
-    agg[tag][fila].qtd += qtd;
+    agg[tag][statusEfetivo].qtd += qtd;
     if (prodExibirReceita) {
       const recCents = grupo === 'NET PJ - VIRTUA'
         ? qtd * Math.round(valor * 100)
         : Math.round(valor * 100);
-      agg[tag][fila].rec += recCents;
+      agg[tag][statusEfetivo].rec += recCents;
     }
   });
 
@@ -3541,16 +3540,11 @@ async function renderProducao() {
   );
   const colsFinal = colsComDado.length > 0 ? colsComDado : statusArr;
 
-  // Se a coluna "Aguardando Consultor" está visível, expande com sub-colunas
-  // de etapa (GROSS: Biometria / Falha Portabilidade)
-  const mostrarEtapasAguardando = colsFinal.includes(NOME_FILA_AGUARDANDO_CONSULTOR);
-
   // Linhas por unidade
   const linhas = Object.entries(tagsMap).sort((a,b) => a[1].localeCompare(b[1])).map(([tag, nome]) => {
     const totalQtd = colsFinal.reduce((s, st) => s + (agg[tag]?.[st]?.qtd || 0), 0);
     const totalRec = colsFinal.reduce((s, st) => s + (agg[tag]?.[st]?.rec || 0), 0);
-    const etapaCells = mostrarEtapasAguardando ? ETAPAS_DESTAQUE.map(et => aggEtapa[tag]?.[et.valor] || 0) : [];
-    return { tag, nome, cells: colsFinal.map(s => agg[tag]?.[s] || { qtd: 0, rec: 0 }), totalQtd, totalRec, etapaCells };
+    return { tag, nome, cells: colsFinal.map(s => agg[tag]?.[s] || { qtd: 0, rec: 0 }), totalQtd, totalRec };
   });
 
   // Totais por coluna
@@ -3558,9 +3552,6 @@ async function renderProducao() {
     qtd: linhas.reduce((s, r) => s + r.cells[ci].qtd, 0),
     rec: linhas.reduce((s, r) => s + r.cells[ci].rec, 0)
   }));
-  const totaisEtapa = mostrarEtapasAguardando
-    ? ETAPAS_DESTAQUE.map((_, i) => linhas.reduce((s, r) => s + r.etapaCells[i], 0))
-    : [];
   const totalGeralQtd = linhas.reduce((s, r) => s + r.totalQtd, 0);
   const totalGeralRec = linhas.reduce((s, r) => s + r.totalRec, 0);
 
@@ -3580,17 +3571,10 @@ async function renderProducao() {
 
   const rowspanReceita = prodExibirReceita ? ' rowspan="2"' : '';
 
-  const thStatus = colsFinal.map(s => {
-    let html = prodExibirReceita
-      ? `<th colspan="2">${s}</th>`
-      : `<th>${s}</th>`;
-    if (s === NOME_FILA_AGUARDANDO_CONSULTOR && mostrarEtapasAguardando) {
-      html += ETAPAS_DESTAQUE.map(et =>
-        `<th${rowspanReceita} title="${et.valor}">${et.label}</th>`
-      ).join('');
-    }
-    return html;
-  }).join('');
+  const thStatus = colsFinal.map(s => prodExibirReceita
+    ? `<th colspan="2">${s}</th>`
+    : `<th>${s}</th>`
+  ).join('');
 
   const thSub = prodExibirReceita
     ? colsFinal.map(() => `<th style="font-size:9px">Qtd</th><th style="font-size:9px">Receita</th>`).join('')
@@ -3689,18 +3673,11 @@ async function renderProducao() {
           ${linhas.map(r => `
             <tr>
               <td>${r.nome}</td>
-              ${r.cells.map((c, ci) => {
-                let html = prodExibirReceita
-                  ? `<td class="${c.qtd === 0 ? 'prod-cell-zero' : 'prod-cell-val'}">${c.qtd === 0 ? '—' : c.qtd.toLocaleString('pt-BR')}</td>
-                     <td class="${c.rec === 0 ? 'prod-cell-zero' : ''}" style="font-size:11px">${c.rec === 0 ? '—' : fmtRec(c.rec)}</td>`
-                  : `<td class="${c.qtd === 0 ? 'prod-cell-zero' : 'prod-cell-val'}">${c.qtd === 0 ? '—' : c.qtd.toLocaleString('pt-BR')}</td>`;
-                if (colsFinal[ci] === NOME_FILA_AGUARDANDO_CONSULTOR && mostrarEtapasAguardando) {
-                  html += r.etapaCells.map(v =>
-                    `<td class="${v === 0 ? 'prod-cell-zero' : 'prod-cell-val'}">${v === 0 ? '—' : v.toLocaleString('pt-BR')}</td>`
-                  ).join('');
-                }
-                return html;
-              }).join('')}
+              ${r.cells.map(c => prodExibirReceita
+                ? `<td class="${c.qtd === 0 ? 'prod-cell-zero' : 'prod-cell-val'}">${c.qtd === 0 ? '—' : c.qtd.toLocaleString('pt-BR')}</td>
+                   <td class="${c.rec === 0 ? 'prod-cell-zero' : ''}" style="font-size:11px">${c.rec === 0 ? '—' : fmtRec(c.rec)}</td>`
+                : `<td class="${c.qtd === 0 ? 'prod-cell-zero' : 'prod-cell-val'}">${c.qtd === 0 ? '—' : c.qtd.toLocaleString('pt-BR')}</td>`
+              ).join('')}
               ${linhaComparativo(r)}
               <td class="prod-cell-total">${r.totalQtd === 0 ? '—' : r.totalQtd.toLocaleString('pt-BR')}</td>
               ${prodExibirReceita ? `<td class="prod-cell-total" style="font-size:11px">${r.totalRec === 0 ? '—' : fmtRec(r.totalRec)}</td>` : ''}
@@ -3709,15 +3686,10 @@ async function renderProducao() {
         <tfoot>
           <tr>
             <td>TOTAL GERAL</td>
-            ${totaisCol.map((c, ci) => {
-              let html = prodExibirReceita
-                ? `<td>${c.qtd.toLocaleString('pt-BR')}</td><td style="font-size:11px">${fmtRec(c.rec)}</td>`
-                : `<td>${c.qtd.toLocaleString('pt-BR')}</td>`;
-              if (colsFinal[ci] === NOME_FILA_AGUARDANDO_CONSULTOR && mostrarEtapasAguardando) {
-                html += totaisEtapa.map(v => `<td>${v.toLocaleString('pt-BR')}</td>`).join('');
-              }
-              return html;
-            }).join('')}
+            ${totaisCol.map(c => prodExibirReceita
+              ? `<td>${c.qtd.toLocaleString('pt-BR')}</td><td style="font-size:11px">${fmtRec(c.rec)}</td>`
+              : `<td>${c.qtd.toLocaleString('pt-BR')}</td>`
+            ).join('')}
             ${totalComparativoHtml}
             <td class="prod-cell-total">${totalGeralQtd.toLocaleString('pt-BR')}</td>
             ${prodExibirReceita ? `<td class="prod-cell-total" style="font-size:11px">${fmtRec(totalGeralRec)}</td>` : ''}
