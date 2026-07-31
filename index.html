@@ -1279,6 +1279,13 @@
         </div>
       </div>
       <div class="prod-toggle-group">
+        <label class="top-label">Convergência</label>
+        <div class="prod-toggle" id="prod-toggle-convergencia" onclick="toggleConvergencia()" title="Mostra apenas a quantidade dos pedidos (GROSS, VOZ Novo, VOZ Portabilidade, VOZ Renovação) que convergem com NET PJ - VIRTUA no mesmo CNPJ, e vice-versa">
+          <div class="prod-toggle-dot"></div>
+          <span>Convergência</span>
+        </div>
+      </div>
+      <div class="prod-toggle-group">
         <label class="top-label">Visão</label>
         <div class="prod-toggle" id="prod-toggle-gestor-visao" onclick="toggleVisaoGestor()">
           <div class="prod-toggle-dot"></div>
@@ -3086,6 +3093,7 @@ const EQUIPES_PR_LIST = [
 ];
 
 let prodExibirReceita = false;
+let prodConvergencia = false;
 let prodVisaoGestor = false;
 let prodStatusSelecionados = new Set();
 let prodExibirMOM = false;
@@ -3291,6 +3299,13 @@ function toggleReceita() {
   prodExibirReceita = !prodExibirReceita;
   const el = document.getElementById('prod-toggle-receita');
   el.classList.toggle('active', prodExibirReceita);
+  renderProducao();
+}
+
+function toggleConvergencia() {
+  prodConvergencia = !prodConvergencia;
+  const el = document.getElementById('prod-toggle-convergencia');
+  el.classList.toggle('active', prodConvergencia);
   renderProducao();
 }
 
@@ -3776,6 +3791,20 @@ function checkUF(filtro, uf) {
   return u === filtro;
 }
 
+// ─── CONVERGÊNCIA (Produção) ────────────────────────────────────────────────
+// NET PJ - VIRTUA é sempre a âncora da convergência. Os demais produtos abaixo
+// só "convergem" quando o mesmo CNPJ também tem um pedido de NET PJ - VIRTUA
+// (em qualquer status). Renovação + GROSS sozinhos, por exemplo, NÃO convergem.
+const GRUPO_VIRTUA = 'NET PJ - VIRTUA';
+function isGrupoConvergenteVoz(grupo) {
+  const g = (grupo || '').trim().toUpperCase();
+  if (g === 'GROSS') return true;                          // GROSS
+  if (g.includes('RENOVA')) return true;                    // VOZ - Renovação
+  if (g.includes('PORTABILIDADE')) return true;              // VOZ - Portabilidade (voz portado)
+  if (g.includes('TITULARIDADE') || g === 'VOZ - NOVO') return true; // VOZ - Tranf. Titularidade / VOZ - Novo (voz novo)
+  return false;
+}
+
 async function renderProducao() {
   if (!ALL_DATA.length) return;
 
@@ -3811,6 +3840,23 @@ async function renderProducao() {
 
   // Na visão por gestor, a chave é o nome do gestor; por unidade, é a tag
   const aggGestores = {}; // gestor → status → { qtd, rec }
+
+  // Convergência: mapeia quais CNPJs têm NET PJ - VIRTUA e quais têm algum
+  // produto elegível a convergência (GROSS/VOZ Novo/VOZ Portabilidade/VOZ
+  // Renovação). Calculado sobre a base inteira — convergência é um atributo
+  // do CNPJ como um todo, independe do status/unidade filtrados na tela.
+  let cnpjsComVirtua = null, cnpjsComConvergente = null;
+  if (prodConvergencia) {
+    cnpjsComVirtua = new Set();
+    cnpjsComConvergente = new Set();
+    ALL_DATA.forEach(row => {
+      const cnpjRow = (row['CPF/CNPJ'] || '').replace(/\D/g, '');
+      if (!cnpjRow) return;
+      const g = row['GRUPO'] || '';
+      if (g === GRUPO_VIRTUA) cnpjsComVirtua.add(cnpjRow);
+      else if (isGrupoConvergenteVoz(g)) cnpjsComConvergente.add(cnpjRow);
+    });
+  }
 
   if (!prodVisaoGestor) {
     Object.keys(tagsMap).forEach(tag => {
@@ -3855,6 +3901,18 @@ async function renderProducao() {
 
     // Filtro status
     if (!statusArr.includes(fila)) return;
+
+    // Filtro Convergência: só conta a quantidade dos casos que de fato
+    // convergem com NET PJ - VIRTUA no mesmo CNPJ (e vice-versa). Outros
+    // produtos fora dessa regra (ex.: SVA FIXA) continuam contando normalmente.
+    if (prodConvergencia) {
+      const cnpjRow = (r['CPF/CNPJ'] || '').replace(/\D/g, '');
+      if (grupo === GRUPO_VIRTUA) {
+        if (!cnpjRow || !cnpjsComConvergente.has(cnpjRow)) return;
+      } else if (isGrupoConvergenteVoz(grupo)) {
+        if (!cnpjRow || !cnpjsComVirtua.has(cnpjRow)) return;
+      }
+    }
 
     const recCents = prodExibirReceita
       ? (grupo === 'NET PJ - VIRTUA' ? qtd * Math.round(valor * 100) : Math.round(valor * 100))
