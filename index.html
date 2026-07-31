@@ -1235,17 +1235,19 @@
           <option value="RPS">PR + RS + SC</option>
         </select>
       </div>
-      <div class="prod-filter-group" style="min-width:140px">
+      <div class="prod-filter-group" style="min-width:160px">
         <label>UF Cliente</label>
-        <select id="prod-uf-cliente" onchange="renderProducao()">
-          <option value="Todos">Todos</option>
-        </select>
+        <div class="custom-dropdown" id="dd-prod-uf-cliente">
+          <button class="dropdown-btn" onclick="toggleDropdown('dd-content-prod-uf-cliente')">Todos <span>&#9660;</span></button>
+          <div class="dropdown-content" id="dd-content-prod-uf-cliente"></div>
+        </div>
       </div>
-      <div class="prod-filter-group" style="min-width:120px">
+      <div class="prod-filter-group" style="min-width:160px">
         <label>DDD</label>
-        <select id="prod-ddd" onchange="renderProducao()">
-          <option value="Todos">Todos</option>
-        </select>
+        <div class="custom-dropdown" id="dd-prod-ddd">
+          <button class="dropdown-btn" onclick="toggleDropdown('dd-content-prod-ddd')">Todos <span>&#9660;</span></button>
+          <div class="dropdown-content" id="dd-content-prod-ddd"></div>
+        </div>
       </div>
       <div class="prod-filter-group" style="min-width:180px">
         <label>Grupo de Produto</label>
@@ -3068,8 +3070,8 @@ function contarStatusPorTag(rows, filtros, statusSelecionados, cutoffDate) {
     if (filtros.equipes && filtros.equipes.length > 0 && !filtros.equipes.includes(equipe)) return;
     if (filtros.consultores && filtros.consultores.length > 0 && !filtros.consultores.includes(cons)) return;
     if (!checkUF(filtros.uf, uf)) return;
-    if (filtros.ufCliente && filtros.ufCliente !== 'Todos' && ufCliente !== filtros.ufCliente) return;
-    if (filtros.ddd && filtros.ddd !== 'Todos' && ddd !== filtros.ddd) return;
+    if (filtros.ufCliente && filtros.ufCliente.length > 0 && !filtros.ufCliente.includes(ufCliente)) return;
+    if (filtros.ddd && filtros.ddd.length > 0 && !filtros.ddd.includes(ddd)) return;
     // Grupo: 100% dos lançamentos da coluna GRUPO da base entram em "Geral" (sem exclusão)
     if (filtros.grupo !== 'Geral' && grupo !== filtros.grupo) return;
 
@@ -3260,6 +3262,15 @@ function popularDropdownGenerico(contId, itens, onChangeFn, labelBotaoId) {
 
   // Lê estado persistente — null = "Todos" (nenhum selecionado individualmente)
   if (!_ddState[contId]) _ddState[contId] = null; // null = Todos
+  if (_ddState[contId] !== null) {
+    // Remove seleções antigas que não existem mais na lista atual de itens
+    // (ex.: opção que deixou de ter dados com o filtro/status atual)
+    const itensSet = new Set(itens);
+    for (const v of [...(_ddState[contId])]) {
+      if (!itensSet.has(v)) _ddState[contId].delete(v);
+    }
+    if (_ddState[contId].size === 0) _ddState[contId] = null;
+  }
   const sel = _ddState[contId]; // Set ou null
   const todosChecked = sel === null;
 
@@ -3411,36 +3422,15 @@ function initProducao() {
     return `<div class="prod-chip${sel ? ' selected' : ''}" data-status="${s}" onclick="toggleStatusChip('${s}',this)">${s}</div>`;
   }).join('');
 
-  // Popula UF Cliente dinamicamente da base (coluna Estado)
-  const ufClienteSet = new Set();
-  ALL_DATA.forEach(r => {
-    const v = (r['Estado'] || r['ESTADO'] || '').trim().toUpperCase();
-    if (v) ufClienteSet.add(v);
-  });
-  const selUFCliente = document.getElementById('prod-uf-cliente');
-  if (selUFCliente) {
-    const curUFCliente = selUFCliente.value;
-    selUFCliente.innerHTML = '<option value="Todos">Todos</option>' +
-      [...ufClienteSet].sort().map(v => `<option value="${v}">${v}</option>`).join('');
-    if ([...ufClienteSet].includes(curUFCliente)) selUFCliente.value = curUFCliente;
-  }
-
-  // Popula DDD dinamicamente da base (2 primeiros dígitos de NUMERO)
-  const dddSet = new Set();
-  ALL_DATA.forEach(r => {
-    const num = (r['NUMERO'] || r['Numero'] || r['NÚMERO'] || '').toString().replace(/\D/g, '');
-    if (num.length >= 2) dddSet.add(num.substring(0, 2));
-  });
-  const selDDD = document.getElementById('prod-ddd');
-  if (selDDD) {
-    const curDDD = selDDD.value;
-    selDDD.innerHTML = '<option value="Todos">Todos</option>' +
-      [...dddSet].sort().map(v => `<option value="${v}">${v}</option>`).join('');
-    if ([...dddSet].includes(curDDD)) selDDD.value = curDDD;
-  }
-
   // Popula dropdown de Tag de Unidade (lista fixa, preserva seleção existente)
   popularDropdownTagUnidade();
+
+  // UF Cliente e DDD agora são dropdowns de checkbox "inteligentes": suas opções
+  // são recalculadas a cada mudança de filtro (inclusive status) dentro de
+  // renderProducao(), mostrando apenas valores que de fato existem no recorte
+  // atual. Aqui só garantimos que os componentes existam com o estado inicial.
+  popularDropdownProdUFCliente([]);
+  popularDropdownProdDDD([]);
 
   atualizarContadorStatus();
   atualizarVisibilidadeMomTri();
@@ -3561,6 +3551,94 @@ function popularDropdownProdConsultor(consultores) {
   popularDropdownGenerico('dd-content-prod-consultor', consultores, window._ddOnChange_dd_content_prod_consultor, '#dd-prod-consultor .dropdown-btn');
 }
 
+function popularDropdownProdUFCliente(itens) {
+  window._ddOnChange_dd_content_prod_uf_cliente = function(){
+    atualizarBotaoDropdown('dd-content-prod-uf-cliente','#dd-prod-uf-cliente .dropdown-btn');
+    renderProducao();
+  };
+  ddRegisterCallback('dd-content-prod-uf-cliente', window._ddOnChange_dd_content_prod_uf_cliente);
+  popularDropdownGenerico('dd-content-prod-uf-cliente', itens, window._ddOnChange_dd_content_prod_uf_cliente, '#dd-prod-uf-cliente .dropdown-btn');
+}
+
+function popularDropdownProdDDD(itens) {
+  window._ddOnChange_dd_content_prod_ddd = function(){
+    atualizarBotaoDropdown('dd-content-prod-ddd','#dd-prod-ddd .dropdown-btn');
+    renderProducao();
+  };
+  ddRegisterCallback('dd-content-prod-ddd', window._ddOnChange_dd_content_prod_ddd);
+  popularDropdownGenerico('dd-content-prod-ddd', itens, window._ddOnChange_dd_content_prod_ddd, '#dd-prod-ddd .dropdown-btn');
+}
+
+// Recalcula, com base em TODOS os filtros ativos no momento (status de fila,
+// estado, gestor, equipe, consultor, UF BL, grupo, tag — e a interação entre
+// Estado / UF Cliente / DDD entre si), quais valores de Estado, UF Cliente e
+// DDD de fato existem no recorte atual. Isso garante que os dropdowns nunca
+// mostrem opções "fantasma" sem nenhuma linha correspondente (ex.: um DDD que
+// só existe em status diferentes do selecionado).
+function calcularOpcoesInteligentesProducao() {
+  const filtroEstado    = document.getElementById('prod-estado')?.value || 'Todos';
+  const gestoresChecked = getCheckedValuesDd('dd-content-prod-gestor');
+  const equipesChecked  = getCheckedValuesDd('dd-content-prod-equipe');
+  const consultoresChecked = getCheckedValuesDd('dd-content-prod-consultor');
+  const filtroUFBL      = document.getElementById('prod-uf-bl')?.value || 'Geral';
+  const filtroUFCliente = getCheckedValuesDd('dd-content-prod-uf-cliente');
+  const filtroDDD       = getCheckedValuesDd('dd-content-prod-ddd');
+  const filtroGrupo     = document.getElementById('prod-grupo')?.value || 'Geral';
+  const tagsFiltro      = getCheckedValuesDd('dd-content-prod-tag');
+  const statusArr       = [...prodStatusSelecionados];
+
+  const estadosSet = new Set();
+  const ufClienteSet = new Set();
+  const dddSet = new Set();
+
+  ALL_DATA.forEach(r => {
+    const equipe    = r['EQUIPE'] || '';
+    const uf        = r['UF'] || '';
+    const ufCliente = (r['Estado'] || r['ESTADO'] || '').trim().toUpperCase();
+    const numero    = (r['NUMERO'] || r['Numero'] || r['NÚMERO'] || '').toString().replace(/\D/g, '');
+    const ddd       = numero.length >= 2 ? numero.substring(0, 2) : '';
+    const grupo     = r['GRUPO'] || '';
+    const fila      = r['FILA'] || '';
+    const tagRaw    = r['TAGS ATIVIDADE'] || '';
+    const tag       = MAPEAMENTO_TAGS[tagRaw] ? tagRaw : 'Sem Tag';
+    const cons      = r['PROPRIETÁRIO DO PEDIDO'] || '';
+    const est       = EQUIPES_ESTADOS[equipe] || '';
+    const ges       = EQUIPES_GESTORES[equipe] || 'Sem Gestor';
+
+    // Filtros que sempre valem para as três dimensões (status, gestor, equipe,
+    // consultor, UF BL, grupo, tag)
+    if (statusArr.length > 0 && !statusArr.includes(fila)) return;
+    if (gestoresChecked.length > 0 && !gestoresChecked.includes(ges)) return;
+    if (equipesChecked.length > 0 && !equipesChecked.includes(equipe)) return;
+    if (consultoresChecked.length > 0 && !consultoresChecked.includes(cons)) return;
+    if (!checkUF(filtroUFBL, uf)) return;
+    if (filtroGrupo !== 'Geral' && grupo !== filtroGrupo) return;
+    if (tagsFiltro.length > 0 && !tagsFiltro.includes(tag)) return;
+
+    // Checagens cruzadas entre Estado / UF Cliente / DDD — cada dimensão
+    // ignora a própria checagem ao montar sua própria lista de opções, mas
+    // respeita a seleção atual das outras duas.
+    const passEstado    = filtroEstado === 'Todos' || est === filtroEstado;
+    const passUFCliente = filtroUFCliente.length === 0 || filtroUFCliente.includes(ufCliente);
+    const passDDD       = filtroDDD.length === 0 || filtroDDD.includes(ddd);
+
+    if (est && passUFCliente && passDDD) estadosSet.add(est);
+    if (ufCliente && passEstado && passDDD) ufClienteSet.add(ufCliente);
+    if (ddd && passEstado && passUFCliente) dddSet.add(ddd);
+  });
+
+  return { estadosSet, ufClienteSet, dddSet };
+}
+
+function atualizarOpcoesInteligentesProducao() {
+  if (!ALL_DATA.length) return;
+  const { estadosSet, ufClienteSet, dddSet } = calcularOpcoesInteligentesProducao();
+
+  fillProdSelect('prod-estado', ['Todos', ...[...estadosSet].sort()]);
+  popularDropdownProdUFCliente([...ufClienteSet].sort());
+  popularDropdownProdDDD([...dddSet].sort());
+}
+
 function checkUF(filtro, uf) {
   if (filtro === 'Geral') return true;
   const u = (uf || '').trim().toUpperCase();
@@ -3571,13 +3649,18 @@ function checkUF(filtro, uf) {
 async function renderProducao() {
   if (!ALL_DATA.length) return;
 
+  // Recalcula, com base nos filtros já ativos (inclusive status de fila),
+  // quais opções de Estado / UF Cliente / DDD de fato existem no recorte
+  // atual, removendo do dropdown qualquer valor sem linha correspondente.
+  atualizarOpcoesInteligentesProducao();
+
   const filtroEstado = document.getElementById('prod-estado')?.value || 'Todos';
   const gestoresChecked = getCheckedValuesDd('dd-content-prod-gestor'); // vazio = todos
   const equipesChecked = getCheckedValuesDd('dd-content-prod-equipe'); // vazio = todas
   const consultoresChecked = getCheckedValuesDd('dd-content-prod-consultor'); // vazio = todos
   const filtroUFBL      = document.getElementById('prod-uf-bl').value;
-  const filtroUFCliente = document.getElementById('prod-uf-cliente')?.value || 'Todos';
-  const filtroDDD       = document.getElementById('prod-ddd')?.value || 'Todos';
+  const filtroUFCliente = getCheckedValuesDd('dd-content-prod-uf-cliente'); // vazio = todos
+  const filtroDDD       = getCheckedValuesDd('dd-content-prod-ddd'); // vazio = todos
   const filtroGrupo  = document.getElementById('prod-grupo').value;
   const statusArr    = [...prodStatusSelecionados];
 
@@ -3632,10 +3715,10 @@ async function renderProducao() {
     if (!checkUF(filtroUFBL, uf)) return;
 
     // Filtro UF Cliente (coluna Estado da base)
-    if (filtroUFCliente !== 'Todos' && ufCliente !== filtroUFCliente) return;
+    if (filtroUFCliente.length > 0 && !filtroUFCliente.includes(ufCliente)) return;
 
     // Filtro DDD (2 primeiros dígitos de NUMERO)
-    if (filtroDDD !== 'Todos' && ddd !== filtroDDD) return;
+    if (filtroDDD.length > 0 && !filtroDDD.includes(ddd)) return;
 
     // Filtro grupo
     if (filtroGrupo !== 'Geral' && grupo !== filtroGrupo) return;
