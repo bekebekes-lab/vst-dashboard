@@ -1882,11 +1882,14 @@ let sortCol = 'GERAL';
 let sortAsc = false;
 
 function getGrupoKey(g) {
-  if (g === "GROSS") return "GROSS";
-  if (g === "VOZ - Renovação") return "RENOVAÇÃO";
-  if (g === "NET PJ - VIRTUA") return "BL";
-  if (g === "VOZ - Tranf. Titularidade") return "TITULARIDADE";
-  if (g === "SVA FIXA") return "SERV. DIGITAIS";
+  const gu = (g || '').trim().toUpperCase().replace(/[\u2010-\u2015]/g, '-'); // normaliza travessão/en-dash para hífen
+  if (gu === "GROSS") return "GROSS";
+  if (gu === "VOZ - RENOVAÇÃO") return "RENOVAÇÃO";
+  if (gu === "NET PJ - VIRTUA") return "BL";
+  if (gu === "VOZ - TRANF. TITULARIDADE" || gu === "VOZ - TRANSF. TITULARIDADE") return "TITULARIDADE";
+  // A base trazia esse produto como "SVA FIXA"; agora vem como "SD - Serviço
+  // Digital" (ou variações de acentuação/hífen). Aceitamos ambas as formas.
+  if (gu === "SVA FIXA" || gu.startsWith("SD ") || gu.startsWith("SD-") || gu.includes("SERVIÇO DIGITAL") || gu.includes("SERVICO DIGITAL")) return "SERV. DIGITAIS";
   return null;
 }
 
