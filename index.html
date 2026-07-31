@@ -1255,6 +1255,13 @@
           <span>Exibir Receita</span>
         </div>
       </div>
+      <div class="prod-toggle-group">
+        <label class="top-label">Visão</label>
+        <div class="prod-toggle" id="prod-toggle-gestor-visao" onclick="toggleVisaoGestor()">
+          <div class="prod-toggle-dot"></div>
+          <span>Por Gestor</span>
+        </div>
+      </div>
       <div class="prod-mom-tri-wrap" id="prod-mom-tri-wrap">
         <div class="prod-toggle-group">
           <label class="top-label">Comparativo</label>
@@ -2935,6 +2942,7 @@ const EQUIPES_PR_LIST = [
 ];
 
 let prodExibirReceita = false;
+let prodVisaoGestor = false;
 let prodStatusSelecionados = new Set();
 let prodExibirMOM = false;
 let prodExibirTRI = false;
@@ -3134,6 +3142,13 @@ function toggleReceita() {
   prodExibirReceita = !prodExibirReceita;
   const el = document.getElementById('prod-toggle-receita');
   el.classList.toggle('active', prodExibirReceita);
+  renderProducao();
+}
+
+function toggleVisaoGestor() {
+  prodVisaoGestor = !prodVisaoGestor;
+  const el = document.getElementById('prod-toggle-gestor-visao');
+  el.classList.toggle('active', prodVisaoGestor);
   renderProducao();
 }
 
@@ -3344,9 +3359,10 @@ function initProducao() {
   });
   fillProdSelect('prod-estado', ['Todos', ...[...estados].sort()]);
 
-  // Popula Gestor (checkbox multi), Equipe (checkbox multi) e Consultor (checkbox multi), sem cascata
+  // Popula Gestor (checkbox multi), Equipe (checkbox multi) e Consultor (checkbox multi), com cascata
+  _prodEquipeItens = [...equipes].sort();
   popularDropdownProdGestor([...gestores].sort());
-  popularDropdownEquipe([...equipes].sort());
+  popularDropdownEquipe(_prodEquipeItens);
   const consultores = new Set();
   ALL_DATA.forEach(r => { if (r['PROPRIETÁRIO DO PEDIDO']) consultores.add(r['PROPRIETÁRIO DO PEDIDO']); });
   popularDropdownProdConsultor([...consultores].sort());
@@ -3400,19 +3416,102 @@ function popularDropdownEquipe(equipes) {
 }
 
 function onProdFilterChange(level) {
-  // Gestor (checkbox multi-select) não cascateia mais a partir do Estado —
-  // a lista completa de equipes já é populada em initProducao().
   renderProducao();
 }
 
+// Listas base salvas para restaurar no reset de cascata
+let _prodGestorItens = [];
+let _prodEquipeItens = [];
+
 function popularDropdownProdGestor(gestores) {
-  window._ddOnChange_dd_content_prod_gestor = function(){ atualizarBotaoDropdown('dd-content-prod-gestor','#dd-prod-gestor .dropdown-btn'); renderProducao(); };
+  _prodGestorItens = gestores;
+  window._ddOnChange_dd_content_prod_gestor = function(){
+    atualizarBotaoDropdown('dd-content-prod-gestor','#dd-prod-gestor .dropdown-btn');
+    // Cascata: Gestor → Equipe e Consultor
+    const gestoresSel = getCheckedValuesDd('dd-content-prod-gestor');
+    if (gestoresSel.length > 0) {
+      const equipesPermitidas = new Set();
+      Object.entries(EQUIPES_GESTORES).forEach(([eq, ges]) => {
+        if (gestoresSel.includes(ges)) equipesPermitidas.add(eq);
+      });
+      const equipesArr = [...equipesPermitidas].filter(eq => _prodEquipeItens.includes(eq)).sort();
+      // Limpa equipes/consultores fora do escopo
+      const equipesSel = getCheckedValuesDd('dd-content-prod-equipe');
+      const equipesFora = equipesSel.filter(e => !equipesPermitidas.has(e));
+      if (equipesFora.length > 0) _ddState['dd-content-prod-equipe'] = null;
+      popularDropdownEquipe(equipesArr);
+      // Restringe consultores ao escopo
+      const consultoresSet = new Set();
+      ALL_DATA.forEach(r => {
+        if (equipesPermitidas.has(r['EQUIPE']) && r['PROPRIETÁRIO DO PEDIDO'])
+          consultoresSet.add(r['PROPRIETÁRIO DO PEDIDO']);
+      });
+      _popularProdConsultorLista([...consultoresSet].sort());
+    } else {
+      // Todos os gestores: restaura listas completas
+      popularDropdownEquipe(_prodEquipeItens);
+      const consultoresAll = new Set();
+      ALL_DATA.forEach(r => { if (r['PROPRIETÁRIO DO PEDIDO']) consultoresAll.add(r['PROPRIETÁRIO DO PEDIDO']); });
+      _popularProdConsultorLista([...consultoresAll].sort());
+    }
+    renderProducao();
+  };
   ddRegisterCallback('dd-content-prod-gestor', window._ddOnChange_dd_content_prod_gestor);
   popularDropdownGenerico('dd-content-prod-gestor', gestores, window._ddOnChange_dd_content_prod_gestor, '#dd-prod-gestor .dropdown-btn');
 }
 
+function popularDropdownEquipe(equipes) {
+  window._ddOnChange_dd_content_prod_equipe = function(){
+    atualizarBotaoDropdown('dd-content-prod-equipe','#dd-prod-equipe .dropdown-btn');
+    // Cascata: Equipe → Consultor
+    const equipesSel = getCheckedValuesDd('dd-content-prod-equipe');
+    const equipesEscopo = equipesSel.length > 0 ? new Set(equipesSel) : null;
+    if (equipesEscopo) {
+      const consultoresSet = new Set();
+      ALL_DATA.forEach(r => {
+        if (equipesEscopo.has(r['EQUIPE']) && r['PROPRIETÁRIO DO PEDIDO'])
+          consultoresSet.add(r['PROPRIETÁRIO DO PEDIDO']);
+      });
+      _popularProdConsultorLista([...consultoresSet].sort());
+    } else {
+      // Sem equipe selecionada: respeita escopo do gestor (se houver)
+      const gestoresSel = getCheckedValuesDd('dd-content-prod-gestor');
+      if (gestoresSel.length > 0) {
+        const equipesGestor = new Set();
+        Object.entries(EQUIPES_GESTORES).forEach(([eq, ges]) => {
+          if (gestoresSel.includes(ges)) equipesGestor.add(eq);
+        });
+        const consultoresSet = new Set();
+        ALL_DATA.forEach(r => {
+          if (equipesGestor.has(r['EQUIPE']) && r['PROPRIETÁRIO DO PEDIDO'])
+            consultoresSet.add(r['PROPRIETÁRIO DO PEDIDO']);
+        });
+        _popularProdConsultorLista([...consultoresSet].sort());
+      } else {
+        const consultoresAll = new Set();
+        ALL_DATA.forEach(r => { if (r['PROPRIETÁRIO DO PEDIDO']) consultoresAll.add(r['PROPRIETÁRIO DO PEDIDO']); });
+        _popularProdConsultorLista([...consultoresAll].sort());
+      }
+    }
+    renderProducao();
+  };
+  ddRegisterCallback('dd-content-prod-equipe', window._ddOnChange_dd_content_prod_equipe);
+  popularDropdownGenerico('dd-content-prod-equipe', equipes, window._ddOnChange_dd_content_prod_equipe, '#dd-prod-equipe .dropdown-btn');
+}
+
+function _popularProdConsultorLista(consultores) {
+  // Limpa consultores selecionados que ficaram fora do novo escopo
+  const consulSel = getCheckedValuesDd('dd-content-prod-consultor');
+  const consulFora = consulSel.filter(c => !consultores.includes(c));
+  if (consulFora.length > 0) _ddState['dd-content-prod-consultor'] = null;
+  popularDropdownProdConsultor(consultores);
+}
+
 function popularDropdownProdConsultor(consultores) {
-  window._ddOnChange_dd_content_prod_consultor = function(){ atualizarBotaoDropdown('dd-content-prod-consultor','#dd-prod-consultor .dropdown-btn'); renderProducao(); };
+  window._ddOnChange_dd_content_prod_consultor = function(){
+    atualizarBotaoDropdown('dd-content-prod-consultor','#dd-prod-consultor .dropdown-btn');
+    renderProducao();
+  };
   ddRegisterCallback('dd-content-prod-consultor', window._ddOnChange_dd_content_prod_consultor);
   popularDropdownGenerico('dd-content-prod-consultor', consultores, window._ddOnChange_dd_content_prod_consultor, '#dd-prod-consultor .dropdown-btn');
 }
@@ -3442,17 +3541,23 @@ async function renderProducao() {
     return;
   }
 
-  // Agrega: tag → status → { qtd, receita }
+  // Agrega: chave (tag ou gestor) → status → { qtd, receita }
   const agg = {};
   const tagsFiltro = getCheckedValuesDd('dd-content-prod-tag'); // vazio = todas
   const tagsMapBase = { ...MAPEAMENTO_TAGS, 'Sem Tag': 'Sem Tag' };
   const tagsMap = tagsFiltro.length > 0
     ? Object.fromEntries(Object.entries(tagsMapBase).filter(([tag]) => tagsFiltro.includes(tag)))
     : { ...tagsMapBase };
-  Object.keys(tagsMap).forEach(tag => {
-    agg[tag] = {};
-    statusArr.forEach(s => agg[tag][s] = { qtd: 0, rec: 0 });
-  });
+
+  // Na visão por gestor, a chave é o nome do gestor; por unidade, é a tag
+  const aggGestores = {}; // gestor → status → { qtd, rec }
+
+  if (!prodVisaoGestor) {
+    Object.keys(tagsMap).forEach(tag => {
+      agg[tag] = {};
+      statusArr.forEach(s => agg[tag][s] = { qtd: 0, rec: 0 });
+    });
+  }
 
   ALL_DATA.forEach(r => {
     const equipe = r['EQUIPE'] || '';
@@ -3467,7 +3572,7 @@ async function renderProducao() {
 
     // Filtro estado/gestor/equipe/consultor em cascata
     const est = EQUIPES_ESTADOS[equipe] || '';
-    const ges = EQUIPES_GESTORES[equipe] || '';
+    const ges = EQUIPES_GESTORES[equipe] || 'Sem Gestor';
     if (filtroEstado !== 'Todos' && est !== filtroEstado) return;
     if (gestoresChecked.length > 0 && !gestoresChecked.includes(ges)) return;
     if (equipesChecked.length > 0 && !equipesChecked.includes(equipe)) return;
@@ -3476,39 +3581,54 @@ async function renderProducao() {
     // Filtro UF
     if (!checkUF(filtroUF, uf)) return;
 
-    // Filtro grupo — 100% dos valores da coluna GRUPO da base entram em "Geral"
+    // Filtro grupo
     if (filtroGrupo !== 'Geral' && grupo !== filtroGrupo) return;
 
     // Filtro status
     if (!statusArr.includes(fila)) return;
 
-    // Tag nas unidades foco (lançamentos sem tag/tag não mapeada entram em "Sem Tag")
-    if (!tagsMap[tag]) return;
+    const recCents = prodExibirReceita
+      ? (grupo === 'NET PJ - VIRTUA' ? qtd * Math.round(valor * 100) : Math.round(valor * 100))
+      : 0;
 
-    if (!agg[tag]) agg[tag] = {};
-    if (!agg[tag][fila]) agg[tag][fila] = { qtd: 0, rec: 0 };
-
-    agg[tag][fila].qtd += qtd;
-    if (prodExibirReceita) {
-      const recCents = grupo === 'NET PJ - VIRTUA'
-        ? qtd * Math.round(valor * 100)
-        : Math.round(valor * 100);
+    if (prodVisaoGestor) {
+      // Agrega por gestor (sem filtro de tag)
+      if (!aggGestores[ges]) { aggGestores[ges] = {}; statusArr.forEach(s => aggGestores[ges][s] = { qtd: 0, rec: 0 }); }
+      if (!aggGestores[ges][fila]) aggGestores[ges][fila] = { qtd: 0, rec: 0 };
+      aggGestores[ges][fila].qtd += qtd;
+      aggGestores[ges][fila].rec += recCents;
+    } else {
+      // Agrega por tag/unidade
+      if (!tagsMap[tag]) return;
+      if (!agg[tag]) agg[tag] = {};
+      if (!agg[tag][fila]) agg[tag][fila] = { qtd: 0, rec: 0 };
+      agg[tag][fila].qtd += qtd;
       agg[tag][fila].rec += recCents;
     }
   });
 
   // Monta colunas de status que têm dado
+  const aggAtivo = prodVisaoGestor ? aggGestores : agg;
   const colsComDado = statusArr.filter(s =>
-    Object.values(agg).some(tagData => (tagData[s]?.qtd || 0) > 0)
+    Object.values(aggAtivo).some(d => (d[s]?.qtd || 0) > 0)
   );
   const colsFinal = colsComDado.length > 0 ? colsComDado : statusArr;
 
-  // Linhas por unidade
-  const linhas = Object.entries(tagsMap).sort((a,b) => a[1].localeCompare(b[1])).map(([tag, nome]) => {
-    const totalQtd = colsFinal.reduce((s, st) => s + (agg[tag]?.[st]?.qtd || 0), 0);
-    const totalRec = colsFinal.reduce((s, st) => s + (agg[tag]?.[st]?.rec || 0), 0);
-    return { tag, nome, cells: colsFinal.map(s => agg[tag]?.[s] || { qtd: 0, rec: 0 }), totalQtd, totalRec };
-  });
+  // Linhas: por unidade ou por gestor
+  let linhas;
+  if (prodVisaoGestor) {
+    linhas = Object.keys(aggGestores).sort((a, b) => a.localeCompare(b)).map(ges => {
+      const totalQtd = colsFinal.reduce((s, st) => s + (aggGestores[ges]?.[st]?.qtd || 0), 0);
+      const totalRec = colsFinal.reduce((s, st) => s + (aggGestores[ges]?.[st]?.rec || 0), 0);
+      return { tag: ges, nome: ges, cells: colsFinal.map(s => aggGestores[ges]?.[s] || { qtd: 0, rec: 0 }), totalQtd, totalRec };
+    });
+  } else {
+    linhas = Object.entries(tagsMap).sort((a,b) => a[1].localeCompare(b[1])).map(([tag, nome]) => {
+      const totalQtd = colsFinal.reduce((s, st) => s + (agg[tag]?.[st]?.qtd || 0), 0);
+      const totalRec = colsFinal.reduce((s, st) => s + (agg[tag]?.[st]?.rec || 0), 0);
+      return { tag, nome, cells: colsFinal.map(s => agg[tag]?.[s] || { qtd: 0, rec: 0 }), totalQtd, totalRec };
+    });
+  }
 
   // Totais por coluna
   const totaisCol = colsFinal.map((_, ci) => ({
@@ -3615,17 +3735,20 @@ async function renderProducao() {
     ? ` · comparando contra ${prodExibirMOM ? 'mês anterior' : ''}${prodExibirMOM && prodExibirTRI ? ' e ' : ''}${prodExibirTRI ? `média do trimestre (${comparativo.triMeses} meses)` : ''}`
     : '';
 
+  const tituloVisao = prodVisaoGestor ? 'Produção por Gestor' : 'Produção por Unidade';
+  const colunaVisao = prodVisaoGestor ? 'Gestor' : 'Unidade';
+
   resultArea.innerHTML = `
     ${avisoHtml}
     <div class="section-header">
-      <span class="section-title">Produção por Unidade</span>
+      <span class="section-title">${tituloVisao}</span>
       <span class="count-badge">${colsFinal.length} status · ${totalGeralQtd.toLocaleString('pt-BR')} registros${badgeComparativo}</span>
     </div>
     <div class="prod-table-wrap"><div class="prod-table-scroll">
       <table>
         <thead>
           <tr>
-            <th rowspan="${prodExibirReceita ? 2 : 1}" style="vertical-align:middle;text-align:left">Unidade</th>
+            <th rowspan="${prodExibirReceita ? 2 : 1}" style="vertical-align:middle;text-align:left">${colunaVisao}</th>
             ${thStatus}
             ${thComparativo}
             ${thTotal}
