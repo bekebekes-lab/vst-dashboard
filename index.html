@@ -2607,6 +2607,12 @@ function abrirDetalheCliente(idx) {
   }
   if (!relacionados.length) relacionados = [row];
 
+  // GROSS é um agregado que já é coberto pelas abas de VOZ (Transf. Titularidade
+  // e Portabilidade) — omitimos do drilldown para não duplicar a informação.
+  // Só mantemos GROSS se for o único registro do cliente (senão o modal ficaria vazio).
+  const semGross = relacionados.filter(r => (r['GRUPO'] || '').trim().toUpperCase() !== 'GROSS');
+  if (semGross.length) relacionados = semGross;
+
   renderModalDetalheCliente(nomeCliente, relacionados);
 }
 
