@@ -1226,13 +1226,25 @@
         </div>
       </div>
       <div class="prod-filter-group">
-        <label>UF</label>
-        <select id="prod-uf" onchange="renderProducao()">
+        <label>UF BL</label>
+        <select id="prod-uf-bl" onchange="renderProducao()">
           <option value="Geral">Geral</option>
           <option value="PR">PR</option>
           <option value="RS">RS</option>
           <option value="SC">SC</option>
           <option value="RPS">PR + RS + SC</option>
+        </select>
+      </div>
+      <div class="prod-filter-group" style="min-width:140px">
+        <label>UF Cliente</label>
+        <select id="prod-uf-cliente" onchange="renderProducao()">
+          <option value="Todos">Todos</option>
+        </select>
+      </div>
+      <div class="prod-filter-group" style="min-width:120px">
+        <label>DDD</label>
+        <select id="prod-ddd" onchange="renderProducao()">
+          <option value="Todos">Todos</option>
         </select>
       </div>
       <div class="prod-filter-group" style="min-width:180px">
@@ -3037,14 +3049,17 @@ function contarStatusPorTag(rows, filtros, statusSelecionados, cutoffDate) {
   const usarAguardando = statusSelecionados.has('Aguardando Instalação');
   const out = {};
   rows.forEach(r => {
-    const equipe  = r['EQUIPE'] || '';
-    const uf      = r['UF'] || '';
-    const grupo   = r['GRUPO'] || '';
-    const fila    = r['FILA'] || '';
-    const tagRaw  = r['TAGS ATIVIDADE'] || '';
-    const tag     = tagsMap[tagRaw] ? tagRaw : 'Sem Tag';
-    const cons    = r['PROPRIETÁRIO DO PEDIDO'] || '';
-    const qtd     = parseInt(r['QUANTIDADE']) || 1;
+    const equipe    = r['EQUIPE'] || '';
+    const uf        = r['UF'] || '';
+    const ufCliente = (r['Estado'] || r['ESTADO'] || '').trim().toUpperCase();
+    const numero    = (r['NUMERO'] || r['Numero'] || r['NÚMERO'] || '').toString().replace(/\D/g, '');
+    const ddd       = numero.length >= 2 ? numero.substring(0, 2) : '';
+    const grupo     = r['GRUPO'] || '';
+    const fila      = r['FILA'] || '';
+    const tagRaw    = r['TAGS ATIVIDADE'] || '';
+    const tag       = tagsMap[tagRaw] ? tagRaw : 'Sem Tag';
+    const cons      = r['PROPRIETÁRIO DO PEDIDO'] || '';
+    const qtd       = parseInt(r['QUANTIDADE']) || 1;
 
     const est = EQUIPES_ESTADOS[equipe] || '';
     const ges = EQUIPES_GESTORES[equipe] || '';
@@ -3053,6 +3068,8 @@ function contarStatusPorTag(rows, filtros, statusSelecionados, cutoffDate) {
     if (filtros.equipes && filtros.equipes.length > 0 && !filtros.equipes.includes(equipe)) return;
     if (filtros.consultores && filtros.consultores.length > 0 && !filtros.consultores.includes(cons)) return;
     if (!checkUF(filtros.uf, uf)) return;
+    if (filtros.ufCliente && filtros.ufCliente !== 'Todos' && ufCliente !== filtros.ufCliente) return;
+    if (filtros.ddd && filtros.ddd !== 'Todos' && ddd !== filtros.ddd) return;
     // Grupo: 100% dos lançamentos da coluna GRUPO da base entram em "Geral" (sem exclusão)
     if (filtros.grupo !== 'Geral' && grupo !== filtros.grupo) return;
 
@@ -3394,6 +3411,34 @@ function initProducao() {
     return `<div class="prod-chip${sel ? ' selected' : ''}" data-status="${s}" onclick="toggleStatusChip('${s}',this)">${s}</div>`;
   }).join('');
 
+  // Popula UF Cliente dinamicamente da base (coluna Estado)
+  const ufClienteSet = new Set();
+  ALL_DATA.forEach(r => {
+    const v = (r['Estado'] || r['ESTADO'] || '').trim().toUpperCase();
+    if (v) ufClienteSet.add(v);
+  });
+  const selUFCliente = document.getElementById('prod-uf-cliente');
+  if (selUFCliente) {
+    const curUFCliente = selUFCliente.value;
+    selUFCliente.innerHTML = '<option value="Todos">Todos</option>' +
+      [...ufClienteSet].sort().map(v => `<option value="${v}">${v}</option>`).join('');
+    if ([...ufClienteSet].includes(curUFCliente)) selUFCliente.value = curUFCliente;
+  }
+
+  // Popula DDD dinamicamente da base (2 primeiros dígitos de NUMERO)
+  const dddSet = new Set();
+  ALL_DATA.forEach(r => {
+    const num = (r['NUMERO'] || r['Numero'] || r['NÚMERO'] || '').toString().replace(/\D/g, '');
+    if (num.length >= 2) dddSet.add(num.substring(0, 2));
+  });
+  const selDDD = document.getElementById('prod-ddd');
+  if (selDDD) {
+    const curDDD = selDDD.value;
+    selDDD.innerHTML = '<option value="Todos">Todos</option>' +
+      [...dddSet].sort().map(v => `<option value="${v}">${v}</option>`).join('');
+    if ([...dddSet].includes(curDDD)) selDDD.value = curDDD;
+  }
+
   // Popula dropdown de Tag de Unidade (lista fixa, preserva seleção existente)
   popularDropdownTagUnidade();
 
@@ -3530,7 +3575,9 @@ async function renderProducao() {
   const gestoresChecked = getCheckedValuesDd('dd-content-prod-gestor'); // vazio = todos
   const equipesChecked = getCheckedValuesDd('dd-content-prod-equipe'); // vazio = todas
   const consultoresChecked = getCheckedValuesDd('dd-content-prod-consultor'); // vazio = todos
-  const filtroUF     = document.getElementById('prod-uf').value;
+  const filtroUFBL      = document.getElementById('prod-uf-bl').value;
+  const filtroUFCliente = document.getElementById('prod-uf-cliente')?.value || 'Todos';
+  const filtroDDD       = document.getElementById('prod-ddd')?.value || 'Todos';
   const filtroGrupo  = document.getElementById('prod-grupo').value;
   const statusArr    = [...prodStatusSelecionados];
 
@@ -3560,15 +3607,18 @@ async function renderProducao() {
   }
 
   ALL_DATA.forEach(r => {
-    const equipe = r['EQUIPE'] || '';
-    const uf     = r['UF'] || '';
-    const grupo  = r['GRUPO'] || '';
-    const fila   = r['FILA'] || '';
-    const tagRaw = r['TAGS ATIVIDADE'] || '';
-    const tag    = MAPEAMENTO_TAGS[tagRaw] ? tagRaw : 'Sem Tag';
-    const cons   = r['PROPRIETÁRIO DO PEDIDO'] || '';
-    const qtd    = parseInt(r['QUANTIDADE']) || 1;
-    const valor  = parseFloat((r['VALOR UNIT'] || '0').toString().replace(',', '.')) || 0;
+    const equipe    = r['EQUIPE'] || '';
+    const uf        = r['UF'] || '';
+    const ufCliente = (r['Estado'] || r['ESTADO'] || '').trim().toUpperCase();
+    const numero    = (r['NUMERO'] || r['Numero'] || r['NÚMERO'] || '').toString().replace(/\D/g, '');
+    const ddd       = numero.length >= 2 ? numero.substring(0, 2) : '';
+    const grupo     = r['GRUPO'] || '';
+    const fila      = r['FILA'] || '';
+    const tagRaw    = r['TAGS ATIVIDADE'] || '';
+    const tag       = MAPEAMENTO_TAGS[tagRaw] ? tagRaw : 'Sem Tag';
+    const cons      = r['PROPRIETÁRIO DO PEDIDO'] || '';
+    const qtd       = parseInt(r['QUANTIDADE']) || 1;
+    const valor     = parseFloat((r['VALOR UNIT'] || '0').toString().replace(',', '.')) || 0;
 
     // Filtro estado/gestor/equipe/consultor em cascata
     const est = EQUIPES_ESTADOS[equipe] || '';
@@ -3578,8 +3628,14 @@ async function renderProducao() {
     if (equipesChecked.length > 0 && !equipesChecked.includes(equipe)) return;
     if (consultoresChecked.length > 0 && !consultoresChecked.includes(cons)) return;
 
-    // Filtro UF
-    if (!checkUF(filtroUF, uf)) return;
+    // Filtro UF BL (coluna UF da base — UF de instalação)
+    if (!checkUF(filtroUFBL, uf)) return;
+
+    // Filtro UF Cliente (coluna Estado da base)
+    if (filtroUFCliente !== 'Todos' && ufCliente !== filtroUFCliente) return;
+
+    // Filtro DDD (2 primeiros dígitos de NUMERO)
+    if (filtroDDD !== 'Todos' && ddd !== filtroDDD) return;
 
     // Filtro grupo
     if (filtroGrupo !== 'Geral' && grupo !== filtroGrupo) return;
@@ -3646,7 +3702,7 @@ async function renderProducao() {
 
   if (mostrarComparativo) {
     resultArea.innerHTML = '<div class="prod-empty">Calculando comparativo MOM/TRI...</div>';
-    const filtros = { estado: filtroEstado, gestores: gestoresChecked, equipes: equipesChecked, consultores: consultoresChecked, uf: filtroUF, grupo: filtroGrupo };
+    const filtros = { estado: filtroEstado, gestores: gestoresChecked, equipes: equipesChecked, consultores: consultoresChecked, uf: filtroUFBL, ufCliente: filtroUFCliente, ddd: filtroDDD, grupo: filtroGrupo };
     const idRequisicao = ++prodComparativoReqId;
     comparativo = await calcularComparativos(filtros);
     if (idRequisicao !== prodComparativoReqId) return; // uma nova chamada substituiu esta
