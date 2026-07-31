@@ -998,6 +998,15 @@
   .raiox-stat { background: rgba(255,255,255,.12); border-radius: 20px; padding: 4px 12px; font-size: 11px; color: rgba(255,255,255,.9); }
   .raiox-stat strong { color: #fff; }
 
+  /* ─── Drilldown de detalhes do cliente (aba Gerencial) ──────────────────── */
+  .cliente-drill-link { cursor: pointer; }
+  .cliente-drill-link:hover { text-decoration: underline; text-underline-offset: 2px; }
+  .det-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px 20px; }
+  .det-item { min-width: 0; }
+  .det-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--text-3); margin-bottom: 3px; }
+  .det-value { font-size: 13px; color: var(--text); font-weight: 500; word-break: break-word; line-height: 1.4; }
+  .det-value.empty { color: var(--text-4); font-weight: 400; }
+
   /* ─── SPRINT 2: KPIs DE EFICIÊNCIA ──────────────────────────────────────── */
   .disc-kpi2-card {
     background: var(--surface); border: 1px solid var(--border);
@@ -2531,7 +2540,7 @@ function drillFila(categoria, fila) {
         </tr></thead>
         <tbody>${sortedRows.length === 0
           ? `<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--text3)">Nenhum registro no período selecionado.</td></tr>`
-          : sortedRows.map(r => {
+          : (window._drillRows = sortedRows, sortedRows.map((r, idx) => {
           const qtd   = parseInt(r['QUANTIDADE']) || 1;
           const prop  = r['PROPRIETÁRIO DO PEDIDO'] || '—';
           const nome  = r['NOME CLIENTE'] || '—';
@@ -2542,7 +2551,7 @@ function drillFila(categoria, fila) {
           return `<tr>
             <td><span class="tag-pill" style="font-size:11px">${grupo}</span></td>
             <td style="font-size:12px;color:var(--text2)">${vinc}</td>
-            <td style="font-size:12px;font-weight:500">${nome}</td>
+            <td style="font-size:12px;font-weight:500"><span class="cliente-drill-link" onclick="abrirDetalheCliente(${idx})" title="Ver detalhes do registro">${nome}</span></td>
             <td>
               <div class="consultant-name">
                 <div class="avatar" style="width:22px;height:22px;font-size:9px">${initials(prop)}</div>
@@ -2553,14 +2562,129 @@ function drillFila(categoria, fila) {
             <td class="center" style="font-size:11px;color:var(--text2)">${upd}</td>
             <td class="center"><span class="badge badge-red">${qtd}</span></td>
           </tr>`;
-        }).join('')}
+        }).join(''))}
         </tbody>
       </table>
     </div></div>`;
 }
 
-// =============================================================
-// SIMULADOR DE CARTEIRA
+// ─── DRILLDOWN DE DETALHES DO CLIENTE (aba Gerencial) ──────────────────────
+// Colunas que recebem tratamento especial de formatação (datas / moeda).
+// Tudo o mais é exibido cru, direto da base — o modal é 100% orientado pelos
+// headers reais da planilha, então novas colunas aparecem automaticamente.
+const DET_COLS_DATA = ['ATUALIZACAO', 'DATA REF', 'CADASTRO', 'DATA CADASTRO', 'DATA INSTALAÇÃO', 'DATA ATIVAÇÃO'];
+const DET_COLS_MOEDA = ['VALOR UNIT', 'VALOR'];
+
+function detFormatarValor(col, val) {
+  const v = (val || '').toString().trim();
+  if (!v) return '';
+  const colU = col.toUpperCase();
+  if (DET_COLS_DATA.some(c => colU === c.toUpperCase())) return fmtDate(v);
+  if (DET_COLS_MOEDA.some(c => colU === c.toUpperCase())) {
+    const num = parseFloat(v.replace(',', '.'));
+    return isNaN(num) ? v : 'R$ ' + num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  return v;
+}
+
+function abrirDetalheCliente(idx) {
+  const rows = window._drillRows || [];
+  const row = rows[idx];
+  if (!row) return;
+
+  const nomeCliente = row['NOME CLIENTE'] || '—';
+  const cnpj = (row['CPF/CNPJ'] || '').replace(/\D/g, '');
+  const vinc = (row['VINCULADO'] || '').trim();
+
+  // Agrupa todos os registros da base que pertencem ao mesmo cliente
+  // (por CNPJ; se não houver, cai para VINCULADO; se não houver nenhum, usa
+  // só o registro clicado).
+  let relacionados = [];
+  if (cnpj) {
+    relacionados = ALL_DATA.filter(r => (r['CPF/CNPJ'] || '').replace(/\D/g, '') === cnpj);
+  } else if (vinc && vinc !== '—') {
+    relacionados = ALL_DATA.filter(r => (r['VINCULADO'] || '').trim() === vinc);
+  }
+  if (!relacionados.length) relacionados = [row];
+
+  renderModalDetalheCliente(nomeCliente, relacionados);
+}
+
+function renderModalDetalheCliente(nomeCliente, registros) {
+  // Monta uma aba por registro/produto vinculado ao cliente
+  const contagemGrupo = {};
+  const tabsInfo = registros.map(r => {
+    const grupo = r['GRUPO'] || 'Registro';
+    contagemGrupo[grupo] = (contagemGrupo[grupo] || 0) + 1;
+    return { grupo, n: contagemGrupo[grupo] };
+  });
+  const grupoTotal = {};
+  registros.forEach(r => { const g = r['GRUPO'] || 'Registro'; grupoTotal[g] = (grupoTotal[g] || 0) + 1; });
+
+  const tabs = registros.map((r, i) => {
+    const info = tabsInfo[i];
+    const label = grupoTotal[info.grupo] > 1 ? `${info.grupo} #${info.n}` : info.grupo;
+    const fila = r['FILA'] || '';
+    return `<div class="raiox-tab${i === 0 ? ' active' : ''}" onclick="detTab(this,${i})">${label}${fila ? ` <span style="opacity:.65;font-weight:400">· ${fila}</span>` : ''}</div>`;
+  }).join('');
+
+  const panes = registros.map((r, i) => {
+    const campos = headers
+      .map(h => ({ label: h, val: detFormatarValor(h, r[h]) }))
+      .filter(c => c.val !== '');
+    const grid = campos.length
+      ? campos.map(c => `
+          <div class="det-item">
+            <div class="det-label">${c.label}</div>
+            <div class="det-value">${c.val}</div>
+          </div>`).join('')
+      : '<div style="grid-column:1/-1;text-align:center;padding:30px;color:var(--text-3);">Sem dados preenchidos para este registro.</div>';
+    return `<div id="det-pane-${i}" class="raiox-pane${i === 0 ? ' active' : ''}"><div class="det-grid">${grid}</div></div>`;
+  }).join('');
+
+  let modal = document.getElementById('cliente-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'cliente-modal';
+    modal.style.cssText = 'position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.5);display:flex;align-items:flex-start;justify-content:center;padding:40px 20px;overflow-y:auto;';
+    modal.onclick = function(e) { if (e.target === modal) detDrillClose(); };
+    document.body.appendChild(modal);
+  }
+
+  modal.innerHTML =
+    `<div style="background:var(--surface);border-radius:var(--radius-xl);width:100%;max-width:960px;box-shadow:0 24px 60px rgba(0,0,0,.3);overflow:hidden;">
+      <div style="background:var(--brand);">
+        <div style="padding:16px 20px;display:flex;align-items:center;justify-content:space-between;">
+          <div>
+            <div style="font-size:10px;color:rgba(255,255,255,.65);text-transform:uppercase;letter-spacing:.07em;margin-bottom:2px;">Detalhes do Cliente</div>
+            <div style="font-size:18px;font-weight:700;color:#fff;">${nomeCliente}</div>
+          </div>
+          <button onclick="detDrillClose()" style="background:rgba(255,255,255,.15);border:none;color:#fff;width:32px;height:32px;border-radius:50%;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;">×</button>
+        </div>
+        <div class="raiox-tabs">${tabs}</div>
+      </div>
+      ${panes}
+    </div>`;
+
+  modal.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+
+function detTab(el, idx) {
+  el.parentElement.querySelectorAll('.raiox-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  const modal = document.getElementById('cliente-modal');
+  if (!modal) return;
+  modal.querySelectorAll('.raiox-pane').forEach((p, i) => p.classList.toggle('active', i === idx));
+}
+
+function detDrillClose() {
+  const modal = document.getElementById('cliente-modal');
+  if (modal) modal.style.display = 'none';
+  document.body.style.overflow = '';
+}
+
+
 // =============================================================
 const MAPEAMENTO_TAGS = {
   '#1EWV': '#1EWV - CASCAVEL',
