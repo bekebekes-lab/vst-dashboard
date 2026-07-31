@@ -959,11 +959,19 @@
 
 
   /* ─── SPRINT 3: RAIO-X DO CONSULTOR ─────────────────────────────────────── */
-  .raiox-tabs { display: flex; border-bottom: 1px solid rgba(255,255,255,.2); padding: 0 20px; }
+  .raiox-tabs {
+    display: flex; border-bottom: 1px solid rgba(255,255,255,.2); padding: 0 20px;
+    overflow-x: auto; overflow-y: hidden; flex-wrap: nowrap; scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,.4) transparent;
+  }
+  .raiox-tabs::-webkit-scrollbar { height: 6px; }
+  .raiox-tabs::-webkit-scrollbar-track { background: transparent; }
+  .raiox-tabs::-webkit-scrollbar-thumb { background: rgba(255,255,255,.35); border-radius: 3px; }
+  .raiox-tabs::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.55); }
   .raiox-tab {
     padding: 10px 16px; font-size: 12px; font-weight: 500; color: rgba(255,255,255,.6);
     cursor: pointer; border-bottom: 2px solid transparent; transition: all .15s;
-    white-space: nowrap;
+    white-space: nowrap; flex: 0 0 auto;
   }
   .raiox-tab:hover { color: rgba(255,255,255,.9); }
   .raiox-tab.active { color: #fff; border-bottom-color: #fff; font-weight: 700; }
@@ -2686,6 +2694,7 @@ function renderModalDetalheCliente(nomeCliente, registros) {
 function detTab(el, idx) {
   el.parentElement.querySelectorAll('.raiox-tab').forEach(t => t.classList.remove('active'));
   el.classList.add('active');
+  el.scrollIntoView({ behavior: 'smooth', inline: 'nearest', block: 'nearest' });
   const modal = document.getElementById('cliente-modal');
   if (!modal) return;
   modal.querySelectorAll('.raiox-pane').forEach((p, i) => p.classList.toggle('active', i === idx));
