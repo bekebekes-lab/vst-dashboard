@@ -1217,6 +1217,13 @@
           <div class="dropdown-content" id="dd-content-prod-equipe"></div>
         </div>
       </div>
+      <div class="prod-filter-group" style="min-width:200px">
+        <label>Consultor</label>
+        <div class="custom-dropdown" id="dd-prod-consultor">
+          <button class="dropdown-btn" onclick="toggleDropdown('dd-content-prod-consultor')">Todos <span>&#9660;</span></button>
+          <div class="dropdown-content" id="dd-content-prod-consultor"></div>
+        </div>
+      </div>
       <div class="prod-filter-group">
         <label>UF</label>
         <select id="prod-uf" onchange="renderProducao()">
@@ -2566,7 +2573,7 @@ function buildMetasGrid() {
   if (!grid) return;
   const existing = {};
   grid.querySelectorAll('input').forEach(inp => existing[inp.dataset.tag] = inp.value);
-  grid.innerHTML = Object.entries(MAPEAMENTO_TAGS).sort((a,b) => a[1].localeCompare(b[1])).map(([tag, nome]) => {
+  grid.innerHTML = Object.entries(MAPEAMENTO_TAGS).sort((a,b) => a[1].localeCompare(b[1])).concat([['Sem Tag', 'Sem Tag']]).map(([tag, nome]) => {
     const shortName = nome.split(' - ')[1] || nome;
     const val = existing[tag] || '0';
     return `<div class="sim-meta-item">
@@ -2600,18 +2607,18 @@ function calcularSimulador() {
 
   // agrega por tag
   const agg = {};
-  Object.keys(MAPEAMENTO_TAGS).forEach(tag => {
+  Object.keys(MAPEAMENTO_TAGS).concat(['Sem Tag']).forEach(tag => {
     agg[tag] = { virtua: { qtd: 0, rec: 0 }, vozNovo: { qtd: 0, rec: 0 }, vozPort: { qtd: 0, rec: 0 } };
   });
 
   ALL_DATA.forEach(r => {
-    const tag   = r['TAGS ATIVIDADE'] || '';
+    const tagRaw = r['TAGS ATIVIDADE'] || '';
+    const tag   = MAPEAMENTO_TAGS[tagRaw] ? tagRaw : 'Sem Tag';
     const grupo = r['GRUPO'] || '';
     const fila  = r['FILA'] || '';
     const qtd   = parseInt(r['QUANTIDADE']) || 1;
     const valor = parseFloat((r['VALOR UNIT'] || '0').toString().replace(',', '.')) || 0;
 
-    if (!MAPEAMENTO_TAGS[tag]) return;
     if (!filasPermitidas.includes(fila)) return;
     if (!produtosAlvo.includes(grupo)) return;
 
@@ -2630,7 +2637,7 @@ function calcularSimulador() {
   });
 
   // calcula resultados por tag
-  const resultados = Object.entries(MAPEAMENTO_TAGS).sort((a,b) => a[1].localeCompare(b[1])).map(([tag, nome]) => {
+  const resultados = Object.entries(MAPEAMENTO_TAGS).sort((a,b) => a[1].localeCompare(b[1])).concat([['Sem Tag', 'Sem Tag']]).map(([tag, nome]) => {
     const d = agg[tag];
 
     // Faturamento = receita × multiplicador de cada produto
@@ -3018,7 +3025,6 @@ async function fetchAbaDados(sheetName) {
 //     A contagem é única (não soma duplicado entre os dois status).
 function contarStatusPorTag(rows, filtros, statusSelecionados, cutoffDate) {
   const tagsMap = MAPEAMENTO_TAGS;
-  const gruposExcluidos = new Set(['VOZ - Novo', 'VOZ - Portabilidade', 'APARELHO']);
   const usarAguardando = statusSelecionados.has('Aguardando Instalação');
   const out = {};
   rows.forEach(r => {
@@ -3026,18 +3032,19 @@ function contarStatusPorTag(rows, filtros, statusSelecionados, cutoffDate) {
     const uf      = r['UF'] || '';
     const grupo   = r['GRUPO'] || '';
     const fila    = r['FILA'] || '';
-    const tag     = r['TAGS ATIVIDADE'] || '';
+    const tagRaw  = r['TAGS ATIVIDADE'] || '';
+    const tag     = tagsMap[tagRaw] ? tagRaw : 'Sem Tag';
+    const cons    = r['PROPRIETÁRIO DO PEDIDO'] || '';
     const qtd     = parseInt(r['QUANTIDADE']) || 1;
-
-    if (!tagsMap[tag]) return;
 
     const est = EQUIPES_ESTADOS[equipe] || '';
     const ges = EQUIPES_GESTORES[equipe] || '';
     if (filtros.estado !== 'Todos' && est !== filtros.estado) return;
     if (filtros.gestores && filtros.gestores.length > 0 && !filtros.gestores.includes(ges)) return;
     if (filtros.equipes && filtros.equipes.length > 0 && !filtros.equipes.includes(equipe)) return;
+    if (filtros.consultores && filtros.consultores.length > 0 && !filtros.consultores.includes(cons)) return;
     if (!checkUF(filtros.uf, uf)) return;
-    if (filtros.grupo === 'Geral' && gruposExcluidos.has(grupo)) return;
+    // Grupo: 100% dos lançamentos da coluna GRUPO da base entram em "Geral" (sem exclusão)
     if (filtros.grupo !== 'Geral' && grupo !== filtros.grupo) return;
 
     if (usarAguardando) {
@@ -3313,7 +3320,7 @@ function getCheckedValuesDd(contId) {
 }
 
 function popularDropdownTagUnidade() {
-  const itens = Object.entries(MAPEAMENTO_TAGS).sort((a, b) => a[1].localeCompare(b[1])).map(([tag]) => tag);
+  const itens = Object.entries(MAPEAMENTO_TAGS).sort((a, b) => a[1].localeCompare(b[1])).map(([tag]) => tag).concat(['Sem Tag']);
   ddRegisterCallback('dd-content-prod-tag', function(){ atualizarBotaoDropdown('dd-content-prod-tag','#dd-prod-tag .dropdown-btn'); renderProducao(); });
   window._ddOnChange_dd_content_prod_tag = function(){ atualizarBotaoDropdown('dd-content-prod-tag','#dd-prod-tag .dropdown-btn'); renderProducao(); };
   popularDropdownGenerico('dd-content-prod-tag', itens, function(){ atualizarBotaoDropdown('dd-content-prod-tag','#dd-prod-tag .dropdown-btn'); renderProducao(); }, '#dd-prod-tag .dropdown-btn');
@@ -3336,17 +3343,19 @@ function initProducao() {
   });
   fillProdSelect('prod-estado', ['Todos', ...[...estados].sort()]);
 
-  // Popula Gestor (checkbox multi) e Equipe (checkbox multi), sem cascata
+  // Popula Gestor (checkbox multi), Equipe (checkbox multi) e Consultor (checkbox multi), sem cascata
   popularDropdownProdGestor([...gestores].sort());
   popularDropdownEquipe([...equipes].sort());
+  const consultores = new Set();
+  ALL_DATA.forEach(r => { if (r['PROPRIETÁRIO DO PEDIDO']) consultores.add(r['PROPRIETÁRIO DO PEDIDO']); });
+  popularDropdownProdConsultor([...consultores].sort());
 
   // Aplica trava de perfil (Gestor Macro 2.0) sobre o filtro de Gestor
   aplicarTravaProducao();
 
-  // Popula grupos (excluindo itens não relevantes)
-  const gruposExcluidos = new Set(['VOZ - Novo', 'VOZ - Portabilidade', 'APARELHO']);
+  // Popula grupos — 100% dos valores da coluna GRUPO da base, sem exclusão
   const grupos = new Set();
-  ALL_DATA.forEach(r => { if (r['GRUPO'] && !gruposExcluidos.has(r['GRUPO'])) grupos.add(r['GRUPO']); });
+  ALL_DATA.forEach(r => { if (r['GRUPO']) grupos.add(r['GRUPO']); });
   const selGrupo = document.getElementById('prod-grupo');
   const curGrupo = selGrupo.value;
   selGrupo.innerHTML = '<option value="Geral">Geral</option>' +
@@ -3401,6 +3410,12 @@ function popularDropdownProdGestor(gestores) {
   popularDropdownGenerico('dd-content-prod-gestor', gestores, window._ddOnChange_dd_content_prod_gestor, '#dd-prod-gestor .dropdown-btn');
 }
 
+function popularDropdownProdConsultor(consultores) {
+  window._ddOnChange_dd_content_prod_consultor = function(){ atualizarBotaoDropdown('dd-content-prod-consultor','#dd-prod-consultor .dropdown-btn'); renderProducao(); };
+  ddRegisterCallback('dd-content-prod-consultor', window._ddOnChange_dd_content_prod_consultor);
+  popularDropdownGenerico('dd-content-prod-consultor', consultores, window._ddOnChange_dd_content_prod_consultor, '#dd-prod-consultor .dropdown-btn');
+}
+
 function checkUF(filtro, uf) {
   if (filtro === 'Geral') return true;
   const u = (uf || '').trim().toUpperCase();
@@ -3414,6 +3429,7 @@ async function renderProducao() {
   const filtroEstado = document.getElementById('prod-estado')?.value || 'Todos';
   const gestoresChecked = getCheckedValuesDd('dd-content-prod-gestor'); // vazio = todos
   const equipesChecked = getCheckedValuesDd('dd-content-prod-equipe'); // vazio = todas
+  const consultoresChecked = getCheckedValuesDd('dd-content-prod-consultor'); // vazio = todos
   const filtroUF     = document.getElementById('prod-uf').value;
   const filtroGrupo  = document.getElementById('prod-grupo').value;
   const statusArr    = [...prodStatusSelecionados];
@@ -3428,9 +3444,10 @@ async function renderProducao() {
   // Agrega: tag → status → { qtd, receita }
   const agg = {};
   const tagsFiltro = getCheckedValuesDd('dd-content-prod-tag'); // vazio = todas
+  const tagsMapBase = { ...MAPEAMENTO_TAGS, 'Sem Tag': 'Sem Tag' };
   const tagsMap = tagsFiltro.length > 0
-    ? Object.fromEntries(Object.entries(MAPEAMENTO_TAGS).filter(([tag]) => tagsFiltro.includes(tag)))
-    : { ...MAPEAMENTO_TAGS };
+    ? Object.fromEntries(Object.entries(tagsMapBase).filter(([tag]) => tagsFiltro.includes(tag)))
+    : { ...tagsMapBase };
   Object.keys(tagsMap).forEach(tag => {
     agg[tag] = {};
     statusArr.forEach(s => agg[tag][s] = { qtd: 0, rec: 0 });
@@ -3441,29 +3458,30 @@ async function renderProducao() {
     const uf     = r['UF'] || '';
     const grupo  = r['GRUPO'] || '';
     const fila   = r['FILA'] || '';
-    const tag    = r['TAGS ATIVIDADE'] || '';
+    const tagRaw = r['TAGS ATIVIDADE'] || '';
+    const tag    = MAPEAMENTO_TAGS[tagRaw] ? tagRaw : 'Sem Tag';
+    const cons   = r['PROPRIETÁRIO DO PEDIDO'] || '';
     const qtd    = parseInt(r['QUANTIDADE']) || 1;
     const valor  = parseFloat((r['VALOR UNIT'] || '0').toString().replace(',', '.')) || 0;
 
-    // Filtro estado/gestor/equipe em cascata
+    // Filtro estado/gestor/equipe/consultor em cascata
     const est = EQUIPES_ESTADOS[equipe] || '';
     const ges = EQUIPES_GESTORES[equipe] || '';
     if (filtroEstado !== 'Todos' && est !== filtroEstado) return;
     if (gestoresChecked.length > 0 && !gestoresChecked.includes(ges)) return;
     if (equipesChecked.length > 0 && !equipesChecked.includes(equipe)) return;
+    if (consultoresChecked.length > 0 && !consultoresChecked.includes(cons)) return;
 
     // Filtro UF
     if (!checkUF(filtroUF, uf)) return;
 
-    // Filtro grupo
-    const gruposExcluidos = new Set(['VOZ - Novo', 'VOZ - Portabilidade', 'APARELHO']);
-    if (filtroGrupo === 'Geral' && gruposExcluidos.has(grupo)) return;
+    // Filtro grupo — 100% dos valores da coluna GRUPO da base entram em "Geral"
     if (filtroGrupo !== 'Geral' && grupo !== filtroGrupo) return;
 
     // Filtro status
     if (!statusArr.includes(fila)) return;
 
-    // Tag nas unidades foco
+    // Tag nas unidades foco (lançamentos sem tag/tag não mapeada entram em "Sem Tag")
     if (!tagsMap[tag]) return;
 
     if (!agg[tag]) agg[tag] = {};
@@ -3507,7 +3525,7 @@ async function renderProducao() {
 
   if (mostrarComparativo) {
     resultArea.innerHTML = '<div class="prod-empty">Calculando comparativo MOM/TRI...</div>';
-    const filtros = { estado: filtroEstado, gestores: gestoresChecked, equipes: equipesChecked, uf: filtroUF, grupo: filtroGrupo };
+    const filtros = { estado: filtroEstado, gestores: gestoresChecked, equipes: equipesChecked, consultores: consultoresChecked, uf: filtroUF, grupo: filtroGrupo };
     const idRequisicao = ++prodComparativoReqId;
     comparativo = await calcularComparativos(filtros);
     if (idRequisicao !== prodComparativoReqId) return; // uma nova chamada substituiu esta
@@ -3962,7 +3980,8 @@ async function salvarConfigSimulador() {
 // Cada item vira { tag: '#1EWV', nome: '#1EWV - CASCAVEL' }.
 const CODIGOS_AACE2 = Object.entries(MAPEAMENTO_TAGS)
   .sort((a, b) => a[1].localeCompare(b[1]))
-  .map(([tag, nome]) => ({ tag, nome }));
+  .map(([tag, nome]) => ({ tag, nome }))
+  .concat([{ tag: 'Sem Tag', nome: 'Sem Tag' }]);
 
 // sufixo seguro para usar em id="" (remove caracteres especiais do código, ex: '#1EWV' -> '1EWV')
 function s2Sid(tag) { return tag.replace(/[^a-zA-Z0-9]/g, ''); }
@@ -4001,7 +4020,8 @@ function s2PuxarDadosSheet() {
   });
 
   ALL_DATA.forEach(r => {
-    const tag   = r['TAGS ATIVIDADE'] || '';
+    const tagRaw = r['TAGS ATIVIDADE'] || '';
+    const tag   = MAPEAMENTO_TAGS[tagRaw] ? tagRaw : 'Sem Tag';
     const grupo = r['GRUPO'] || '';
     const fila  = r['FILA'] || '';
     const qtd   = parseInt(r['QUANTIDADE']) || 1;
