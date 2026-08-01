@@ -2097,8 +2097,6 @@ function buildFilters() {
   const estados = new Set();
   const gestores = new Set();
   const equipes = new Set();
-  const consultores = new Set();
-  const tags = new Set();
 
   ALL_DATA.forEach(r => {
     const eq = r['EQUIPE'];
@@ -2107,65 +2105,58 @@ function buildFilters() {
     if (est) estados.add(est);
     if (ges) gestores.add(ges);
     if (eq) equipes.add(eq);
-    if (r['PROPRIETÁRIO DO PEDIDO']) consultores.add(r['PROPRIETÁRIO DO PEDIDO']);
-    if (r['TAGS ATIVIDADE']) tags.add(r['TAGS ATIVIDADE']);
   });
 
   fillSelect('f-estado', ['Todos', ...[...estados].sort()]);
   _fGestorItens = [...gestores].sort();
   _fEquipeItens = [...equipes].sort();
-  _fEquipeItensEscopo = null; // recalculado por aplicarPermissoes() se o perfil tiver trava
-  popularDropdownFGestor(_fGestorItens);
-  popularDropdownFEquipe(_fEquipeItens);
-  fillSelect('f-consultor', ['Todos', ...[...consultores].sort()]);
-  fillSelect('f-tag', ['Todas', ...[...tags].sort()]);
+  _fEquipeItensEscopo = null; // recalculado por _gerCascatear() logo abaixo
+
+  // Cascata inicial: Estado ('Todos' no primeiro load) → Gestor → Equipe → Consultor/Tag
+  _gerCascatear();
+}
+
+// Cascata única e centralizada do Gerencial: Estado → Gestor → Equipe → Consultor/Tag.
+// Cada nível recalcula as OPÇÕES do nível seguinte com base no que está selecionado
+// (ou travado por permissão de perfil) nos níveis acima. Espelha _prodCascatear()
+// da aba Produção.
+function _gerCascatear() {
+  const estadoSel = document.getElementById('f-estado').value;
+
+  // Nível 1 → 2: Estado restringe o universo de equipes/gestores
+  const equipesEstado = _fEquipeItens.filter(eq => estadoSel === 'Todos' || EQUIPES_ESTADOS[eq] === estadoSel);
+  const gestoresDoEstado = [...new Set(equipesEstado.map(eq => EQUIPES_GESTORES[eq]).filter(Boolean))].sort();
+  popularDropdownFGestor(gestoresDoEstado);
+
+  // Nível 2 → 3: Gestor(es) selecionado(s)/travado(s) restringem as Equipes
+  const gestoresSel = getCheckedValuesDd('dd-content-f-gestor');
+  const equipesGestor = (gestoresSel.length > 0
+    ? equipesEstado.filter(eq => gestoresSel.includes(EQUIPES_GESTORES[eq]))
+    : equipesEstado
+  ).sort();
+  _fEquipeItensEscopo = equipesGestor; // escopo usado por filterByEquipe()
+  popularDropdownFEquipe(equipesGestor);
+
+  // Nível 3 → 4: Equipe(s) selecionada(s)/travada(s) restringem Consultor e Tag
+  const equipesSel = getCheckedValuesDd('dd-content-f-equipe');
+  const equipesFinal = equipesSel.length > 0 ? equipesGestor.filter(eq => equipesSel.includes(eq)) : equipesGestor;
+  const equipesFinalSet = new Set(equipesFinal);
+  const consultoresSet = new Set();
+  const tagsSet = new Set();
+  ALL_DATA.forEach(r => {
+    if (equipesFinalSet.has(r['EQUIPE'])) {
+      if (r['PROPRIETÁRIO DO PEDIDO']) consultoresSet.add(r['PROPRIETÁRIO DO PEDIDO']);
+      if (r['TAGS ATIVIDADE']) tagsSet.add(r['TAGS ATIVIDADE']);
+    }
+  });
+  fillSelect('f-consultor', ['Todos', ...[...consultoresSet].sort()]);
+  fillSelect('f-tag', ['Todas', ...[...tagsSet].sort()]);
 }
 
 function popularDropdownFGestor(itens) {
   window._ddOnChange_dd_content_f_gestor = function(){
     atualizarBotaoDropdown('dd-content-f-gestor','#dd-f-gestor .dropdown-btn');
-    // Cascata: ao selecionar gestor(es), restringe Equipe e Consultor ao escopo
-    const gestoresSel = getCheckedValuesDd('dd-content-f-gestor'); // [] = Todos
-    if (gestoresSel.length > 0) {
-      // Calcula equipes permitidas para os gestores selecionados
-      const equipesPermitidas = new Set();
-      Object.entries(EQUIPES_GESTORES).forEach(([eq, ges]) => {
-        if (gestoresSel.includes(ges)) equipesPermitidas.add(eq);
-      });
-      const equipesArr = [...equipesPermitidas].filter(eq => _fEquipeItens.includes(eq)).sort();
-      _fEquipeItensEscopo = equipesArr;
-      popularDropdownFEquipe(equipesArr);
-      // Limpa seleção de equipe que ficou fora do escopo
-      const equipeSel = getCheckedValuesDd('dd-content-f-equipe');
-      const equipesFora = equipeSel.filter(e => !equipesPermitidas.has(e));
-      if (equipesFora.length > 0) {
-        _ddState['dd-content-f-equipe'] = null;
-        popularDropdownFEquipe(equipesArr);
-      }
-      // Restringe consultores ao escopo dos gestores selecionados
-      const consultoresSet = new Set();
-      const tagsSet = new Set();
-      ALL_DATA.forEach(r => {
-        if (equipesPermitidas.has(r['EQUIPE'])) {
-          if (r['PROPRIETÁRIO DO PEDIDO']) consultoresSet.add(r['PROPRIETÁRIO DO PEDIDO']);
-          if (r['TAGS ATIVIDADE']) tagsSet.add(r['TAGS ATIVIDADE']);
-        }
-      });
-      fillSelect('f-consultor', ['Todos', ...[...consultoresSet].sort()]);
-      fillSelect('f-tag', ['Todas', ...[...tagsSet].sort()]);
-    } else {
-      // Nenhum gestor selecionado (Todos): restaura listas completas
-      _fEquipeItensEscopo = null;
-      popularDropdownFEquipe(_fEquipeItens);
-      const consultoresAll = new Set();
-      const tagsAll = new Set();
-      ALL_DATA.forEach(r => {
-        if (r['PROPRIETÁRIO DO PEDIDO']) consultoresAll.add(r['PROPRIETÁRIO DO PEDIDO']);
-        if (r['TAGS ATIVIDADE']) tagsAll.add(r['TAGS ATIVIDADE']);
-      });
-      fillSelect('f-consultor', ['Todos', ...[...consultoresAll].sort()]);
-      fillSelect('f-tag', ['Todas', ...[...tagsAll].sort()]);
-    }
+    _gerCascatear();
     render();
   };
   ddRegisterCallback('dd-content-f-gestor', window._ddOnChange_dd_content_f_gestor);
@@ -2175,48 +2166,7 @@ function popularDropdownFGestor(itens) {
 function popularDropdownFEquipe(itens) {
   window._ddOnChange_dd_content_f_equipe = function(){
     atualizarBotaoDropdown('dd-content-f-equipe','#dd-f-equipe .dropdown-btn');
-    // Cascata: restringe Consultor e Tag às equipes selecionadas
-    const equipesSel = getCheckedValuesDd('dd-content-f-equipe'); // [] = Todas
-    if (equipesSel.length > 0) {
-      const consultoresSet = new Set();
-      const tagsSet = new Set();
-      ALL_DATA.forEach(r => {
-        if (equipesSel.includes(r['EQUIPE'])) {
-          if (r['PROPRIETÁRIO DO PEDIDO']) consultoresSet.add(r['PROPRIETÁRIO DO PEDIDO']);
-          if (r['TAGS ATIVIDADE']) tagsSet.add(r['TAGS ATIVIDADE']);
-        }
-      });
-      fillSelect('f-consultor', ['Todos', ...[...consultoresSet].sort()]);
-      fillSelect('f-tag', ['Todas', ...[...tagsSet].sort()]);
-    } else {
-      // Nenhuma equipe específica: usa escopo do gestor (se tiver) ou tudo
-      const gestoresSel = getCheckedValuesDd('dd-content-f-gestor');
-      if (gestoresSel.length > 0) {
-        const equipesGestor = new Set();
-        Object.entries(EQUIPES_GESTORES).forEach(([eq, ges]) => {
-          if (gestoresSel.includes(ges)) equipesGestor.add(eq);
-        });
-        const consultoresSet = new Set();
-        const tagsSet = new Set();
-        ALL_DATA.forEach(r => {
-          if (equipesGestor.has(r['EQUIPE'])) {
-            if (r['PROPRIETÁRIO DO PEDIDO']) consultoresSet.add(r['PROPRIETÁRIO DO PEDIDO']);
-            if (r['TAGS ATIVIDADE']) tagsSet.add(r['TAGS ATIVIDADE']);
-          }
-        });
-        fillSelect('f-consultor', ['Todos', ...[...consultoresSet].sort()]);
-        fillSelect('f-tag', ['Todas', ...[...tagsSet].sort()]);
-      } else {
-        const consultoresAll = new Set();
-        const tagsAll = new Set();
-        ALL_DATA.forEach(r => {
-          if (r['PROPRIETÁRIO DO PEDIDO']) consultoresAll.add(r['PROPRIETÁRIO DO PEDIDO']);
-          if (r['TAGS ATIVIDADE']) tagsAll.add(r['TAGS ATIVIDADE']);
-        });
-        fillSelect('f-consultor', ['Todos', ...[...consultoresAll].sort()]);
-        fillSelect('f-tag', ['Todas', ...[...tagsAll].sort()]);
-      }
-    }
+    _gerCascatear();
     render();
   };
   ddRegisterCallback('dd-content-f-equipe', window._ddOnChange_dd_content_f_equipe);
@@ -2251,10 +2201,7 @@ function fillSelect(id, opts) {
 }
 
 function onFilterChange(level) {
-  // Gestor e Equipe agora são dropdowns de checkbox independentes (não fazem
-  // mais cascata a partir do Estado) — a lista completa já é populada em
-  // buildFilters(). O Consultor continua sendo recalculado com base em todos
-  // os filtros ativos no momento do render().
+  if (level === 'estado') _gerCascatear();
   render();
 }
 
@@ -5206,41 +5153,6 @@ function aplicarPermissoes() {
     sel.style.pointerEvents = 'none';
   };
 
-  // Restringe as opções de Equipe/Consultor/Tag do Gerencial ao escopo do
-  // gestor(es) ou equipe(s) travados — evita que o usuário selecione algo
-  // fora do seu escopo e veja dado zerado.
-  const restringirListasGerencial = (gestoresLock, equipesLock) => {
-    let equipesPermitidas = null;
-    if (equipesLock && equipesLock.length > 0) {
-      equipesPermitidas = new Set(equipesLock);
-    } else if (gestoresLock && gestoresLock.length > 0) {
-      equipesPermitidas = new Set();
-      Object.entries(EQUIPES_GESTORES).forEach(([eq, ges]) => {
-        if (gestoresLock.includes(ges)) equipesPermitidas.add(eq);
-      });
-    }
-    if (!equipesPermitidas) return;
-
-    const consultores = new Set();
-    const tags = new Set();
-    ALL_DATA.forEach(r => {
-      if (equipesPermitidas.has(r['EQUIPE'])) {
-        if (r['PROPRIETÁRIO DO PEDIDO']) consultores.add(r['PROPRIETÁRIO DO PEDIDO']);
-        if (r['TAGS ATIVIDADE']) tags.add(r['TAGS ATIVIDADE']);
-      }
-    });
-
-    // Só repopula Equipe se ela não estiver travada por equipesLock (senão
-    // travarDropdownMulti já cuidou da seleção exata)
-    const equipesArr = [...equipesPermitidas].filter(eq => _fEquipeItens.includes(eq)).sort();
-    _fEquipeItensEscopo = equipesArr; // guarda o escopo pra filterByEquipe() respeitar
-    if (!equipesLock || equipesLock.length === 0) {
-      popularDropdownFEquipe(equipesArr);
-    }
-    fillSelect('f-consultor', ['Todos', ...[...consultores].sort()]);
-    fillSelect('f-tag', ['Todas', ...[...tags].sort()]);
-  };
-
   const aplicarFiltrosGerencial = () => {
     if (p === 'consultor') {
       // Bloqueia todos os filtros — consultor não pode mudar nada
@@ -5263,12 +5175,12 @@ function aplicarPermissoes() {
       const nomesLock = (USUARIO_ATUAL.gestores_ref || []).length > 0 ? USUARIO_ATUAL.gestores_ref : [USUARIO_ATUAL.gestor_ref];
       travarDropdownMulti('dd-content-f-gestor', '#dd-f-gestor .dropdown-btn', nomesLock);
       travarSelectSimples('f-estado');
-      restringirListasGerencial(nomesLock, null);
+      _gerCascatear();
       render();
     } else if (p === 'gestor_macro2' && (USUARIO_ATUAL.gestores_ref || []).length > 0) {
       // Trava Gerencial em 1+ nomes de gestor
       travarDropdownMulti('dd-content-f-gestor', '#dd-f-gestor .dropdown-btn', USUARIO_ATUAL.gestores_ref);
-      restringirListasGerencial(USUARIO_ATUAL.gestores_ref, null);
+      _gerCascatear();
       render();
     } else if (p === 'supervisao' && (USUARIO_ATUAL.equipes_ref || []).length > 0) {
       // Trava Gerencial em 1+ equipes (supervisão), sem trava de gestor/estado
@@ -5278,7 +5190,7 @@ function aplicarPermissoes() {
         USUARIO_ATUAL.equipes_ref.map(eq => EQUIPES_GESTORES[eq]).filter(Boolean)
       )];
       travarDropdownMulti('dd-content-f-gestor', '#dd-f-gestor .dropdown-btn', gestoresDasEquipes);
-      restringirListasGerencial(null, USUARIO_ATUAL.equipes_ref);
+      _gerCascatear();
       render();
     }
   };
