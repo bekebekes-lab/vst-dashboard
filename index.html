@@ -3648,16 +3648,15 @@ function initProducao() {
   });
   fillProdSelect('prod-estado', ['Todos', ...[...estados].sort()]);
 
-  // Popula Gestor (checkbox multi), Equipe (checkbox multi) e Consultor (checkbox multi), com cascata
+  // Base completa de equipes (usada pela cascata Estado → Gestor → Equipe → Consultor)
   _prodEquipeItens = [...equipes].sort();
-  popularDropdownProdGestor([...gestores].sort());
-  popularDropdownEquipe(_prodEquipeItens);
-  const consultores = new Set();
-  ALL_DATA.forEach(r => { if (r['PROPRIETÁRIO DO PEDIDO']) consultores.add(r['PROPRIETÁRIO DO PEDIDO']); });
-  popularDropdownProdConsultor([...consultores].sort());
 
-  // Aplica trava de perfil (Gestor Macro 2.0) sobre o filtro de Gestor
+  // Aplica trava de perfil (Gestor Macro 2.0) sobre o filtro de Gestor — precisa
+  // rodar ANTES da cascata para que o escopo travado já entre no cálculo.
   aplicarTravaProducao();
+
+  // Cascata inicial: popula Gestor/Equipe/Consultor já respeitando Estado e trava
+  _prodCascatear();
 
   // Popula grupos — 100% dos valores da coluna GRUPO da base, sem exclusão
   const grupos = new Set();
@@ -3705,13 +3704,8 @@ function fillProdSelect(id, opts) {
   if (opts.includes(cur)) sel.value = cur;
 }
 
-function popularDropdownEquipe(equipes) {
-  ddRegisterCallback('dd-content-prod-equipe', function(){ atualizarBotaoDropdown('dd-content-prod-equipe','#dd-prod-equipe .dropdown-btn'); renderProducao(); });
-  window._ddOnChange_dd_content_prod_equipe = function(){ atualizarBotaoDropdown('dd-content-prod-equipe','#dd-prod-equipe .dropdown-btn'); renderProducao(); };
-  popularDropdownGenerico('dd-content-prod-equipe', equipes, function(){ atualizarBotaoDropdown('dd-content-prod-equipe','#dd-prod-equipe .dropdown-btn'); renderProducao(); }, '#dd-prod-equipe .dropdown-btn');
-}
-
 function onProdFilterChange(level) {
+  if (level === 'estado') _prodCascatear();
   renderProducao();
 }
 
@@ -3719,37 +3713,45 @@ function onProdFilterChange(level) {
 let _prodGestorItens = [];
 let _prodEquipeItens = [];
 
+// Cascata única e centralizada: Estado → Gestor → Equipe → Consultor.
+// Cada nível recalcula as OPÇÕES do nível seguinte com base no que está
+// selecionado nos níveis acima (usando EQUIPES_ESTADOS/EQUIPES_GESTORES).
+// Seleções que deixam de fazer sentido no novo escopo são podadas
+// automaticamente por popularDropdownGenerico/_popularProdConsultorLista.
+function _prodCascatear() {
+  const estadoSel = document.getElementById('prod-estado').value;
+
+  // Nível 1 → 2: Estado restringe o universo de equipes/gestores
+  const equipesEstado = _prodEquipeItens.filter(eq => estadoSel === 'Todos' || EQUIPES_ESTADOS[eq] === estadoSel);
+  const gestoresDoEstado = [...new Set(equipesEstado.map(eq => EQUIPES_GESTORES[eq]).filter(Boolean))].sort();
+  popularDropdownProdGestor(gestoresDoEstado);
+
+  // Nível 2 → 3: Gestor(es) selecionado(s) restringem as Equipes
+  const gestoresSel = getCheckedValuesDd('dd-content-prod-gestor');
+  const equipesGestor = (gestoresSel.length > 0
+    ? equipesEstado.filter(eq => gestoresSel.includes(EQUIPES_GESTORES[eq]))
+    : equipesEstado
+  ).sort();
+  popularDropdownEquipe(equipesGestor);
+
+  // Nível 3 → 4: Equipe(s) selecionada(s) restringem os Consultores
+  const equipesSel = getCheckedValuesDd('dd-content-prod-equipe');
+  const equipesFinal = equipesSel.length > 0
+    ? equipesGestor.filter(eq => equipesSel.includes(eq))
+    : equipesGestor;
+  const equipesFinalSet = new Set(equipesFinal);
+  const consultoresSet = new Set();
+  ALL_DATA.forEach(r => {
+    if (equipesFinalSet.has(r['EQUIPE']) && r['PROPRIETÁRIO DO PEDIDO']) consultoresSet.add(r['PROPRIETÁRIO DO PEDIDO']);
+  });
+  _popularProdConsultorLista([...consultoresSet].sort());
+}
+
 function popularDropdownProdGestor(gestores) {
   _prodGestorItens = gestores;
   window._ddOnChange_dd_content_prod_gestor = function(){
     atualizarBotaoDropdown('dd-content-prod-gestor','#dd-prod-gestor .dropdown-btn');
-    // Cascata: Gestor → Equipe e Consultor
-    const gestoresSel = getCheckedValuesDd('dd-content-prod-gestor');
-    if (gestoresSel.length > 0) {
-      const equipesPermitidas = new Set();
-      Object.entries(EQUIPES_GESTORES).forEach(([eq, ges]) => {
-        if (gestoresSel.includes(ges)) equipesPermitidas.add(eq);
-      });
-      const equipesArr = [...equipesPermitidas].filter(eq => _prodEquipeItens.includes(eq)).sort();
-      // Limpa equipes/consultores fora do escopo
-      const equipesSel = getCheckedValuesDd('dd-content-prod-equipe');
-      const equipesFora = equipesSel.filter(e => !equipesPermitidas.has(e));
-      if (equipesFora.length > 0) _ddState['dd-content-prod-equipe'] = null;
-      popularDropdownEquipe(equipesArr);
-      // Restringe consultores ao escopo
-      const consultoresSet = new Set();
-      ALL_DATA.forEach(r => {
-        if (equipesPermitidas.has(r['EQUIPE']) && r['PROPRIETÁRIO DO PEDIDO'])
-          consultoresSet.add(r['PROPRIETÁRIO DO PEDIDO']);
-      });
-      _popularProdConsultorLista([...consultoresSet].sort());
-    } else {
-      // Todos os gestores: restaura listas completas
-      popularDropdownEquipe(_prodEquipeItens);
-      const consultoresAll = new Set();
-      ALL_DATA.forEach(r => { if (r['PROPRIETÁRIO DO PEDIDO']) consultoresAll.add(r['PROPRIETÁRIO DO PEDIDO']); });
-      _popularProdConsultorLista([...consultoresAll].sort());
-    }
+    _prodCascatear();
     renderProducao();
   };
   ddRegisterCallback('dd-content-prod-gestor', window._ddOnChange_dd_content_prod_gestor);
@@ -3759,36 +3761,7 @@ function popularDropdownProdGestor(gestores) {
 function popularDropdownEquipe(equipes) {
   window._ddOnChange_dd_content_prod_equipe = function(){
     atualizarBotaoDropdown('dd-content-prod-equipe','#dd-prod-equipe .dropdown-btn');
-    // Cascata: Equipe → Consultor
-    const equipesSel = getCheckedValuesDd('dd-content-prod-equipe');
-    const equipesEscopo = equipesSel.length > 0 ? new Set(equipesSel) : null;
-    if (equipesEscopo) {
-      const consultoresSet = new Set();
-      ALL_DATA.forEach(r => {
-        if (equipesEscopo.has(r['EQUIPE']) && r['PROPRIETÁRIO DO PEDIDO'])
-          consultoresSet.add(r['PROPRIETÁRIO DO PEDIDO']);
-      });
-      _popularProdConsultorLista([...consultoresSet].sort());
-    } else {
-      // Sem equipe selecionada: respeita escopo do gestor (se houver)
-      const gestoresSel = getCheckedValuesDd('dd-content-prod-gestor');
-      if (gestoresSel.length > 0) {
-        const equipesGestor = new Set();
-        Object.entries(EQUIPES_GESTORES).forEach(([eq, ges]) => {
-          if (gestoresSel.includes(ges)) equipesGestor.add(eq);
-        });
-        const consultoresSet = new Set();
-        ALL_DATA.forEach(r => {
-          if (equipesGestor.has(r['EQUIPE']) && r['PROPRIETÁRIO DO PEDIDO'])
-            consultoresSet.add(r['PROPRIETÁRIO DO PEDIDO']);
-        });
-        _popularProdConsultorLista([...consultoresSet].sort());
-      } else {
-        const consultoresAll = new Set();
-        ALL_DATA.forEach(r => { if (r['PROPRIETÁRIO DO PEDIDO']) consultoresAll.add(r['PROPRIETÁRIO DO PEDIDO']); });
-        _popularProdConsultorLista([...consultoresAll].sort());
-      }
-    }
+    _prodCascatear();
     renderProducao();
   };
   ddRegisterCallback('dd-content-prod-equipe', window._ddOnChange_dd_content_prod_equipe);
@@ -5365,15 +5338,9 @@ function aplicarTravaProducao() {
   if (p === 'gestor_macro2' && (USUARIO_ATUAL.gestores_ref || []).length > 0 && document.getElementById('dd-content-prod-gestor')) {
     travarDropdownMulti('dd-content-prod-gestor', '#dd-prod-gestor .dropdown-btn', USUARIO_ATUAL.gestores_ref);
 
-    // Restringe a lista de Equipes às equipes desses gestores
-    if (ALL_DATA.length) {
-      const equipesPermitidas = new Set();
-      ALL_DATA.forEach(r => {
-        const eq = r['EQUIPE'];
-        if (eq && USUARIO_ATUAL.gestores_ref.includes(EQUIPES_GESTORES[eq])) equipesPermitidas.add(eq);
-      });
-      if (equipesPermitidas.size > 0) popularDropdownEquipe([...equipesPermitidas].sort());
-    }
+    // Recalcula Equipe e Consultor a partir do Gestor travado (via cascata central,
+    // já considerando também o Estado selecionado no momento)
+    if (ALL_DATA.length && _prodEquipeItens.length) _prodCascatear();
   }
 }
 
