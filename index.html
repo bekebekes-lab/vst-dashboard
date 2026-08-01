@@ -1213,6 +1213,8 @@
   <!-- TAB PRODUÇÃO -->
   <div class="tab-panel" id="tab-producao">
 
+    <div id="prod-equipe-alerta"></div>
+
     <!-- FILTROS PRINCIPAIS -->
     <div class="prod-filters">
       <div class="prod-filter-group">
@@ -1778,6 +1780,7 @@ const SHEET_NAME = 'BaseCRM';
 
 const EQUIPES_ESTADOS = {
   "ADM E GESTORES":"RS",
+  "COMERCIAL DIOU":"RS",
   "COMERCIAL ERISON":"SC",
   "COMERCIAL FRANCISCO BELTRAO":"PR",
   "COMERCIAL JEAN":"SC",
@@ -1790,7 +1793,9 @@ const EQUIPES_ESTADOS = {
   "COMERCIAL LOHAYNE":"PR",
   "COMERCIAL MARCOS":"SC",
   "COMERCIAL MAURO":"SC",
+  "COMERCIAL NATHAN":"SC",
   "COMERCIAL PATRICIA":"RS",
+  "COMERCIAL PAULA":"RS",
   "COMERCIAL RAFAEL GOMES":"SC",
   "COMERCIAL RICHIELLE":"RS",
   "COMERCIAL RICHIELLE 55":"RS",
@@ -1809,6 +1814,7 @@ const EQUIPES_ESTADOS = {
   "EQUIPE CXS TEL":"RS",
   "EQUIPE ERECHIM":"RS",
   "EQUIPE FOZ DO IGUAÇU":"PR",
+  "EQUIPE JOINVILLE":"SC",
   "EQUIPE KL":"PR",
   "EQUIPE LIVRAMENTO":"RS",
   "EQUIPE LONDRINA":"PR",
@@ -1816,6 +1822,7 @@ const EQUIPES_ESTADOS = {
   "EQUIPE MARINGA":"PR",
   "EQUIPE NH - INTERNO LAURA":"RS",
   "EQUIPE NH - INTERNO MARIA":"RS",
+  "EQUIPE NH - PAULA":"RS",
   "EQUIPE PEL":"RS",
   "EQUIPE PEL 2":"RS",
   "EQUIPE PONTA GROSSA":"PR",
@@ -1827,23 +1834,26 @@ const EQUIPES_ESTADOS = {
 };
 
 const EQUIPES_GESTORES = {
-  "ADM E GESTORES":"ADM E GESTORES",
-  "COMERCIAL ERISON":"RAFAEL GOMES",
+  "ADM E GESTORES":"PATRÍCIA",
+  "COMERCIAL DIOU":"DIOU",
+  "COMERCIAL ERISON":"RAFA GOMES",
   "COMERCIAL FRANCISCO BELTRAO":"RAPHAEL FIRMINO",
   "COMERCIAL JEAN":"JEAN CORREA",
   "COMERCIAL KARINA":"KARINA MENDES",
   "COMERCIAL KARINA 54/55":"KARINA MENDES",
-  "COMERCIAL LAURA":"LAURA LIS",
+  "COMERCIAL LAURA":"LAURA SANTOS",
   "COMERCIAL LEANDRO":"MAURO NARDINO",
   "COMERCIAL LISANDRA CAPITAL":"LISANDRA SANTOS",
   "COMERCIAL LISANDRA INTERIOR":"LISANDRA SANTOS",
   "COMERCIAL LOHAYNE":"LOHAYNE MOHANNA",
   "COMERCIAL MARCOS":"MAURO NARDINO",
   "COMERCIAL MAURO":"MAURO NARDINO",
+  "COMERCIAL NATHAN":"MAURO NARDINO",
   "COMERCIAL PATRICIA":"PATRÍCIA",
-  "COMERCIAL RAFAEL GOMES":"RAFAEL GOMES",
+  "COMERCIAL PAULA":"PAULA",
+  "COMERCIAL RAFAEL GOMES":"RAFA GOMES",
   "COMERCIAL RICHIELLE":"RICHIELLE MORAIS",
-  "COMERCIAL RICHIELLE 55":"RICHIELLE MORAIS",
+  "COMERCIAL RICHIELLE 55":"PATRÍCIA",
   "EQUIPE BALNEARIO CAMBORIU":"RICHIELLE MORAIS",
   "EQUIPE CAMPO MOURÃO":"RAPHAEL FIRMINO",
   "EQUIPE CAMPO MOURÃO INTERNO":"LOHAYNE MOHANNA",
@@ -1853,26 +1863,87 @@ const EQUIPES_GESTORES = {
   "EQUIPE CASCAVEL - INTERNO":"LOHAYNE MOHANNA",
   "EQUIPE CHAPECO":"JEAN CORREA",
   "EQUIPE CONECTON":"LISANDRA SANTOS",
-  "EQUIPE CRICIUMA":"RAFAEL GOMES",
+  "EQUIPE CRICIUMA":"RAFA GOMES",
   "EQUIPE CURITIBA - INTERNO":"LISANDRA SANTOS",
   "EQUIPE CXS":"PATRÍCIA",
-  "EQUIPE CXS TEL":"TELECT",
+  "EQUIPE CXS TEL":"PATRÍCIA",
   "EQUIPE ERECHIM":"PATRÍCIA",
   "EQUIPE FOZ DO IGUAÇU":"LOHAYNE MOHANNA",
+  "EQUIPE JOINVILLE":"YAB",
   "EQUIPE KL":"LISANDRA SANTOS",
-  "EQUIPE LIVRAMENTO":"PATRÍCIA",
+  "EQUIPE LIVRAMENTO":"RICHIELLE MORAIS",
   "EQUIPE LONDRINA":"RAPHAEL MARIANO",
   "EQUIPE LONDRINA - INTERNO":"RAPHAEL MARIANO",
   "EQUIPE MARINGA":"GISLAINE",
-  "EQUIPE NH - INTERNO LAURA":"LAURA LIS",
+  "EQUIPE NH - INTERNO LAURA":"LAURA SANTOS",
   "EQUIPE NH - INTERNO MARIA":"MARIA VAZ",
+  "EQUIPE NH - PAULA":"PAULA",
   "EQUIPE PEL":"VAGNER PEREIRA",
-  "EQUIPE PEL 2":"RICHIELLE MORAIS",
+  "EQUIPE PEL 2":"VAGNER PEREIRA",
   "EQUIPE PONTA GROSSA":"BRS",
   "EQUIPE RIO GRANDE":"RICHIELLE MORAIS",
-  "EQUIPE STA CRUZ":"PATRÍCIA",
+  "EQUIPE STA CRUZ":"KARINA MENDES",
   "INSIDE SALES POA - A":"RICHARD REIS",
   "INSIDE SALES POA - B":"RICHARD REIS",
+  "PAP ERECHIM":"PATRÍCIA"
+};
+
+// Nível "Gestor Macro" (acima do Gestor). Equipes que não estavam na planilha de
+// reorg (EQUIPE CASCAVEL - EXECUTIVA, EQUIPE CXS, INSIDE SALES POA - B, PAP ERECHIM)
+// tiveram o Gestor Macro inferido a partir do Gestor Macro já usado por outras
+// equipes do mesmo gestor — vale confirmar com o Raphael.
+const EQUIPES_GESTOR_MACRO = {
+  "ADM E GESTORES":"PATRÍCIA",
+  "COMERCIAL DIOU":"DIOU",
+  "COMERCIAL ERISON":"DIOU",
+  "COMERCIAL FRANCISCO BELTRAO":"RAPHAEL MARIANO",
+  "COMERCIAL JEAN":"DIOU",
+  "COMERCIAL KARINA":"PATRÍCIA",
+  "COMERCIAL KARINA 54/55":"PATRÍCIA",
+  "COMERCIAL LAURA":"PATRÍCIA",
+  "COMERCIAL LEANDRO":"DIOU",
+  "COMERCIAL LISANDRA CAPITAL":"RAPHAEL MARIANO",
+  "COMERCIAL LISANDRA INTERIOR":"RAPHAEL MARIANO",
+  "COMERCIAL LOHAYNE":"RAPHAEL MARIANO",
+  "COMERCIAL MARCOS":"DIOU",
+  "COMERCIAL MAURO":"DIOU",
+  "COMERCIAL NATHAN":"DIOU",
+  "COMERCIAL PATRICIA":"PATRÍCIA",
+  "COMERCIAL PAULA":"PATRÍCIA",
+  "COMERCIAL RAFAEL GOMES":"DIOU",
+  "COMERCIAL RICHIELLE":"PATRÍCIA",
+  "COMERCIAL RICHIELLE 55":"PATRÍCIA",
+  "EQUIPE BALNEARIO CAMBORIU":"DIOU",
+  "EQUIPE CAMPO MOURÃO":"RAPHAEL MARIANO",
+  "EQUIPE CAMPO MOURÃO INTERNO":"RAPHAEL MARIANO",
+  "EQUIPE CANOAS":"PATRÍCIA",
+  "EQUIPE CASCAVEL":"RAPHAEL MARIANO",
+  "EQUIPE CASCAVEL - EXECUTIVA":"RAPHAEL MARIANO",
+  "EQUIPE CASCAVEL - INTERNO":"RAPHAEL MARIANO",
+  "EQUIPE CHAPECO":"DIOU",
+  "EQUIPE CONECTON":"RAPHAEL MARIANO",
+  "EQUIPE CRICIUMA":"DIOU",
+  "EQUIPE CURITIBA - INTERNO":"RAPHAEL MARIANO",
+  "EQUIPE CXS":"PATRÍCIA",
+  "EQUIPE CXS TEL":"PATRÍCIA",
+  "EQUIPE ERECHIM":"PATRÍCIA",
+  "EQUIPE FOZ DO IGUAÇU":"RAPHAEL MARIANO",
+  "EQUIPE JOINVILLE":"DIOU",
+  "EQUIPE KL":"RAPHAEL MARIANO",
+  "EQUIPE LIVRAMENTO":"PATRÍCIA",
+  "EQUIPE LONDRINA":"RAPHAEL MARIANO",
+  "EQUIPE LONDRINA - INTERNO":"RAPHAEL MARIANO",
+  "EQUIPE MARINGA":"RAPHAEL MARIANO",
+  "EQUIPE NH - INTERNO LAURA":"PATRÍCIA",
+  "EQUIPE NH - INTERNO MARIA":"PATRÍCIA",
+  "EQUIPE NH - PAULA":"PATRÍCIA",
+  "EQUIPE PEL":"PATRÍCIA",
+  "EQUIPE PEL 2":"PATRÍCIA",
+  "EQUIPE PONTA GROSSA":"RAPHAEL MARIANO",
+  "EQUIPE RIO GRANDE":"PATRÍCIA",
+  "EQUIPE STA CRUZ":"PATRÍCIA",
+  "INSIDE SALES POA - A":"DIOU",
+  "INSIDE SALES POA - B":"DIOU",
   "PAP ERECHIM":"PATRÍCIA"
 };
 
@@ -3527,8 +3598,41 @@ function popularDropdownTagUnidade() {
   popularDropdownGenerico('dd-content-prod-tag', itens, function(){ atualizarBotaoDropdown('dd-content-prod-tag','#dd-prod-tag .dropdown-btn'); renderProducao(); }, '#dd-prod-tag .dropdown-btn');
 }
 
+// Detecta equipes presentes na base (coluna EQUIPE) que ainda não têm hierarquia
+// atribuída em EQUIPES_ESTADOS/EQUIPES_GESTORES/EQUIPES_GESTOR_MACRO, e avisa na
+// aba Produção para que a hierarquia (Gestor / Gestor Macro / Estado) possa ser
+// atribuída manualmente.
+function verificarEquipesSemHierarquia() {
+  const alertaEl = document.getElementById('prod-equipe-alerta');
+  if (!alertaEl) return;
+
+  const equipesSemHierarquia = new Set();
+  ALL_DATA.forEach(r => {
+    const eq = r['EQUIPE'];
+    if (!eq) return;
+    if (!EQUIPES_ESTADOS[eq] || !EQUIPES_GESTORES[eq] || !EQUIPES_GESTOR_MACRO[eq]) equipesSemHierarquia.add(eq);
+  });
+
+  if (equipesSemHierarquia.size === 0) {
+    alertaEl.innerHTML = '';
+    return;
+  }
+
+  const lista = [...equipesSemHierarquia].sort().map(eq => `<li>${eq}</li>`).join('');
+  alertaEl.innerHTML = `
+    <div style="background:var(--red-sem-bg);border:1px solid var(--red-sem-brd);color:var(--red-sem);
+      border-radius:var(--radius);padding:10px 14px;font-size:12.5px;margin-bottom:12px;">
+      <strong>⚠ Equipe(s) sem hierarquia atribuída (${equipesSemHierarquia.size}):</strong>
+      Aparecem na base mas não estão em <code>EQUIPES_ESTADOS</code>/<code>EQUIPES_GESTORES</code>/<code>EQUIPES_GESTOR_MACRO</code> —
+      até serem atribuídas, seus lançamentos ficam de fora dos filtros de Estado/Gestor/Gestor Macro na Produção.
+      <ul style="margin:6px 0 0 18px;padding:0;">${lista}</ul>
+    </div>`;
+}
+
 function initProducao() {
   if (!ALL_DATA.length) return;
+
+  verificarEquipesSemHierarquia();
 
   // Popula Estado
   const estados = new Set();
