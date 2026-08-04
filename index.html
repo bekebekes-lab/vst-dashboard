@@ -538,7 +538,9 @@
 
   .prod-mom-tri-wrap { display: none; flex-direction: row; gap: 10px; }
   .prod-mom-tri-wrap.visible { display: flex; }
-  .mom-cell, .tri-cell { font-size: 11px; white-space: nowrap; }
+  .prod-meses-wrap { display: none; }
+  .prod-meses-wrap.visible { display: block; }
+  .mom-cell, .tri-cell, .mes-cell { font-size: 11px; white-space: nowrap; }
   .mom-tri-up   { color: var(--green); font-weight: 600; }
   .mom-tri-down { color: var(--red-sem); font-weight: 600; }
   .mom-tri-flat { color: var(--text-3); font-weight: 600; }
@@ -1330,6 +1332,18 @@
         </div>
       </div>
       <div class="prod-status-chips" id="prod-status-chips"></div>
+    </div>
+
+    <!-- COMPARAR MESES -->
+    <div class="prod-status-section prod-meses-wrap" id="prod-meses-wrap">
+      <div class="prod-status-label">
+        <span>Comparar Meses</span>
+        <div style="display:flex;gap:6px">
+          <button class="prod-chip-action" onclick="selecionarTodosMesesComparar()">Selecionar todos</button>
+          <button class="prod-chip-action" onclick="limparMesesComparar()">Limpar</button>
+        </div>
+      </div>
+      <div class="prod-status-chips" id="prod-meses-chips"></div>
     </div>
 
     <!-- RESULTADO -->
@@ -3181,6 +3195,7 @@ let prodVisaoGestor = false;
 let prodStatusSelecionados = new Set();
 let prodExibirMOM = false;
 let prodExibirTRI = false;
+let prodMesesComparar = new Set(); // meses extras marcados no bloco "Comparar Meses", formato "MM/YYYY"
 let prodComparativoReqId = 0;
 const HIST_SHEETS_CACHE = {}; // cache de abas históricas já buscadas (por nome da aba)
 
@@ -3267,8 +3282,13 @@ async function fetchAbaDados(sheetName) {
 //     mesmo quando Ativo/Instalado também está marcado — nesse caso o Ativo
 //     deixa de olhar DATA REF e passa a entrar nessa mesma contagem por CADASTRO.
 //     A contagem é única (não soma duplicado entre os dois status).
-function contarStatusPorTag(rows, filtros, statusSelecionados, cutoffDate) {
+// modoAgregacao: 'tag' (padrão, por unidade) ou 'gestor' (visão Por Gestor).
+// A chave de agregação usada no mapa de saída acompanha a visão ativa na tela,
+// para que o lookup no comparativo (por r.tag, que na visão Por Gestor guarda
+// o nome do gestor) sempre encontre o valor correspondente.
+function contarStatusPorTag(rows, filtros, statusSelecionados, cutoffDate, modoAgregacao) {
   const tagsMap = MAPEAMENTO_TAGS;
+  const porGestor = modoAgregacao === 'gestor';
   const usarAguardando = statusSelecionados.has('Aguardando Instalação');
   const out = {};
   rows.forEach(r => {
@@ -3285,7 +3305,7 @@ function contarStatusPorTag(rows, filtros, statusSelecionados, cutoffDate) {
     const qtd       = parseInt(r['QUANTIDADE']) || 1;
 
     const est = EQUIPES_ESTADOS[equipe] || '';
-    const ges = EQUIPES_GESTORES[equipe] || '';
+    const ges = EQUIPES_GESTORES[equipe] || 'Sem Gestor';
     if (filtros.estado !== 'Todos' && est !== filtros.estado) return;
     if (filtros.gestores && filtros.gestores.length > 0 && !filtros.gestores.includes(ges)) return;
     if (filtros.equipes && filtros.equipes.length > 0 && !filtros.equipes.includes(equipe)) return;
@@ -3296,19 +3316,21 @@ function contarStatusPorTag(rows, filtros, statusSelecionados, cutoffDate) {
     // Grupo: 100% dos lançamentos da coluna GRUPO da base entram em "Geral" (sem exclusão)
     if (filtros.grupo !== 'Geral' && grupo !== filtros.grupo) return;
 
+    const chave = porGestor ? ges : tag;
+
     if (usarAguardando) {
       // Aguardando Instalação sozinho OU combinado com Ativo/Instalado:
       // contagem única por CADASTRO, sem olhar a fila.
       const dataCad = parseDataRefBR(r['CADASTRO']);
       if (dataCad && dataCad.getTime() <= cutoffDate.getTime()) {
-        out[tag] = (out[tag] || 0) + qtd;
+        out[chave] = (out[chave] || 0) + qtd;
       }
     } else {
       // Só Ativo/Instalado selecionado: comportamento original com DATA REF.
       if (fila === 'Ativo/Instalado') {
         const dataRef = parseDataRefBR(r['DATA REF']);
         if (dataRef && dataRef.getTime() <= cutoffDate.getTime()) {
-          out[tag] = (out[tag] || 0) + qtd;
+          out[chave] = (out[chave] || 0) + qtd;
         }
       }
     }
@@ -3316,8 +3338,9 @@ function contarStatusPorTag(rows, filtros, statusSelecionados, cutoffDate) {
   return out;
 }
 
-// Busca e calcula os mapas MOM e/ou TRI (por tag) conforme toggles ativos
-async function calcularComparativos(filtros) {
+// Busca e calcula os mapas MOM e/ou TRI (por tag ou por gestor, conforme
+// modoAgregacao) de acordo com os toggles ativos
+async function calcularComparativos(filtros, modoAgregacao) {
   const resultado = { mom: null, tri: null, momErro: null, triErro: null, triMeses: 0 };
   const mesRef = getMesReferenciaSelecionado();
   const diaCorteBase = getDiaCorteBase();
@@ -3332,7 +3355,7 @@ async function calcularComparativos(filtros) {
         const rows = await fetchAbaDados(nomeAba(alvo.mm, alvo.yyyy));
         const cutoffDia = Math.min(diaCorteBase, diasNoMes(alvo.mm, alvo.yyyy));
         const cutoff = new Date(parseInt(alvo.yyyy), parseInt(alvo.mm) - 1, cutoffDia, 23, 59, 59, 999);
-        resultado.mom = contarStatusPorTag(rows, filtros, statusSelecionados, cutoff);
+        resultado.mom = contarStatusPorTag(rows, filtros, statusSelecionados, cutoff, modoAgregacao);
       } catch (e) {
         resultado.momErro = 'erro ao buscar dados do mês anterior';
       }
@@ -3349,7 +3372,7 @@ async function calcularComparativos(filtros) {
         const rows = await fetchAbaDados(nomeAba(alvo.mm, alvo.yyyy));
         const cutoffDia = Math.min(diaCorteBase, diasNoMes(alvo.mm, alvo.yyyy));
         const cutoff = new Date(parseInt(alvo.yyyy), parseInt(alvo.mm) - 1, cutoffDia, 23, 59, 59, 999);
-        const mapa = contarStatusPorTag(rows, filtros, statusSelecionados, cutoff);
+        const mapa = contarStatusPorTag(rows, filtros, statusSelecionados, cutoff, modoAgregacao);
         Object.keys(mapa).forEach(tag => { somaPorTag[tag] = (somaPorTag[tag] || 0) + mapa[tag]; });
         mesesValidos++;
       } catch (e) { /* ignora este mês em caso de erro de rede */ }
@@ -3364,6 +3387,35 @@ async function calcularComparativos(filtros) {
     }
   }
 
+  return resultado;
+}
+
+// Busca e calcula, para cada mês marcado no bloco "Comparar Meses", o mapa de
+// contagem (por tag ou por gestor, conforme modoAgregacao) usando a mesma
+// regra do MOM/TRI: Ativo/Instalado via DATA REF para qualquer produto, e
+// Ativo+Aguardando via CADASTRO só quando o Grupo de Produto for NET PJ - VIRTUA
+// (essa restrição já vem de apenasAtivoSelecionado(), que controla se o bloco
+// aparece habilitado).
+async function calcularComparativoMeses(filtros, modoAgregacao, meses) {
+  const resultado = {}; // "MM/YYYY" -> { mapa, erro }
+  const diaCorteBase = getDiaCorteBase();
+  const statusSelecionados = new Set(prodStatusSelecionados);
+
+  for (const chave of meses) {
+    const [mm, yyyy] = chave.split('/');
+    if (!abaExiste(mm, yyyy)) {
+      resultado[chave] = { mapa: null, erro: `aba de ${mm}/${yyyy} não encontrada na planilha` };
+      continue;
+    }
+    try {
+      const rows = await fetchAbaDados(nomeAba(mm, yyyy));
+      const cutoffDia = Math.min(diaCorteBase, diasNoMes(mm, yyyy));
+      const cutoff = new Date(parseInt(yyyy), parseInt(mm) - 1, cutoffDia, 23, 59, 59, 999);
+      resultado[chave] = { mapa: contarStatusPorTag(rows, filtros, statusSelecionados, cutoff, modoAgregacao), erro: null };
+    } catch (e) {
+      resultado[chave] = { mapa: null, erro: `erro ao buscar dados de ${mm}/${yyyy}` };
+    }
+  }
   return resultado;
 }
 
@@ -3432,13 +3484,68 @@ function apenasAtivoSelecionado() {
 
 function atualizarVisibilidadeMomTri() {
   const wrap = document.getElementById('prod-mom-tri-wrap');
+  const wrapMeses = document.getElementById('prod-meses-wrap');
   const habilitado = apenasAtivoSelecionado();
   wrap.classList.toggle('visible', habilitado);
-  if (!habilitado) {
+  wrapMeses.classList.toggle('visible', habilitado);
+  if (habilitado) {
+    popularMesesComparar();
+  } else {
     // Desliga os toggles quando saem do modo "somente Ativo/Instalado"
     if (prodExibirMOM) { prodExibirMOM = false; document.getElementById('prod-toggle-mom').classList.remove('active'); }
     if (prodExibirTRI) { prodExibirTRI = false; document.getElementById('prod-toggle-tri').classList.remove('active'); }
+    if (prodMesesComparar.size > 0) {
+      prodMesesComparar.clear();
+      document.querySelectorAll('.prod-chip[data-mes]').forEach(el => el.classList.remove('selected'));
+    }
   }
+}
+
+const MESES_LABEL_CURTO = { '01':'Jan','02':'Fev','03':'Mar','04':'Abr','05':'Mai','06':'Jun','07':'Jul','08':'Ago','09':'Set','10':'Out','11':'Nov','12':'Dez' };
+
+// Popula os chips do bloco "Comparar Meses" com as abas históricas disponíveis
+// na planilha (window.ABAS_HISTORICO), excluindo o mês atualmente selecionado
+// no seletor de topo (não faz sentido comparar um mês contra ele mesmo).
+// Preserva a seleção anterior para os meses que continuam disponíveis.
+function popularMesesComparar() {
+  const chipsEl = document.getElementById('prod-meses-chips');
+  if (!chipsEl) return;
+  const mesRef = getMesReferenciaSelecionado();
+  const meses = (window.ABAS_HISTORICO || []).filter(a => !(a.mm === mesRef.mm && a.yyyy === mesRef.yyyy));
+  const selecionadosAntes = new Set(prodMesesComparar);
+  prodMesesComparar.clear();
+  chipsEl.innerHTML = meses.map(a => {
+    const chave = `${a.mm}/${a.yyyy}`;
+    const sel = selecionadosAntes.has(chave);
+    if (sel) prodMesesComparar.add(chave);
+    const label = `${MESES_LABEL_CURTO[a.mm] || a.mm}/${a.yyyy}`;
+    return `<div class="prod-chip${sel ? ' selected' : ''}" data-mes="${chave}" onclick="toggleMesComparar('${chave}',this)">${label}</div>`;
+  }).join('');
+}
+
+function toggleMesComparar(chave, el) {
+  if (prodMesesComparar.has(chave)) {
+    prodMesesComparar.delete(chave);
+    el.classList.remove('selected');
+  } else {
+    prodMesesComparar.add(chave);
+    el.classList.add('selected');
+  }
+  renderProducao();
+}
+
+function selecionarTodosMesesComparar() {
+  document.querySelectorAll('.prod-chip[data-mes]').forEach(el => {
+    prodMesesComparar.add(el.dataset.mes);
+    el.classList.add('selected');
+  });
+  renderProducao();
+}
+
+function limparMesesComparar() {
+  prodMesesComparar.clear();
+  document.querySelectorAll('.prod-chip[data-mes]').forEach(el => el.classList.remove('selected'));
+  renderProducao();
 }
 
 function toggleStatusChip(status, el) {
@@ -4083,16 +4190,26 @@ async function renderProducao() {
 
   const fmtRec = v => 'R$ ' + (v/100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-  // ─── Comparativo MOM/TRI (só quando a seleção de status é Ativo/Instalado e/ou Aguardando Instalação) ─
+  // ─── Comparativo MOM/TRI/Meses (só quando a seleção de status é Ativo/Instalado e/ou Aguardando Instalação) ─
+  const modoAgregacao = prodVisaoGestor ? 'gestor' : 'tag';
   const mostrarComparativo = apenasAtivoSelecionado() && (prodExibirMOM || prodExibirTRI);
+  const mostrarMeses = apenasAtivoSelecionado() && prodMesesComparar.size > 0;
   let comparativo = { mom: null, tri: null, momErro: null, triErro: null, triMeses: 0 };
+  let comparativoMeses = {};
+  // Ordena os meses selecionados cronologicamente (mais antigo → mais recente)
+  const mesesOrdenados = [...prodMesesComparar].sort((a, b) => {
+    const [ma, ya] = a.split('/'); const [mb, yb] = b.split('/');
+    return (ya + ma).localeCompare(yb + mb);
+  });
 
-  if (mostrarComparativo) {
-    resultArea.innerHTML = '<div class="prod-empty">Calculando comparativo MOM/TRI...</div>';
+  if (mostrarComparativo || mostrarMeses) {
+    resultArea.innerHTML = '<div class="prod-empty">Calculando comparativo...</div>';
     const filtros = { estado: filtroEstado, gestores: gestoresChecked, equipes: equipesChecked, consultores: consultoresChecked, uf: filtroUFBL, ufCliente: filtroUFCliente, ddd: filtroDDD, grupo: filtroGrupo };
     const idRequisicao = ++prodComparativoReqId;
-    comparativo = await calcularComparativos(filtros);
+    if (mostrarComparativo) comparativo = await calcularComparativos(filtros, modoAgregacao);
     if (idRequisicao !== prodComparativoReqId) return; // uma nova chamada substituiu esta
+    if (mostrarMeses) comparativoMeses = await calcularComparativoMeses(filtros, modoAgregacao, mesesOrdenados);
+    if (idRequisicao !== prodComparativoReqId) return;
   }
 
   const rowspanReceita = prodExibirReceita ? ' rowspan="2"' : '';
@@ -4111,13 +4228,22 @@ async function renderProducao() {
     + (prodExibirTRI ? `<th${rowspanReceita}${!prodExibirMOM ? ' style="border-left:2px solid rgba(255,255,255,0.3)"' : ''}>TRI</th>` : '')
     : '';
 
+  const thMeses = mostrarMeses
+    ? mesesOrdenados.map((chave, i) => {
+        const [mm, yyyy] = chave.split('/');
+        const label = `${MESES_LABEL_CURTO[mm] || mm}/${yyyy}`;
+        const primeira = i === 0 && !mostrarComparativo;
+        return `<th${rowspanReceita}${primeira ? ' style="border-left:2px solid rgba(255,255,255,0.3)"' : ''}>${label}</th>`;
+      }).join('')
+    : '';
+
   const thTotal = prodExibirReceita
     ? `<th colspan="2" style="border-left:2px solid rgba(255,255,255,0.3)">Total</th>`
     : `<th style="border-left:2px solid rgba(255,255,255,0.3)">Total</th>`;
 
-  // Células de comparativo por linha (unidade)
+  // Células de comparativo por linha (unidade ou gestor, conforme a visão ativa)
   const linhaComparativo = (r) => {
-    if (!mostrarComparativo) return '';
+    if (!mostrarComparativo && !mostrarMeses) return '';
     let html = '';
     if (prodExibirMOM) {
       if (comparativo.momErro) {
@@ -4136,6 +4262,20 @@ async function renderProducao() {
         const v = formatVariacao(r.totalQtd, anterior);
         html += `<td class="tri-cell ${v.classe}"${!prodExibirMOM ? ' style="border-left:2px solid var(--border)"' : ''}>${anterior.toLocaleString('pt-BR',{maximumFractionDigits:1})}<br><span>${v.texto}</span></td>`;
       }
+    }
+    if (mostrarMeses) {
+      mesesOrdenados.forEach((chave, i) => {
+        const primeira = i === 0 && !mostrarComparativo;
+        const borda = primeira ? ' style="border-left:2px solid var(--border)"' : '';
+        const dados = comparativoMeses[chave];
+        if (!dados || dados.erro) {
+          html += `<td class="mes-cell prod-cell-zero"${borda}>—</td>`;
+        } else {
+          const anterior = dados.mapa?.[r.tag] || 0;
+          const v = formatVariacao(r.totalQtd, anterior);
+          html += `<td class="mes-cell ${v.classe}"${borda}>${anterior.toLocaleString('pt-BR')}<br><span>${v.texto}</span></td>`;
+        }
+      });
     }
     return html;
   };
@@ -4162,6 +4302,20 @@ async function renderProducao() {
       }
     }
   }
+  if (mostrarMeses) {
+    mesesOrdenados.forEach((chave, i) => {
+      const primeira = i === 0 && !mostrarComparativo;
+      const borda = primeira ? ' style="border-left:2px solid rgba(255,255,255,0.3)"' : '';
+      const dados = comparativoMeses[chave];
+      if (!dados || dados.erro) {
+        totalComparativoHtml += `<td class="prod-cell-zero"${borda}>—</td>`;
+      } else {
+        const totalAnterior = linhas.reduce((s, r) => s + (dados.mapa?.[r.tag] || 0), 0);
+        const v = formatVariacao(totalGeralQtd, totalAnterior);
+        totalComparativoHtml += `<td${borda}>${totalAnterior.toLocaleString('pt-BR')} <span style="font-size:10px">${v.texto}</span></td>`;
+      }
+    });
+  }
 
   // Avisos sobre meses não encontrados na planilha
   const avisos = [];
@@ -4170,13 +4324,21 @@ async function renderProducao() {
   if (mostrarComparativo && prodExibirTRI && !comparativo.triErro && comparativo.triMeses < 3) {
     avisos.push(`TRI: média calculada com ${comparativo.triMeses} de 3 meses disponíveis`);
   }
+  if (mostrarMeses) {
+    mesesOrdenados.forEach(chave => {
+      const dados = comparativoMeses[chave];
+      if (dados && dados.erro) avisos.push(dados.erro);
+    });
+  }
   const avisoHtml = avisos.length
     ? `<div class="prod-empty" style="margin-bottom:10px;font-size:11px;color:var(--red-sem)">${avisos.join(' · ')}</div>`
     : '';
 
-  const badgeComparativo = mostrarComparativo
-    ? ` · comparando contra ${prodExibirMOM ? 'mês anterior' : ''}${prodExibirMOM && prodExibirTRI ? ' e ' : ''}${prodExibirTRI ? `média do trimestre (${comparativo.triMeses} meses)` : ''}`
-    : '';
+  const partesBadge = [];
+  if (prodExibirMOM) partesBadge.push('mês anterior');
+  if (prodExibirTRI) partesBadge.push(`média do trimestre (${comparativo.triMeses} meses)`);
+  if (mostrarMeses) partesBadge.push(`${mesesOrdenados.length} mês(es) selecionado(s)`);
+  const badgeComparativo = partesBadge.length ? ` · comparando contra ${partesBadge.join(' e ')}` : '';
 
   const tituloVisao = prodVisaoGestor ? 'Produção por Gestor' : 'Produção por Unidade';
   const colunaVisao = prodVisaoGestor ? 'Gestor' : 'Unidade';
@@ -4194,6 +4356,7 @@ async function renderProducao() {
             <th rowspan="${prodExibirReceita ? 2 : 1}" style="vertical-align:middle;text-align:left">${colunaVisao}</th>
             ${thStatus}
             ${thComparativo}
+            ${thMeses}
             ${thTotal}
           </tr>
           ${prodExibirReceita ? `<tr>${thSub}<th style="font-size:9px;border-left:2px solid rgba(255,255,255,0.3)">Qtd</th><th style="font-size:9px">Receita</th></tr>` : ''}
