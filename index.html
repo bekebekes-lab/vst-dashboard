@@ -1817,7 +1817,7 @@ const EQUIPES_ESTADOS = {
   "EQUIPE CAMPO MOURÃO":"PR",
   "EQUIPE CAMPO MOURÃO INTERNO":"PR",
   "EQUIPE CANOAS":"RS",
-  "EQUIPE CANOAS – ERON":"RS",
+  "EQUIPE CANOAS - ERON":"RS",
   "EQUIPE CASCAVEL":"PR",
   "EQUIPE CASCAVEL - EXECUTIVA":"PR",
   "EQUIPE CASCAVEL - INTERNO":"PR",
@@ -1873,7 +1873,7 @@ const EQUIPES_GESTORES = {
   "EQUIPE CAMPO MOURÃO":"RAPHAEL FIRMINO",
   "EQUIPE CAMPO MOURÃO INTERNO":"LOHAYNE MOHANNA",
   "EQUIPE CANOAS":"YAB",
-  "EQUIPE CANOAS – ERON":"YAB",
+  "EQUIPE CANOAS - ERON":"YAB",
   "EQUIPE CASCAVEL":"RAPHAEL FIRMINO",
   "EQUIPE CASCAVEL - EXECUTIVA":"LOHAYNE MOHANNA",
   "EQUIPE CASCAVEL - INTERNO":"LOHAYNE MOHANNA",
@@ -1933,7 +1933,7 @@ const EQUIPES_GESTOR_MACRO = {
   "EQUIPE CAMPO MOURÃO":"RAPHAEL MARIANO",
   "EQUIPE CAMPO MOURÃO INTERNO":"RAPHAEL MARIANO",
   "EQUIPE CANOAS":"PATRÍCIA",
-  "EQUIPE CANOAS – ERON":"PATRÍCIA",
+  "EQUIPE CANOAS - ERON":"PATRÍCIA",
   "EQUIPE CASCAVEL":"RAPHAEL MARIANO",
   "EQUIPE CASCAVEL - EXECUTIVA":"RAPHAEL MARIANO",
   "EQUIPE CASCAVEL - INTERNO":"RAPHAEL MARIANO",
@@ -1968,6 +1968,17 @@ let ALL_DATA = [];
 let headers = [];
 let sortCol = 'GERAL';
 let sortAsc = false;
+
+// Normaliza o nome da equipe vindo da planilha: colapsa espaços duplicados e
+// converte qualquer variação de traço (en dash –, em dash —, minus −, etc.)
+// para o hífen padrão "-", para bater com as chaves de EQUIPES_ESTADOS/
+// EQUIPES_GESTORES/EQUIPES_GESTOR_MACRO independentemente de como o traço foi
+// digitado na planilha.
+function normalizarNomeEquipe(s) {
+  return (s || '').toString().trim()
+    .replace(/[\u2010-\u2015\u2212]/g, '-')
+    .replace(/\s+/g, ' ');
+}
 
 function getGrupoKey(g) {
   const gu = (g || '').trim().toUpperCase().replace(/[\u2010-\u2015]/g, '-'); // normaliza travessão/en-dash para hífen
@@ -2024,7 +2035,7 @@ async function loadData() {
     headers = rows[0];
     ALL_DATA = rows.slice(1).map(r => {
       let obj = {};
-      headers.forEach((h, i) => obj[h] = (r[i] || '').toString().trim());
+      headers.forEach((h, i) => obj[h] = h === 'EQUIPE' ? normalizarNomeEquipe(r[i]) : (r[i] || '').toString().trim());
       return obj;
     });
 
