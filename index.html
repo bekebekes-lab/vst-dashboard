@@ -2149,51 +2149,52 @@ function buildFilters() {
   fillSelect('f-tag', ['Todas', ...[...tags].sort()]);
 }
 
+// ─── Cascata Gerencial: Estado → Gestor → Equipe → Consultor/Tag ───────────
+// Chamada sempre que Estado, Gestor ou Equipe mudam. Recalcula em cadeia as
+// opções disponíveis nos níveis abaixo, preservando seleções que ainda são
+// válidas (popularDropdownGenerico já limpa sozinho o que ficou fora de escopo).
+function atualizarCascataGerencial() {
+  const estado = document.getElementById('f-estado')?.value || 'Todos';
+
+  // 1) Equipes dentro do Estado selecionado (ou todas, se "Todos")
+  const equipesEstado = estado === 'Todos'
+    ? _fEquipeItens
+    : _fEquipeItens.filter(eq => EQUIPES_ESTADOS[eq] === estado);
+
+  // 2) Gestores disponíveis dentro desse recorte de Estado
+  const gestoresDisponiveis = [...new Set(equipesEstado.map(eq => EQUIPES_GESTORES[eq]).filter(Boolean))]
+    .filter(g => _fGestorItens.includes(g))
+    .sort();
+  popularDropdownFGestor(gestoresDisponiveis);
+
+  // 3) Equipes disponíveis dentro do Estado E dos Gestores selecionados (se houver)
+  const gestoresSel = getCheckedValuesDd('dd-content-f-gestor'); // [] = Todos
+  const equipesDisponiveis = gestoresSel.length > 0
+    ? equipesEstado.filter(eq => gestoresSel.includes(EQUIPES_GESTORES[eq]))
+    : equipesEstado;
+  _fEquipeItensEscopo = equipesDisponiveis;
+  popularDropdownFEquipe(equipesDisponiveis);
+
+  // 4) Consultor/Tag: com base nas equipes efetivamente selecionadas (ou no
+  // recorte disponível, se nenhuma equipe específica estiver marcada)
+  const equipesSel = getCheckedValuesDd('dd-content-f-equipe'); // [] = Todas
+  const equipesFinal = equipesSel.length > 0 ? equipesSel : equipesDisponiveis;
+  const consultoresSet = new Set();
+  const tagsSet = new Set();
+  ALL_DATA.forEach(r => {
+    if (equipesFinal.includes(r['EQUIPE'])) {
+      if (r['PROPRIETÁRIO DO PEDIDO']) consultoresSet.add(r['PROPRIETÁRIO DO PEDIDO']);
+      if (r['TAGS ATIVIDADE']) tagsSet.add(r['TAGS ATIVIDADE']);
+    }
+  });
+  fillSelect('f-consultor', ['Todos', ...[...consultoresSet].sort()]);
+  fillSelect('f-tag', ['Todas', ...[...tagsSet].sort()]);
+}
+
 function popularDropdownFGestor(itens) {
   window._ddOnChange_dd_content_f_gestor = function(){
     atualizarBotaoDropdown('dd-content-f-gestor','#dd-f-gestor .dropdown-btn');
-    // Cascata: ao selecionar gestor(es), restringe Equipe e Consultor ao escopo
-    const gestoresSel = getCheckedValuesDd('dd-content-f-gestor'); // [] = Todos
-    if (gestoresSel.length > 0) {
-      // Calcula equipes permitidas para os gestores selecionados
-      const equipesPermitidas = new Set();
-      Object.entries(EQUIPES_GESTORES).forEach(([eq, ges]) => {
-        if (gestoresSel.includes(ges)) equipesPermitidas.add(eq);
-      });
-      const equipesArr = [...equipesPermitidas].filter(eq => _fEquipeItens.includes(eq)).sort();
-      _fEquipeItensEscopo = equipesArr;
-      popularDropdownFEquipe(equipesArr);
-      // Limpa seleção de equipe que ficou fora do escopo
-      const equipeSel = getCheckedValuesDd('dd-content-f-equipe');
-      const equipesFora = equipeSel.filter(e => !equipesPermitidas.has(e));
-      if (equipesFora.length > 0) {
-        _ddState['dd-content-f-equipe'] = null;
-        popularDropdownFEquipe(equipesArr);
-      }
-      // Restringe consultores ao escopo dos gestores selecionados
-      const consultoresSet = new Set();
-      const tagsSet = new Set();
-      ALL_DATA.forEach(r => {
-        if (equipesPermitidas.has(r['EQUIPE'])) {
-          if (r['PROPRIETÁRIO DO PEDIDO']) consultoresSet.add(r['PROPRIETÁRIO DO PEDIDO']);
-          if (r['TAGS ATIVIDADE']) tagsSet.add(r['TAGS ATIVIDADE']);
-        }
-      });
-      fillSelect('f-consultor', ['Todos', ...[...consultoresSet].sort()]);
-      fillSelect('f-tag', ['Todas', ...[...tagsSet].sort()]);
-    } else {
-      // Nenhum gestor selecionado (Todos): restaura listas completas
-      _fEquipeItensEscopo = null;
-      popularDropdownFEquipe(_fEquipeItens);
-      const consultoresAll = new Set();
-      const tagsAll = new Set();
-      ALL_DATA.forEach(r => {
-        if (r['PROPRIETÁRIO DO PEDIDO']) consultoresAll.add(r['PROPRIETÁRIO DO PEDIDO']);
-        if (r['TAGS ATIVIDADE']) tagsAll.add(r['TAGS ATIVIDADE']);
-      });
-      fillSelect('f-consultor', ['Todos', ...[...consultoresAll].sort()]);
-      fillSelect('f-tag', ['Todas', ...[...tagsAll].sort()]);
-    }
+    atualizarCascataGerencial();
     render();
   };
   ddRegisterCallback('dd-content-f-gestor', window._ddOnChange_dd_content_f_gestor);
@@ -2203,48 +2204,7 @@ function popularDropdownFGestor(itens) {
 function popularDropdownFEquipe(itens) {
   window._ddOnChange_dd_content_f_equipe = function(){
     atualizarBotaoDropdown('dd-content-f-equipe','#dd-f-equipe .dropdown-btn');
-    // Cascata: restringe Consultor e Tag às equipes selecionadas
-    const equipesSel = getCheckedValuesDd('dd-content-f-equipe'); // [] = Todas
-    if (equipesSel.length > 0) {
-      const consultoresSet = new Set();
-      const tagsSet = new Set();
-      ALL_DATA.forEach(r => {
-        if (equipesSel.includes(r['EQUIPE'])) {
-          if (r['PROPRIETÁRIO DO PEDIDO']) consultoresSet.add(r['PROPRIETÁRIO DO PEDIDO']);
-          if (r['TAGS ATIVIDADE']) tagsSet.add(r['TAGS ATIVIDADE']);
-        }
-      });
-      fillSelect('f-consultor', ['Todos', ...[...consultoresSet].sort()]);
-      fillSelect('f-tag', ['Todas', ...[...tagsSet].sort()]);
-    } else {
-      // Nenhuma equipe específica: usa escopo do gestor (se tiver) ou tudo
-      const gestoresSel = getCheckedValuesDd('dd-content-f-gestor');
-      if (gestoresSel.length > 0) {
-        const equipesGestor = new Set();
-        Object.entries(EQUIPES_GESTORES).forEach(([eq, ges]) => {
-          if (gestoresSel.includes(ges)) equipesGestor.add(eq);
-        });
-        const consultoresSet = new Set();
-        const tagsSet = new Set();
-        ALL_DATA.forEach(r => {
-          if (equipesGestor.has(r['EQUIPE'])) {
-            if (r['PROPRIETÁRIO DO PEDIDO']) consultoresSet.add(r['PROPRIETÁRIO DO PEDIDO']);
-            if (r['TAGS ATIVIDADE']) tagsSet.add(r['TAGS ATIVIDADE']);
-          }
-        });
-        fillSelect('f-consultor', ['Todos', ...[...consultoresSet].sort()]);
-        fillSelect('f-tag', ['Todas', ...[...tagsSet].sort()]);
-      } else {
-        const consultoresAll = new Set();
-        const tagsAll = new Set();
-        ALL_DATA.forEach(r => {
-          if (r['PROPRIETÁRIO DO PEDIDO']) consultoresAll.add(r['PROPRIETÁRIO DO PEDIDO']);
-          if (r['TAGS ATIVIDADE']) tagsAll.add(r['TAGS ATIVIDADE']);
-        });
-        fillSelect('f-consultor', ['Todos', ...[...consultoresAll].sort()]);
-        fillSelect('f-tag', ['Todas', ...[...tagsAll].sort()]);
-      }
-    }
+    atualizarCascataGerencial();
     render();
   };
   ddRegisterCallback('dd-content-f-equipe', window._ddOnChange_dd_content_f_equipe);
@@ -2279,10 +2239,8 @@ function fillSelect(id, opts) {
 }
 
 function onFilterChange(level) {
-  // Gestor e Equipe agora são dropdowns de checkbox independentes (não fazem
-  // mais cascata a partir do Estado) — a lista completa já é populada em
-  // buildFilters(). O Consultor continua sendo recalculado com base em todos
-  // os filtros ativos no momento do render().
+  // Estado dispara a cascata: recalcula Gestor → Equipe → Consultor/Tag.
+  if (level === 'estado') atualizarCascataGerencial();
   render();
 }
 
@@ -3771,7 +3729,8 @@ function initProducao() {
 
   // Popula Gestor (checkbox multi), Equipe (checkbox multi) e Consultor (checkbox multi), com cascata
   _prodEquipeItens = [...equipes].sort();
-  popularDropdownProdGestor([...gestores].sort());
+  _prodGestorItens = [...gestores].sort();
+  popularDropdownProdGestor(_prodGestorItens);
   popularDropdownEquipe(_prodEquipeItens);
   const consultores = new Set();
   ALL_DATA.forEach(r => { if (r['PROPRIETÁRIO DO PEDIDO']) consultores.add(r['PROPRIETÁRIO DO PEDIDO']); });
@@ -3826,13 +3785,8 @@ function fillProdSelect(id, opts) {
   if (opts.includes(cur)) sel.value = cur;
 }
 
-function popularDropdownEquipe(equipes) {
-  ddRegisterCallback('dd-content-prod-equipe', function(){ atualizarBotaoDropdown('dd-content-prod-equipe','#dd-prod-equipe .dropdown-btn'); renderProducao(); });
-  window._ddOnChange_dd_content_prod_equipe = function(){ atualizarBotaoDropdown('dd-content-prod-equipe','#dd-prod-equipe .dropdown-btn'); renderProducao(); };
-  popularDropdownGenerico('dd-content-prod-equipe', equipes, function(){ atualizarBotaoDropdown('dd-content-prod-equipe','#dd-prod-equipe .dropdown-btn'); renderProducao(); }, '#dd-prod-equipe .dropdown-btn');
-}
-
 function onProdFilterChange(level) {
+  if (level === 'estado') atualizarCascataProducao();
   renderProducao();
 }
 
@@ -3840,37 +3794,44 @@ function onProdFilterChange(level) {
 let _prodGestorItens = [];
 let _prodEquipeItens = [];
 
+// ─── Cascata Produção: Estado → Gestor → Equipe → Consultor ────────────────
+function atualizarCascataProducao() {
+  const estado = document.getElementById('prod-estado')?.value || 'Todos';
+
+  // 1) Equipes dentro do Estado selecionado (ou todas, se "Todos")
+  const equipesEstado = estado === 'Todos'
+    ? _prodEquipeItens
+    : _prodEquipeItens.filter(eq => EQUIPES_ESTADOS[eq] === estado);
+
+  // 2) Gestores disponíveis dentro desse recorte de Estado
+  const gestoresDisponiveis = [...new Set(equipesEstado.map(eq => EQUIPES_GESTORES[eq]).filter(Boolean))]
+    .filter(g => _prodGestorItens.includes(g))
+    .sort();
+  popularDropdownProdGestor(gestoresDisponiveis);
+
+  // 3) Equipes disponíveis dentro do Estado E dos Gestores selecionados (se houver)
+  const gestoresSel = getCheckedValuesDd('dd-content-prod-gestor');
+  const equipesDisponiveis = gestoresSel.length > 0
+    ? equipesEstado.filter(eq => gestoresSel.includes(EQUIPES_GESTORES[eq]))
+    : equipesEstado;
+  popularDropdownEquipe(equipesDisponiveis);
+
+  // 4) Consultor: com base nas equipes efetivamente selecionadas (ou no
+  // recorte disponível, se nenhuma equipe específica estiver marcada)
+  const equipesSel = getCheckedValuesDd('dd-content-prod-equipe');
+  const equipesFinal = equipesSel.length > 0 ? equipesSel : equipesDisponiveis;
+  const consultoresSet = new Set();
+  ALL_DATA.forEach(r => {
+    if (equipesFinal.includes(r['EQUIPE']) && r['PROPRIETÁRIO DO PEDIDO'])
+      consultoresSet.add(r['PROPRIETÁRIO DO PEDIDO']);
+  });
+  _popularProdConsultorLista([...consultoresSet].sort());
+}
+
 function popularDropdownProdGestor(gestores) {
-  _prodGestorItens = gestores;
   window._ddOnChange_dd_content_prod_gestor = function(){
     atualizarBotaoDropdown('dd-content-prod-gestor','#dd-prod-gestor .dropdown-btn');
-    // Cascata: Gestor → Equipe e Consultor
-    const gestoresSel = getCheckedValuesDd('dd-content-prod-gestor');
-    if (gestoresSel.length > 0) {
-      const equipesPermitidas = new Set();
-      Object.entries(EQUIPES_GESTORES).forEach(([eq, ges]) => {
-        if (gestoresSel.includes(ges)) equipesPermitidas.add(eq);
-      });
-      const equipesArr = [...equipesPermitidas].filter(eq => _prodEquipeItens.includes(eq)).sort();
-      // Limpa equipes/consultores fora do escopo
-      const equipesSel = getCheckedValuesDd('dd-content-prod-equipe');
-      const equipesFora = equipesSel.filter(e => !equipesPermitidas.has(e));
-      if (equipesFora.length > 0) _ddState['dd-content-prod-equipe'] = null;
-      popularDropdownEquipe(equipesArr);
-      // Restringe consultores ao escopo
-      const consultoresSet = new Set();
-      ALL_DATA.forEach(r => {
-        if (equipesPermitidas.has(r['EQUIPE']) && r['PROPRIETÁRIO DO PEDIDO'])
-          consultoresSet.add(r['PROPRIETÁRIO DO PEDIDO']);
-      });
-      _popularProdConsultorLista([...consultoresSet].sort());
-    } else {
-      // Todos os gestores: restaura listas completas
-      popularDropdownEquipe(_prodEquipeItens);
-      const consultoresAll = new Set();
-      ALL_DATA.forEach(r => { if (r['PROPRIETÁRIO DO PEDIDO']) consultoresAll.add(r['PROPRIETÁRIO DO PEDIDO']); });
-      _popularProdConsultorLista([...consultoresAll].sort());
-    }
+    atualizarCascataProducao();
     renderProducao();
   };
   ddRegisterCallback('dd-content-prod-gestor', window._ddOnChange_dd_content_prod_gestor);
@@ -3880,36 +3841,7 @@ function popularDropdownProdGestor(gestores) {
 function popularDropdownEquipe(equipes) {
   window._ddOnChange_dd_content_prod_equipe = function(){
     atualizarBotaoDropdown('dd-content-prod-equipe','#dd-prod-equipe .dropdown-btn');
-    // Cascata: Equipe → Consultor
-    const equipesSel = getCheckedValuesDd('dd-content-prod-equipe');
-    const equipesEscopo = equipesSel.length > 0 ? new Set(equipesSel) : null;
-    if (equipesEscopo) {
-      const consultoresSet = new Set();
-      ALL_DATA.forEach(r => {
-        if (equipesEscopo.has(r['EQUIPE']) && r['PROPRIETÁRIO DO PEDIDO'])
-          consultoresSet.add(r['PROPRIETÁRIO DO PEDIDO']);
-      });
-      _popularProdConsultorLista([...consultoresSet].sort());
-    } else {
-      // Sem equipe selecionada: respeita escopo do gestor (se houver)
-      const gestoresSel = getCheckedValuesDd('dd-content-prod-gestor');
-      if (gestoresSel.length > 0) {
-        const equipesGestor = new Set();
-        Object.entries(EQUIPES_GESTORES).forEach(([eq, ges]) => {
-          if (gestoresSel.includes(ges)) equipesGestor.add(eq);
-        });
-        const consultoresSet = new Set();
-        ALL_DATA.forEach(r => {
-          if (equipesGestor.has(r['EQUIPE']) && r['PROPRIETÁRIO DO PEDIDO'])
-            consultoresSet.add(r['PROPRIETÁRIO DO PEDIDO']);
-        });
-        _popularProdConsultorLista([...consultoresSet].sort());
-      } else {
-        const consultoresAll = new Set();
-        ALL_DATA.forEach(r => { if (r['PROPRIETÁRIO DO PEDIDO']) consultoresAll.add(r['PROPRIETÁRIO DO PEDIDO']); });
-        _popularProdConsultorLista([...consultoresAll].sort());
-      }
-    }
+    atualizarCascataProducao();
     renderProducao();
   };
   ddRegisterCallback('dd-content-prod-equipe', window._ddOnChange_dd_content_prod_equipe);
