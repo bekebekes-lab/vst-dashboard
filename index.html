@@ -5418,22 +5418,16 @@ function aplicarPermissoes() {
           .filter(([eq, ges]) => USUARIO_ATUAL.gestores_ref.includes(ges))
           .map(([eq]) => EQUIPES_ESTADOS[eq])
           .filter(Boolean)
-      )];
-      if (estadosMacro2.length === 1) {
-        // Estado único → trava o select
+      )].sort();
+      if (estadosMacro2.length >= 1) {
         const selEst = document.getElementById('f-estado');
         if (selEst) {
+          // Repopula com as options corretas e então trava
+          fillSelect('f-estado', estadosMacro2);
           selEst.value = estadosMacro2[0];
           selEst.disabled = true;
           selEst.style.opacity = '0.5';
           selEst.style.pointerEvents = 'none';
-        }
-      } else if (estadosMacro2.length > 1) {
-        // Múltiplos estados → remove "Todos" e mantém só os permitidos, mas não desabilita
-        const selEst = document.getElementById('f-estado');
-        if (selEst) {
-          fillSelect('f-estado', estadosMacro2.sort());
-          selEst.value = estadosMacro2[0];
         }
       }
       restringirListasGerencial(USUARIO_ATUAL.gestores_ref, null);
@@ -5449,22 +5443,16 @@ function aplicarPermissoes() {
       // Inferir estados permitidos a partir das equipes travadas
       const estadosSupervisao = [...new Set(
         USUARIO_ATUAL.equipes_ref.map(eq => EQUIPES_ESTADOS[eq]).filter(Boolean)
-      )];
-      if (estadosSupervisao.length === 1) {
-        // Estado único → trava o select
+      )].sort();
+      if (estadosSupervisao.length >= 1) {
         const selEst = document.getElementById('f-estado');
         if (selEst) {
+          // Repopula com as options corretas e então trava
+          fillSelect('f-estado', estadosSupervisao);
           selEst.value = estadosSupervisao[0];
           selEst.disabled = true;
           selEst.style.opacity = '0.5';
           selEst.style.pointerEvents = 'none';
-        }
-      } else if (estadosSupervisao.length > 1) {
-        // Múltiplos estados → restringe opções, mas não desabilita
-        const selEst = document.getElementById('f-estado');
-        if (selEst) {
-          fillSelect('f-estado', estadosSupervisao.sort());
-          selEst.value = estadosSupervisao[0];
         }
       }
       restringirListasGerencial(null, USUARIO_ATUAL.equipes_ref);
@@ -5527,16 +5515,13 @@ function aplicarTravaProducao() {
 
   const travarProdEstado = (estadosPermitidos) => {
     const selEst = document.getElementById('prod-estado');
-    if (!selEst) return;
-    if (estadosPermitidos.length === 1) {
-      selEst.value = estadosPermitidos[0];
-      selEst.disabled = true;
-      selEst.style.opacity = '0.5';
-      selEst.style.pointerEvents = 'none';
-    } else if (estadosPermitidos.length > 1) {
-      fillProdSelect('prod-estado', estadosPermitidos.sort());
-      selEst.value = estadosPermitidos[0];
-    }
+    if (!selEst || estadosPermitidos.length === 0) return;
+    // Sempre repopula com as options corretas antes de setar e travar
+    fillProdSelect('prod-estado', [...estadosPermitidos].sort());
+    selEst.value = estadosPermitidos[0];
+    selEst.disabled = true;
+    selEst.style.opacity = '0.5';
+    selEst.style.pointerEvents = 'none';
   };
 
   if (p === 'gestor_macro2' && (USUARIO_ATUAL.gestores_ref || []).length > 0 && document.getElementById('dd-content-prod-gestor')) {
