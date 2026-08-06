@@ -2139,7 +2139,11 @@ function buildFilters() {
     if (r['TAGS ATIVIDADE']) tags.add(r['TAGS ATIVIDADE']);
   });
 
-  fillSelect('f-estado', ['Todos', ...[...estados].sort()]);
+  // Não sobrescreve o select de Estado se ele estiver travado por perfil
+  const _selFEstado = document.getElementById('f-estado');
+  if (!_selFEstado || !_selFEstado.disabled) {
+    fillSelect('f-estado', ['Todos', ...[...estados].sort()]);
+  }
   _fGestorItens = [...gestores].sort();
   _fEquipeItens = [...equipes].sort();
   _fEquipeItensEscopo = null; // recalculado por aplicarPermissoes() se o perfil tiver trava
@@ -3948,7 +3952,11 @@ function atualizarOpcoesInteligentesProducao() {
   if (!ALL_DATA.length) return;
   const { estadosSet, ufClienteSet, dddSet } = calcularOpcoesInteligentesProducao();
 
-  fillProdSelect('prod-estado', ['Todos', ...[...estadosSet].sort()]);
+  // Não sobrescreve o select de Estado se ele estiver travado por perfil
+  const selEst = document.getElementById('prod-estado');
+  if (!selEst || !selEst.disabled) {
+    fillProdSelect('prod-estado', ['Todos', ...[...estadosSet].sort()]);
+  }
   popularDropdownProdUFCliente([...ufClienteSet].sort());
   popularDropdownProdDDD([...dddSet].sort());
 }
@@ -5404,16 +5412,61 @@ function aplicarPermissoes() {
     } else if (p === 'gestor_macro2' && (USUARIO_ATUAL.gestores_ref || []).length > 0) {
       // Trava Gerencial em 1+ nomes de gestor
       travarDropdownMulti('dd-content-f-gestor', '#dd-f-gestor .dropdown-btn', USUARIO_ATUAL.gestores_ref);
+      // Inferir estados permitidos a partir das equipes dos gestores travados
+      const estadosMacro2 = [...new Set(
+        Object.entries(EQUIPES_GESTORES)
+          .filter(([eq, ges]) => USUARIO_ATUAL.gestores_ref.includes(ges))
+          .map(([eq]) => EQUIPES_ESTADOS[eq])
+          .filter(Boolean)
+      )];
+      if (estadosMacro2.length === 1) {
+        // Estado único → trava o select
+        const selEst = document.getElementById('f-estado');
+        if (selEst) {
+          selEst.value = estadosMacro2[0];
+          selEst.disabled = true;
+          selEst.style.opacity = '0.5';
+          selEst.style.pointerEvents = 'none';
+        }
+      } else if (estadosMacro2.length > 1) {
+        // Múltiplos estados → remove "Todos" e mantém só os permitidos, mas não desabilita
+        const selEst = document.getElementById('f-estado');
+        if (selEst) {
+          fillSelect('f-estado', estadosMacro2.sort());
+          selEst.value = estadosMacro2[0];
+        }
+      }
       restringirListasGerencial(USUARIO_ATUAL.gestores_ref, null);
       render();
     } else if (p === 'supervisao' && (USUARIO_ATUAL.equipes_ref || []).length > 0) {
-      // Trava Gerencial em 1+ equipes (supervisão), sem trava de gestor/estado
+      // Trava Gerencial em 1+ equipes (supervisão)
       travarDropdownMulti('dd-content-f-equipe', '#dd-f-equipe .dropdown-btn', USUARIO_ATUAL.equipes_ref);
       // Trava o dropdown de Gestor nas equipes do escopo (impede selecionar gestor fora do escopo)
       const gestoresDasEquipes = [...new Set(
         USUARIO_ATUAL.equipes_ref.map(eq => EQUIPES_GESTORES[eq]).filter(Boolean)
       )];
       travarDropdownMulti('dd-content-f-gestor', '#dd-f-gestor .dropdown-btn', gestoresDasEquipes);
+      // Inferir estados permitidos a partir das equipes travadas
+      const estadosSupervisao = [...new Set(
+        USUARIO_ATUAL.equipes_ref.map(eq => EQUIPES_ESTADOS[eq]).filter(Boolean)
+      )];
+      if (estadosSupervisao.length === 1) {
+        // Estado único → trava o select
+        const selEst = document.getElementById('f-estado');
+        if (selEst) {
+          selEst.value = estadosSupervisao[0];
+          selEst.disabled = true;
+          selEst.style.opacity = '0.5';
+          selEst.style.pointerEvents = 'none';
+        }
+      } else if (estadosSupervisao.length > 1) {
+        // Múltiplos estados → restringe opções, mas não desabilita
+        const selEst = document.getElementById('f-estado');
+        if (selEst) {
+          fillSelect('f-estado', estadosSupervisao.sort());
+          selEst.value = estadosSupervisao[0];
+        }
+      }
       restringirListasGerencial(null, USUARIO_ATUAL.equipes_ref);
       render();
     }
@@ -5471,6 +5524,21 @@ function podeExportarDiscadoraCSV() {
 // ─── TRAVA DA ABA PRODUÇÃO (Gestor Macro 2.0 — trava por 1+ gestores) ───────
 function aplicarTravaProducao() {
   const p = USUARIO_ATUAL?.perfil;
+
+  const travarProdEstado = (estadosPermitidos) => {
+    const selEst = document.getElementById('prod-estado');
+    if (!selEst) return;
+    if (estadosPermitidos.length === 1) {
+      selEst.value = estadosPermitidos[0];
+      selEst.disabled = true;
+      selEst.style.opacity = '0.5';
+      selEst.style.pointerEvents = 'none';
+    } else if (estadosPermitidos.length > 1) {
+      fillProdSelect('prod-estado', estadosPermitidos.sort());
+      selEst.value = estadosPermitidos[0];
+    }
+  };
+
   if (p === 'gestor_macro2' && (USUARIO_ATUAL.gestores_ref || []).length > 0 && document.getElementById('dd-content-prod-gestor')) {
     travarDropdownMulti('dd-content-prod-gestor', '#dd-prod-gestor .dropdown-btn', USUARIO_ATUAL.gestores_ref);
 
@@ -5483,6 +5551,33 @@ function aplicarTravaProducao() {
       });
       if (equipesPermitidas.size > 0) popularDropdownEquipe([...equipesPermitidas].sort());
     }
+
+    // Trava o filtro de Estado da Produção nos estados dos gestores
+    const estadosMacro2Prod = [...new Set(
+      Object.entries(EQUIPES_GESTORES)
+        .filter(([eq, ges]) => USUARIO_ATUAL.gestores_ref.includes(ges))
+        .map(([eq]) => EQUIPES_ESTADOS[eq])
+        .filter(Boolean)
+    )];
+    if (estadosMacro2Prod.length > 0) travarProdEstado(estadosMacro2Prod);
+
+  } else if (p === 'supervisao' && (USUARIO_ATUAL.equipes_ref || []).length > 0) {
+    // Trava o filtro de Estado da Produção nos estados das equipes da supervisão
+    const estadosSupervisaoProd = [...new Set(
+      USUARIO_ATUAL.equipes_ref.map(eq => EQUIPES_ESTADOS[eq]).filter(Boolean)
+    )];
+    if (estadosSupervisaoProd.length > 0) travarProdEstado(estadosSupervisaoProd);
+
+  } else if ((p === 'gestor_macro' || p === 'gestor' || p === 'gestor_beta') && ((USUARIO_ATUAL.gestores_ref || []).length > 0 || USUARIO_ATUAL.gestor_ref)) {
+    // Trava o filtro de Estado da Produção para gestor/gestor_macro/gestor_beta
+    const nomesLockProd = (USUARIO_ATUAL.gestores_ref || []).length > 0 ? USUARIO_ATUAL.gestores_ref : [USUARIO_ATUAL.gestor_ref];
+    const estadosGestorProd = [...new Set(
+      Object.entries(EQUIPES_GESTORES)
+        .filter(([eq, ges]) => nomesLockProd.includes(ges))
+        .map(([eq]) => EQUIPES_ESTADOS[eq])
+        .filter(Boolean)
+    )];
+    if (estadosGestorProd.length > 0) travarProdEstado(estadosGestorProd);
   }
 }
 
