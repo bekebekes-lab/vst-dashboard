@@ -1788,8 +1788,6 @@
 </div>
 
 <script>
-const SHEET_ID = '1lNrHoK4vsSsjisB4C254SVMQJyP9nmtFTECdZzH4AjQ';
-const API_KEY = 'AIzaSyA5Dbl6mmIxk01KDXPAsVxNy2XYf5DEQgU';
 const SHEET_NAME = 'BaseCRM';
 
 const EQUIPES_ESTADOS = {
@@ -2022,7 +2020,7 @@ async function loadData() {
   document.getElementById('stats-row-area').innerHTML = '';
 
   try {
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(sheetName)}?key=${API_KEY}`;
+    const url = `/api/sheets?action=values&sheet=${encodeURIComponent(sheetName)}`;
     const res = await fetch(url);
     if (!res.ok) {
       const err = await res.json();
@@ -2068,7 +2066,7 @@ async function loadData() {
 // Busca abas disponíveis na planilha e popula o dropdown dinamicamente
 async function carregarAbas() {
   try {
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}?key=${API_KEY}&fields=sheets.properties.title`;
+    const url = `/api/sheets?action=list`;
     const res = await fetch(url);
     if (!res.ok) return;
     const json = await res.json();
@@ -3230,7 +3228,7 @@ function getDiaCorteBase() {
 
 async function fetchAbaDados(sheetName) {
   if (HIST_SHEETS_CACHE[sheetName]) return HIST_SHEETS_CACHE[sheetName];
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(sheetName)}?key=${API_KEY}`;
+  const url = `/api/sheets?action=values&sheet=${encodeURIComponent(sheetName)}`;
   const res = await fetch(url);
   if (!res.ok) throw new Error('Falha ao buscar ' + sheetName);
   const json = await res.json();
@@ -4363,6 +4361,15 @@ const supa = supabase.createClient(SUPA_URL, SUPA_KEY);
 
 let USUARIO_ATUAL = null;
 
+// Token de sessão do usuário logado, mantido em sincronia pelo Supabase Auth.
+// Necessário porque o autosave (beforeunload, mais abaixo) faz um fetch()
+// cru — sem isso, ele mandaria a anon key como Authorization e as policies
+// de RLS baseadas em auth.uid() bloqueariam o salvamento.
+let USUARIO_ACCESS_TOKEN = null;
+supa.auth.onAuthStateChange((_event, session) => {
+  USUARIO_ACCESS_TOKEN = session?.access_token || null;
+});
+
 // ─── DETECÇÃO DE SCHEMA ──────────────────────────────────────────────────────
 // Verifica se a coluna "periodo" já existe na tabela metas_carteira
 // Resultado em cache para não repetir a verificação
@@ -4507,7 +4514,7 @@ window.addEventListener('beforeunload', () => {
     headers: {
       'Content-Type': 'application/json',
       'apikey': SUPA_KEY,
-      'Authorization': `Bearer ${SUPA_KEY}`,
+      'Authorization': `Bearer ${USUARIO_ACCESS_TOKEN || SUPA_KEY}`,
       'Prefer': 'resolution=merge-duplicates'
     },
     body: JSON.stringify(rows)
