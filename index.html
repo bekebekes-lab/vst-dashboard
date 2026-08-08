@@ -1528,12 +1528,22 @@
           <div class="s2-hint">Mesmos escopos do Simulador de Carteira: define quais status/filas do BaseCRM entram na contagem de linhas ativadas no mês (o resto do painel usa sempre "Ativo/Instalado" como base real da carteira). Atualiza automaticamente ao trocar o escopo ou ao clicar em "Atualizar" na barra superior.</div>
         </div>
         <div class="s2-field">
-          <label>Fator VIRTUA · VOZ Novo · VOZ Portab. (R$/linha)</label>
+          <label>Cluster atingido (Elite, dentro da área — item 2.2, Tabela 1)</label>
+          <select id="s2-cluster" onchange="s2AplicarFatoresFixos();marcarSimulador2Sujo()">
+            <option value="P">Cluster "P"</option>
+            <option value="M">Cluster "M"</option>
+            <option value="G">Cluster "G"</option>
+          </select>
+          <div class="s2-hint">Define os 3 fatores fixos ao lado, direto da Tabela 1 do regulamento (modalidade Elite, dentro da área de atuação).</div>
+        </div>
+        <div class="s2-field">
+          <label>Fator VIRTUA (Fixa Básica) · VOZ Novo (Incremento) · VOZ Portab. (R$/linha)</label>
           <div style="display:flex;gap:6px">
-            <input type="number" id="s2-fator-virtua" value="4" step="0.1" min="0" onchange="renderSimulador2();marcarSimulador2Sujo()" style="width:70px">
-            <input type="number" id="s2-fator-voznovo" value="5.5" step="0.1" min="0" onchange="renderSimulador2();marcarSimulador2Sujo()" style="width:70px">
-            <input type="number" id="s2-fator-vozport" value="7.5" step="0.1" min="0" onchange="renderSimulador2();marcarSimulador2Sujo()" style="width:70px">
+            <input type="number" id="s2-fator-virtua" value="4" readonly style="width:70px;background:var(--bg-2,#f3f4f6);cursor:default">
+            <input type="number" id="s2-fator-voznovo" value="5.5" readonly style="width:70px;background:var(--bg-2,#f3f4f6);cursor:default">
+            <input type="number" id="s2-fator-vozport" value="7.5" readonly style="width:70px;background:var(--bg-2,#f3f4f6);cursor:default">
           </div>
+          <div class="s2-hint">Preenchidos automaticamente pelo Cluster selecionado. Por decisão de negócio, "VOZ Novo" usa a linha de Incremento da Tabela 1 (não a linha de Novo/Portabilidade) — ver comentário no código.</div>
         </div>
         <div class="s2-field">
           <label>Total CNPJs · Total HCs</label>
@@ -1593,7 +1603,7 @@
     <!-- SEÇÃO 04 — BÔNUS PRODUTIVIDADE -->
     <div class="s2-secao">
       <div class="s2-secao-titulo"><span class="s2-secao-num">04</span> Bônus Produtividade</div>
-      <div class="s2-secao-desc">Exclusivo para modalidade Elite, com mínimo de 4 vendedores cadastrados (item 2.7). Informe quantos HCs você TEM disponíveis em cada estágio de rampa (0/25/25/50/50/75/100% do 1º ao 7º mês+) — a coluna "Sugestão a Declarar" calcula quantos declarar em cada estágio para maximizar o total de HCs sem cair abaixo de 100% em Voz e BL (o que reduziria a faixa de bônus de todo mundo, não só do excedente). Estágio de 1º mês (0% de meta) é "grátis" — sempre vale declarar todo mundo que estiver nele.</div>
+      <div class="s2-secao-desc">Exclusivo para modalidade Elite, com mínimo de 4 vendedores cadastrados (item 2.7). Informe quantos HCs você TEM disponíveis em cada estágio de rampa (0/25/25/50/75/100% do 1º ao 6º mês+) — a coluna "Sugestão a Declarar" calcula quantos declarar em cada estágio para maximizar o total de HCs sem cair abaixo de 100% em Voz e BL (o que reduziria a faixa de bônus de todo mundo, não só do excedente). Estágio de 1º mês (0% de meta) é "grátis" — sempre vale declarar todo mundo que estiver nele.</div>
 
       <div class="s2-params-bar" style="margin-top:2px;margin-bottom:10px">
         <div class="s2-field">
@@ -1610,7 +1620,8 @@
         </div>
         <div class="s2-field">
           <label>Receita SD realizada no mês (R$)</label>
-          <input type="number" id="s2-real-sd" value="0" min="0" step="0.01" onchange="renderSimulador2();marcarSimulador2Sujo()">
+          <input type="number" id="s2-real-sd" value="0" readonly style="background:var(--bg-2,#f3f4f6);cursor:default">
+          <div class="s2-hint">Somada automaticamente do BaseCRM (grupo "SD"/"SVA FIXA"), no mesmo escopo selecionado na seção 01 acima — não editável.</div>
         </div>
       </div>
 
@@ -4798,6 +4809,7 @@ function s2PuxarDadosSheet() {
       vozPort: { qtd: 0, rec: 0 },
     };
   });
+  let recSDCents = 0; // Receita de Solução Digital — mesmo escopo, mesma fonte
 
   ALL_DATA.forEach(r => {
     const tagRaw = r['TAGS ATIVIDADE'] || '';
@@ -4806,11 +4818,18 @@ function s2PuxarDadosSheet() {
     const fila  = r['FILA'] || '';
     const qtd   = parseInt(r['QUANTIDADE']) || 1;
     const valor = parseFloat((r['VALOR UNIT'] || '0').toString().replace(',', '.')) || 0;
-    if (!aggAtivacao[tag]) return;
-    if (!produtosAlvo.includes(grupo)) return;
     if (!filasPermitidas.includes(fila)) return;
 
     const recCents = Math.round(valor * 100);
+
+    // Solução Digital: soma independente da unidade/tag (a Meta de HC de
+    // Produtividade — item 2.7-iii-a-3 — é apurada no total, não por unidade).
+    if (getGrupoKey(grupo) === 'SERV. DIGITAIS') {
+      recSDCents += qtd * recCents;
+    }
+
+    if (!aggAtivacao[tag]) return;
+    if (!produtosAlvo.includes(grupo)) return;
 
     if (grupo === 'NET PJ - VIRTUA') {
       aggAtivacao[tag].virtua.qtd += qtd;
@@ -4824,7 +4843,9 @@ function s2PuxarDadosSheet() {
     }
   });
 
-  window._s2SheetData = { ativacao: aggAtivacao };
+  window._s2SheetData = { ativacao: aggAtivacao, receitaSD: recSDCents / 100 };
+  const campoSD = document.getElementById('s2-real-sd');
+  if (campoSD) campoSD.value = (recSDCents / 100).toFixed(2);
 
   // Só renderiza se a aba já foi montada (evita erro caso o BaseCRM carregue antes
   // de o usuário nunca ter aberto a aba Simulador 2.0 nesta sessão).
@@ -4845,6 +4866,31 @@ const FAIXAS_CNPJHC_TRANSICAO = [
   { faixa: 'Faixa 3', min: 501, max: 599,      unitario: 1.50 },
   { faixa: 'Faixa 4', min: 600, max: Infinity, unitario: 1.00 },
 ];
+
+// Item 2.2, Tabela 1 — Fatores fixos de remuneração (modalidade Elite, dentro
+// da área de atuação), por cluster "P"/"M"/"G". Só as 3 linhas que usamos no
+// simulador:
+//  - virtua  → linha "FIXA BÁSICA: TV/FONE/BANDA LARGA"
+//  - vozPort → linha "MÓVEL: NOVO VOZ/PORTABILIDADE NOVO VOZ-BL/PORTABILIDADE
+//              INCREMENTO VOZ-BL/TT PRÉ PF-PJ VOZ-BL"
+//  - vozNovo → linha "MÓVEL: INCREMENTO MÓDULO VOZ/BL/TT PÓS PF-PJ VOZ-BL" —
+//              por decisão de negócio, o BaseCRM classifica como "Novo" o que
+//              a política trata como "Incremento", então usamos essa linha
+//              (não a de Novo/Portabilidade) para o fator de VOZ Novo.
+const FATORES_FIXOS_TABELA1 = {
+  P: { virtua: 2.90, vozNovo: 2.50, vozPort: 5.00 },
+  M: { virtua: 3.10, vozNovo: 2.50, vozPort: 5.20 },
+  G: { virtua: 3.40, vozNovo: 2.50, vozPort: 5.60 },
+};
+
+function s2AplicarFatoresFixos() {
+  const cluster = document.getElementById('s2-cluster').value;
+  const f = FATORES_FIXOS_TABELA1[cluster] || FATORES_FIXOS_TABELA1.P;
+  document.getElementById('s2-fator-virtua').value = f.virtua;
+  document.getElementById('s2-fator-voznovo').value = f.vozNovo;
+  document.getElementById('s2-fator-vozport').value = f.vozPort;
+  renderSimulador2();
+}
 
 // Item 2.6.4-i — Net Adds negativo: unitário fixo por categoria
 const UNITARIO_NETADDS_NEGATIVO = { bronze: 0.60, prata: 0.60, ouro: 0.80, safira: 1.00, diamante: 1.00 };
@@ -5157,15 +5203,12 @@ function s2CamposParaSalvar() {
   const campos = {
     'tabela-cnpjhc': document.getElementById('s2-tabela-cnpjhc').value,
     'categoria': document.getElementById('s2-categoria').value,
-    'fator-virtua': s2num('s2-fator-virtua'),
-    'fator-voznovo': s2num('s2-fator-voznovo'),
-    'fator-vozport': s2num('s2-fator-vozport'),
+    'cluster': document.getElementById('s2-cluster').value,
     'total-cnpjs': s2num('s2-total-cnpjs'),
     'total-hcs': s2num('s2-total-hcs'),
     'meta-voz': s2num('s2-meta-voz'),
     'meta-bl': s2num('s2-meta-bl'),
     'meta-sd': s2num('s2-meta-sd'),
-    'real-sd': s2num('s2-real-sd'),
   };
   CODIGOS_AACE2.forEach(({ tag }) => {
     const sid = s2Sid(tag);
@@ -5189,15 +5232,12 @@ function marcarSimulador2Sujo() { _simulador2Sujo = true; }
 const S2_DEFAULTS = {
   'tabela-cnpjhc': 'transicao',
   'categoria':     'bronze',
-  'fator-virtua':  4,
-  'fator-voznovo': 5.5,
-  'fator-vozport': 7.5,
+  'cluster':       'P',
   'total-cnpjs':   0,
   'total-hcs':     1,
   'meta-voz':      18,
   'meta-bl':       6,
   'meta-sd':       50,
-  'real-sd':       0,
 };
 
 function resetarCamposSimulador2() {
@@ -5205,6 +5245,7 @@ function resetarCamposSimulador2() {
     const el = document.getElementById('s2-' + chave);
     if (el) el.value = val;
   });
+  s2AplicarFatoresFixos(); // deriva fator-virtua/voznovo/vozport do cluster default
   CODIGOS_AACE2.forEach(({ tag }) => {
     const sid = s2Sid(tag);
     const l = document.getElementById('s2-cart-linhas-' + sid);   if (l) l.value = 0;
@@ -5259,6 +5300,7 @@ async function carregarSimulador2(periodoAlvo) {
   } catch (e) {
     console.warn('Simulador 2.0: config_simulador2 indisponível ainda —', e.message, e);
   } finally {
+    s2AplicarFatoresFixos(); // garante que os 3 fatores batem com o cluster que ficou carregado
     _s2PeriodoCarregado = periodo;
   }
 }
