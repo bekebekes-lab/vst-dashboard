@@ -1,11 +1,14 @@
 // Vercel Serverless Function — dispara o NeoSales Bot no GitHub Actions
 // Token fica seguro em GITHUB_ACTIONS_TOKEN (env var do Vercel)
 
+import { requireAuth } from './_lib/auth.js';
+
 export default async function handler(req, res) {
   // Só aceita POST
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
+  if (!(await requireAuth(req, res))) return;
 
   const token = process.env.GITHUB_ACTIONS_TOKEN;
   if (!token) {

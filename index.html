@@ -1790,6 +1790,22 @@
 <script>
 const SHEET_NAME = 'BaseCRM';
 
+// Escapa dados vindos de fontes não confiáveis (planilha BaseCRM, API da
+// discadora) antes de injetar em innerHTML — evita XSS armazenado caso
+// algum campo de texto livre contenha HTML/JS.
+function escapeHtml(str) {
+  return String(str ?? '').replace(/[&<>"']/g, ch => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[ch]));
+}
+
+// Escapa especificamente pra uso dentro de um literal JS de aspas simples
+// embutido num atributo onclick="...('valor')" — impede que o valor quebre
+// tanto o literal quanto o atributo HTML ao redor.
+function escapeJsAttr(str) {
+  return escapeHtml(str).replace(/'/g, "\\'");
+}
+
 const EQUIPES_ESTADOS = {
   "ADM E GESTORES":"RS",
   "COMERCIAL DIOU":"RS",
@@ -2021,7 +2037,7 @@ async function loadData() {
 
   try {
     const url = `/api/sheets?action=values&sheet=${encodeURIComponent(sheetName)}`;
-    const res = await fetch(url);
+    const res = await fetch(url, { headers: authHeaders() });
     if (!res.ok) {
       const err = await res.json();
       throw new Error(err.error?.message || 'HTTP ' + res.status);
@@ -2067,7 +2083,7 @@ async function loadData() {
 async function carregarAbas() {
   try {
     const url = `/api/sheets?action=list`;
-    const res = await fetch(url);
+    const res = await fetch(url, { headers: authHeaders() });
     if (!res.ok) return;
     const json = await res.json();
     const abas = (json.sheets || []).map(s => s.properties.title);
@@ -2236,7 +2252,7 @@ function limparDropdownMulti(contId, labelBotaoSel) {
 function fillSelect(id, opts) {
   const sel = document.getElementById(id);
   const cur = sel.value;
-  sel.innerHTML = opts.map(o => `<option value="${o}">${o}</option>`).join('');
+  sel.innerHTML = opts.map(o => `<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`).join('');
   if (opts.includes(cur)) sel.value = cur;
 }
 
@@ -2259,13 +2275,11 @@ function fmtDate(val) {
 }
 
 function linkConsultor(name) {
-  const safe = name.replace(/'/g, "\\'");
-  return `<span class="consultant-link equipe-clickable" onclick="filterByConsultor('${safe}')">${name}</span>`;
+  return `<span class="consultant-link equipe-clickable" onclick="filterByConsultor('${escapeJsAttr(name)}')">${escapeHtml(name)}</span>`;
 }
 
 function linkEquipe(eq) {
-  const safe = eq.replace(/'/g, "\\'");
-  return `<span class="equipe-clickable" onclick="filterByEquipe('${safe}')">${eq}</span>`;
+  return `<span class="equipe-clickable" onclick="filterByEquipe('${escapeJsAttr(eq)}')">${escapeHtml(eq)}</span>`;
 }
 
 function thDrill(col, label, currentCol, currentAsc, onclickFn) {
@@ -2406,9 +2420,9 @@ function render() {
         <tbody>${rows.map(([cn, d]) => `
           <tr>
             <td>
-              <div class="consultant-name consultant-clickable" onclick="filterByConsultor('${cn.replace(/'/g,"\\'")}')">
-                <div class="avatar">${initials(cn)}</div>
-                <span class="consultant-link">${cn}</span>
+              <div class="consultant-name consultant-clickable" onclick="filterByConsultor('${escapeJsAttr(cn)}')">
+                <div class="avatar">${escapeHtml(initials(cn))}</div>
+                <span class="consultant-link">${escapeHtml(cn)}</span>
               </div>
             </td>
             <td>${linkEquipe(d.equipe)}</td>
@@ -2521,16 +2535,16 @@ function drillFila(categoria, fila) {
   if (gestorSel.length > 0)  ctxParts.push(gestorSel.join(', '));
   if (equipeSel.length > 0)  ctxParts.push(equipeSel.join(', '));
   if (consultor !== 'Todos') ctxParts.push(consultor);
-  const ctxLabel = ctxParts.join(' › ');
+  const ctxLabel = escapeHtml(ctxParts.join(' › '));
 
   const breadcrumb = `
     <div class="detail-header">
       <div class="detail-breadcrumb">
         <button class="breadcrumb-back" onclick="lastDrillArgs=null;render()">← Voltar</button>
         <span class="breadcrumb-sep">›</span>
-        <span class="breadcrumb-item">${categoria}</span>
+        <span class="breadcrumb-item">${escapeHtml(categoria)}</span>
         <span class="breadcrumb-sep">›</span>
-        <span class="breadcrumb-fila">${fila}</span>
+        <span class="breadcrumb-fila">${escapeHtml(fila)}</span>
         ${ctxLabel ? `<span class="breadcrumb-sep">·</span><span style="font-size:11px;color:var(--text3)">${ctxLabel}</span>` : ''}
       </div>
       <span class="count-badge">${total} pedidos · ${sortedRows.length} registros</span>
@@ -3229,7 +3243,7 @@ function getDiaCorteBase() {
 async function fetchAbaDados(sheetName) {
   if (HIST_SHEETS_CACHE[sheetName]) return HIST_SHEETS_CACHE[sheetName];
   const url = `/api/sheets?action=values&sheet=${encodeURIComponent(sheetName)}`;
-  const res = await fetch(url);
+  const res = await fetch(url, { headers: authHeaders() });
   if (!res.ok) throw new Error('Falha ao buscar ' + sheetName);
   const json = await res.json();
   const rows = json.values || [];
@@ -3747,7 +3761,7 @@ function initProducao() {
   const selGrupo = document.getElementById('prod-grupo');
   const curGrupo = selGrupo.value;
   selGrupo.innerHTML = '<option value="Geral">Geral</option>' +
-    [...grupos].sort().map(g => `<option value="${g}">${g}</option>`).join('');
+    [...grupos].sort().map(g => `<option value="${escapeHtml(g)}">${escapeHtml(g)}</option>`).join('');
   if ([...grupos].includes(curGrupo)) selGrupo.value = curGrupo;
 
   // Popula status chips dinamicamente da base (sempre atualizado)
@@ -3762,7 +3776,7 @@ function initProducao() {
   chipsEl.innerHTML = statusList.map(s => {
     const sel = selectedAntes.has(s);
     if (sel) prodStatusSelecionados.add(s);
-    return `<div class="prod-chip${sel ? ' selected' : ''}" data-status="${s}" onclick="toggleStatusChip('${s}',this)">${s}</div>`;
+    return `<div class="prod-chip${sel ? ' selected' : ''}" data-status="${escapeHtml(s)}" onclick="toggleStatusChip('${escapeJsAttr(s)}',this)">${escapeHtml(s)}</div>`;
   }).join('');
 
   // Popula dropdown de Tag de Unidade (lista fixa, preserva seleção existente)
@@ -3783,7 +3797,7 @@ function initProducao() {
 function fillProdSelect(id, opts) {
   const sel = document.getElementById(id);
   const cur = sel.value;
-  sel.innerHTML = opts.map(o => `<option value="${o}">${o}</option>`).join('');
+  sel.innerHTML = opts.map(o => `<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`).join('');
   if (opts.includes(cur)) sel.value = cur;
 }
 
@@ -5251,7 +5265,13 @@ async function fazerLogin() {
     return;
   }
 
+  USUARIO_ACCESS_TOKEN = data.session?.access_token || null;
   await carregarPerfil(data.user);
+}
+
+// Header padrão pra chamadas autenticadas em /api/* — sem token, nem tenta.
+function authHeaders() {
+  return USUARIO_ACCESS_TOKEN ? { 'Authorization': `Bearer ${USUARIO_ACCESS_TOKEN}` } : {};
 }
 
 async function carregarPerfil(user) {
@@ -5580,7 +5600,7 @@ async function triggerBotEAtualizar(btn) {
 
   try {
     // 1. Dispara o bot via Vercel Function
-    const res = await fetch('/api/trigger-bot', { method: 'POST' });
+    const res = await fetch('/api/trigger-bot', { method: 'POST', headers: authHeaders() });
     const data = await res.json();
 
     if (!res.ok) throw new Error(data.error || 'Erro ao disparar bot');
@@ -5688,7 +5708,7 @@ async function discadoraBuscarPagina(pagina) {
   }`;
   const res = await fetch(DISC_API_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify({ query })
   });
   const json = await res.json();
@@ -5852,13 +5872,13 @@ function discadoraRender() {
 
   // Popula os selects antigos da barra superior (se existirem)
   if(document.getElementById('disc-grupo')) {
-    document.getElementById('disc-grupo').innerHTML = '<option value="">Todos</option>' + grupos.map(g => '<option value="' + g + '"' + (g===grupoFiltro?' selected':'') + '>' + g + '</option>').join('');
+    document.getElementById('disc-grupo').innerHTML = '<option value="">Todos</option>' + grupos.map(g => '<option value="' + escapeHtml(g) + '"' + (g===grupoFiltro?' selected':'') + '>' + escapeHtml(g) + '</option>').join('');
   }
   if(document.getElementById('disc-fila')) {
-    document.getElementById('disc-fila').innerHTML = '<option value="">Todas</option>' + filas.map(f => '<option value="' + f + '"' + (f===filaFiltro?' selected':'') + '>' + f + '</option>').join('');
+    document.getElementById('disc-fila').innerHTML = '<option value="">Todas</option>' + filas.map(f => '<option value="' + escapeHtml(f) + '"' + (f===filaFiltro?' selected':'') + '>' + escapeHtml(f) + '</option>').join('');
   }
   if(document.getElementById('disc-consultor')) {
-    document.getElementById('disc-consultor').innerHTML = '<option value="">Todos</option>' + consultores.map(c => '<option value="' + c + '"' + (c===consultorFiltro?' selected':'') + '>' + c + '</option>').join('');
+    document.getElementById('disc-consultor').innerHTML = '<option value="">Todos</option>' + consultores.map(c => '<option value="' + escapeHtml(c) + '"' + (c===consultorFiltro?' selected':'') + '>' + escapeHtml(c) + '</option>').join('');
   }
 
   // Filtra os dados
@@ -6012,10 +6032,12 @@ function discadoraRender() {
 
   // Renderiza o Corpo com a numeração na lateral esquerda (#)
   document.getElementById('disc-tbody').innerHTML = rows.map(function(r, index) {
-    var nomeEsc = r.nome.replace(/&/g,'&amp;').replace(/"/g,'&quot;');
+    var nomeEsc = escapeHtml(r.nome);
+    var grupoEsc = escapeHtml(r.grupo);
+    var filaEsc = escapeHtml(r.fila);
     var nomeCell = r.produtivas > 0
-      ? '<span class="disc-drill-link" data-nome="' + nomeEsc + '" style="cursor:pointer;color:var(--brand);font-weight:600;text-decoration:underline;text-underline-offset:2px;" title="Ver ligações produtivas">' + r.nome + '</span>'
-      : '<span>' + r.nome + '</span>';
+      ? '<span class="disc-drill-link" data-nome="' + nomeEsc + '" style="cursor:pointer;color:var(--brand);font-weight:600;text-decoration:underline;text-underline-offset:2px;" title="Ver ligações produtivas">' + nomeEsc + '</span>'
+      : '<span>' + nomeEsc + '</span>';
     var prodCell = r.produtivas > 0
       ? '<span class="disc-drill-link" data-nome="' + nomeEsc + '" style="cursor:pointer;color:var(--brand);font-weight:700;text-decoration:underline;text-underline-offset:2px;" title="Ver ligações produtivas">' + r.produtivas + '</span>'
       : '0';
@@ -6024,8 +6046,8 @@ function discadoraRender() {
     return '<tr>' +
       '<td style="width:40px;min-width:40px;max-width:40px;text-align:center;font-weight:700;color:var(--text3);font-size:11px;">' + (index + 1) + '</td>' +
       '<td style="text-align:left;font-weight:600;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-transform:uppercase;">' + nomeCell + '</td>' +
-      '<td style="text-align:left;text-transform:uppercase;font-size:11px;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + r.grupo + '">' + r.grupo + '</td>' +
-      '<td style="text-align:left;text-transform:uppercase;font-size:11px;">' + r.fila + '</td>' +
+      '<td style="text-align:left;text-transform:uppercase;font-size:11px;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + grupoEsc + '">' + grupoEsc + '</td>' +
+      '<td style="text-align:left;text-transform:uppercase;font-size:11px;">' + filaEsc + '</td>' +
       '<td style="text-align:left;font-family:monospace;">' + r.total + '</td>' +
       '<td style="text-align:left;font-family:monospace;">' + r.atendidas + '</td>' +
       '<td style="text-align:left;font-family:monospace;">' + prodCell + '</td>' +
