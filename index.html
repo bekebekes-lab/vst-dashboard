@@ -1483,12 +1483,12 @@
       <div class="s2-params-bar">
         <div class="s2-field">
           <label>Competência</label>
-          <input type="month" id="s2-competencia">
+          <input type="month" id="s2-competencia" onchange="trocarCompetenciaSimulador2()">
           <div class="s2-hint">Mês/ano de referência do fechamento sendo simulado. Serve apenas de registro — não define sozinho a tabela de CNPJ/HC (ver campo ao lado).</div>
         </div>
         <div class="s2-field">
           <label>Tabela CNPJ / HC vigente</label>
-          <select id="s2-tabela-cnpjhc" onchange="renderSimulador2()">
+          <select id="s2-tabela-cnpjhc" onchange="renderSimulador2();marcarSimulador2Sujo()">
             <option value="transicao">Transição (jun–ago/26) — faixas ≤400/500/599/600</option>
             <option value="definitiva">Definitiva (a partir de set/26) — faixas ≤200/300/399/400</option>
           </select>
@@ -1496,7 +1496,7 @@
         </div>
         <div class="s2-field">
           <label>Categoria do parceiro</label>
-          <select id="s2-categoria" onchange="renderSimulador2()">
+          <select id="s2-categoria" onchange="renderSimulador2();marcarSimulador2Sujo()">
             <option value="bronze">Bronze</option>
             <option value="prata">Prata</option>
             <option value="ouro">Ouro</option>
@@ -1530,16 +1530,16 @@
         <div class="s2-field">
           <label>Fator VIRTUA · VOZ Novo · VOZ Portab. (R$/linha)</label>
           <div style="display:flex;gap:6px">
-            <input type="number" id="s2-fator-virtua" value="4" step="0.1" min="0" onchange="renderSimulador2()" style="width:70px">
-            <input type="number" id="s2-fator-voznovo" value="5.5" step="0.1" min="0" onchange="renderSimulador2()" style="width:70px">
-            <input type="number" id="s2-fator-vozport" value="7.5" step="0.1" min="0" onchange="renderSimulador2()" style="width:70px">
+            <input type="number" id="s2-fator-virtua" value="4" step="0.1" min="0" onchange="renderSimulador2();marcarSimulador2Sujo()" style="width:70px">
+            <input type="number" id="s2-fator-voznovo" value="5.5" step="0.1" min="0" onchange="renderSimulador2();marcarSimulador2Sujo()" style="width:70px">
+            <input type="number" id="s2-fator-vozport" value="7.5" step="0.1" min="0" onchange="renderSimulador2();marcarSimulador2Sujo()" style="width:70px">
           </div>
         </div>
         <div class="s2-field">
           <label>Total CNPJs · Total HCs</label>
           <div style="display:flex;gap:6px">
-            <input type="number" id="s2-total-cnpjs" value="0" min="0" onchange="renderSimulador2()" style="width:80px" title="Total de CNPJs na carteira">
-            <input type="number" id="s2-total-hcs" value="1" min="1" onchange="renderSimulador2()" style="width:70px" title="Total de HCs ativos declarados">
+            <input type="number" id="s2-total-cnpjs" value="0" min="0" onchange="renderSimulador2();marcarSimulador2Sujo()" style="width:80px" title="Total de CNPJs na carteira">
+            <input type="number" id="s2-total-hcs" value="1" min="1" onchange="renderSimulador2();marcarSimulador2Sujo()" style="width:70px" title="Total de HCs ativos declarados">
           </div>
           <div class="s2-hint">CNPJ/HC: <b id="s2-cnpjhc-resultado">—</b> · Faixa: <b id="s2-faixa-resultado">—</b></div>
         </div>
@@ -1598,19 +1598,19 @@
       <div class="s2-params-bar" style="margin-top:2px;margin-bottom:10px">
         <div class="s2-field">
           <label>Meta p/ ativar 1 HC — Voz (linhas)</label>
-          <input type="number" id="s2-meta-voz" value="18" min="0" step="1" onchange="renderSimulador2()">
+          <input type="number" id="s2-meta-voz" value="18" min="0" step="1" onchange="renderSimulador2();marcarSimulador2Sujo()">
         </div>
         <div class="s2-field">
           <label>Meta p/ ativar 1 HC — BL (linhas)</label>
-          <input type="number" id="s2-meta-bl" value="6" min="0" step="1" onchange="renderSimulador2()">
+          <input type="number" id="s2-meta-bl" value="6" min="0" step="1" onchange="renderSimulador2();marcarSimulador2Sujo()">
         </div>
         <div class="s2-field">
           <label>Meta p/ ativar 1 HC — Solução Digital (R$)</label>
-          <input type="number" id="s2-meta-sd" value="50" min="0" step="1" onchange="renderSimulador2()">
+          <input type="number" id="s2-meta-sd" value="50" min="0" step="1" onchange="renderSimulador2();marcarSimulador2Sujo()">
         </div>
         <div class="s2-field">
           <label>Receita SD realizada no mês (R$)</label>
-          <input type="number" id="s2-real-sd" value="0" min="0" step="0.01" onchange="renderSimulador2()">
+          <input type="number" id="s2-real-sd" value="0" min="0" step="0.01" onchange="renderSimulador2();marcarSimulador2Sujo()">
         </div>
       </div>
 
@@ -4587,6 +4587,29 @@ window.addEventListener('beforeunload', () => {
   }).catch(() => {});
 });
 
+// Mesma proteção acima, pro Simulador 2.0 — salva a competência atualmente
+// carregada se tiver edição pendente não salva.
+window.addEventListener('beforeunload', () => {
+  if (!_simulador2Sujo || !USUARIO_ATUAL || !_s2PeriodoCarregado) return;
+  if (USUARIO_ATUAL.perfil !== 'admin') return;
+
+  const campos = s2CamposParaSalvar();
+  const rows = Object.entries(campos).map(([chave, valor]) => ({ periodo: _s2PeriodoCarregado, chave, valor }));
+  if (!rows.length) return;
+
+  fetch(`${SUPA_URL}/rest/v1/config_simulador2?on_conflict=periodo,chave`, {
+    method: 'POST',
+    keepalive: true,
+    headers: {
+      'Content-Type': 'application/json',
+      'apikey': SUPA_KEY,
+      'Authorization': `Bearer ${USUARIO_ACCESS_TOKEN || SUPA_KEY}`,
+      'Prefer': 'resolution=merge-duplicates'
+    },
+    body: JSON.stringify(rows)
+  }).catch(() => {});
+});
+
 // ─── METAS DO BANCO ──────────────────────────────────────────────────────────
 async function carregarMetasDoBanco(periodo) {
   periodo = periodo || getPeriodoAtivo();
@@ -4875,7 +4898,8 @@ function initSimulador2() {
   // Monta a linha de recebimento por unidade apenas na primeira vez.
   // Net Adds e Linhas da Carteira são os ÚNICOS campos editáveis — a Claro reporta
   // a carteira via demonstrativo próprio (item 2.6.1-vii), isso não está no BaseCRM/Sheets.
-  if (!document.getElementById('s2-recebimento-body').children.length) {
+  const primeiraVez = !document.getElementById('s2-recebimento-body').children.length;
+  if (primeiraVez) {
     document.getElementById('s2-recebimento-body').innerHTML = CODIGOS_AACE2.map(({ tag, nome }) => { const sid = s2Sid(tag); return `
       <tr data-tag="${tag}">
         <td>${nome}</td>
@@ -4883,8 +4907,8 @@ function initSimulador2() {
         <td id="s2-rec-tetopct-${sid}">—</td>
         <td id="s2-rec-teto-${sid}">R$ 0,00</td>
         <td id="s2-rec-potencial-${sid}">0</td>
-        <td><input type="number" min="0" value="0" id="s2-cart-linhas-${sid}" onchange="renderSimulador2()" style="width:80px"></td>
-        <td><input type="number" value="0" id="s2-cart-netadds-${sid}" onchange="renderSimulador2()" style="width:70px"></td>
+        <td><input type="number" min="0" value="0" id="s2-cart-linhas-${sid}" onchange="renderSimulador2();marcarSimulador2Sujo()" style="width:80px"></td>
+        <td><input type="number" value="0" id="s2-cart-netadds-${sid}" onchange="renderSimulador2();marcarSimulador2Sujo()" style="width:70px"></td>
         <td id="s2-rec-unit-${sid}">—</td>
         <td id="s2-rec-linhasrec-${sid}">0</td>
         <td id="s2-rec-bruto-${sid}">R$ 0,00</td>
@@ -4897,7 +4921,7 @@ function initSimulador2() {
       <tr>
         <td>${r.label}</td>
         <td>${(r.pct * 100).toFixed(0)}%</td>
-        <td><input type="number" min="0" value="0" id="s2-rampa-disp-${i}" onchange="renderSimulador2()"></td>
+        <td><input type="number" min="0" value="0" id="s2-rampa-disp-${i}" onchange="renderSimulador2();marcarSimulador2Sujo()"></td>
         <td id="s2-rampa-sugestao-${i}" style="font-weight:700;color:var(--green)">0</td>
       </tr>`).join('');
   }
@@ -4907,11 +4931,16 @@ function initSimulador2() {
     document.getElementById('s2-competencia').value = hoje.toISOString().slice(0, 7);
   }
 
-  // Carrega config salva da competência (se houver) e, na sequência, tenta puxar
-  // os números direto do BaseCRM (ALL_DATA) — mesma fonte do Simulador de Carteira.
-  carregarSimulador2().then(() => {
+  // Carrega config salva da competência só na primeira vez que a aba abre
+  // nesta sessão. Reentradas na aba (trocar pra outra aba e voltar) NÃO
+  // recarregam nem resetam os campos — senão qualquer edição em andamento
+  // seria descartada sem nunca ter sido salva. Trocar de competência tem
+  // fluxo próprio (trocarPeriodoSimulador2), que salva o pendente antes.
+  if (primeiraVez) {
+    carregarSimulador2().then(() => { s2PuxarDadosSheet(); });
+  } else {
     s2PuxarDadosSheet();
-  });
+  }
   carregarHistoricoListaSimulador2();
 }
 
@@ -5148,40 +5177,90 @@ function s2CamposParaSalvar() {
   return campos;
 }
 
-async function salvarSimulador2() {
-  if (!USUARIO_ATUAL || USUARIO_ATUAL.perfil !== 'admin') { alert('Apenas administradores podem salvar o Simulador 2.0.'); return; }
+// Estado da competência atualmente carregada no formulário + flag de edição
+// pendente — usados pra decidir quando autosalvar antes de trocar de mês
+// (mesmo espírito do _metasSujas/trocarMes() do Simulador de Carteira).
+let _s2PeriodoCarregado = null;
+let _simulador2Sujo = false;
+function marcarSimulador2Sujo() { _simulador2Sujo = true; }
+
+// Valores default de cada campo — usados pra limpar o formulário antes de
+// carregar uma competência nova, senão os valores do mês anterior "vazam"
+// pro mês seguinte quando não há nada salvo ainda pra ele.
+const S2_DEFAULTS = {
+  'tabela-cnpjhc': 'transicao',
+  'categoria':     'bronze',
+  'fator-virtua':  4,
+  'fator-voznovo': 5.5,
+  'fator-vozport': 7.5,
+  'total-cnpjs':   0,
+  'total-hcs':     1,
+  'meta-voz':      18,
+  'meta-bl':       6,
+  'meta-sd':       50,
+  'real-sd':       0,
+};
+
+function resetarCamposSimulador2() {
+  Object.entries(S2_DEFAULTS).forEach(([chave, val]) => {
+    const el = document.getElementById('s2-' + chave);
+    if (el) el.value = val;
+  });
+  CODIGOS_AACE2.forEach(({ tag }) => {
+    const sid = s2Sid(tag);
+    const l = document.getElementById('s2-cart-linhas-' + sid);   if (l) l.value = 0;
+    const n = document.getElementById('s2-cart-netadds-' + sid);  if (n) n.value = 0;
+  });
+  RAMPA_PRODUTIVIDADE.forEach((r, i) => {
+    const el = document.getElementById('s2-rampa-disp-' + i);
+    if (el) el.value = 0;
+  });
+}
+
+async function salvarSimulador2(silencioso, periodoForcado) {
+  if (!USUARIO_ATUAL || USUARIO_ATUAL.perfil !== 'admin') {
+    if (!silencioso) alert('Apenas administradores podem salvar o Simulador 2.0.');
+    return;
+  }
   const btn = document.getElementById('s2-btn-salvar');
-  btn.textContent = '⏳ Salvando...'; btn.disabled = true;
-  const periodo = document.getElementById('s2-competencia').value || new Date().toISOString().slice(0, 7);
+  if (!silencioso) { btn.textContent = '⏳ Salvando...'; btn.disabled = true; }
+  const periodo = periodoForcado || document.getElementById('s2-competencia').value || new Date().toISOString().slice(0, 7);
   const campos = s2CamposParaSalvar();
   const rows = Object.entries(campos).map(([chave, valor]) => ({ periodo, chave, valor }));
   try {
     const { error } = await supa.from('config_simulador2').upsert(rows, { onConflict: 'periodo,chave' });
     if (error) throw error;
-    btn.textContent = '✅ Salvo!';
+    _simulador2Sujo = false;
+    if (!silencioso) { btn.textContent = '✅ Salvo!'; }
     carregarHistoricoListaSimulador2();
   } catch (e) {
     console.warn('Erro ao salvar Simulador 2.0:', e);
-    btn.textContent = '❌ Erro ao salvar';
-    alert('Não foi possível salvar no Supabase.\n\nMotivo: ' + (e.message || e) +
-      '\n\nVerifique se a tabela "config_simulador2" existe (SQL no código-fonte, logo acima desta função) e se as permissões (RLS) da tabela permitem INSERT/UPDATE para o usuário logado.');
+    if (!silencioso) {
+      btn.textContent = '❌ Erro ao salvar';
+      alert('Não foi possível salvar no Supabase.\n\nMotivo: ' + (e.message || e) +
+        '\n\nVerifique se a tabela "config_simulador2" existe (SQL no código-fonte, logo acima desta função) e se as permissões (RLS) da tabela permitem INSERT/UPDATE para o usuário logado.');
+    }
   } finally {
-    setTimeout(() => { btn.textContent = '💾 Salvar competência'; btn.disabled = false; }, 2000);
+    if (!silencioso) setTimeout(() => { btn.textContent = '💾 Salvar competência'; btn.disabled = false; }, 2000);
   }
 }
 
 async function carregarSimulador2(periodoAlvo) {
   const periodo = periodoAlvo || document.getElementById('s2-competencia').value || new Date().toISOString().slice(0, 7);
+  resetarCamposSimulador2();
   try {
     const { data, error } = await supa.from('config_simulador2').select('*').eq('periodo', periodo);
     if (error) { console.warn('Simulador 2.0: erro ao consultar config_simulador2 —', error.message, error); return; }
-    if (!data || !data.length) return;
-    data.forEach(({ chave, valor }) => {
-      const el = document.getElementById('s2-' + chave);
-      if (el) el.value = valor;
-    });
+    if (data && data.length) {
+      data.forEach(({ chave, valor }) => {
+        const el = document.getElementById('s2-' + chave);
+        if (el) el.value = valor;
+      });
+    }
   } catch (e) {
     console.warn('Simulador 2.0: config_simulador2 indisponível ainda —', e.message, e);
+  } finally {
+    _s2PeriodoCarregado = periodo;
   }
 }
 
@@ -5196,11 +5275,29 @@ async function carregarHistoricoListaSimulador2() {
   } catch (e) { /* tabela ainda não existe — silencioso */ }
 }
 
-async function carregarHistoricoSimulador2(periodo) {
-  if (!periodo) return;
-  document.getElementById('s2-competencia').value = periodo;
-  await carregarSimulador2(periodo);
+// Ponto único de troca de competência — usado tanto pelo campo de mês
+// quanto pelo select de histórico. Salva a edição pendente do período
+// ANTERIOR (se houver e for admin) antes de trocar, e sempre limpa o
+// formulário antes de aplicar os dados do novo período (ou os defaults,
+// se ainda não houver nada salvo pra ele).
+async function trocarPeriodoSimulador2(novoPeriodo) {
+  if (!novoPeriodo) return;
+  if (_simulador2Sujo && _s2PeriodoCarregado && _s2PeriodoCarregado !== novoPeriodo &&
+      USUARIO_ATUAL && USUARIO_ATUAL.perfil === 'admin') {
+    await salvarSimulador2(true, _s2PeriodoCarregado).catch(e => console.warn('Falha ao autosalvar Simulador 2.0:', e));
+  }
+  _simulador2Sujo = false;
+  document.getElementById('s2-competencia').value = novoPeriodo;
+  await carregarSimulador2(novoPeriodo);
   renderSimulador2();
+}
+
+async function trocarCompetenciaSimulador2() {
+  await trocarPeriodoSimulador2(document.getElementById('s2-competencia').value);
+}
+
+async function carregarHistoricoSimulador2(periodo) {
+  await trocarPeriodoSimulador2(periodo);
 }
 
 function exportarSimulador2() {
