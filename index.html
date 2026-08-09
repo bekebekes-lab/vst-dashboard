@@ -5244,15 +5244,17 @@ function renderSimulador2() {
   document.getElementById('s2-cap-bl-sub').textContent = limitanteLabel === 'BL' ? '⚠ é o gargalo' : 'tem folga';
   document.getElementById('s2-cap-heads').textContent = `${totalDisponivel.toLocaleString('pt-BR')} / ${totalVendedores.toLocaleString('pt-BR')}`;
 
-  const metaVozPonderada = metaHcPonderada * metaVozUnit;
-  const metaBlPonderada  = metaHcPonderada * metaBlUnit;
-  const metaSdPonderada  = metaHcPonderada * metaSdUnit;
+  // Item 2.7-ii-d, "Importante": arredondamento de meta é sempre pra cima
+  // (4,50 → 5), independente da fração — nunca pra baixo/mais próximo.
+  const metaVozPonderada = Math.ceil(metaHcPonderada * metaVozUnit);
+  const metaBlPonderada  = Math.ceil(metaHcPonderada * metaBlUnit);
+  const metaSdPonderada  = Math.ceil(metaHcPonderada * metaSdUnit);
 
   // Meta que seria exigida se TODOS os HCs disponíveis (sem limitar pela capacidade) fossem declarados —
   // referência de quão longe a produção atual está de sustentar a rampa inteira.
-  const metaVozMaxTodos = pesoTotalDisponivel * metaVozUnit;
-  const metaBlMaxTodos  = pesoTotalDisponivel * metaBlUnit;
-  const metaSdMaxTodos  = pesoTotalDisponivel * metaSdUnit;
+  const metaVozMaxTodos = Math.ceil(pesoTotalDisponivel * metaVozUnit);
+  const metaBlMaxTodos  = Math.ceil(pesoTotalDisponivel * metaBlUnit);
+  const metaSdMaxTodos  = Math.ceil(pesoTotalDisponivel * metaSdUnit);
 
   const pctMovel = metaVozPonderada > 0 ? (realizadoVoz / metaVozPonderada) * 100 : 0;
   const pctFixa  = metaBlPonderada  > 0 ? (realizadoBl  / metaBlPonderada)  * 100 : 0;
