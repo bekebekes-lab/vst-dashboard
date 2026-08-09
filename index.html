@@ -1529,7 +1529,7 @@
         </div>
         <div class="s2-field">
           <label>Cluster atingido (Elite, dentro da área — item 2.2, Tabela 1)</label>
-          <select id="s2-cluster" onchange="s2AplicarFatoresFixos();marcarSimulador2Sujo()">
+          <select id="s2-cluster" onchange="s2RecalcularFatores();marcarSimulador2Sujo()">
             <option value="P">Cluster "P"</option>
             <option value="M">Cluster "M"</option>
             <option value="G">Cluster "G"</option>
@@ -1552,6 +1552,22 @@
             <input type="number" id="s2-total-hcs" value="1" min="1" onchange="renderSimulador2();marcarSimulador2Sujo()" style="width:70px" title="Total de HCs ativos declarados">
           </div>
           <div class="s2-hint">CNPJ/HC: <b id="s2-cnpjhc-resultado">—</b> · Faixa: <b id="s2-faixa-resultado">—</b></div>
+        </div>
+      </div>
+
+      <div class="s2-params-bar" style="margin-top:10px">
+        <div class="s2-field">
+          <label>Meta trimestral — Móvel Voz (linhas)</label>
+          <input type="number" id="s2-meta-movel-voz" value="0" min="0" step="0.1" onchange="s2RecalcularFatores();marcarSimulador2Sujo()" style="width:100px">
+          <div class="s2-hint">Realizado: <b id="s2-real-movel-voz">0</b> linhas (VOZ Novo + Portabilidade, mesmo escopo acima) · <b id="s2-pct-movel-voz">0%</b> atingido · <b id="s2-faixa-movel-voz">Faixa 0</b></div>
+        </div>
+        <div class="s2-field">
+          <label>Meta trimestral — Fixa Básica Banda Larga (linhas)</label>
+          <input type="number" id="s2-meta-fixa-bl" value="0" min="0" step="0.1" onchange="s2RecalcularFatores();marcarSimulador2Sujo()" style="width:100px">
+          <div class="s2-hint">Realizado: <b id="s2-real-fixa-bl">0</b> linhas (VIRTUA, mesmo escopo acima) · <b id="s2-pct-fixa-bl">0%</b> atingido · <b id="s2-faixa-fixa-bl">Faixa 0</b></div>
+        </div>
+        <div class="s2-field" style="flex:2">
+          <div class="s2-hint">Item 2.3 do regulamento: acima de 100% da meta trimestral (informada mês a mês pela Claro), o AACE ganha um <b>fator adicional</b> por faixa de atingimento e cluster, somado ao fator fixo acima — já embutido nos 3 fatores exibidos na barra de cima. Abaixo de 100%, só vale o fator fixo.</div>
         </div>
       </div>
 
@@ -4849,7 +4865,8 @@ function s2PuxarDadosSheet() {
 
   // Só renderiza se a aba já foi montada (evita erro caso o BaseCRM carregue antes
   // de o usuário nunca ter aberto a aba Simulador 2.0 nesta sessão).
-  if (document.getElementById('s2-recebimento-body')?.children.length) renderSimulador2();
+  // s2RecalcularFatores() já chama renderSimulador2() no final.
+  if (document.getElementById('s2-recebimento-body')?.children.length) s2RecalcularFatores();
 }
 
 // Item 2.6.4-ii — Faixa CNPJ/HC (tabela definitiva, a partir de set/26)
@@ -4873,22 +4890,87 @@ const FAIXAS_CNPJHC_TRANSICAO = [
 //  - virtua  → linha "FIXA BÁSICA: TV/FONE/BANDA LARGA"
 //  - vozPort → linha "MÓVEL: NOVO VOZ/PORTABILIDADE NOVO VOZ-BL/PORTABILIDADE
 //              INCREMENTO VOZ-BL/TT PRÉ PF-PJ VOZ-BL"
-//  - vozNovo → linha "MÓVEL: INCREMENTO MÓDULO VOZ/BL/TT PÓS PF-PJ VOZ-BL" —
+//  - vozNovo → linha "MÓVEL: NOVO BL/INCREMENTO LINHAS E RECEITA VOZ/BL" —
 //              por decisão de negócio, o BaseCRM classifica como "Novo" o que
-//              a política trata como "Incremento", então usamos essa linha
-//              (não a de Novo/Portabilidade) para o fator de VOZ Novo.
+//              a política trata nessa linha (não a de Novo Voz/Portabilidade).
 const FATORES_FIXOS_TABELA1 = {
-  P: { virtua: 2.90, vozNovo: 2.50, vozPort: 5.00 },
-  M: { virtua: 3.10, vozNovo: 2.50, vozPort: 5.20 },
-  G: { virtua: 3.40, vozNovo: 2.50, vozPort: 5.60 },
+  P: { virtua: 2.90, vozNovo: 3.70, vozPort: 5.00 },
+  M: { virtua: 3.10, vozNovo: 3.90, vozPort: 5.20 },
+  G: { virtua: 3.40, vozNovo: 4.20, vozPort: 5.60 },
 };
 
-function s2AplicarFatoresFixos() {
+// Item 2.3, Tabela 1 — Fator adicional por faixa de atingimento de meta
+// trimestral e cluster "P"/"M"/"G". Faixa 1 = 100-119,99%, Faixa 2 =
+// 120-139,99%, Faixa 3 = a partir de 140%. Abaixo de 100% não há adicional.
+// Linhas usadas (mesmo critério de mapeamento do fator fixo, acima):
+//  - virtua  → Fixa Básica: Banda Larga
+//  - vozPort → Móvel: Portabilidade Voz (Novo e Increm)
+//  - vozNovo → Móvel: Portabilidade BL (Novo e Increm) + Incremento Voz/BL
+const FATORES_ADICIONAIS_TABELA1 = {
+  vozNovo: [
+    { P: 0.50, M: 0.60, G: 0.75 },
+    { P: 0.60, M: 0.70, G: 0.85 },
+    { P: 0.70, M: 0.80, G: 0.95 },
+  ],
+  vozPort: [
+    { P: 0.50, M: 0.65, G: 0.90 },
+    { P: 0.60, M: 0.85, G: 1.10 },
+    { P: 0.70, M: 1.05, G: 1.40 },
+  ],
+  virtua: [
+    { P: 0.95, M: 1.15, G: 1.55 },
+    { P: 1.15, M: 1.35, G: 1.75 },
+    { P: 1.45, M: 1.65, G: 2.05 },
+  ],
+};
+
+// Retorna o índice da faixa (0/1/2 = Faixa 1/2/3) ou -1 se não atingiu 100%.
+function s2FaixaAdicionalIdx(pct) {
+  if (pct >= 140) return 2;
+  if (pct >= 120) return 1;
+  if (pct >= 100) return 0;
+  return -1;
+}
+
+// Recalcula os 3 fatores (fixo + adicional) sempre que o cluster, uma meta
+// trimestral ou os dados do BaseCRM (realizado) mudam. O realizado de Móvel
+// Voz soma VOZ Novo + VOZ Portabilidade; o de Fixa Básica BL usa VIRTUA —
+// mesmos dados já agregados por s2PuxarDadosSheet(), mesmo escopo da seção 01.
+function s2RecalcularFatores() {
   const cluster = document.getElementById('s2-cluster').value;
-  const f = FATORES_FIXOS_TABELA1[cluster] || FATORES_FIXOS_TABELA1.P;
-  document.getElementById('s2-fator-virtua').value = f.virtua;
-  document.getElementById('s2-fator-voznovo').value = f.vozNovo;
-  document.getElementById('s2-fator-vozport').value = f.vozPort;
+  const fFixo = FATORES_FIXOS_TABELA1[cluster] || FATORES_FIXOS_TABELA1.P;
+
+  const aggAtivacao = (window._s2SheetData || {}).ativacao || {};
+  let realMovelVoz = 0, realFixaBl = 0;
+  Object.values(aggAtivacao).forEach(u => {
+    realMovelVoz += (u.vozNovo?.qtd || 0) + (u.vozPort?.qtd || 0);
+    realFixaBl += (u.virtua?.qtd || 0);
+  });
+
+  const metaMovelVoz = s2num('s2-meta-movel-voz');
+  const metaFixaBl   = s2num('s2-meta-fixa-bl');
+  const pctMovelVoz = metaMovelVoz > 0 ? (realMovelVoz / metaMovelVoz * 100) : 0;
+  const pctFixaBl   = metaFixaBl   > 0 ? (realFixaBl   / metaFixaBl   * 100) : 0;
+  const faixaMovelVozIdx = s2FaixaAdicionalIdx(pctMovelVoz);
+  const faixaFixaBlIdx   = s2FaixaAdicionalIdx(pctFixaBl);
+
+  const adicVozNovo = faixaMovelVozIdx >= 0 ? FATORES_ADICIONAIS_TABELA1.vozNovo[faixaMovelVozIdx][cluster] : 0;
+  const adicVozPort = faixaMovelVozIdx >= 0 ? FATORES_ADICIONAIS_TABELA1.vozPort[faixaMovelVozIdx][cluster] : 0;
+  const adicVirtua  = faixaFixaBlIdx   >= 0 ? FATORES_ADICIONAIS_TABELA1.virtua[faixaFixaBlIdx][cluster]    : 0;
+
+  document.getElementById('s2-fator-virtua').value  = (fFixo.virtua  + adicVirtua).toFixed(2);
+  document.getElementById('s2-fator-voznovo').value = (fFixo.vozNovo + adicVozNovo).toFixed(2);
+  document.getElementById('s2-fator-vozport').value = (fFixo.vozPort + adicVozPort).toFixed(2);
+
+  const fmtFaixa = idx => idx >= 0 ? ('Faixa ' + (idx + 1)) : 'Faixa 0 (sem adicional)';
+  document.getElementById('s2-real-movel-voz').textContent = realMovelVoz.toLocaleString('pt-BR');
+  document.getElementById('s2-pct-movel-voz').textContent = pctMovelVoz.toFixed(1) + '%';
+  document.getElementById('s2-faixa-movel-voz').textContent = fmtFaixa(faixaMovelVozIdx);
+
+  document.getElementById('s2-real-fixa-bl').textContent = realFixaBl.toLocaleString('pt-BR');
+  document.getElementById('s2-pct-fixa-bl').textContent = pctFixaBl.toFixed(1) + '%';
+  document.getElementById('s2-faixa-fixa-bl').textContent = fmtFaixa(faixaFixaBlIdx);
+
   renderSimulador2();
 }
 
@@ -5209,6 +5291,8 @@ function s2CamposParaSalvar() {
     'meta-voz': s2num('s2-meta-voz'),
     'meta-bl': s2num('s2-meta-bl'),
     'meta-sd': s2num('s2-meta-sd'),
+    'meta-movel-voz': s2num('s2-meta-movel-voz'),
+    'meta-fixa-bl': s2num('s2-meta-fixa-bl'),
   };
   CODIGOS_AACE2.forEach(({ tag }) => {
     const sid = s2Sid(tag);
@@ -5238,6 +5322,16 @@ const S2_DEFAULTS = {
   'meta-voz':      18,
   'meta-bl':       6,
   'meta-sd':       50,
+  'meta-movel-voz': 0,
+  'meta-fixa-bl':   0,
+};
+
+// Metas trimestrais informadas pela Claro (item 2.3-ii) pra jun/jul/ago-26 —
+// usadas como valor inicial só quando a competência ainda não tem nada salvo.
+const S2_METAS_TRIMESTRE = {
+  '2026-06': { 'meta-movel-voz': 1855,   'meta-fixa-bl': 809.2 },
+  '2026-07': { 'meta-movel-voz': 2388.4, 'meta-fixa-bl': 868 },
+  '2026-08': { 'meta-movel-voz': 2388.4, 'meta-fixa-bl': 996.8 },
 };
 
 function resetarCamposSimulador2() {
@@ -5245,7 +5339,7 @@ function resetarCamposSimulador2() {
     const el = document.getElementById('s2-' + chave);
     if (el) el.value = val;
   });
-  s2AplicarFatoresFixos(); // deriva fator-virtua/voznovo/vozport do cluster default
+  s2RecalcularFatores(); // deriva fator-virtua/voznovo/vozport do cluster default
   CODIGOS_AACE2.forEach(({ tag }) => {
     const sid = s2Sid(tag);
     const l = document.getElementById('s2-cart-linhas-' + sid);   if (l) l.value = 0;
@@ -5297,10 +5391,20 @@ async function carregarSimulador2(periodoAlvo) {
         if (el) el.value = valor;
       });
     }
+    // Metas trimestrais conhecidas (jun/jul/ago-26): só aplica se a
+    // competência ainda não tiver nada salvo pra essas duas chaves.
+    const metasDoMes = S2_METAS_TRIMESTRE[periodo];
+    const jaTemMeta = data && data.some(d => d.chave === 'meta-movel-voz' || d.chave === 'meta-fixa-bl');
+    if (metasDoMes && !jaTemMeta) {
+      Object.entries(metasDoMes).forEach(([chave, val]) => {
+        const el = document.getElementById('s2-' + chave);
+        if (el) el.value = val;
+      });
+    }
   } catch (e) {
     console.warn('Simulador 2.0: config_simulador2 indisponível ainda —', e.message, e);
   } finally {
-    s2AplicarFatoresFixos(); // garante que os 3 fatores batem com o cluster que ficou carregado
+    s2RecalcularFatores(); // garante que os 3 fatores batem com o cluster/metas que ficaram carregados
     _s2PeriodoCarregado = periodo;
   }
 }
