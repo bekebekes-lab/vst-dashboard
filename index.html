@@ -4841,8 +4841,10 @@ function s2PuxarDadosSheet() {
 
     // Solução Digital: soma independente da unidade/tag (a Meta de HC de
     // Produtividade — item 2.7-iii-a-3 — é apurada no total, não por unidade).
+    // Diferente de VIRTUA: aqui é só o valor da venda, sem multiplicar por
+    // quantidade (VALOR UNIT já é a receita vendida, não um valor por item).
     if (getGrupoKey(grupo) === 'SERV. DIGITAIS') {
-      recSDCents += qtd * recCents;
+      recSDCents += recCents;
     }
 
     if (!aggAtivacao[tag]) return;
