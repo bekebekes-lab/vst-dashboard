@@ -1479,12 +1479,13 @@
     <!-- PARÂMETROS GERAIS DO PERÍODO — usados em várias seções abaixo -->
     <div class="s2-secao">
       <div class="s2-secao-titulo">Parâmetros do Período</div>
-      <div class="s2-secao-desc">Competência simulada, categoria do parceiro e tabela de CNPJ/HC vigente. Esses valores alimentam o cálculo de todas as seções abaixo.</div>
+      <div class="s2-secao-desc">Categoria do parceiro e tabela de CNPJ/HC vigente. Esses valores alimentam o cálculo de todas as seções abaixo. A competência simulada é sempre a mesma do seletor de Período no topo do dashboard — não precisa (e não dá) pra escolher uma diferente aqui.</div>
       <div class="s2-params-bar">
         <div class="s2-field">
-          <label>Competência</label>
-          <input type="month" id="s2-competencia" onchange="trocarCompetenciaSimulador2()">
-          <div class="s2-hint">Mês/ano de referência do fechamento sendo simulado. Serve apenas de registro — não define sozinho a tabela de CNPJ/HC (ver campo ao lado).</div>
+          <label>Competência (via Período, no topo)</label>
+          <input type="text" id="s2-competencia-label" readonly style="background:var(--bg-2,#f3f4f6);cursor:default">
+          <input type="hidden" id="s2-competencia">
+          <div class="s2-hint">Tudo que você salva aqui (metas, cluster, carteira, HCs) fica gravado nesta competência. Troque de mês lá no seletor de Período, no topo do dashboard.</div>
         </div>
         <div class="s2-field">
           <label>Tabela CNPJ / HC vigente</label>
@@ -5027,6 +5028,28 @@ function s2FaixaPorCnpjHc(razao) {
   return faixas.find(f => razao >= f.min && razao <= f.max) || faixas[faixas.length - 1];
 }
 
+// Converte o valor do seletor de Período do topo ('BaseCRM' ou
+// 'BaseCRM MMYYYY') pro formato 'YYYY-MM' usado como periodo no
+// config_simulador2 — e o caminho inverso, pra quando o histórico do
+// Simulador 2.0 aponta pra um mês que também existe como aba no BaseCRM.
+function s2PeriodoDoSeletorAtivo() {
+  const ativo = getPeriodoAtivo();
+  if (ativo === 'BaseCRM') return new Date().toISOString().slice(0, 7);
+  const m = ativo.match(/BaseCRM\s+(\d{2})(\d{4})/);
+  return m ? `${m[2]}-${m[1]}` : new Date().toISOString().slice(0, 7);
+}
+function s2PeriodoParaSeletorMes(periodoS2) {
+  const m = (periodoS2 || '').match(/^(\d{4})-(\d{2})$/);
+  return m ? `BaseCRM ${m[2]}${m[1]}` : null;
+}
+const S2_MESES_LABEL = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+function s2AtualizarLabelCompetencia() {
+  const m = (document.getElementById('s2-competencia').value || '').match(/^(\d{4})-(\d{2})$/);
+  document.getElementById('s2-competencia-label').value = m
+    ? `${S2_MESES_LABEL[parseInt(m[2], 10) - 1]}/${m[1]}`
+    : '—';
+}
+
 function initSimulador2() {
   // Monta a linha de recebimento por unidade apenas na primeira vez.
   // Net Adds e Linhas da Carteira são os ÚNICOS campos editáveis — a Claro reporta
@@ -5059,19 +5082,23 @@ function initSimulador2() {
       </tr>`).join('');
   }
 
-  if (!document.getElementById('s2-competencia').value) {
-    const hoje = new Date();
-    document.getElementById('s2-competencia').value = hoje.toISOString().slice(0, 7);
-  }
+  // A competência do Simulador 2.0 é sempre a mesma do seletor de Período
+  // do topo — nunca escolhida aqui dentro.
+  const periodoDoSeletor = s2PeriodoDoSeletorAtivo();
 
-  // Carrega config salva da competência só na primeira vez que a aba abre
-  // nesta sessão. Reentradas na aba (trocar pra outra aba e voltar) NÃO
-  // recarregam nem resetam os campos — senão qualquer edição em andamento
-  // seria descartada sem nunca ter sido salva. Trocar de competência tem
-  // fluxo próprio (trocarPeriodoSimulador2), que salva o pendente antes.
   if (primeiraVez) {
-    carregarSimulador2().then(() => { s2PuxarDadosSheet(); });
+    // Primeira vez que a aba abre nesta sessão: carrega a competência atual.
+    document.getElementById('s2-competencia').value = periodoDoSeletor;
+    s2AtualizarLabelCompetencia();
+    carregarSimulador2(periodoDoSeletor).then(() => { s2PuxarDadosSheet(); });
+  } else if (periodoDoSeletor !== _s2PeriodoCarregado) {
+    // O seletor de Período mudou enquanto o usuário estava em outra aba —
+    // sincroniza (salva pendente da competência anterior, se houver, e troca).
+    trocarPeriodoSimulador2(periodoDoSeletor);
   } else {
+    // Reentrada na aba sem mudança de período: NÃO recarrega nem reseta os
+    // campos — só atualiza os dados live do BaseCRM (Comissão de Ativação,
+    // Receita SD). Assim nenhuma edição em andamento é descartada.
     s2PuxarDadosSheet();
   }
   carregarHistoricoListaSimulador2();
@@ -5412,6 +5439,7 @@ async function carregarSimulador2(periodoAlvo) {
   } finally {
     s2RecalcularFatores(); // garante que os 3 fatores batem com o cluster/metas que ficaram carregados
     _s2PeriodoCarregado = periodo;
+    s2AtualizarLabelCompetencia();
   }
 }
 
@@ -5439,16 +5467,26 @@ async function trocarPeriodoSimulador2(novoPeriodo) {
   }
   _simulador2Sujo = false;
   document.getElementById('s2-competencia').value = novoPeriodo;
+  s2AtualizarLabelCompetencia();
   await carregarSimulador2(novoPeriodo);
   renderSimulador2();
 }
 
-async function trocarCompetenciaSimulador2() {
-  await trocarPeriodoSimulador2(document.getElementById('s2-competencia').value);
-}
-
+// Histórico do Simulador 2.0 aponta pra um mês — se esse mês também existir
+// como aba no BaseCRM, troca o seletor de Período do topo pra ele (cascateia
+// pra tudo: dados do BaseCRM, metas do Simulador 1.0 e este). Se não existir
+// (mês fora do que a planilha guarda), só troca a competência aqui mesmo.
 async function carregarHistoricoSimulador2(periodo) {
-  await trocarPeriodoSimulador2(periodo);
+  if (!periodo) return;
+  const valorSeletor = s2PeriodoParaSeletorMes(periodo);
+  const sel = document.getElementById('mes-selector');
+  const existeNoSeletor = sel && valorSeletor && [...sel.options].some(o => o.value === valorSeletor);
+  if (existeNoSeletor) {
+    sel.value = valorSeletor;
+    await trocarMes();
+  } else {
+    await trocarPeriodoSimulador2(periodo);
+  }
 }
 
 function exportarSimulador2() {
@@ -5518,6 +5556,8 @@ async function trocarMes() {
   loadData();
   // Aguarda dados carregarem, depois recarrega metas do novo período
   setTimeout(() => carregarMetasDoBanco(getPeriodoAtivo()), 900);
+  // Sincroniza a competência do Simulador 2.0 com o novo período selecionado
+  setTimeout(() => trocarPeriodoSimulador2(s2PeriodoDoSeletorAtivo()), 900);
   // Reaplica permissões após dados carregarem
   setTimeout(() => aplicarPermissoes(), 1000);
   setTimeout(() => aplicarPermissoes(), 2500);
