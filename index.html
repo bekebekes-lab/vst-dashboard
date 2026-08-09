@@ -1543,7 +1543,7 @@
             <input type="number" id="s2-fator-voznovo" value="5.5" readonly style="width:70px;background:var(--bg-2,#f3f4f6);cursor:default">
             <input type="number" id="s2-fator-vozport" value="7.5" readonly style="width:70px;background:var(--bg-2,#f3f4f6);cursor:default">
           </div>
-          <div class="s2-hint">Preenchidos automaticamente pelo Cluster selecionado. Por decisão de negócio, "VOZ Novo" usa a linha de Incremento da Tabela 1 (não a linha de Novo/Portabilidade) — ver comentário no código.</div>
+          <div class="s2-hint">Preenchidos automaticamente pelo Cluster selecionado (fixo + adicional por meta) — "Voz Portab." já inclui o Plugin de Portabilidade (+R$1,50/linha, item 2.2-v).</div>
         </div>
         <div class="s2-field">
           <label>Total CNPJs · Total HCs</label>
@@ -4899,6 +4899,12 @@ const FATORES_FIXOS_TABELA1 = {
   G: { virtua: 3.40, vozNovo: 4.20, vozPort: 5.60 },
 };
 
+// Item 2.2-v/vi + linha "PLUGIN PORTABILIDADE VOZ" da Tabela 1 — R$/linha
+// fixo, igual em qualquer modalidade/cluster/dentro-fora área. Só vale para
+// Portabilidade Novo/Incremento de VOZ (não vale pra Banda Larga Móvel),
+// somado ao fator normal de "Voz Portab." acima.
+const PLUGIN_PORTABILIDADE_VOZ = 1.50;
+
 // Item 2.3, Tabela 1 — Fator adicional por faixa de atingimento de meta
 // trimestral e cluster "P"/"M"/"G". Faixa 1 = 100-119,99%, Faixa 2 =
 // 120-139,99%, Faixa 3 = a partir de 140%. Abaixo de 100% não há adicional.
@@ -4960,7 +4966,7 @@ function s2RecalcularFatores() {
 
   document.getElementById('s2-fator-virtua').value  = (fFixo.virtua  + adicVirtua).toFixed(2);
   document.getElementById('s2-fator-voznovo').value = (fFixo.vozNovo + adicVozNovo).toFixed(2);
-  document.getElementById('s2-fator-vozport').value = (fFixo.vozPort + adicVozPort).toFixed(2);
+  document.getElementById('s2-fator-vozport').value = (fFixo.vozPort + adicVozPort + PLUGIN_PORTABILIDADE_VOZ).toFixed(2);
 
   const fmtFaixa = idx => idx >= 0 ? ('Faixa ' + (idx + 1)) : 'Faixa 0 (sem adicional)';
   document.getElementById('s2-real-movel-voz').textContent = realMovelVoz.toLocaleString('pt-BR');
@@ -5329,9 +5335,9 @@ const S2_DEFAULTS = {
 // Metas trimestrais informadas pela Claro (item 2.3-ii) pra jun/jul/ago-26 —
 // usadas como valor inicial só quando a competência ainda não tem nada salvo.
 const S2_METAS_TRIMESTRE = {
-  '2026-06': { 'meta-movel-voz': 1855,   'meta-fixa-bl': 809.2 },
-  '2026-07': { 'meta-movel-voz': 2388.4, 'meta-fixa-bl': 868 },
-  '2026-08': { 'meta-movel-voz': 2388.4, 'meta-fixa-bl': 996.8 },
+  '2026-06': { 'meta-movel-voz': 1325, 'meta-fixa-bl': 578 },
+  '2026-07': { 'meta-movel-voz': 1706, 'meta-fixa-bl': 620 },
+  '2026-08': { 'meta-movel-voz': 1706, 'meta-fixa-bl': 712 },
 };
 
 function resetarCamposSimulador2() {
