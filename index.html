@@ -293,6 +293,45 @@
   .tab-btn:hover { color: var(--text-2); }
   .tab-btn.active { color: var(--brand); border-bottom-color: var(--brand); font-weight: 600; }
 
+  /* ─── BOTTOM NAV — só existe visualmente no breakpoint mobile (ver
+       @media max-width:768px). Escondida por padrão pra nunca aparecer
+       no desktop, mesmo que a viewport mude sem reload. ─── */
+  .mobile-bottom-nav {
+    display: none;
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 200;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    box-shadow: 0 -2px 12px rgba(0,0,0,.06);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .mobile-bottom-nav .bottom-nav-btn {
+    flex: 1 1 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 3px; padding: 7px 2px 8px;
+    min-height: 56px;
+    border: none; border-bottom: none;
+    color: var(--text-3);
+    font-size: 10.5px; font-weight: 600;
+  }
+  .mobile-bottom-nav .bottom-nav-btn.active { color: var(--brand); border-bottom: none; }
+  .mobile-bottom-nav .bottom-nav-icon { font-size: 20px; line-height: 1; }
+  .mobile-bottom-nav .bottom-nav-label { white-space: nowrap; }
+
+  /* ─── DRAWER DE CONTA (mobile) — mesma lógica: escondido por padrão,
+       só existe visualmente dentro do breakpoint mobile. ─── */
+  .mobile-drawer-backdrop { display: none; }
+  .mobile-drawer { display: none; }
+  .mobile-drawer-header { display: flex; align-items: center; gap: 12px; padding: 20px 18px; border-bottom: 1px solid var(--border); }
+  .mobile-drawer-nome { font-weight: 600; color: var(--text); font-size: 14px; }
+  .mobile-drawer-perfil { font-size: 11px; color: var(--text-3); text-transform: uppercase; letter-spacing: .04em; margin-top: 2px; }
+  .mobile-drawer-item {
+    display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+    padding: 16px 18px; background: none; border: none;
+    font-size: 14px; color: var(--text); cursor: pointer;
+    font-family: 'DM Sans', sans-serif;
+  }
+  .mobile-drawer-item:active { background: var(--surface-2); }
+
   /* ─── CONTENT ────────────────────────────────────────────── */
   .content { padding: 20px 24px; max-width: 1440px; margin: 0 auto; }
   .tab-panel { display: none; }
@@ -924,10 +963,37 @@
     .user-avatar { width: 28px; height: 28px; font-size: 11px; }
     .mes-label { display: none; }
     .mes-select { font-size: 12px !important; padding: 5px 8px; }
-    .tabs-nav { padding: 0 10px; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
-    .tabs-nav::-webkit-scrollbar { display: none; }
+    .tabs-nav { display: none; }
+    .mobile-bottom-nav { display: flex; }
+    .mobile-drawer-backdrop {
+      display: block; position: fixed; inset: 0; z-index: 500;
+      background: rgba(15,23,42,.45);
+      opacity: 0; visibility: hidden;
+      transition: opacity .2s, visibility .2s;
+    }
+    .mobile-drawer-backdrop.show { opacity: 1; visibility: visible; }
+    .mobile-drawer {
+      display: flex; flex-direction: column;
+      position: fixed; top: 0; right: 0; bottom: 0; z-index: 501;
+      width: 78%; max-width: 320px;
+      background: var(--surface);
+      box-shadow: -8px 0 24px rgba(0,0,0,.15);
+      transform: translateX(100%);
+      transition: transform .25s ease;
+      padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom);
+    }
+    .mobile-drawer.open { transform: translateX(0); }
+    /* Modais de drill-down (montados via JS com style inline) full-screen
+       no mobile — !important pra vencer o inline, sem tocar no desktop. */
+    #cliente-modal, #disc-modal {
+      padding: 0 !important; align-items: stretch !important;
+    }
+    #cliente-modal > div, #disc-modal > div {
+      max-width: 100% !important; width: 100% !important;
+      min-height: 100%; border-radius: 0 !important;
+    }
     .tab-btn { padding: 13px 16px; font-size: 12px; white-space: nowrap; min-height: 44px; }
-    .content { padding: 12px; }
+    .content { padding: 12px 12px calc(64px + env(safe-area-inset-bottom) + 12px); }
     .filters-bar { grid-template-columns: 1fr 1fr; gap: 8px; padding: 10px 12px; }
     .prod-filters { gap: 8px; padding: 12px; }
     .prod-filter-group { min-width: calc(50% - 4px); flex: 1 1 calc(50% - 4px); }
@@ -1207,7 +1273,7 @@
     <span class="last-update" id="last-update"></span>
     <button class="btn-refresh" id="btn-refresh" onclick="triggerBotEAtualizar(this)">↻ Atualizar</button>
     <span class="clock" id="clock"></span>
-    <div class="user-badge" onclick="fazerLogout()" title="Clique para sair">
+    <div class="user-badge" onclick="handleUserBadgeClick()" title="Clique para sair">
       <div class="user-avatar" id="user-avatar">?</div>
       <span id="user-nome">...</span>
       <span class="user-perfil-badge" id="user-perfil"></span>
@@ -1217,11 +1283,43 @@
 
 <!-- TABS -->
 <div class="tabs-nav">
-  <button class="tab-btn active" onclick="switchTab('simulador', this)">🎯 Simulador de Carteira</button>
-  <button class="tab-btn" onclick="switchTab('gerencial', this)">📊 Gerencial</button>
-  <button class="tab-btn" onclick="switchTab('producao', this)">🏭 Produção</button>
+  <button class="tab-btn active" id="tab-btn-simulador" onclick="switchTab('simulador', this)">🎯 Simulador de Carteira</button>
+  <button class="tab-btn" id="tab-btn-gerencial" onclick="switchTab('gerencial', this)">📊 Gerencial</button>
+  <button class="tab-btn" id="tab-btn-producao" onclick="switchTab('producao', this)">🏭 Produção</button>
   <button class="tab-btn" id="tab-btn-discadora" onclick="switchTab('discadora', this)">📞 Discadora</button>
   <button class="tab-btn" id="tab-btn-simulador2" onclick="switchTab('simulador2', this)">🧮 Simulador 2.0</button>
+</div>
+
+<!-- BOTTOM NAV (mobile only — casca visual nova, chama switchTab() já existente) -->
+<div class="mobile-bottom-nav" id="mobile-bottom-nav">
+  <button class="tab-btn bottom-nav-btn active" onclick="mobileSwitchTab('simulador', this)">
+    <span class="bottom-nav-icon">🎯</span><span class="bottom-nav-label">Simulador</span>
+  </button>
+  <button class="tab-btn bottom-nav-btn" onclick="mobileSwitchTab('gerencial', this)">
+    <span class="bottom-nav-icon">📊</span><span class="bottom-nav-label">Gerencial</span>
+  </button>
+  <button class="tab-btn bottom-nav-btn" onclick="mobileSwitchTab('producao', this)">
+    <span class="bottom-nav-icon">🏭</span><span class="bottom-nav-label">Produção</span>
+  </button>
+  <button class="tab-btn bottom-nav-btn" onclick="mobileSwitchTab('discadora', this)">
+    <span class="bottom-nav-icon">📞</span><span class="bottom-nav-label">Discadora</span>
+  </button>
+  <button class="tab-btn bottom-nav-btn" onclick="mobileSwitchTab('simulador2', this)">
+    <span class="bottom-nav-icon">🧮</span><span class="bottom-nav-label">Simul. 2.0</span>
+  </button>
+</div>
+
+<!-- DRAWER DE CONTA (mobile) -->
+<div class="mobile-drawer-backdrop" id="mobile-drawer-backdrop" onclick="fecharDrawerConta()"></div>
+<div class="mobile-drawer" id="mobile-drawer-conta">
+  <div class="mobile-drawer-header">
+    <div class="user-avatar" id="drawer-user-avatar">?</div>
+    <div>
+      <div class="mobile-drawer-nome" id="drawer-user-nome">—</div>
+      <div class="mobile-drawer-perfil" id="drawer-user-perfil">—</div>
+    </div>
+  </div>
+  <button class="mobile-drawer-item" onclick="fecharDrawerConta();fazerLogout()">🚪 Sair</button>
 </div>
 
 <!-- CONTENT -->
@@ -4442,6 +4540,18 @@ function switchTab(name, el) {
   if (name === 'simulador2') initSimulador2();
 }
 
+// Bottom nav (mobile) — delega pro switchTab() de sempre usando o botão
+// desktop correspondente (mesma lógica de permissão/carregamento), só marca
+// o próprio botão da bottom nav como ativo depois (switchTab já limpa
+// .active de todo .tab-btn, incluindo os da bottom nav, que também têm essa
+// classe — é assim que aplicarPermissoes() também já esconde/mostra eles
+// automaticamente por perfil, sem precisar de lógica extra).
+function mobileSwitchTab(name, btnEl) {
+  const desktopBtn = document.getElementById('tab-btn-' + name);
+  switchTab(name, desktopBtn || btnEl);
+  btnEl.classList.add('active');
+}
+
 // ─── SUPABASE CONFIG ────────────────────────────────────────────────────────
 const SUPA_URL = 'https://kzlchetrpsfefwybaaoy.supabase.co';
 const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt6bGNoZXRycHNmZWZ3eWJhYW95Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkwNTM4NDIsImV4cCI6MjA5NDYyOTg0Mn0.4euWpZZadXe9ayg6ITY5SNueEhU094ajJv379gC9YrU';
@@ -6120,6 +6230,28 @@ async function fazerLogout() {
   document.getElementById('login-senha').value = '';
   document.getElementById('login-btn').disabled = false;
   document.getElementById('login-btn').textContent = 'Entrar';
+}
+
+// No mobile, tocar no avatar abre o drawer de conta em vez de deslogar
+// direto (o desktop continua exatamente como era: clique = confirm() de
+// logout).
+function handleUserBadgeClick() {
+  if (window.matchMedia('(max-width: 768px)').matches) {
+    abrirDrawerConta();
+  } else {
+    fazerLogout();
+  }
+}
+function abrirDrawerConta() {
+  document.getElementById('drawer-user-avatar').textContent = document.getElementById('user-avatar').textContent;
+  document.getElementById('drawer-user-nome').textContent = document.getElementById('user-nome').textContent;
+  document.getElementById('drawer-user-perfil').textContent = document.getElementById('user-perfil').textContent;
+  document.getElementById('mobile-drawer-conta').classList.add('open');
+  document.getElementById('mobile-drawer-backdrop').classList.add('show');
+}
+function fecharDrawerConta() {
+  document.getElementById('mobile-drawer-conta').classList.remove('open');
+  document.getElementById('mobile-drawer-backdrop').classList.remove('show');
 }
 
 // ─── DISCADORA ───────────────────────────────────────────────────────────────
