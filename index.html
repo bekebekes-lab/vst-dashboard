@@ -6172,8 +6172,32 @@ function aplicarTravaProducao() {
     )];
     if (estadosSupervisaoProd.length > 0) travarProdEstado(estadosSupervisaoProd);
 
-  } else if ((p === 'gestor_macro' || p === 'gestor_macro3' || p === 'gestor' || p === 'gestor_beta') && ((USUARIO_ATUAL.gestores_ref || []).length > 0 || USUARIO_ATUAL.gestor_ref)) {
-    // Trava o filtro de Estado da Produção para gestor/gestor_macro/gestor_macro3/gestor_beta
+  } else if (p === 'gestor_macro3' && ((USUARIO_ATUAL.gestores_ref || []).length > 0 || USUARIO_ATUAL.gestor_ref) && document.getElementById('dd-content-prod-gestor')) {
+    // Trava Produção no gestor único (mesmo tratamento de gestor_macro2, mas com 1 nome)
+    const nomesLockMacro3 = (USUARIO_ATUAL.gestores_ref || []).length > 0 ? USUARIO_ATUAL.gestores_ref : [USUARIO_ATUAL.gestor_ref];
+    travarDropdownMulti('dd-content-prod-gestor', '#dd-prod-gestor .dropdown-btn', nomesLockMacro3);
+
+    // Restringe a lista de Equipes às equipes desse gestor
+    if (ALL_DATA.length) {
+      const equipesPermitidasMacro3 = new Set();
+      ALL_DATA.forEach(r => {
+        const eq = r['EQUIPE'];
+        if (eq && nomesLockMacro3.includes(EQUIPES_GESTORES[eq])) equipesPermitidasMacro3.add(eq);
+      });
+      if (equipesPermitidasMacro3.size > 0) popularDropdownEquipe([...equipesPermitidasMacro3].sort());
+    }
+
+    // Trava o filtro de Estado da Produção nos estados do gestor
+    const estadosMacro3Prod = [...new Set(
+      Object.entries(EQUIPES_GESTORES)
+        .filter(([eq, ges]) => nomesLockMacro3.includes(ges))
+        .map(([eq]) => EQUIPES_ESTADOS[eq])
+        .filter(Boolean)
+    )];
+    if (estadosMacro3Prod.length > 0) travarProdEstado(estadosMacro3Prod);
+
+  } else if ((p === 'gestor_macro' || p === 'gestor' || p === 'gestor_beta') && ((USUARIO_ATUAL.gestores_ref || []).length > 0 || USUARIO_ATUAL.gestor_ref)) {
+    // Trava o filtro de Estado da Produção para gestor/gestor_macro/gestor_beta
     const nomesLockProd = (USUARIO_ATUAL.gestores_ref || []).length > 0 ? USUARIO_ATUAL.gestores_ref : [USUARIO_ATUAL.gestor_ref];
     const estadosGestorProd = [...new Set(
       Object.entries(EQUIPES_GESTORES)
