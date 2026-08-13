@@ -2483,6 +2483,48 @@ function thDrill(col, label, currentCol, currentAsc, onclickFn) {
   return `<th class="center th-sort${active ? ' th-sort-active' : ''}" style="cursor:pointer" onclick="${onclickFn}('${col}')">${label}<span class="sort-arrow">${arrow}</span></th>`;
 }
 
+// ─── TRAVA DE ESCOPO (defesa em profundidade) ───────────────────────────────
+// Todas as travas de perfil até aqui dependiam só do estado dos dropdowns
+// (marcar/travar a opção certa) — se QUALQUER dropdown esquecer de ser
+// restringido ou repopular fora de ordem, os dados vazam (já aconteceu 2x:
+// Produção do gestor_macro3 e o raio-x de cliente do consultor). Esta função
+// calcula o escopo real do perfil direto de USUARIO_ATUAL — sem depender de
+// nenhum elemento da tela — para ser usada como um filtro obrigatório e
+// independente em cima de ALL_DATA, em Gerencial e Produção.
+function getEscopoTravado() {
+  const u = USUARIO_ATUAL;
+  const p = u?.perfil;
+  if (!p || p === 'admin') return null;
+
+  if (p === 'gestor_macro2') {
+    const g = u.gestores_ref || [];
+    return g.length ? { gestores: new Set(g) } : null;
+  }
+  if (p === 'gestor_macro' || p === 'gestor_macro3' || p === 'gestor' || p === 'gestor_beta') {
+    const g = (u.gestores_ref || []).length ? u.gestores_ref : (u.gestor_ref ? [u.gestor_ref] : []);
+    return g.length ? { gestores: new Set(g) } : null;
+  }
+  if (p === 'supervisao' || p === 'supervisao_beta') {
+    const e = u.equipes_ref || [];
+    return e.length ? { equipes: new Set(e) } : null;
+  }
+  if (p === 'consultor') {
+    return u.consultor_ref ? { consultorRef: u.consultor_ref.toUpperCase() } : null;
+  }
+  return null;
+}
+
+// Testa uma linha crua de ALL_DATA contra o escopo travado. `equipe` pode ser
+// passado já calculado (evita recalcular EQUIPES_GESTORES[eq] de novo).
+function linhaDentroDoEscopo(r, escopo, equipe) {
+  if (!escopo) return true;
+  const eq = equipe !== undefined ? equipe : (r['EQUIPE'] || '');
+  if (escopo.gestores && !escopo.gestores.has(EQUIPES_GESTORES[eq])) return false;
+  if (escopo.equipes && !escopo.equipes.has(eq)) return false;
+  if (escopo.consultorRef && (r['PROPRIETÁRIO DO PEDIDO'] || '').toUpperCase() !== escopo.consultorRef) return false;
+  return true;
+}
+
 // ─── main render ────────────────────────────────────────────────────────────
 function render() {
   if (!ALL_DATA.length) return;
@@ -2513,6 +2555,7 @@ function render() {
   let consMap = {};
   let nConsSet = new Set();
   let totalRows = 0;
+  const escopo = getEscopoTravado();
 
   ALL_DATA.forEach(r => {
     const eq  = r['EQUIPE'];
@@ -2524,6 +2567,7 @@ function render() {
     const fila = r['FILA'] || 'Sem Status';
     const grupo = r['GRUPO'] || '';
 
+    if (!linhaDentroDoEscopo(r, escopo, eq)) return;
     if (estado    !== 'Todos' && est  !== estado)         return;
     if (gestorSel.length > 0  && !gestorSel.includes(ges)) return;
     if (equipeSel.length > 0  && !equipeSel.includes(eq))  return;
@@ -2684,6 +2728,7 @@ function drillFila(categoria, fila) {
   const consultor = document.getElementById('f-consultor').value;
   const tag       = document.getElementById('f-tag').value;
 
+  const escopo = getEscopoTravado();
   const filtered = ALL_DATA.filter(r => {
     const eq  = r['EQUIPE'];
     const est = EQUIPES_ESTADOS[eq] || '';
@@ -2694,6 +2739,7 @@ function drillFila(categoria, fila) {
     const filaR = r['FILA'] || 'Sem Status';
     const grupoKey = getGrupoKey(grupo);
 
+    if (!linhaDentroDoEscopo(r, escopo, eq)) return false;
     if (estado    !== 'Todos' && est  !== estado)         return false;
     if (gestorSel.length > 0  && !gestorSel.includes(ges)) return false;
     if (equipeSel.length > 0  && !equipeSel.includes(eq))  return false;
@@ -2892,13 +2938,11 @@ function abrirDetalheCliente(idx) {
     relacionados = ALL_DATA.filter(r => (r['VINCULADO'] || '').trim() === vinc);
   }
 
-  // Consultor só pode ver, dentro do raio-x do cliente, os pedidos em que ele
-  // próprio é o proprietário — um mesmo cliente pode ter pedidos de outros
-  // consultores, e esses não são assunto dele.
-  if (USUARIO_ATUAL?.perfil === 'consultor' && USUARIO_ATUAL.consultor_ref) {
-    const refUp = USUARIO_ATUAL.consultor_ref.toUpperCase();
-    relacionados = relacionados.filter(r => (r['PROPRIETÁRIO DO PEDIDO'] || '').toUpperCase() === refUp);
-  }
+  // Ninguém pode ver, dentro do raio-x do cliente, pedidos fora do seu escopo
+  // travado — um mesmo cliente pode ter pedidos de outro consultor/equipe/
+  // gestor, e esses não são assunto de quem está travado.
+  const escopoDetalhe = getEscopoTravado();
+  relacionados = relacionados.filter(r => linhaDentroDoEscopo(r, escopoDetalhe));
 
   if (!relacionados.length) relacionados = [row];
 
@@ -4124,6 +4168,7 @@ function calcularOpcoesInteligentesProducao() {
   const estadosSet = new Set();
   const ufClienteSet = new Set();
   const dddSet = new Set();
+  const escopoOpcoes = getEscopoTravado();
 
   ALL_DATA.forEach(r => {
     const equipe    = r['EQUIPE'] || '';
@@ -4139,6 +4184,7 @@ function calcularOpcoesInteligentesProducao() {
     const est       = EQUIPES_ESTADOS[equipe] || '';
     const ges       = EQUIPES_GESTORES[equipe] || 'Sem Gestor';
 
+    if (!linhaDentroDoEscopo(r, escopoOpcoes, equipe)) return;
     // Filtros que sempre valem para as três dimensões (status, gestor, equipe,
     // consultor, UF BL, grupo, tag)
     if (statusArr.length > 0 && !statusArr.includes(fila)) return;
@@ -4215,6 +4261,7 @@ async function renderProducao() {
   const filtroDDD       = getCheckedValuesDd('dd-content-prod-ddd'); // vazio = todos
   const filtroGrupo  = document.getElementById('prod-grupo').value;
   const statusArr    = [...prodStatusSelecionados];
+  const escopo = getEscopoTravado();
 
   const resultArea = document.getElementById('prod-result-area');
 
@@ -4275,6 +4322,7 @@ async function renderProducao() {
     // Filtro estado/gestor/equipe/consultor em cascata
     const est = EQUIPES_ESTADOS[equipe] || '';
     const ges = EQUIPES_GESTORES[equipe] || 'Sem Gestor';
+    if (!linhaDentroDoEscopo(r, escopo, equipe)) return;
     if (filtroEstado !== 'Todos' && est !== filtroEstado) return;
     if (gestoresChecked.length > 0 && !gestoresChecked.includes(ges)) return;
     if (equipesChecked.length > 0 && !equipesChecked.includes(equipe)) return;
@@ -6248,6 +6296,19 @@ function aplicarTravaProducao() {
         .filter(Boolean)
     )];
     if (estadosGestorProd.length > 0) travarProdEstado(estadosGestorProd);
+  }
+
+  // Reconstrói a lista de Consultor da Produção direto do escopo travado
+  // (independente de qual dropdown/cascata rodou antes) — nenhum dos blocos
+  // acima mexia nela, então ficava com a lista cheia (todo mundo) mesmo com
+  // Gestor/Equipe travados.
+  const escopoProd = getEscopoTravado();
+  if (escopoProd && ALL_DATA.length && document.getElementById('dd-content-prod-consultor')) {
+    const consultoresPermitidosProd = new Set();
+    ALL_DATA.forEach(r => {
+      if (linhaDentroDoEscopo(r, escopoProd) && r['PROPRIETÁRIO DO PEDIDO']) consultoresPermitidosProd.add(r['PROPRIETÁRIO DO PEDIDO']);
+    });
+    popularDropdownProdConsultor([...consultoresPermitidosProd].sort());
   }
 }
 
