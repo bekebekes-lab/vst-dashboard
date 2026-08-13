@@ -5969,7 +5969,7 @@ function aplicarPermissoes() {
     'gestor':         ['gerencial', 'discadora'],
     'gestor_beta':    ['gerencial'],
     'supervisao':     ['gerencial', 'discadora'],
-    'supervisao_beta':['gerencial'],
+    'supervisao_beta':['gerencial', 'producao'],
     'consultor':      ['gerencial']
   };
   const permitidas = abasPermitidas[p] || ['gerencial'];
@@ -6196,7 +6196,18 @@ function aplicarTravaProducao() {
     )];
     if (estadosMacro2Prod.length > 0) travarProdEstado(estadosMacro2Prod);
 
-  } else if ((p === 'supervisao' || p === 'supervisao_beta') && (USUARIO_ATUAL.equipes_ref || []).length > 0) {
+  } else if ((p === 'supervisao' || p === 'supervisao_beta') && (USUARIO_ATUAL.equipes_ref || []).length > 0 && document.getElementById('dd-content-prod-equipe')) {
+    // Trava Produção nas equipes da supervisão
+    travarDropdownMulti('dd-content-prod-equipe', '#dd-prod-equipe .dropdown-btn', USUARIO_ATUAL.equipes_ref);
+
+    // Trava o dropdown de Gestor nas equipes do escopo (impede selecionar gestor fora do escopo)
+    const gestoresDasEquipesProd = [...new Set(
+      USUARIO_ATUAL.equipes_ref.map(eq => EQUIPES_GESTORES[eq]).filter(Boolean)
+    )];
+    if (gestoresDasEquipesProd.length > 0 && document.getElementById('dd-content-prod-gestor')) {
+      travarDropdownMulti('dd-content-prod-gestor', '#dd-prod-gestor .dropdown-btn', gestoresDasEquipesProd);
+    }
+
     // Trava o filtro de Estado da Produção nos estados das equipes da supervisão
     const estadosSupervisaoProd = [...new Set(
       USUARIO_ATUAL.equipes_ref.map(eq => EQUIPES_ESTADOS[eq]).filter(Boolean)
