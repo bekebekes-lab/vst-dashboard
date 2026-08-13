@@ -2891,6 +2891,15 @@ function abrirDetalheCliente(idx) {
   } else if (vinc && vinc !== '—') {
     relacionados = ALL_DATA.filter(r => (r['VINCULADO'] || '').trim() === vinc);
   }
+
+  // Consultor só pode ver, dentro do raio-x do cliente, os pedidos em que ele
+  // próprio é o proprietário — um mesmo cliente pode ter pedidos de outros
+  // consultores, e esses não são assunto dele.
+  if (USUARIO_ATUAL?.perfil === 'consultor' && USUARIO_ATUAL.consultor_ref) {
+    const refUp = USUARIO_ATUAL.consultor_ref.toUpperCase();
+    relacionados = relacionados.filter(r => (r['PROPRIETÁRIO DO PEDIDO'] || '').toUpperCase() === refUp);
+  }
+
   if (!relacionados.length) relacionados = [row];
 
   // GROSS é um agregado que já é coberto pelas abas de VOZ (Transf. Titularidade
