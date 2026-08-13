@@ -3949,6 +3949,13 @@ function verificarEquipesSemHierarquia() {
   const alertaEl = document.getElementById('prod-equipe-alerta');
   if (!alertaEl) return;
 
+  // Aviso técnico só interessa ao admin — os demais perfis não têm o que
+  // fazer com isso, e a mensagem menciona nomes internos de variáveis.
+  if (USUARIO_ATUAL?.perfil !== 'admin') {
+    alertaEl.innerHTML = '';
+    return;
+  }
+
   const equipesSemHierarquia = new Set();
   ALL_DATA.forEach(r => {
     const eq = r['EQUIPE'];
