@@ -2431,6 +2431,26 @@ function fillSelect(id, opts) {
   if (opts.includes(cur)) sel.value = cur;
 }
 
+// Trava o select de Consultor no nome do perfil 'consultor'. Faz match
+// ignorando maiúsc/minúsc contra as opções já populadas (dados reais do CRM);
+// se não achar nenhuma (ex.: consultor novo, ainda sem pedido nenhum na base),
+// cria a opção com o valor cru — nunca deixa o select "vazio" (select.value = X
+// falha em silêncio se não existir <option value="X">, e isso zerava os dados
+// de qualquer consultor cujo nome não batesse 100% com a base).
+function travarSelectConsultor(ref) {
+  const sel = document.getElementById('f-consultor');
+  if (!sel || !ref) return;
+  const opts = [...sel.options];
+  let match = opts.find(o => o.value === ref) || opts.find(o => o.value.toUpperCase() === ref.toUpperCase());
+  if (!match) {
+    match = document.createElement('option');
+    match.value = ref;
+    match.textContent = ref;
+    sel.appendChild(match);
+  }
+  sel.value = match.value;
+}
+
 function onFilterChange(level) {
   // Estado dispara a cascata: recalcula Gestor → Equipe → Consultor/Tag.
   if (level === 'estado') atualizarCascataGerencial();
@@ -2470,8 +2490,8 @@ function render() {
   // Proteção: garante que consultor nunca veja dados de outros
   if (USUARIO_ATUAL?.perfil === 'consultor' && USUARIO_ATUAL.consultor_ref) {
     const selC = document.getElementById('f-consultor');
-    if (selC && selC.value !== USUARIO_ATUAL.consultor_ref) {
-      selC.value = USUARIO_ATUAL.consultor_ref;
+    if (selC && selC.value.toUpperCase() !== USUARIO_ATUAL.consultor_ref.toUpperCase()) {
+      travarSelectConsultor(USUARIO_ATUAL.consultor_ref);
     }
     ['f-estado','f-tag'].forEach(id => {
       const sel = document.getElementById(id);
@@ -2507,7 +2527,7 @@ function render() {
     if (estado    !== 'Todos' && est  !== estado)         return;
     if (gestorSel.length > 0  && !gestorSel.includes(ges)) return;
     if (equipeSel.length > 0  && !equipeSel.includes(eq))  return;
-    if (consultor !== 'Todos' && cons !== consultor)      return;
+    if (consultor !== 'Todos' && cons.toUpperCase() !== consultor.toUpperCase()) return;
     if (tag       !== 'Todas' && rtag !== tag)            return;
 
     totalRows++;
@@ -2677,7 +2697,7 @@ function drillFila(categoria, fila) {
     if (estado    !== 'Todos' && est  !== estado)         return false;
     if (gestorSel.length > 0  && !gestorSel.includes(ges)) return false;
     if (equipeSel.length > 0  && !equipeSel.includes(eq))  return false;
-    if (consultor !== 'Todos' && cons !== consultor)      return false;
+    if (consultor !== 'Todos' && cons.toUpperCase() !== consultor.toUpperCase()) return false;
     if (tag       !== 'Todas' && rtag !== tag)            return false;
     if (filaR !== fila) return false;
     // sempre restringir aos 4 grupos mapeados
@@ -6014,7 +6034,7 @@ function aplicarPermissoes() {
       // Trava o filtro de consultor no próprio nome
       const selC = document.getElementById('f-consultor');
       if (selC && USUARIO_ATUAL.consultor_ref) {
-        selC.value = USUARIO_ATUAL.consultor_ref;
+        travarSelectConsultor(USUARIO_ATUAL.consultor_ref);
         selC.disabled = true;
         selC.style.opacity = '0.5';
         selC.style.pointerEvents = 'none';
