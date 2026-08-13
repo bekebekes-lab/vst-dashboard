@@ -5684,7 +5684,7 @@ async function trocarMes() {
   const p = USUARIO_ATUAL?.perfil;
   const filtrosLivres = [];
   if (!['consultor'].includes(p)) filtrosLivres.push('f-consultor');
-  if (!['consultor','gestor','gestor_beta','supervisao'].includes(p)) filtrosLivres.push('f-tag');
+  if (!['consultor','gestor','gestor_beta','supervisao','supervisao_beta'].includes(p)) filtrosLivres.push('f-tag');
 
   filtrosLivres.forEach(id => {
     const sel = document.getElementById(id);
@@ -5695,7 +5695,7 @@ async function trocarMes() {
   if (!['gestor_macro','gestor_macro2','gestor_macro3','gestor','gestor_beta'].includes(p)) {
     limparDropdownMulti('dd-content-f-gestor', '#dd-f-gestor .dropdown-btn');
   }
-  if (p !== 'supervisao') {
+  if (p !== 'supervisao' && p !== 'supervisao_beta') {
     limparDropdownMulti('dd-content-f-equipe', '#dd-f-equipe .dropdown-btn');
   }
 
@@ -5955,6 +5955,7 @@ async function carregarPerfil(user) {
 //  gestor         — Gerencial travado no seu gestor_ref (1 nome) + Discadora travada no grupo_ref (cidade)
 //  gestor_beta    — igual gestor, mas sem acesso à Discadora
 //  supervisao     — Gerencial travado em equipes_ref (1+ equipes) + Discadora travada no grupo_ref (cidade)
+//  supervisao_beta— igual supervisao, mas sem acesso à Discadora
 //  consultor      — nada muda (travado no consultor_ref)
 function aplicarPermissoes() {
   const p = USUARIO_ATUAL.perfil;
@@ -5968,6 +5969,7 @@ function aplicarPermissoes() {
     'gestor':         ['gerencial', 'discadora'],
     'gestor_beta':    ['gerencial'],
     'supervisao':     ['gerencial', 'discadora'],
+    'supervisao_beta':['gerencial'],
     'consultor':      ['gerencial']
   };
   const permitidas = abasPermitidas[p] || ['gerencial'];
@@ -6080,7 +6082,7 @@ function aplicarPermissoes() {
       }
       restringirListasGerencial(USUARIO_ATUAL.gestores_ref, null);
       render();
-    } else if (p === 'supervisao' && (USUARIO_ATUAL.equipes_ref || []).length > 0) {
+    } else if ((p === 'supervisao' || p === 'supervisao_beta') && (USUARIO_ATUAL.equipes_ref || []).length > 0) {
       // Trava Gerencial em 1+ equipes (supervisão)
       travarDropdownMulti('dd-content-f-equipe', '#dd-f-equipe .dropdown-btn', USUARIO_ATUAL.equipes_ref);
       // Trava o dropdown de Gestor nas equipes do escopo (impede selecionar gestor fora do escopo)
@@ -6194,7 +6196,7 @@ function aplicarTravaProducao() {
     )];
     if (estadosMacro2Prod.length > 0) travarProdEstado(estadosMacro2Prod);
 
-  } else if (p === 'supervisao' && (USUARIO_ATUAL.equipes_ref || []).length > 0) {
+  } else if ((p === 'supervisao' || p === 'supervisao_beta') && (USUARIO_ATUAL.equipes_ref || []).length > 0) {
     // Trava o filtro de Estado da Produção nos estados das equipes da supervisão
     const estadosSupervisaoProd = [...new Set(
       USUARIO_ATUAL.equipes_ref.map(eq => EQUIPES_ESTADOS[eq]).filter(Boolean)
