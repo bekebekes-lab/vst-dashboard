@@ -5663,7 +5663,7 @@ async function trocarMes() {
   });
 
   // Reseta os dropdowns de checkbox (Gestor/Equipe) só para perfis sem trava fixa
-  if (!['gestor_macro','gestor_macro2','gestor','gestor_beta'].includes(p)) {
+  if (!['gestor_macro','gestor_macro2','gestor_macro3','gestor','gestor_beta'].includes(p)) {
     limparDropdownMulti('dd-content-f-gestor', '#dd-f-gestor .dropdown-btn');
   }
   if (p !== 'supervisao') {
@@ -5922,6 +5922,7 @@ async function carregarPerfil(user) {
 //  admin          — acesso 100% a tudo
 //  gestor_macro   — Gerencial travado no seu gestor_ref (1 nome) + Discadora total
 //  gestor_macro2  — Gerencial e Produção travados em gestores_ref (1+ nomes) + Discadora total
+//  gestor_macro3  — Gerencial e Produção travados no seu gestor_ref (1 nome), sem Discadora
 //  gestor         — Gerencial travado no seu gestor_ref (1 nome) + Discadora travada no grupo_ref (cidade)
 //  gestor_beta    — igual gestor, mas sem acesso à Discadora
 //  supervisao     — Gerencial travado em equipes_ref (1+ equipes) + Discadora travada no grupo_ref (cidade)
@@ -5934,6 +5935,7 @@ function aplicarPermissoes() {
     'admin':          ['simulador', 'gerencial', 'producao', 'discadora', 'simulador2'],
     'gestor_macro':   ['gerencial', 'discadora'],
     'gestor_macro2':  ['gerencial', 'producao', 'discadora'],
+    'gestor_macro3':  ['gerencial', 'producao'],
     'gestor':         ['gerencial', 'discadora'],
     'gestor_beta':    ['gerencial'],
     'supervisao':     ['gerencial', 'discadora'],
@@ -6018,7 +6020,7 @@ function aplicarPermissoes() {
         selC.style.pointerEvents = 'none';
       }
       render();
-    } else if ((p === 'gestor_macro' || p === 'gestor' || p === 'gestor_beta') && ((USUARIO_ATUAL.gestores_ref || []).length > 0 || USUARIO_ATUAL.gestor_ref)) {
+    } else if ((p === 'gestor_macro' || p === 'gestor_macro3' || p === 'gestor' || p === 'gestor_beta') && ((USUARIO_ATUAL.gestores_ref || []).length > 0 || USUARIO_ATUAL.gestor_ref)) {
       // Trava Gerencial no(s) nome(s) do(s) gestor(es) — usa gestores_ref (1+) se
       // preenchido, senão cai para o gestor_ref único (comportamento padrão)
       const nomesLock = (USUARIO_ATUAL.gestores_ref || []).length > 0 ? USUARIO_ATUAL.gestores_ref : [USUARIO_ATUAL.gestor_ref];
@@ -6170,8 +6172,8 @@ function aplicarTravaProducao() {
     )];
     if (estadosSupervisaoProd.length > 0) travarProdEstado(estadosSupervisaoProd);
 
-  } else if ((p === 'gestor_macro' || p === 'gestor' || p === 'gestor_beta') && ((USUARIO_ATUAL.gestores_ref || []).length > 0 || USUARIO_ATUAL.gestor_ref)) {
-    // Trava o filtro de Estado da Produção para gestor/gestor_macro/gestor_beta
+  } else if ((p === 'gestor_macro' || p === 'gestor_macro3' || p === 'gestor' || p === 'gestor_beta') && ((USUARIO_ATUAL.gestores_ref || []).length > 0 || USUARIO_ATUAL.gestor_ref)) {
+    // Trava o filtro de Estado da Produção para gestor/gestor_macro/gestor_macro3/gestor_beta
     const nomesLockProd = (USUARIO_ATUAL.gestores_ref || []).length > 0 ? USUARIO_ATUAL.gestores_ref : [USUARIO_ATUAL.gestor_ref];
     const estadosGestorProd = [...new Set(
       Object.entries(EQUIPES_GESTORES)
