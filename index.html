@@ -1351,6 +1351,10 @@
       </div>
       <div class="filter-group"><label>Consultor</label><select id="f-consultor" onchange="render()"><option>Todos</option></select></div>
       <div class="filter-group"><label>Tag / Unidade</label><select id="f-tag" onchange="render()"><option>Todas</option></select></div>
+      <div class="filter-group" style="min-width:220px">
+        <label>Buscar (CNPJ, razão social, vinculado ou nº)</label>
+        <input type="text" id="f-busca" placeholder="Digite para buscar..." oninput="onFilterChange('busca')" autocomplete="off">
+      </div>
     </div>
 
     <div id="error-area"></div>
@@ -2531,6 +2535,22 @@ function linhaDentroDoEscopo(r, escopo, equipe) {
   return true;
 }
 
+// Busca livre do Gerencial (CNPJ, razão social, vinculado ou número de linha).
+// Roda POR CIMA do escopo já travado (linhaDentroDoEscopo) — nunca abre uma
+// segunda porta pra ver algo fora do que o usuário já podia ver, só filtra
+// dentro do que já era visível.
+function linhaBateBusca(r, buscaLower, buscaDigits) {
+  if (!buscaLower) return true;
+  if ((r['NOME CLIENTE'] || '').toLowerCase().includes(buscaLower)) return true;
+  if ((r['VINCULADO'] || '').toLowerCase().includes(buscaLower)) return true;
+  if (buscaDigits) {
+    if ((r['CPF/CNPJ'] || '').replace(/\D/g, '').includes(buscaDigits)) return true;
+    const numero = (r['NUMERO'] || r['Numero'] || r['NÚMERO'] || '').toString().replace(/\D/g, '');
+    if (numero.includes(buscaDigits)) return true;
+  }
+  return false;
+}
+
 // ─── main render ────────────────────────────────────────────────────────────
 function render() {
   if (!ALL_DATA.length) return;
@@ -2554,6 +2574,9 @@ function render() {
   const equipeSel   = getCheckedValuesDd('dd-content-f-equipe'); // [] = Todas
   const consultor   = document.getElementById('f-consultor').value;
   const tag         = document.getElementById('f-tag').value;
+  const buscaRaw    = (document.getElementById('f-busca')?.value || '').trim();
+  const buscaLower  = buscaRaw.toLowerCase();
+  const buscaDigits = buscaRaw.replace(/\D/g, '');
 
   const cats = ["GERAL", "GROSS", "RENOVAÇÃO", "BL", "TITULARIDADE", "SERV. DIGITAIS"];
   let metrics = {};
@@ -2579,6 +2602,7 @@ function render() {
     if (equipeSel.length > 0  && !equipeSel.includes(eq))  return;
     if (consultor !== 'Todos' && cons.toUpperCase() !== consultor.toUpperCase()) return;
     if (tag       !== 'Todas' && rtag !== tag)            return;
+    if (!linhaBateBusca(r, buscaLower, buscaDigits))      return;
 
     totalRows++;
     nConsSet.add(cons);
@@ -2733,6 +2757,9 @@ function drillFila(categoria, fila) {
   const equipeSel = getCheckedValuesDd('dd-content-f-equipe'); // [] = Todas
   const consultor = document.getElementById('f-consultor').value;
   const tag       = document.getElementById('f-tag').value;
+  const buscaRaw    = (document.getElementById('f-busca')?.value || '').trim();
+  const buscaLower  = buscaRaw.toLowerCase();
+  const buscaDigits = buscaRaw.replace(/\D/g, '');
 
   const escopo = getEscopoTravado();
   const filtered = ALL_DATA.filter(r => {
@@ -2751,6 +2778,7 @@ function drillFila(categoria, fila) {
     if (equipeSel.length > 0  && !equipeSel.includes(eq))  return false;
     if (consultor !== 'Todos' && cons.toUpperCase() !== consultor.toUpperCase()) return false;
     if (tag       !== 'Todas' && rtag !== tag)            return false;
+    if (!linhaBateBusca(r, buscaLower, buscaDigits))      return false;
     if (filaR !== fila) return false;
     // sempre restringir aos 4 grupos mapeados
     if (!grupoKey) return false;
@@ -5751,6 +5779,10 @@ async function trocarMes() {
     const sel = document.getElementById(id);
     if (sel && !sel.disabled) sel.selectedIndex = 0;
   });
+
+  // Busca livre é sempre por período — não faz sentido manter o termo ao trocar de mês
+  const buscaEl = document.getElementById('f-busca');
+  if (buscaEl) buscaEl.value = '';
 
   // Reseta os dropdowns de checkbox (Gestor/Equipe) só para perfis sem trava fixa
   if (!['gestor_macro','gestor_macro2','gestor_macro3','gestor','gestor_beta'].includes(p)) {
