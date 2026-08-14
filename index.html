@@ -1214,15 +1214,17 @@
       <div class="login-sub">Acesse com suas credenciais</div>
       <div class="login-error" id="login-error"></div>
       <div class="login-success" id="login-success"></div>
-      <div class="login-field">
-        <label>E-mail</label>
-        <input type="email" id="login-email" placeholder="seu@email.com" autocomplete="email">
-      </div>
-      <div class="login-field">
-        <label>Senha</label>
-        <input type="password" id="login-senha" placeholder="••••••••" autocomplete="current-password">
-      </div>
-      <button class="login-btn" id="login-btn" onclick="fazerLogin()">Entrar</button>
+      <form onsubmit="fazerLogin(); return false;">
+        <div class="login-field">
+          <label>E-mail</label>
+          <input type="email" id="login-email" placeholder="seu@email.com" autocomplete="email">
+        </div>
+        <div class="login-field">
+          <label>Senha</label>
+          <input type="password" id="login-senha" placeholder="••••••••" autocomplete="current-password">
+        </div>
+        <button class="login-btn" id="login-btn" type="submit">Entrar</button>
+      </form>
       <div class="login-forgot-link" onclick="abrirTelaEsqueciSenha()">Esqueci minha senha</div>
       <div class="login-footer">Acesso restrito · VST Group</div>
     </div>
@@ -1232,11 +1234,13 @@
       <div class="login-sub">Informe seu e-mail e enviaremos um link de redefinição</div>
       <div class="login-error" id="forgot-error"></div>
       <div class="login-success" id="forgot-success"></div>
-      <div class="login-field">
-        <label>E-mail</label>
-        <input type="email" id="forgot-email" placeholder="seu@email.com" autocomplete="email">
-      </div>
-      <button class="login-btn" id="forgot-btn" onclick="enviarResetSenha()">Enviar link de redefinição</button>
+      <form onsubmit="enviarResetSenha(); return false;">
+        <div class="login-field">
+          <label>E-mail</label>
+          <input type="email" id="forgot-email" placeholder="seu@email.com" autocomplete="email">
+        </div>
+        <button class="login-btn" id="forgot-btn" type="submit">Enviar link de redefinição</button>
+      </form>
       <div class="login-forgot-link" onclick="voltarParaLogin()">← Voltar para o login</div>
     </div>
 
@@ -1244,15 +1248,17 @@
       <div class="login-title">Defina sua nova senha</div>
       <div class="login-sub">Escolha uma nova senha para sua conta</div>
       <div class="login-error" id="newpass-error"></div>
-      <div class="login-field">
-        <label>Nova senha</label>
-        <input type="password" id="newpass-senha" placeholder="••••••••" autocomplete="new-password">
-      </div>
-      <div class="login-field">
-        <label>Confirmar nova senha</label>
-        <input type="password" id="newpass-confirma" placeholder="••••••••" autocomplete="new-password">
-      </div>
-      <button class="login-btn" id="newpass-btn" onclick="salvarNovaSenha()">Salvar nova senha</button>
+      <form onsubmit="salvarNovaSenha(); return false;">
+        <div class="login-field">
+          <label>Nova senha</label>
+          <input type="password" id="newpass-senha" placeholder="••••••••" autocomplete="new-password">
+        </div>
+        <div class="login-field">
+          <label>Confirmar nova senha</label>
+          <input type="password" id="newpass-confirma" placeholder="••••••••" autocomplete="new-password">
+        </div>
+        <button class="login-btn" id="newpass-btn" type="submit">Salvar nova senha</button>
+      </form>
     </div>
   </div>
 </div>
@@ -5969,7 +5975,7 @@ async function carregarPerfil(user) {
     .from('usuarios_dashboard')
     .select('*')
     .eq('id', user.id)
-    .single();
+    .maybeSingle();
 
   if (perfilDash) {
     perfil = perfilDash;
@@ -5978,7 +5984,7 @@ async function carregarPerfil(user) {
       .from('usuarios')
       .select('*')
       .eq('id', user.id)
-      .single();
+      .maybeSingle();
     perfil = perfilLeg;
   }
 
