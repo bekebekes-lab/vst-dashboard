@@ -10,7 +10,8 @@
 // pra assinar o JWT do fluxo OAuth2 de service account do Google.
 
 import { createSign } from 'crypto';
-import { requireAuth } from './_lib/auth.js';
+import { requireAuth, getUsuarioDashboard } from './_lib/auth.js';
+import { getEscopoTravado, linhaDentroDoEscopo, normalizarNomeEquipe } from './_lib/escopo.js';
 
 function base64url(input) {
   return Buffer.from(input)
@@ -59,7 +60,8 @@ export default async function handler(req, res) {
 
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
-  if (!(await requireAuth(req, res))) return;
+  const authUser = await requireAuth(req, res);
+  if (!authUser) return;
 
   const sheetId = process.env.GOOGLE_SHEETS_ID;
   if (!sheetId) return res.status(500).json({ error: 'GOOGLE_SHEETS_ID não configurado no servidor' });
@@ -80,6 +82,37 @@ export default async function handler(req, res) {
     const accessToken = await getAccessToken();
     const response = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
     const data = await response.json();
+
+    // Filtra as linhas pelo escopo travado do usuário ANTES de devolver —
+    // hoje o navegador recebia a base inteira e filtrava na tela; qualquer
+    // um com F12 conseguia ler os dados de todo mundo em ALL_DATA. Admin
+    // (escopo null) continua recebendo exatamente o que sempre recebeu,
+    // sem passar por nenhuma linha de código nova abaixo.
+    if (action === 'values' && response.ok && Array.isArray(data.values) && data.values.length > 0) {
+      const perfilRow = await getUsuarioDashboard(req, authUser.id);
+      const perfil = perfilRow?.perfil || 'consultor';
+      const escopo = getEscopoTravado(perfil, perfilRow);
+
+      if (escopo) {
+        const header = data.values[0];
+        const idxEquipe = header.indexOf('EQUIPE');
+        const idxProprietario = header.indexOf('PROPRIETÁRIO DO PEDIDO');
+
+        if (idxEquipe === -1 || idxProprietario === -1) {
+          // Aba sem essas colunas — não dá pra filtrar com segurança, então
+          // devolve só o cabeçalho (nenhuma linha de dado) em vez de vazar
+          // tudo sem filtro.
+          data.values = [header];
+        } else {
+          const linhas = data.values.slice(1).filter(row => {
+            const equipeNorm = normalizarNomeEquipe(row[idxEquipe]);
+            return linhaDentroDoEscopo(equipeNorm, row[idxProprietario], escopo);
+          });
+          data.values = [header, ...linhas];
+        }
+      }
+    }
+
     res.status(response.status).json(data);
   } catch (e) {
     res.status(500).json({ error: e.message });
