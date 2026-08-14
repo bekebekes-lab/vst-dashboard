@@ -19,7 +19,7 @@
 <meta name="description" content="VST Group — Dashboard Gerencial">
 
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="/vendor/supabase-js-2.112.3.js"></script>
 <style>
   /* ═══════════════════════════════════════════════════════════
      VST DASHBOARD — DESIGN SYSTEM v2.0
@@ -5929,18 +5929,31 @@ async function fazerLogin() {
   erro.classList.remove('active');
   document.getElementById('login-success')?.classList.remove('active');
 
-  const { data, error } = await supa.auth.signInWithPassword({ email, password: senha });
+  // Qualquer falha aqui (rede, biblioteca que não carregou, etc.) precisa
+  // sempre destravar o botão e mostrar algo pro usuário — senão a tela fica
+  // presa em "Entrando..." pra sempre, sem nenhum aviso visível.
+  try {
+    if (typeof supa === 'undefined' || !supa) throw new Error('Falha ao carregar recursos da página.');
 
-  if (error) {
-    erro.textContent = 'E-mail ou senha incorretos.';
+    const { data, error } = await supa.auth.signInWithPassword({ email, password: senha });
+
+    if (error) {
+      erro.textContent = 'E-mail ou senha incorretos.';
+      erro.classList.add('active');
+      btn.disabled = false;
+      btn.textContent = 'Entrar';
+      return;
+    }
+
+    USUARIO_ACCESS_TOKEN = data.session?.access_token || null;
+    await carregarPerfil(data.user);
+  } catch (e) {
+    console.error('Erro no login:', e);
+    erro.textContent = 'Não foi possível conectar. Verifique sua internet/rede e tente novamente.';
     erro.classList.add('active');
     btn.disabled = false;
     btn.textContent = 'Entrar';
-    return;
   }
-
-  USUARIO_ACCESS_TOKEN = data.session?.access_token || null;
-  await carregarPerfil(data.user);
 }
 
 // Header padrão pra chamadas autenticadas em /api/* — sem token, nem tenta.
