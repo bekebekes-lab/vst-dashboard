@@ -7605,7 +7605,41 @@ async function initChurn() {
     return;
   }
   CHURN_DADOS = data || [];
+
+  // Cruza cada alerta com a base de Carteira pelo CNPJ pra mostrar de quem
+  // é o cliente (consultor/equipe) — best-effort: se a Carteira falhar em
+  // carregar, o Churn continua funcionando normalmente, só sem essa info.
+  try { await carregarCarteiraDados(); } catch (e) { console.error('Não consegui cruzar Churn com a Carteira:', e); }
+
   renderChurn();
+}
+
+// Mapa CNPJ (só dígitos) -> linha da Carteira, pra achar rápido de quem é
+// o cliente de um alerta de Churn sem varrer os ~40k registros a cada render.
+function carteiraMapaPorCnpj() {
+  if (window._carteiraPorCnpj && window._carteiraPorCnpjSize === CARTEIRA_DADOS.length) return window._carteiraPorCnpj;
+  const mapa = new Map();
+  CARTEIRA_DADOS.forEach(r => {
+    const digitos = (r['CNPJ'] || '').replace(/\D/g, '');
+    if (digitos) mapa.set(digitos, r);
+  });
+  window._carteiraPorCnpj = mapa;
+  window._carteiraPorCnpjSize = CARTEIRA_DADOS.length;
+  return mapa;
+}
+
+// Dono do cliente na Carteira (consultor/equipe atual), pra identificar
+// quem deve tratar o PORT-OUT — null se a Carteira não carregou ou o CNPJ
+// do alerta não bateu com nenhuma linha.
+function churnDonoCliente(r) {
+  const cnpjDigitos = (r.cnpj || '').replace(/\D/g, '');
+  if (!cnpjDigitos || !CARTEIRA_DADOS.length) return null;
+  const linha = carteiraMapaPorCnpj().get(cnpjDigitos);
+  if (!linha) return null;
+  return {
+    consultor: linha['NEO VST (CONSULTOR)'] || '',
+    equipe: linha['NEO VST (EQUIPE)'] || '',
+  };
 }
 
 // Extrai o código de revenda/unidade (ex.: "YI8F") do fim do texto de
@@ -7659,6 +7693,8 @@ function renderChurn() {
           <th class="center">Linhas</th>
           <th>Receptora</th>
           <th>Unidade</th>
+          <th>Consultor</th>
+          <th>Equipe</th>
           <th>Cidade</th>
           <th class="center">UF</th>
           <th>Data Janela</th>
@@ -7672,6 +7708,7 @@ function renderChurn() {
           const recebidoFmt = recebidoDt && !isNaN(recebidoDt)
             ? recebidoDt.toLocaleDateString('pt-BR') + ' ' + recebidoDt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
             : '—';
+          const dono = churnDonoCliente(r);
           return `<tr>
             <td style="font-size:11px;color:var(--text-2);white-space:nowrap;">${recebidoFmt}</td>
             <td style="font-weight:500">${escapeHtml(r.nome_cliente || '—')}${obrigatorio ? ' <span title="Resposta obrigatória (10+ linhas)" style="color:#dc2626;">●</span>' : ''}</td>
@@ -7679,6 +7716,8 @@ function renderChurn() {
             <td class="center">${r.qtd_linhas ?? '—'}</td>
             <td>${escapeHtml(r.receptora || '—')}</td>
             <td style="font-size:12px">${escapeHtml(churnUnidade(r))}</td>
+            <td style="font-size:12px">${escapeHtml(dono?.consultor || '—')}</td>
+            <td style="font-size:12px">${escapeHtml(dono?.equipe || '—')}</td>
             <td style="font-size:12px">${escapeHtml(r.municipio_cliente || '—')}</td>
             <td class="center" style="font-size:12px">${escapeHtml(r.uf_cliente || '—')}</td>
             <td>${escapeHtml(r.data_janela || '—')}</td>
@@ -7717,9 +7756,11 @@ function churnAbrirDetalhe(id) {
     document.body.appendChild(modal);
   }
 
+  const dono = churnDonoCliente(r);
   const campos = [
     ['Nome do Cliente', r.nome_cliente], ['CNPJ', r.cnpj], ['Número de linhas', r.qtd_linhas],
     ['Cidade', r.municipio_cliente], ['UF', r.uf_cliente], ['Unidade', churnUnidade(r)],
+    ['Consultor (Carteira)', dono?.consultor], ['Equipe (Carteira)', dono?.equipe],
     ['Receptora', r.receptora], ['Promoção Atual', r.promocao_atual], ['Classificação', r.classificacao],
     ['Tempo Médio', r.tempo_medio], ['Carteira AACE', r.carteira_aace], ['Gerente de Canal', r.gerente_canal],
     ['Coordenador', r.coordenador], ['Data da Janela', r.data_janela], ['Multa estimada', r.multa_estimada],
@@ -7827,6 +7868,30 @@ function carteiraAptoBase(tm, classe) {
 function carteiraApto(r) { return carteiraAptoBase(carteiraTM(r), r['Classificação']); }
 function carteiraAptoBL(r) { return carteiraAptoBase(carteiraTM_BL(r), r['Classificação']); }
 
+// Busca e normaliza os dados da planilha de Carteira em CARTEIRA_DADOS —
+// usado pela própria aba Carteira e também pelo Churn (pra cruzar CNPJ e
+// mostrar de quem é o cliente). Não mexe em nenhum elemento de tela, só
+// nos dados, pra poder ser chamado a partir de qualquer aba.
+async function carregarCarteiraDados() {
+  if (CARTEIRA_CARREGADA) return;
+  const url = '/api/sheets?action=values&sheet=' + encodeURIComponent(CARTEIRA_ABA) + '&planilha=carteira';
+  const res = await fetch(url, { headers: authHeaders() });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Falha ao carregar carteira');
+  const rows = json.values || [];
+  if (rows.length < 2) throw new Error('Planilha sem dados.');
+
+  const headers = rows[0];
+  CARTEIRA_DADOS = rows.slice(1).map(r => {
+    const obj = {};
+    // Alguns cabeçalhos vêm duplicados na planilha (ex.: FLG_CEP_CABEADO
+    // aparece 2x) — mantém só a primeira ocorrência.
+    headers.forEach((h, i) => { if (obj[h] === undefined) obj[h] = (r[i] || '').toString().trim(); });
+    return obj;
+  });
+  CARTEIRA_CARREGADA = true;
+}
+
 async function initCarteira() {
   if (CARTEIRA_CARREGADA) { renderCarteiraOverview(); return; }
 
@@ -7836,22 +7901,7 @@ async function initCarteira() {
   document.getElementById('carteira-table-area').innerHTML = '';
 
   try {
-    const url = '/api/sheets?action=values&sheet=' + encodeURIComponent(CARTEIRA_ABA) + '&planilha=carteira';
-    const res = await fetch(url, { headers: authHeaders() });
-    const json = await res.json();
-    if (!res.ok) throw new Error(json.error || 'Falha ao carregar carteira');
-    const rows = json.values || [];
-    if (rows.length < 2) throw new Error('Planilha sem dados.');
-
-    const headers = rows[0];
-    CARTEIRA_DADOS = rows.slice(1).map(r => {
-      const obj = {};
-      // Alguns cabeçalhos vêm duplicados na planilha (ex.: FLG_CEP_CABEADO
-      // aparece 2x) — mantém só a primeira ocorrência.
-      headers.forEach((h, i) => { if (obj[h] === undefined) obj[h] = (r[i] || '').toString().trim(); });
-      return obj;
-    });
-    CARTEIRA_CARREGADA = true;
+    await carregarCarteiraDados();
     document.getElementById('carteira-status-area').innerHTML = '';
 
     const revendas = [...new Set(CARTEIRA_DADOS.map(carteiraUnidade))].filter(u => u && u !== '—').sort();
