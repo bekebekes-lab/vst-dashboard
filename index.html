@@ -6510,6 +6510,12 @@ function discDataHoje() {
   return new Date().toISOString().split('T')[0];
 }
 
+function discDataOntem() {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().split('T')[0];
+}
+
 function initDiscadora() {
   if (_discIniciado) return;
   _discIniciado = true;
@@ -6570,6 +6576,68 @@ async function discadoraBuscarPagina(pagina) {
   return json.data.listar_historico_contato || [];
 }
 
+// Dias já fechados (ontem pra trás) vêm sincronizados no Supabase — rápido
+// não importa quão longe no passado for. Só "hoje" precisa ir na API ao
+// vivo (ver discadoraCarregar() abaixo).
+async function discadoraBuscarHistorico(desde, ate) {
+  const url = `/api/discadora-historico?desde=${desde}&ate=${ate}`;
+  const res = await fetch(url, { headers: authHeaders() });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Falha ao buscar histórico da discadora');
+  return json.registros || [];
+}
+
+// Busca só um dia (todos os agentes) direto na API ao vivo, usando os filtros
+// de data que a API já suporta (data_hora_minima/maxima) — usado pra
+// preencher a URL da gravação de ligações de dias já arquivados no Supabase
+// (onde a URL não é guardada, só é buscada quando alguém realmente quer
+// ouvir). Continua rápido mesmo pra datas antigas porque filtra no servidor
+// da própria discadora, não precisa paginar desde hoje.
+async function discadoraBuscarGravacoesDia(dataYYYYMMDD) {
+  let todos = [];
+  let pagina = 1;
+  const MAX_PAGINAS_DIA = 20;
+  while (pagina <= MAX_PAGINAS_DIA) {
+    const query = `{
+      listar_historico_contato(
+        contem_usuarios: true
+        limite: 1000
+        pagina: ${pagina}
+        data_hora_minima: "${dataYYYYMMDD}T00:00:00-03:00"
+        data_hora_maxima: "${dataYYYYMMDD}T23:59:59-03:00"
+      ) {
+        dataRegistro
+        duracao
+        telefonia
+        urlLigacao
+        usuario { nome }
+      }
+    }`;
+    const res = await fetch(DISC_API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ query })
+    });
+    const json = await res.json();
+    if (json.errors) throw new Error(json.errors[0].message);
+    const lote = json.data?.listar_historico_contato || [];
+    if (!lote.length) break;
+    todos = todos.concat(lote);
+    if (lote.length < 1000) break;
+    pagina++;
+  }
+  return _discCorrigirFuso(todos);
+}
+
+function _discCorrigirFuso(lote) {
+  lote.forEach(r => {
+    if (r.dataRegistro && r.dataRegistro.endsWith('Z')) {
+      r.dataRegistro = r.dataRegistro.replace('Z', '-03:00');
+    }
+  });
+  return lote;
+}
+
 async function discadoraCarregar() {
   if (_discCarregando) return;
   _discCarregando = true;
@@ -6582,48 +6650,58 @@ async function discadoraCarregar() {
 
   const tsIni = new Date(`${dtIni}T${hrIni}:00-03:00`).getTime();
   const tsFim = new Date(`${dtFim}T${hrFim}:59-03:00`).getTime();
+  const hoje = discDataHoje();
 
   statusEl.textContent = '';
   discProgressSet(5, 'Iniciando busca...');
 
   try {
     let todos = [];
-    let pagina = 1;
-    const MAX_PAGINAS = 200;
 
-    while (pagina <= MAX_PAGINAS) {
-      discProgressSet(
-        Math.min(5 + (pagina / MAX_PAGINAS) * 90, 95),
-        `Buscando pagina ${pagina}... (${todos.length} registros)`
-      );
-
-      const lote = await discadoraBuscarPagina(pagina);
-      if (!lote.length) break;
-
-      // CORREÇÃO DO FUSO HORÁRIO:
-      // Remove o "Z" (UTC) enviado pela API e amarra em UTC-3 (Brasília)
-      lote.forEach(r => {
-        if (r.dataRegistro && r.dataRegistro.endsWith('Z')) {
-          r.dataRegistro = r.dataRegistro.replace('Z', '-03:00');
-        }
-      });
-
-      const tsRecente = new Date(lote[0].dataRegistro).getTime();
-
-      if (tsRecente < tsIni) break;
-
-      const filtrados = lote.filter(r => {
+    // Parte histórica: qualquer dia estritamente anterior a hoje.
+    if (dtIni < hoje) {
+      discProgressSet(15, 'Buscando histórico...');
+      const ateHistorico = dtFim < hoje ? dtFim : discDataOntem();
+      const historico = _discCorrigirFuso(await discadoraBuscarHistorico(dtIni, ateHistorico));
+      todos = todos.concat(historico.filter(r => {
         const ts = new Date(r.dataRegistro).getTime();
         return ts >= tsIni && ts <= tsFim;
-      });
+      }));
+    }
 
-      if (filtrados.length > 0) todos = todos.concat(filtrados);
-      
-      const tsAntigo = new Date(lote[lote.length - 1].dataRegistro).getTime();
-      
-      if (tsAntigo < tsIni) break;
-      if (lote.length < 1000) break;
-      pagina++;
+    // Parte ao vivo: só busca na API da discadora se o intervalo pedido
+    // inclui hoje — e só pagina até o início de hoje, nunca até tsIni
+    // (senão voltaria a paginar meses inteiros à toa).
+    if (dtFim >= hoje) {
+      discProgressSet(60, 'Buscando ligações de hoje...');
+      const tsHojeIni = new Date(`${hoje}T00:00:00-03:00`).getTime();
+      const tsLimiteInferior = Math.max(tsIni, tsHojeIni);
+
+      let pagina = 1;
+      const MAX_PAGINAS = 200;
+      while (pagina <= MAX_PAGINAS) {
+        discProgressSet(
+          Math.min(60 + (pagina / MAX_PAGINAS) * 35, 95),
+          `Buscando página ${pagina} de hoje... (${todos.length} registros)`
+        );
+
+        const lote = _discCorrigirFuso(await discadoraBuscarPagina(pagina));
+        if (!lote.length) break;
+
+        const tsRecente = new Date(lote[0].dataRegistro).getTime();
+        if (tsRecente < tsLimiteInferior) break;
+
+        const filtrados = lote.filter(r => {
+          const ts = new Date(r.dataRegistro).getTime();
+          return ts >= tsLimiteInferior && ts <= tsFim;
+        });
+        if (filtrados.length > 0) todos = todos.concat(filtrados);
+
+        const tsAntigo = new Date(lote[lote.length - 1].dataRegistro).getTime();
+        if (tsAntigo < tsLimiteInferior) break;
+        if (lote.length < 1000) break;
+        pagina++;
+      }
     }
 
     _discDados = todos;
@@ -7077,6 +7155,38 @@ function discDrillDown(nomeConsultor) {
   });
   var produtivos = todosDoConsultor.filter(function(r){ return (r.duracao || 0) > 60; });
   produtivos.sort(function(a,b){ return new Date(b.dataRegistro) - new Date(a.dataRegistro); });
+
+  // Ligações de dias já arquivados (Supabase) não trazem a URL da gravação
+  // (não guardamos isso pra economizar espaço) — busca sob demanda, só dos
+  // dias que realmente faltam, e redesenha o modal quando chegar.
+  (function buscarGravacoesFaltantes() {
+    var diasFaltando = new Set();
+    produtivos.forEach(function(r) {
+      if (!r.urlLigacao) diasFaltando.add(r.dataRegistro.slice(0, 10));
+    });
+    if (diasFaltando.size === 0 || window._discGravacoesBuscando) return;
+    window._discGravacoesBuscando = true;
+    Promise.all([...diasFaltando].map(function(dia) {
+      return discadoraBuscarGravacoesDia(dia).catch(function(){ return []; });
+    })).then(function(resultados) {
+      var mapa = {};
+      resultados.flat().forEach(function(r) {
+        if (r.urlLigacao) mapa[r.dataRegistro + '|' + ((r.usuario && r.usuario.nome) || '')] = r.urlLigacao;
+      });
+      var mudou = false;
+      _discDados.forEach(function(r) {
+        if (!r.urlLigacao) {
+          var chave = r.dataRegistro + '|' + ((r.usuario && r.usuario.nome) || '');
+          if (mapa[chave]) { r.urlLigacao = mapa[chave]; mudou = true; }
+        }
+      });
+      window._discGravacoesBuscando = false;
+      var modalAberto = document.getElementById('disc-modal');
+      if (mudou && modalAberto && modalAberto.style.display !== 'none') {
+        discDrillDown(nomeConsultor);
+      }
+    }).catch(function() { window._discGravacoesBuscando = false; });
+  })();
 
   // ── Stats rápidos ──────────────────────────────────────────────────────────
   var totalC   = todosDoConsultor.length;
