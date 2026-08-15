@@ -155,7 +155,21 @@ def main():
         pagina += 1
 
     print(f"Total coletado no período: {len(todos)} registros")
-    upsert_supabase(service_key, todos)
+
+    # Dedup pela mesma chave do UNIQUE constraint — o Postgres rejeita um
+    # upsert em lote se duas linhas do MESMO comando colidirem na chave
+    # (ON CONFLICT não pode afetar a mesma linha duas vezes). Duplicatas
+    # acontecem por causa de sobreposição entre páginas ao paginar uma
+    # API que segue recebendo dados novos durante a coleta.
+    vistos = {}
+    for linha in todos:
+        chave = (linha["data_registro"], linha["usuario_nome"], linha["telefonia"], linha["duracao"])
+        vistos[chave] = linha
+    linhas_dedup = list(vistos.values())
+    if len(linhas_dedup) != len(todos):
+        print(f"Removidas {len(todos) - len(linhas_dedup)} duplicatas (sobreposição de página)")
+
+    upsert_supabase(service_key, linhas_dedup)
     print("Sincronização concluída.")
 
 
