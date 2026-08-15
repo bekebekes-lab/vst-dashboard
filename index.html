@@ -7631,15 +7631,34 @@ function carteiraMapaPorCnpj() {
 // Dono do cliente na Carteira (consultor/equipe atual), pra identificar
 // quem deve tratar o PORT-OUT — null se a Carteira não carregou ou o CNPJ
 // do alerta não bateu com nenhuma linha.
+// Trata os placeholders de "vazio" da planilha (mesma convenção usada em
+// carteiraNum) — devolve o valor só se for de fato preenchido.
+function carteiraValor(v) {
+  const s = (v || '').toString().trim();
+  return (s && s !== '-' && s !== '#N/A' && s !== '#N/D' && s !== '#NOME?') ? s : '';
+}
+
 function churnDonoCliente(r) {
   const cnpjDigitos = (r.cnpj || '').replace(/\D/g, '');
   if (!cnpjDigitos || !CARTEIRA_DADOS.length) return null;
   const linha = carteiraMapaPorCnpj().get(cnpjDigitos);
   if (!linha) return null;
-  return {
-    consultor: linha['NEO VST (CONSULTOR)'] || '',
-    equipe: linha['NEO VST (EQUIPE)'] || '',
-  };
+
+  const consultor = carteiraValor(linha['NEO VST (CONSULTOR)']);
+  let equipe = carteiraValor(linha['NEO VST (EQUIPE)']);
+
+  // Se NEO VST (CONSULTOR/EQUIPE) não identificou nada, procura nas colunas
+  // de gestor a partir de AE (YAB, ERECHIM, BRS...) — cada coluna é uma
+  // equipe e só tem valor preenchido quando o cliente pertence a ela; usa
+  // o NOME da coluna (não o valor da célula) como equipe.
+  if (!consultor && !equipe) {
+    for (const nomeEquipe of CARTEIRA_CAMPOS_IGNORADOS) {
+      if (carteiraValor(linha[nomeEquipe])) { equipe = nomeEquipe; break; }
+    }
+  }
+
+  if (!consultor && !equipe) return null;
+  return { consultor, equipe };
 }
 
 // Extrai o código de revenda/unidade (ex.: "YI8F") do fim do texto de
@@ -7698,7 +7717,6 @@ function renderChurn() {
           <th>Cidade</th>
           <th class="center">UF</th>
           <th>Data Janela</th>
-          <th style="width:13%">Atribuído a</th>
           <th class="center">Status</th>
           <th></th>
         </tr></thead>
@@ -7721,12 +7739,6 @@ function renderChurn() {
             <td style="font-size:12px">${escapeHtml(r.municipio_cliente || '—')}</td>
             <td class="center" style="font-size:12px">${escapeHtml(r.uf_cliente || '—')}</td>
             <td>${escapeHtml(r.data_janela || '—')}</td>
-            <td>
-              <select onchange="churnAtribuir(${r.id}, this.value)" style="font-size:12px;padding:3px 6px;max-width:100%;">
-                <option value="">Sem atribuição</option>
-                ${CHURN_USUARIOS.map(u => `<option value="${u.id}" ${String(r.atribuido_a) === String(u.id) ? 'selected' : ''}>${escapeHtml(u.nome)}</option>`).join('')}
-              </select>
-            </td>
             <td class="center"><span class="badge ${r.respondido ? '' : 'badge-gray'}" style="${r.respondido ? 'background:#dcfce7;color:#16a34a;' : ''}">${r.respondido ? 'Respondido' : 'Pendente'}</span></td>
             <td class="center"><button class="btn-secondary" style="padding:4px 10px;font-size:11px;white-space:nowrap;" onclick="churnAbrirDetalhe(${r.id})">Ver / Responder</button></td>
           </tr>`;
@@ -7783,6 +7795,13 @@ function churnAbrirDetalhe(id) {
               <div class="det-label">${escapeHtml(label)}</div>
               <div class="det-value">${escapeHtml(String(val))}</div>
             </div>`).join('')}
+        </div>
+        <div style="margin-top:16px;">
+          <label style="font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-2);display:block;margin-bottom:6px;">Atribuído a</label>
+          <select id="churn-atribuido-modal" onchange="churnAtribuir(${r.id}, this.value)" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius);font-family:inherit;font-size:13px;">
+            <option value="">Sem atribuição</option>
+            ${CHURN_USUARIOS.map(u => `<option value="${u.id}" ${String(r.atribuido_a) === String(u.id) ? 'selected' : ''}>${escapeHtml(u.nome)}</option>`).join('')}
+          </select>
         </div>
         <div style="margin-top:16px;">
           <label style="font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-2);display:block;margin-bottom:6px;">Feedback / resposta pra Claro</label>
