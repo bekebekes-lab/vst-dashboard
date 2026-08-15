@@ -7632,13 +7632,15 @@ function renderChurn() {
       <table>
         <thead><tr>
           <th>Recebido</th>
-          <th style="width:18%">Cliente</th>
+          <th style="width:16%">Cliente</th>
           <th>CNPJ</th>
           <th class="center">Linhas</th>
           <th>Receptora</th>
           <th>Unidade</th>
+          <th>Cidade</th>
+          <th class="center">UF</th>
           <th>Data Janela</th>
-          <th style="width:14%">Atribuído a</th>
+          <th style="width:13%">Atribuído a</th>
           <th class="center">Status</th>
           <th></th>
         </tr></thead>
@@ -7655,6 +7657,8 @@ function renderChurn() {
             <td class="center">${r.qtd_linhas ?? '—'}</td>
             <td>${escapeHtml(r.receptora || '—')}</td>
             <td style="font-size:12px">${escapeHtml(churnUnidade(r))}</td>
+            <td style="font-size:12px">${escapeHtml(r.municipio_cliente || '—')}</td>
+            <td class="center" style="font-size:12px">${escapeHtml(r.uf_cliente || '—')}</td>
             <td>${escapeHtml(r.data_janela || '—')}</td>
             <td>
               <select onchange="churnAtribuir(${r.id}, this.value)" style="font-size:12px;padding:3px 6px;max-width:100%;">
@@ -7693,11 +7697,12 @@ function churnAbrirDetalhe(id) {
 
   const campos = [
     ['Nome do Cliente', r.nome_cliente], ['CNPJ', r.cnpj], ['Número de linhas', r.qtd_linhas],
+    ['Cidade', r.municipio_cliente], ['UF', r.uf_cliente], ['Unidade', churnUnidade(r)],
     ['Receptora', r.receptora], ['Promoção Atual', r.promocao_atual], ['Classificação', r.classificacao],
     ['Tempo Médio', r.tempo_medio], ['Carteira AACE', r.carteira_aace], ['Gerente de Canal', r.gerente_canal],
     ['Coordenador', r.coordenador], ['Data da Janela', r.data_janela], ['Multa estimada', r.multa_estimada],
     ['Oferta de Retenção MKT', r.oferta_retencao_mkt], ['Oferta Pós', r.oferta_pos],
-  ].filter(([, v]) => v !== null && v !== undefined && v !== '');
+  ].filter(([, v]) => v !== null && v !== undefined && v !== '' && v !== '—');
 
   modal.innerHTML = `
     <div style="background:var(--surface);border-radius:var(--radius-xl);width:100%;max-width:640px;box-shadow:0 24px 60px rgba(0,0,0,.3);overflow:hidden;">

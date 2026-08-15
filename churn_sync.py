@@ -27,6 +27,7 @@ import json
 import os
 import re
 import sys
+import time
 import unicodedata
 import urllib.request
 import urllib.error
@@ -133,6 +134,27 @@ def post_json(url, body, headers, method="POST"):
         return e.code, parsed
 
 
+def buscar_uf_cnpj(cnpj_digitos, cache):
+    """UF/município do cliente via CNPJ, consultando a BrasilAPI (dados
+    públicos da Receita Federal). Usa um cache pra não bater na mesma API
+    de novo pro mesmo CNPJ a cada sincronização — só consulta CNPJ novo."""
+    if cnpj_digitos in cache:
+        return cache[cnpj_digitos]
+    try:
+        req = urllib.request.Request(
+            f"https://brasilapi.com.br/api/cnpj/v1/{cnpj_digitos}",
+            headers={"Accept": "application/json"},
+        )
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            dados = json.loads(resp.read())
+        resultado = (dados.get("uf"), dados.get("municipio"))
+    except Exception as e:
+        print(f"  aviso: não consegui consultar UF do CNPJ {cnpj_digitos}: {e}")
+        resultado = (None, None)
+    cache[cnpj_digitos] = resultado
+    return resultado
+
+
 def gravar_alerta(service_key, message_id, recebido_em, dados):
     if not dados.get("cnpj") or not dados.get("data_janela"):
         # Sem CNPJ+janela não dá pra deduplicar pela chave de negócio (Claro
@@ -165,6 +187,23 @@ def gravar_alerta(service_key, message_id, recebido_em, dados):
         raise RuntimeError(f"Falha ao gravar alerta no Supabase: HTTP {status} — {resp}")
 
 
+def carregar_cache_uf(service_key):
+    """Pré-popula o cache de CNPJ->UF com o que já está gravado no Supabase,
+    pra não bater na BrasilAPI de novo pra CNPJs que já foram consultados em
+    sincronizações anteriores."""
+    status, dados = post_json(
+        f"{SUPA_URL}/rest/v1/churn_alertas?select=cnpj,uf_cliente,municipio_cliente&uf_cliente=not.is.null",
+        None,
+        {"apikey": service_key, "Authorization": f"Bearer {service_key}"},
+        method="GET",
+    )
+    cache = {}
+    if status == 200 and dados:
+        for row in dados:
+            cache[row["cnpj"]] = (row.get("uf_cliente"), row.get("municipio_cliente"))
+    return cache
+
+
 def main():
     email_user = os.environ.get("CHURN_EMAIL_USER")
     email_pass = os.environ.get("CHURN_EMAIL_PASS")
@@ -172,6 +211,8 @@ def main():
     if not email_user or not email_pass or not service_key:
         print("Faltando CHURN_EMAIL_USER, CHURN_EMAIL_PASS ou SUPABASE_SERVICE_ROLE_KEY", file=sys.stderr)
         sys.exit(1)
+
+    cache_uf = carregar_cache_uf(service_key)
 
     imap = imaplib.IMAP4_SSL(IMAP_HOST, IMAP_PORT)
     try:
@@ -214,6 +255,17 @@ def main():
                     recebido_em = email.utils.parsedate_to_datetime(data_header).isoformat()
                 except Exception:
                     recebido_em = None
+
+            cnpj_digitos = re.sub(r"\D", "", dados.get("cnpj") or "")
+            if cnpj_digitos:
+                era_cache_hit = cnpj_digitos in cache_uf
+                uf, municipio = buscar_uf_cnpj(cnpj_digitos, cache_uf)
+                if uf:
+                    dados["uf_cliente"] = uf
+                if municipio:
+                    dados["municipio_cliente"] = municipio
+                if not era_cache_hit:
+                    time.sleep(1)  # não martela a BrasilAPI em consultas novas
 
             gravar_alerta(service_key, message_id_header.strip(), recebido_em, dados)
             novos += 1
