@@ -1295,6 +1295,7 @@
   <button class="tab-btn" id="tab-btn-discadora" onclick="switchTab('discadora', this)">📞 Discadora</button>
   <button class="tab-btn" id="tab-btn-simulador2" onclick="switchTab('simulador2', this)">🧮 Simulador 2.0</button>
   <button class="tab-btn" id="tab-btn-churn" onclick="switchTab('churn', this)">📉 Churn</button>
+  <button class="tab-btn" id="tab-btn-carteira" onclick="switchTab('carteira', this)">💼 Carteira</button>
 </div>
 
 <!-- BOTTOM NAV (mobile only — casca visual nova, chama switchTab() já existente) -->
@@ -1990,6 +1991,20 @@
     </div>
     <div id="churn-stats-area"></div>
     <div id="churn-table-area"></div>
+  </div>
+
+  <!-- TAB CARTEIRA — planilha separada, só admin -->
+  <div class="tab-panel" id="tab-carteira">
+    <div class="filters-bar">
+      <div class="filter-group" style="min-width:260px;flex:1">
+        <label>Buscar (CNPJ ou razão social)</label>
+        <input type="text" id="carteira-busca" placeholder="Digite para buscar..." oninput="renderCarteiraBusca()" autocomplete="off">
+      </div>
+    </div>
+    <div id="carteira-status-area"></div>
+    <div id="carteira-stats-area"></div>
+    <div id="carteira-charts-area"></div>
+    <div id="carteira-table-area"></div>
   </div>
 
 </div>
@@ -4743,6 +4758,7 @@ function switchTab(name, el) {
   if (name === 'discadora') initDiscadora();
   if (name === 'simulador2') initSimulador2();
   if (name === 'churn') initChurn();
+  if (name === 'carteira') initCarteira();
 }
 
 // Bottom nav (mobile) — delega pro switchTab() de sempre usando o botão
@@ -6152,7 +6168,7 @@ function aplicarPermissoes() {
 
   // Abas permitidas por perfil
   const abasPermitidas = {
-    'admin':          ['simulador', 'gerencial', 'producao', 'discadora', 'simulador2', 'churn'],
+    'admin':          ['simulador', 'gerencial', 'producao', 'discadora', 'simulador2', 'churn', 'carteira'],
     'gestor_macro':   ['gerencial', 'discadora'],
     'gestor_macro2':  ['gerencial', 'producao', 'discadora'],
     'gestor_macro3':  ['gerencial', 'producao'],
@@ -7752,6 +7768,222 @@ async function churnSalvarFeedback(id) {
   if (item) { item.feedback = feedback; item.respondido = respondido; }
   churnFecharDetalhe();
   renderChurn();
+}
+
+// ─── ABA CARTEIRA (planilha separada, só admin) ────────────────────────────
+const CARTEIRA_ABA = '082026';
+const CARTEIRA_LIMIAR_TM = { CG: 16, CB: 16, CF: 16, CD: 16, CC: 18, CE: 18, MI: 18, CA: 24 };
+const CARTEIRA_CAMPOS_IGNORADOS = new Set(['YAB', 'ERECHIM', 'BRS', 'EMERSONPR', 'GLOBECOM', 'JANETE', 'TELECT', 'PELOTAS', 'JULIANO BASTOS', 'LAURA LIS SANTOS', 'MARIA']);
+
+let CARTEIRA_DADOS = [];
+let CARTEIRA_CARREGADA = false;
+
+// Mesma lógica do Churn: extrai o código do fim do Território e mapeia
+// pra cidade via MAPEAMENTO_TAGS (já usado em Produção).
+function carteiraUnidade(r) {
+  const texto = (r['Território'] || '').trim();
+  if (!texto) return '—';
+  const partes = texto.split('-').map(s => s.trim()).filter(Boolean);
+  const codigo = partes[partes.length - 1];
+  if (!codigo) return '—';
+  return MAPEAMENTO_TAGS['#' + codigo.toUpperCase()] || codigo;
+}
+
+function carteiraLinhas(r) { return parseInt(r['Quantidade de linhas (Voz)']) || 0; }
+function carteiraTM(r) { return parseInt(r['Tempo de contrato (Voz)']) || 0; }
+
+// Apto a renovar = TM (Tempo de contrato Voz) >= limiar da Classificação.
+// Calculado aqui, não confia na coluna do mês (que muda de nome por aba).
+function carteiraApto(r) {
+  const classe = (r['Classificação'] || '').trim().toUpperCase();
+  const limiar = CARTEIRA_LIMIAR_TM[classe];
+  if (limiar === undefined) return false;
+  return carteiraTM(r) >= limiar;
+}
+
+async function initCarteira() {
+  if (CARTEIRA_CARREGADA) { renderCarteiraOverview(); return; }
+
+  document.getElementById('carteira-status-area').innerHTML = '<div class="loading-state"><div class="loading-spinner"></div><p>Carregando carteira (base grande, pode levar um pouco)...</p></div>';
+  document.getElementById('carteira-stats-area').innerHTML = '';
+  document.getElementById('carteira-charts-area').innerHTML = '';
+  document.getElementById('carteira-table-area').innerHTML = '';
+
+  try {
+    const url = '/api/sheets?action=values&sheet=' + encodeURIComponent(CARTEIRA_ABA) + '&planilha=carteira';
+    const res = await fetch(url, { headers: authHeaders() });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || 'Falha ao carregar carteira');
+    const rows = json.values || [];
+    if (rows.length < 2) throw new Error('Planilha sem dados.');
+
+    const headers = rows[0];
+    CARTEIRA_DADOS = rows.slice(1).map(r => {
+      const obj = {};
+      // Alguns cabeçalhos vêm duplicados na planilha (ex.: FLG_CEP_CABEADO
+      // aparece 2x) — mantém só a primeira ocorrência.
+      headers.forEach((h, i) => { if (obj[h] === undefined) obj[h] = (r[i] || '').toString().trim(); });
+      return obj;
+    });
+    CARTEIRA_CARREGADA = true;
+    document.getElementById('carteira-status-area').innerHTML = '';
+    renderCarteiraOverview();
+  } catch (e) {
+    document.getElementById('carteira-status-area').innerHTML = `<div class="error-state"><strong>Erro ao carregar carteira</strong>${escapeHtml(e.message)}</div>`;
+  }
+}
+
+function carteiraPieCard(titulo, itens) {
+  const total = itens.reduce((s, i) => s + i.value, 0) || 1;
+  let acc = 0;
+  const stops = itens.map(i => {
+    const de = (acc / total * 100).toFixed(2);
+    acc += i.value;
+    const ate = (acc / total * 100).toFixed(2);
+    return `${i.color} ${de}% ${ate}%`;
+  }).join(', ');
+  const legenda = itens.map(i => `
+    <div style="display:flex;align-items:center;gap:6px;font-size:12px;">
+      <span style="width:10px;height:10px;border-radius:2px;background:${i.color};flex-shrink:0;"></span>
+      <span style="color:var(--text-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(i.label)}</span>
+      <span style="margin-left:auto;font-weight:600;white-space:nowrap;">${i.value.toLocaleString('pt-BR')} (${Math.round(i.value / total * 100)}%)</span>
+    </div>`).join('');
+  return `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;">
+      <div style="font-size:12px;font-weight:600;color:var(--text-2);text-transform:uppercase;margin-bottom:12px;">${escapeHtml(titulo)}</div>
+      <div style="display:flex;gap:16px;align-items:center;">
+        <div style="width:100px;height:100px;border-radius:50%;flex-shrink:0;background:conic-gradient(${stops});"></div>
+        <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:6px;">${legenda}</div>
+      </div>
+    </div>`;
+}
+
+function renderCarteiraOverview() {
+  const totalClientes = CARTEIRA_DADOS.length;
+  const totalLinhas = CARTEIRA_DADOS.reduce((s, r) => s + carteiraLinhas(r), 0);
+
+  document.getElementById('carteira-stats-area').innerHTML = `<div class="stats-row">
+    <div class="stat-chip"><strong>${totalClientes.toLocaleString('pt-BR')}</strong> clientes</div>
+    <div class="stat-chip"><strong>${totalLinhas.toLocaleString('pt-BR')}</strong> linhas (voz)</div>
+  </div>`;
+
+  let linhasAptas = 0, linhasNaoAptas = 0;
+  const porClasseLinhas = {};
+  const porClasseCnpj = {};
+  CARTEIRA_DADOS.forEach(r => {
+    const linhas = carteiraLinhas(r);
+    if (carteiraApto(r)) linhasAptas += linhas; else linhasNaoAptas += linhas;
+    const classe = (r['Classificação'] || '').trim().toUpperCase() || 'Sem classificação';
+    porClasseLinhas[classe] = (porClasseLinhas[classe] || 0) + linhas;
+    porClasseCnpj[classe] = (porClasseCnpj[classe] || 0) + 1;
+  });
+
+  const coresClasse = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#4a3aa7', '#e34948', '#94a3b8'];
+  const classesOrdenadas = Object.keys(porClasseLinhas).sort();
+
+  document.getElementById('carteira-charts-area').innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;margin:16px 0;">
+      ${carteiraPieCard('Linhas aptas a renovar', [
+        { label: 'Aptas', value: linhasAptas, color: '#16a34a' },
+        { label: 'Não aptas', value: linhasNaoAptas, color: '#dc2626' },
+      ])}
+      ${carteiraPieCard('Linhas por classificação (TM)', classesOrdenadas.map((c, i) => ({ label: c, value: porClasseLinhas[c], color: coresClasse[i % coresClasse.length] })))}
+      ${carteiraPieCard('Clientes por classificação (TM)', classesOrdenadas.map((c, i) => ({ label: c, value: porClasseCnpj[c], color: coresClasse[i % coresClasse.length] })))}
+    </div>`;
+
+  renderCarteiraBusca();
+}
+
+function renderCarteiraBusca() {
+  const termo = (document.getElementById('carteira-busca').value || '').trim().toLowerCase();
+  if (!termo) {
+    document.getElementById('carteira-table-area').innerHTML = '';
+    return;
+  }
+  const termoDigitos = termo.replace(/\D/g, '');
+  const resultados = CARTEIRA_DADOS.filter(r => {
+    const razao = (r['Razão Social'] || '').toLowerCase();
+    const cnpj = (r['CNPJ'] || '').replace(/\D/g, '');
+    if (razao.includes(termo)) return true;
+    if (termoDigitos && cnpj.includes(termoDigitos)) return true;
+    return false;
+  }).slice(0, 200);
+
+  window._carteiraResultados = resultados;
+
+  if (resultados.length === 0) {
+    document.getElementById('carteira-table-area').innerHTML = '<div class="coming-soon"><p>Nenhum cliente encontrado.</p></div>';
+    return;
+  }
+
+  document.getElementById('carteira-table-area').innerHTML = `
+    <div class="section-header">
+      <span class="section-title">Resultados</span>
+      <span class="count-badge">${resultados.length}${resultados.length === 200 ? '+' : ''} cliente(s)</span>
+    </div>
+    <div class="table-wrap"><div class="table-scroll">
+      <table>
+        <thead><tr>
+          <th>CNPJ</th><th style="width:24%">Razão Social</th><th>Unidade</th><th>Cidade/UF</th>
+          <th class="center">Linhas (Voz)</th><th class="center">TM</th><th class="center">Classe</th><th class="center">Apto</th><th></th>
+        </tr></thead>
+        <tbody>${resultados.map((r, idx) => `
+          <tr>
+            <td style="font-family:monospace;font-size:12px">${escapeHtml(r['CNPJ'] || '—')}</td>
+            <td style="font-weight:500"><span class="cliente-drill-link" onclick="carteiraAbrirDetalhe(${idx})">${escapeHtml(r['Razão Social'] || '—')}</span></td>
+            <td style="font-size:12px">${escapeHtml(carteiraUnidade(r))}</td>
+            <td style="font-size:12px">${escapeHtml(r['DSC_MUNICIPIO'] || '—')}/${escapeHtml(r['UF'] || '—')}</td>
+            <td class="center">${carteiraLinhas(r)}</td>
+            <td class="center">${carteiraTM(r)}</td>
+            <td class="center">${escapeHtml(r['Classificação'] || '—')}</td>
+            <td class="center">${carteiraApto(r) ? '<span style="color:#16a34a;font-weight:700;">Sim</span>' : '<span style="color:var(--text-3);">Não</span>'}</td>
+            <td class="center"><button class="btn-secondary" style="padding:4px 10px;font-size:11px;" onclick="carteiraAbrirDetalhe(${idx})">Ver</button></td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div></div>`;
+}
+
+function carteiraAbrirDetalhe(idx) {
+  const r = (window._carteiraResultados || [])[idx];
+  if (!r) return;
+
+  let modal = document.getElementById('carteira-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'carteira-modal';
+    modal.style.cssText = 'position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.5);display:flex;align-items:flex-start;justify-content:center;padding:40px 20px;overflow-y:auto;';
+    modal.onclick = function(e) { if (e.target === modal) carteiraFecharDetalhe(); };
+    document.body.appendChild(modal);
+  }
+
+  const campos = Object.entries(r).filter(([k, v]) =>
+    !CARTEIRA_CAMPOS_IGNORADOS.has(k) && v !== '' && v !== '#N/A' && v !== '#N/D' && v !== '#NOME?'
+  );
+
+  modal.innerHTML = `
+    <div style="background:var(--surface);border-radius:var(--radius-xl);width:100%;max-width:720px;box-shadow:0 24px 60px rgba(0,0,0,.3);overflow:hidden;">
+      <div style="background:var(--brand);padding:16px 20px;display:flex;align-items:center;justify-content:space-between;">
+        <div>
+          <div style="font-size:10px;color:rgba(255,255,255,.65);text-transform:uppercase;letter-spacing:.07em;margin-bottom:2px;">Cliente da Carteira</div>
+          <div style="font-size:18px;font-weight:700;color:#fff;">${escapeHtml(r['Razão Social'] || '—')}</div>
+        </div>
+        <button onclick="carteiraFecharDetalhe()" style="background:rgba(255,255,255,.15);border:none;color:#fff;width:32px;height:32px;border-radius:50%;font-size:18px;cursor:pointer;">×</button>
+      </div>
+      <div style="padding:20px;max-height:75vh;overflow-y:auto;">
+        <div class="det-grid">
+          ${campos.map(([k, v]) => `<div class="det-item"><div class="det-label">${escapeHtml(k)}</div><div class="det-value">${escapeHtml(String(v))}</div></div>`).join('')}
+        </div>
+      </div>
+    </div>`;
+  modal.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+
+function carteiraFecharDetalhe() {
+  const modal = document.getElementById('carteira-modal');
+  if (modal) modal.style.display = 'none';
+  document.body.style.overflow = '';
 }
 
 </script>
