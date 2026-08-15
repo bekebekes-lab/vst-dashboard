@@ -35,39 +35,36 @@ export default async function handler(req, res) {
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!serviceKey) return res.status(500).json({ error: 'SUPABASE_SERVICE_ROLE_KEY não configurado no servidor' });
 
-  const params = new URLSearchParams({
-    select: 'data_registro,duracao,telefonia,ddd_telefone,documento,lead_nome,usuario_nome,grupo_nome,fila_nome',
-    data_registro: `gte.${desde}T00:00:00`,
-    order: 'data_registro.desc',
-  });
-  // segundo filtro de data (lte) precisa de uma segunda entrada — URLSearchParams
-  // não deixa duas chaves iguais com set(), então montamos a query manualmente
-  const url = `${SUPA_URL}/rest/v1/discadora_ligacoes?${params.toString()}&data_registro=lte.${ate}T23:59:59${grupoTravado ? `&grupo_nome=eq.${encodeURIComponent(grupoTravado)}` : ''}`;
+  const selectCols = 'data_registro,duracao,telefonia,ddd_telefone,documento,lead_nome,usuario_nome,grupo_nome,fila_nome';
+  const filtroBase = `select=${selectCols}&data_registro=gte.${desde}T00:00:00&data_registro=lte.${ate}T23:59:59${grupoTravado ? `&grupo_nome=eq.${encodeURIComponent(grupoTravado)}` : ''}&order=data_registro.desc`;
 
   try {
-    // PostgREST devolve no máximo max_rows linhas por requisição, não
-    // importa o que a gente peça (configurado em 50.000 no projeto) —
-    // pagina via header Range até acabar.
+    // Pagina por CURSOR (data_registro < último visto), não por OFFSET —
+    // com ~300 mil linhas, OFFSET obriga o Postgres a varrer e descartar
+    // tudo que veio antes a cada página, o que estourava o timeout da
+    // consulta pra ranges grandes. Cursor usa o índice direto, sem esse
+    // custo crescente por página.
     const PAGE_SIZE = 50000;
     const MAX_PAGINAS = 20; // trava de segurança (1 milhão de linhas)
     let rows = [];
-    let offset = 0;
-    while (offset / PAGE_SIZE < MAX_PAGINAS) {
+    let cursor = null;
+    let pagina = 0;
+    while (pagina < MAX_PAGINAS) {
+      pagina++;
+      const url = `${SUPA_URL}/rest/v1/discadora_ligacoes?${filtroBase}&limit=${PAGE_SIZE}` +
+        (cursor ? `&data_registro=lt.${cursor}` : '');
       const response = await fetch(url, {
-        headers: {
-          apikey: serviceKey,
-          Authorization: `Bearer ${serviceKey}`,
-          Range: `${offset}-${offset + PAGE_SIZE - 1}`,
-        },
+        headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` },
       });
-      if (!response.ok && response.status !== 206) {
+      if (!response.ok) {
         const err = await response.text();
         return res.status(response.status).json({ error: err });
       }
-      const pagina = await response.json();
-      rows = rows.concat(pagina);
-      if (pagina.length < PAGE_SIZE) break;
-      offset += PAGE_SIZE;
+      const lote = await response.json();
+      if (!lote.length) break;
+      rows = rows.concat(lote);
+      if (lote.length < PAGE_SIZE) break;
+      cursor = lote[lote.length - 1].data_registro;
     }
 
     // Reformata pro mesmo shape que o cliente já espera de listar_historico_contato
