@@ -7160,9 +7160,25 @@ function discDrillDown(nomeConsultor) {
   // (não guardamos isso pra economizar espaço) — busca sob demanda, só dos
   // dias que realmente faltam, e redesenha o modal quando chegar.
   (function buscarGravacoesFaltantes() {
+    // Chave de correlação usa o INSTANTE real (epoch), não a string crua —
+    // o Supabase devolve a data com sufixo "+00:00" e a API ao vivo (depois
+    // de _discCorrigirFuso) devolve "-03:00"; é o mesmo instante, mas como
+    // texto são strings diferentes e nunca batiam, então a URL nunca era
+    // encontrada.
+    function chaveLigacao(r) {
+      return new Date(r.dataRegistro).getTime() + '|' + ((r.usuario && r.usuario.nome) || '');
+    }
+    // Dia em horário de Brasília (não UTC) — uma ligação às 23h50 BRT vem
+    // como "+03:xx" do dia seguinte em UTC; sem esse ajuste, buscaríamos o
+    // dia errado pra essa ligação.
+    function diaBRT(dataRegistroStr) {
+      var d = new Date(new Date(dataRegistroStr).getTime() - 3 * 3600 * 1000);
+      return d.toISOString().slice(0, 10);
+    }
+
     var diasFaltando = new Set();
     produtivos.forEach(function(r) {
-      if (!r.urlLigacao) diasFaltando.add(r.dataRegistro.slice(0, 10));
+      if (!r.urlLigacao) diasFaltando.add(diaBRT(r.dataRegistro));
     });
     if (diasFaltando.size === 0 || window._discGravacoesBuscando) return;
     window._discGravacoesBuscando = true;
@@ -7171,12 +7187,12 @@ function discDrillDown(nomeConsultor) {
     })).then(function(resultados) {
       var mapa = {};
       resultados.flat().forEach(function(r) {
-        if (r.urlLigacao) mapa[r.dataRegistro + '|' + ((r.usuario && r.usuario.nome) || '')] = r.urlLigacao;
+        if (r.urlLigacao) mapa[chaveLigacao(r)] = r.urlLigacao;
       });
       var mudou = false;
       _discDados.forEach(function(r) {
         if (!r.urlLigacao) {
-          var chave = r.dataRegistro + '|' + ((r.usuario && r.usuario.nome) || '');
+          var chave = chaveLigacao(r);
           if (mapa[chave]) { r.urlLigacao = mapa[chave]; mudou = true; }
         }
       });
