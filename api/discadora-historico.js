@@ -36,36 +36,59 @@ export default async function handler(req, res) {
   if (!serviceKey) return res.status(500).json({ error: 'SUPABASE_SERVICE_ROLE_KEY não configurado no servidor' });
 
   const selectCols = 'data_registro,duracao,telefonia,ddd_telefone,documento,lead_nome,usuario_nome,grupo_nome,fila_nome';
-  const filtroBase = `select=${selectCols}&data_registro=gte.${desde}T00:00:00&data_registro=lte.${ate}T23:59:59${grupoTravado ? `&grupo_nome=eq.${encodeURIComponent(grupoTravado)}` : ''}&order=data_registro.desc`;
+  const PAGE_SIZE = 50000;
+  const MAX_PAGINAS = 10; // trava de segurança por pedaço (500 mil linhas)
 
-  try {
-    // Pagina por CURSOR (data_registro < último visto), não por OFFSET —
-    // com ~300 mil linhas, OFFSET obriga o Postgres a varrer e descartar
-    // tudo que veio antes a cada página, o que estourava o timeout da
-    // consulta pra ranges grandes. Cursor usa o índice direto, sem esse
-    // custo crescente por página.
-    const PAGE_SIZE = 50000;
-    const MAX_PAGINAS = 20; // trava de segurança (1 milhão de linhas)
+  // Pagina por CURSOR (data_registro < último visto), não por OFFSET — com
+  // centenas de milhares de linhas, OFFSET obriga o Postgres a varrer e
+  // descartar tudo que veio antes a cada página, o que estourava o timeout
+  // da consulta. Cursor usa o índice direto, sem esse custo por página.
+  async function buscarPedaco(deIso, ateIso) {
+    const filtro = `select=${selectCols}&data_registro=gte.${deIso}&data_registro=lte.${ateIso}${grupoTravado ? `&grupo_nome=eq.${encodeURIComponent(grupoTravado)}` : ''}&order=data_registro.desc`;
     let rows = [];
     let cursor = null;
     let pagina = 0;
     while (pagina < MAX_PAGINAS) {
       pagina++;
-      const url = `${SUPA_URL}/rest/v1/discadora_ligacoes?${filtroBase}&limit=${PAGE_SIZE}` +
+      const url = `${SUPA_URL}/rest/v1/discadora_ligacoes?${filtro}&limit=${PAGE_SIZE}` +
         (cursor ? `&data_registro=lt.${encodeURIComponent(cursor)}` : '');
       const response = await fetch(url, {
         headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` },
       });
-      if (!response.ok) {
-        const err = await response.text();
-        return res.status(response.status).json({ error: err });
-      }
+      if (!response.ok) throw new Error(await response.text());
       const lote = await response.json();
       if (!lote.length) break;
       rows = rows.concat(lote);
       if (lote.length < PAGE_SIZE) break;
       cursor = lote[lote.length - 1].data_registro;
     }
+    return rows;
+  }
+
+  try {
+    // Divide o período pedido em pedaços de ~5 dias, buscados em paralelo —
+    // cada pedaço tem seu próprio cursor independente, então não precisam
+    // esperar um pelo outro. Isso é o que faz um range de 1+ mês responder
+    // em segundos em vez de dezenas de segundos (soma sequencial de cada
+    // pedaço).
+    const DIAS_POR_PEDACO = 5;
+    const MAX_PEDACOS = 20;
+    const inicio = new Date(`${desde}T00:00:00Z`);
+    const fim = new Date(`${ate}T00:00:00Z`);
+    const pedacos = [];
+    let cursorDia = new Date(inicio);
+    while (cursorDia <= fim && pedacos.length < MAX_PEDACOS) {
+      const deIso = cursorDia.toISOString().slice(0, 10) + 'T00:00:00';
+      const fimPedaco = new Date(cursorDia);
+      fimPedaco.setUTCDate(fimPedaco.getUTCDate() + DIAS_POR_PEDACO - 1);
+      const ateReal = fimPedaco > fim ? fim : fimPedaco;
+      const ateIso = ateReal.toISOString().slice(0, 10) + 'T23:59:59';
+      pedacos.push([deIso, ateIso]);
+      cursorDia.setUTCDate(cursorDia.getUTCDate() + DIAS_POR_PEDACO);
+    }
+
+    const resultados = await Promise.all(pedacos.map(([de, a]) => buscarPedaco(de, a)));
+    const rows = resultados.flat();
 
     // Reformata pro mesmo shape que o cliente já espera de listar_historico_contato
     // (GraphQL aninhado), pra não precisar reescrever discadoraRender()/discDrillDown().
