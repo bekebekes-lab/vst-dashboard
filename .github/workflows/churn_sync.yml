@@ -1,0 +1,27 @@
+name: Sincronizar alertas de Churn (PORT-OUT)
+
+on:
+  schedule:
+    # A cada 30 minutos em dias úteis, das 6h às 22h BRT (UTC-3 = UTC 9h às 1h)
+    - cron: "0,30 9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,0,1 * * 1-5"
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Sincronizar alertas de churn
+        env:
+          CHURN_EMAIL_USER: ${{ secrets.CHURN_EMAIL_USER }}
+          CHURN_EMAIL_PASS: ${{ secrets.CHURN_EMAIL_PASS }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: python churn_sync.py
