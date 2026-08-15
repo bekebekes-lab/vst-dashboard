@@ -63,10 +63,17 @@ export default async function handler(req, res) {
   const authUser = await requireAuth(req, res);
   if (!authUser) return;
 
-  const sheetId = process.env.GOOGLE_SHEETS_ID;
-  if (!sheetId) return res.status(500).json({ error: 'GOOGLE_SHEETS_ID não configurado no servidor' });
-
-  const { action, sheet } = req.query;
+  // "planilha" seleciona qual spreadsheet consultar — mesma conta de
+  // serviço, arquivos diferentes. Omitir o parâmetro mantém o
+  // comportamento de sempre (BaseCRM), pra não afetar nenhuma chamada
+  // já existente no cliente.
+  const PLANILHAS = {
+    basecrm: process.env.GOOGLE_SHEETS_ID,
+    carteira: process.env.GOOGLE_SHEETS_CARTEIRA_ID,
+  };
+  const { action, sheet, planilha } = req.query;
+  const sheetId = PLANILHAS[planilha] || PLANILHAS.basecrm;
+  if (!sheetId) return res.status(500).json({ error: `Planilha "${planilha || 'basecrm'}" não configurada no servidor` });
 
   let url;
   if (action === 'list') {
