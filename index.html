@@ -6660,6 +6660,45 @@ function _discCorrigirFuso(lote) {
   return lote;
 }
 
+// Primeiro dia coberto pela sincronização no Supabase (data do backfill
+// inicial). Pedidos que começam antes disso não têm como vir do Supabase —
+// caem na API ao vivo, do jeito que era antes de existir a sincronização
+// (mais lento pra períodos longos, mas evita mostrar "0 registros" só
+// porque aquele trecho nunca foi sincronizado).
+const DISC_SYNC_INICIO = '2026-07-01';
+
+// Pagina a API ao vivo da discadora entre tsLimiteInferior e tsFim — usado
+// tanto pra "hoje" quanto pro trecho anterior ao início da sincronização.
+async function _discBuscarAoVivoComLimite(tsLimiteInferior, tsFim, rotulo) {
+  const todos = [];
+  let pagina = 1;
+  const MAX_PAGINAS = 200;
+  while (pagina <= MAX_PAGINAS) {
+    discProgressSet(
+      Math.min(55 + (pagina / MAX_PAGINAS) * 40, 95),
+      `Buscando ${rotulo}... página ${pagina} (${todos.length} registros)`
+    );
+
+    const lote = _discCorrigirFuso(await discadoraBuscarPagina(pagina));
+    if (!lote.length) break;
+
+    const tsRecente = new Date(lote[0].dataRegistro).getTime();
+    if (tsRecente < tsLimiteInferior) break;
+
+    const filtrados = lote.filter(r => {
+      const ts = new Date(r.dataRegistro).getTime();
+      return ts >= tsLimiteInferior && ts <= tsFim;
+    });
+    todos.push(...filtrados);
+
+    const tsAntigo = new Date(lote[lote.length - 1].dataRegistro).getTime();
+    if (tsAntigo < tsLimiteInferior) break;
+    if (lote.length < 1000) break;
+    pagina++;
+  }
+  return todos;
+}
+
 async function discadoraCarregar() {
   if (_discCarregando) return;
   _discCarregando = true;
@@ -6680,50 +6719,39 @@ async function discadoraCarregar() {
   try {
     let todos = [];
 
-    // Parte histórica: qualquer dia estritamente anterior a hoje.
-    if (dtIni < hoje) {
-      discProgressSet(15, 'Buscando histórico...');
-      const ateHistorico = dtFim < hoje ? dtFim : discDataOntem();
-      const historico = _discCorrigirFuso(await discadoraBuscarHistorico(dtIni, ateHistorico));
-      todos = todos.concat(historico.filter(r => {
-        const ts = new Date(r.dataRegistro).getTime();
-        return ts >= tsIni && ts <= tsFim;
-      }));
+    // Parte anterior ao início da sincronização: sem cobertura no Supabase,
+    // cai na API ao vivo (limitada ao fim desse trecho, nunca ultrapassa o
+    // início da sincronização, senão duplicaria com a parte de baixo).
+    if (dtIni < DISC_SYNC_INICIO) {
+      const tsSyncInicio = new Date(`${DISC_SYNC_INICIO}T00:00:00-03:00`).getTime();
+      const tsFimPreSync = Math.min(tsFim, tsSyncInicio - 1);
+      if (tsIni <= tsFimPreSync) {
+        discProgressSet(10, `Buscando período anterior a ${DISC_SYNC_INICIO.split('-').reverse().join('/')} (sem sincronização, pode demorar)...`);
+        todos = todos.concat(await _discBuscarAoVivoComLimite(tsIni, tsFimPreSync, 'período antigo'));
+      }
     }
 
-    // Parte ao vivo: só busca na API da discadora se o intervalo pedido
-    // inclui hoje — e só pagina até o início de hoje, nunca até tsIni
-    // (senão voltaria a paginar meses inteiros à toa).
+    // Parte sincronizada (Supabase): do maior entre dtIni e o início da
+    // sincronização, até ontem (ou dtFim, se for antes de hoje).
+    const desdeHistorico = dtIni < DISC_SYNC_INICIO ? DISC_SYNC_INICIO : dtIni;
+    if (desdeHistorico < hoje && dtFim >= DISC_SYNC_INICIO) {
+      const ateHistorico = dtFim < hoje ? dtFim : discDataOntem();
+      if (desdeHistorico <= ateHistorico) {
+        discProgressSet(50, 'Buscando histórico sincronizado...');
+        const historico = _discCorrigirFuso(await discadoraBuscarHistorico(desdeHistorico, ateHistorico));
+        todos = todos.concat(historico.filter(r => {
+          const ts = new Date(r.dataRegistro).getTime();
+          return ts >= tsIni && ts <= tsFim;
+        }));
+      }
+    }
+
+    // Parte ao vivo (hoje): só busca na API se o intervalo pedido inclui
+    // hoje — e só pagina até o início de hoje, nunca até tsIni.
     if (dtFim >= hoje) {
-      discProgressSet(60, 'Buscando ligações de hoje...');
       const tsHojeIni = new Date(`${hoje}T00:00:00-03:00`).getTime();
       const tsLimiteInferior = Math.max(tsIni, tsHojeIni);
-
-      let pagina = 1;
-      const MAX_PAGINAS = 200;
-      while (pagina <= MAX_PAGINAS) {
-        discProgressSet(
-          Math.min(60 + (pagina / MAX_PAGINAS) * 35, 95),
-          `Buscando página ${pagina} de hoje... (${todos.length} registros)`
-        );
-
-        const lote = _discCorrigirFuso(await discadoraBuscarPagina(pagina));
-        if (!lote.length) break;
-
-        const tsRecente = new Date(lote[0].dataRegistro).getTime();
-        if (tsRecente < tsLimiteInferior) break;
-
-        const filtrados = lote.filter(r => {
-          const ts = new Date(r.dataRegistro).getTime();
-          return ts >= tsLimiteInferior && ts <= tsFim;
-        });
-        if (filtrados.length > 0) todos = todos.concat(filtrados);
-
-        const tsAntigo = new Date(lote[lote.length - 1].dataRegistro).getTime();
-        if (tsAntigo < tsLimiteInferior) break;
-        if (lote.length < 1000) break;
-        pagina++;
-      }
+      todos = todos.concat(await _discBuscarAoVivoComLimite(tsLimiteInferior, tsFim, 'hoje'));
     }
 
     _discDados = todos;
