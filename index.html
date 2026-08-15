@@ -2000,6 +2000,12 @@
         <label>Buscar (CNPJ ou razão social)</label>
         <input type="text" id="carteira-busca" placeholder="Digite para buscar..." oninput="renderCarteiraBusca()" autocomplete="off">
       </div>
+      <div class="filter-group" style="min-width:200px;">
+        <label>Revenda</label>
+        <select id="carteira-filtro-revenda" onchange="renderCarteiraBusca()">
+          <option value="">Todas as revendas</option>
+        </select>
+      </div>
     </div>
     <div id="carteira-status-area"></div>
     <div id="carteira-stats-area"></div>
@@ -7789,17 +7795,37 @@ function carteiraUnidade(r) {
   return MAPEAMENTO_TAGS['#' + codigo.toUpperCase()] || codigo;
 }
 
-function carteiraLinhas(r) { return parseInt(r['Quantidade de linhas (Voz)']) || 0; }
-function carteiraTM(r) { return parseInt(r['Tempo de contrato (Voz)']) || 0; }
-
-// Apto a renovar = TM (Tempo de contrato Voz) >= limiar da Classificação.
-// Calculado aqui, não confia na coluna do mês (que muda de nome por aba).
-function carteiraApto(r) {
-  const classe = (r['Classificação'] || '').trim().toUpperCase();
-  const limiar = CARTEIRA_LIMIAR_TM[classe];
-  if (limiar === undefined) return false;
-  return carteiraTM(r) >= limiar;
+// Converte valores da planilha (que vêm como "-", "", "#N/A" pra
+// ausência de dado) num número seguro — nunca NaN.
+function carteiraNum(v) {
+  const s = (v || '').toString().trim();
+  if (!s || s === '-' || s === '#N/A' || s === '#N/D' || s === '#NOME?') return 0;
+  const n = parseInt(s.replace(/[^\d-]/g, ''), 10);
+  return isNaN(n) ? 0 : n;
 }
+
+function carteiraLinhas(r) { return carteiraNum(r['Quantidade de linhas (Voz)']); }
+function carteiraTM(r) { return carteiraNum(r['Tempo de contrato (Voz)']); }
+function carteiraLinhasBL(r) { return carteiraNum(r['Quantidade de linhas (Banda Larga)']); }
+function carteiraTM_BL(r) { return carteiraNum(r['Tempo de contrato (Banda Larga)']); }
+
+// Um cliente só entra nas contagens se tiver linha de Voz OU de Banda
+// Larga — os dois zerados/"-" ao mesmo tempo indicam registro morto/sem
+// serviço ativo, não deve contar como cliente da carteira.
+function carteiraTemAtividade(r) {
+  return carteiraLinhas(r) > 0 || carteiraLinhasBL(r) > 0;
+}
+
+// Apto a renovar = TM (Voz ou BL, conforme o produto) >= limiar da
+// Classificação. Calculado aqui, não confia na coluna do mês (que muda de
+// nome por aba, ex. "AGOSTO").
+function carteiraAptoBase(tm, classe) {
+  const limiar = CARTEIRA_LIMIAR_TM[(classe || '').trim().toUpperCase()];
+  if (limiar === undefined) return false;
+  return tm >= limiar;
+}
+function carteiraApto(r) { return carteiraAptoBase(carteiraTM(r), r['Classificação']); }
+function carteiraAptoBL(r) { return carteiraAptoBase(carteiraTM_BL(r), r['Classificação']); }
 
 async function initCarteira() {
   if (CARTEIRA_CARREGADA) { renderCarteiraOverview(); return; }
@@ -7827,6 +7853,12 @@ async function initCarteira() {
     });
     CARTEIRA_CARREGADA = true;
     document.getElementById('carteira-status-area').innerHTML = '';
+
+    const revendas = [...new Set(CARTEIRA_DADOS.map(carteiraUnidade))].filter(u => u && u !== '—').sort();
+    document.getElementById('carteira-filtro-revenda').innerHTML =
+      '<option value="">Todas as revendas</option>' +
+      revendas.map(u => `<option value="${escapeHtml(u)}">${escapeHtml(u)}</option>`).join('');
+
     renderCarteiraOverview();
   } catch (e) {
     document.getElementById('carteira-status-area').innerHTML = `<div class="error-state"><strong>Erro ao carregar carteira</strong>${escapeHtml(e.message)}</div>`;
@@ -7858,50 +7890,71 @@ function carteiraPieCard(titulo, itens) {
     </div>`;
 }
 
-function renderCarteiraOverview() {
-  const totalClientes = CARTEIRA_DADOS.length;
-  const totalLinhas = CARTEIRA_DADOS.reduce((s, r) => s + carteiraLinhas(r), 0);
+const CARTEIRA_CORES_CLASSE = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#4a3aa7', '#e34948', '#94a3b8'];
 
-  document.getElementById('carteira-stats-area').innerHTML = `<div class="stats-row">
-    <div class="stat-chip"><strong>${totalClientes.toLocaleString('pt-BR')}</strong> clientes</div>
-    <div class="stat-chip"><strong>${totalLinhas.toLocaleString('pt-BR')}</strong> linhas (voz)</div>
-  </div>`;
-
+// Monta os 3 gráficos de um produto (Voz ou Banda Larga): só considera
+// clientes que TÊM linha desse produto (>0) — um cliente sem BL não entra
+// nas contas de "apto a renovar BL" nem no gráfico de classificação BL.
+function carteiraBlocoProduto(titulo, fnLinhas, fnApto) {
   let linhasAptas = 0, linhasNaoAptas = 0;
   const porClasseLinhas = {};
   const porClasseCnpj = {};
+
   CARTEIRA_DADOS.forEach(r => {
-    const linhas = carteiraLinhas(r);
-    if (carteiraApto(r)) linhasAptas += linhas; else linhasNaoAptas += linhas;
+    const linhas = fnLinhas(r);
+    if (linhas <= 0) return;
+    if (fnApto(r)) linhasAptas += linhas; else linhasNaoAptas += linhas;
     const classe = (r['Classificação'] || '').trim().toUpperCase() || 'Sem classificação';
     porClasseLinhas[classe] = (porClasseLinhas[classe] || 0) + linhas;
     porClasseCnpj[classe] = (porClasseCnpj[classe] || 0) + 1;
   });
 
-  const coresClasse = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#4a3aa7', '#e34948', '#94a3b8'];
   const classesOrdenadas = Object.keys(porClasseLinhas).sort();
+  const corDe = c => CARTEIRA_CORES_CLASSE[classesOrdenadas.indexOf(c) % CARTEIRA_CORES_CLASSE.length];
 
-  document.getElementById('carteira-charts-area').innerHTML = `
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;margin:16px 0;">
+  return `
+    <div style="margin:20px 0 8px;font-size:13px;font-weight:600;color:var(--text-2);text-transform:uppercase;letter-spacing:.04em;">${escapeHtml(titulo)}</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;">
       ${carteiraPieCard('Linhas aptas a renovar', [
         { label: 'Aptas', value: linhasAptas, color: '#16a34a' },
         { label: 'Não aptas', value: linhasNaoAptas, color: '#dc2626' },
       ])}
-      ${carteiraPieCard('Linhas por classificação (TM)', classesOrdenadas.map((c, i) => ({ label: c, value: porClasseLinhas[c], color: coresClasse[i % coresClasse.length] })))}
-      ${carteiraPieCard('Clientes por classificação (TM)', classesOrdenadas.map((c, i) => ({ label: c, value: porClasseCnpj[c], color: coresClasse[i % coresClasse.length] })))}
+      ${carteiraPieCard('Linhas por classificação (TM)', classesOrdenadas.map(c => ({ label: c, value: porClasseLinhas[c], color: corDe(c) })))}
+      ${carteiraPieCard('Clientes por classificação (TM)', classesOrdenadas.map(c => ({ label: c, value: porClasseCnpj[c], color: corDe(c) })))}
     </div>`;
+}
+
+function renderCarteiraOverview() {
+  // Clientes sem nenhuma linha ativa (Voz e BL ambos zerados/"-") continuam
+  // na base pra busca/detalhe, só não contam no total de clientes.
+  const totalClientes = CARTEIRA_DADOS.filter(carteiraTemAtividade).length;
+  const totalLinhasVoz = CARTEIRA_DADOS.reduce((s, r) => s + carteiraLinhas(r), 0);
+  const totalLinhasBL = CARTEIRA_DADOS.reduce((s, r) => s + carteiraLinhasBL(r), 0);
+
+  document.getElementById('carteira-stats-area').innerHTML = `<div class="stats-row">
+    <div class="stat-chip"><strong>${totalClientes.toLocaleString('pt-BR')}</strong> clientes</div>
+    <div class="stat-chip"><strong>${totalLinhasVoz.toLocaleString('pt-BR')}</strong> linhas (voz)</div>
+    <div class="stat-chip"><strong>${totalLinhasBL.toLocaleString('pt-BR')}</strong> linhas (banda larga)</div>
+  </div>`;
+
+  document.getElementById('carteira-charts-area').innerHTML =
+    carteiraBlocoProduto('Voz', carteiraLinhas, carteiraApto) +
+    carteiraBlocoProduto('Banda Larga', carteiraLinhasBL, carteiraAptoBL);
 
   renderCarteiraBusca();
 }
 
 function renderCarteiraBusca() {
   const termo = (document.getElementById('carteira-busca').value || '').trim().toLowerCase();
-  if (!termo) {
+  const revendaFiltro = document.getElementById('carteira-filtro-revenda').value;
+  if (!termo && !revendaFiltro) {
     document.getElementById('carteira-table-area').innerHTML = '';
     return;
   }
   const termoDigitos = termo.replace(/\D/g, '');
   const resultados = CARTEIRA_DADOS.filter(r => {
+    if (revendaFiltro && carteiraUnidade(r) !== revendaFiltro) return false;
+    if (!termo) return true;
     const razao = (r['Razão Social'] || '').toLowerCase();
     const cnpj = (r['CNPJ'] || '').replace(/\D/g, '');
     if (razao.includes(termo)) return true;
@@ -7924,10 +7977,14 @@ function renderCarteiraBusca() {
     <div class="table-wrap"><div class="table-scroll">
       <table>
         <thead><tr>
-          <th>CNPJ</th><th style="width:24%">Razão Social</th><th>Unidade</th><th>Cidade/UF</th>
-          <th class="center">Linhas (Voz)</th><th class="center">TM</th><th class="center">Classe</th><th class="center">Apto</th><th></th>
+          <th>CNPJ</th><th style="width:20%">Razão Social</th><th>Unidade</th><th>Cidade/UF</th>
+          <th class="center">Linhas Voz</th><th class="center">TM Voz</th><th class="center">Apto Voz</th>
+          <th class="center">Linhas BL</th><th class="center">TM BL</th><th class="center">Apto BL</th>
+          <th class="center">Classe</th><th></th>
         </tr></thead>
-        <tbody>${resultados.map((r, idx) => `
+        <tbody>${resultados.map((r, idx) => {
+          const simNao = (v) => v ? '<span style="color:#16a34a;font-weight:700;">Sim</span>' : '<span style="color:var(--text-3);">Não</span>';
+          return `
           <tr>
             <td style="font-family:monospace;font-size:12px">${escapeHtml(r['CNPJ'] || '—')}</td>
             <td style="font-weight:500"><span class="cliente-drill-link" onclick="carteiraAbrirDetalhe(${idx})">${escapeHtml(r['Razão Social'] || '—')}</span></td>
@@ -7935,10 +7992,14 @@ function renderCarteiraBusca() {
             <td style="font-size:12px">${escapeHtml(r['DSC_MUNICIPIO'] || '—')}/${escapeHtml(r['UF'] || '—')}</td>
             <td class="center">${carteiraLinhas(r)}</td>
             <td class="center">${carteiraTM(r)}</td>
+            <td class="center">${simNao(carteiraLinhas(r) > 0 && carteiraApto(r))}</td>
+            <td class="center">${carteiraLinhasBL(r)}</td>
+            <td class="center">${carteiraTM_BL(r)}</td>
+            <td class="center">${simNao(carteiraLinhasBL(r) > 0 && carteiraAptoBL(r))}</td>
             <td class="center">${escapeHtml(r['Classificação'] || '—')}</td>
-            <td class="center">${carteiraApto(r) ? '<span style="color:#16a34a;font-weight:700;">Sim</span>' : '<span style="color:var(--text-3);">Não</span>'}</td>
             <td class="center"><button class="btn-secondary" style="padding:4px 10px;font-size:11px;" onclick="carteiraAbrirDetalhe(${idx})">Ver</button></td>
-          </tr>`).join('')}
+          </tr>`;
+        }).join('')}
         </tbody>
       </table>
     </div></div>`;
