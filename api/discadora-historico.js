@@ -39,21 +39,35 @@ export default async function handler(req, res) {
     select: 'data_registro,duracao,telefonia,ddd_telefone,documento,lead_nome,usuario_nome,grupo_nome,fila_nome',
     data_registro: `gte.${desde}T00:00:00`,
     order: 'data_registro.desc',
-    limit: '200000',
   });
   // segundo filtro de data (lte) precisa de uma segunda entrada — URLSearchParams
   // não deixa duas chaves iguais com set(), então montamos a query manualmente
   const url = `${SUPA_URL}/rest/v1/discadora_ligacoes?${params.toString()}&data_registro=lte.${ate}T23:59:59${grupoTravado ? `&grupo_nome=eq.${encodeURIComponent(grupoTravado)}` : ''}`;
 
   try {
-    const response = await fetch(url, {
-      headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` },
-    });
-    if (!response.ok) {
-      const err = await response.text();
-      return res.status(response.status).json({ error: err });
+    // PostgREST devolve no máximo 1000 linhas por requisição (db-max-rows),
+    // não importa o que a gente peça — pagina via header Range até acabar.
+    const PAGE_SIZE = 1000;
+    const MAX_PAGINAS = 500; // trava de segurança (500 mil linhas)
+    let rows = [];
+    let offset = 0;
+    while (offset / PAGE_SIZE < MAX_PAGINAS) {
+      const response = await fetch(url, {
+        headers: {
+          apikey: serviceKey,
+          Authorization: `Bearer ${serviceKey}`,
+          Range: `${offset}-${offset + PAGE_SIZE - 1}`,
+        },
+      });
+      if (!response.ok && response.status !== 206) {
+        const err = await response.text();
+        return res.status(response.status).json({ error: err });
+      }
+      const pagina = await response.json();
+      rows = rows.concat(pagina);
+      if (pagina.length < PAGE_SIZE) break;
+      offset += PAGE_SIZE;
     }
-    const rows = await response.json();
 
     // Reformata pro mesmo shape que o cliente já espera de listar_historico_contato
     // (GraphQL aninhado), pra não precisar reescrever discadoraRender()/discDrillDown().
