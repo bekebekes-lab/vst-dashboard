@@ -52,7 +52,7 @@ export default async function handler(req, res) {
     while (pagina < MAX_PAGINAS) {
       pagina++;
       const url = `${SUPA_URL}/rest/v1/discadora_ligacoes?${filtroBase}&limit=${PAGE_SIZE}` +
-        (cursor ? `&data_registro=lt.${cursor}` : '');
+        (cursor ? `&data_registro=lt.${encodeURIComponent(cursor)}` : '');
       const response = await fetch(url, {
         headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` },
       });
