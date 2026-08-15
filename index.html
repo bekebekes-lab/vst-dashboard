@@ -1294,6 +1294,7 @@
   <button class="tab-btn" id="tab-btn-producao" onclick="switchTab('producao', this)">🏭 Produção</button>
   <button class="tab-btn" id="tab-btn-discadora" onclick="switchTab('discadora', this)">📞 Discadora</button>
   <button class="tab-btn" id="tab-btn-simulador2" onclick="switchTab('simulador2', this)">🧮 Simulador 2.0</button>
+  <button class="tab-btn" id="tab-btn-churn" onclick="switchTab('churn', this)">📉 Churn</button>
 </div>
 
 <!-- BOTTOM NAV (mobile only — casca visual nova, chama switchTab() já existente) -->
@@ -1962,6 +1963,33 @@
         </table>
       </div>
     </div>
+  </div>
+
+  <!-- TAB CHURN — alertas de PORT-OUT sincronizados por e-mail -->
+  <div class="tab-panel" id="tab-churn">
+    <div class="filters-bar">
+      <div class="filter-group">
+        <label>Status</label>
+        <select id="churn-status" onchange="renderChurn()">
+          <option value="pendentes">Pendentes</option>
+          <option value="respondidos">Respondidos</option>
+          <option value="todos">Todos</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label>Linhas</label>
+        <select id="churn-linhas" onchange="renderChurn()">
+          <option value="todos">Todos</option>
+          <option value="10+">A partir de 10 (resposta obrigatória)</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label>Atribuído a</label>
+        <select id="churn-atribuido" onchange="renderChurn()"><option value="todos">Todos</option></select>
+      </div>
+    </div>
+    <div id="churn-stats-area"></div>
+    <div id="churn-table-area"></div>
   </div>
 
 </div>
@@ -4714,6 +4742,7 @@ function switchTab(name, el) {
   if (name === 'producao') initProducao();
   if (name === 'discadora') initDiscadora();
   if (name === 'simulador2') initSimulador2();
+  if (name === 'churn') initChurn();
 }
 
 // Bottom nav (mobile) — delega pro switchTab() de sempre usando o botão
@@ -6123,7 +6152,7 @@ function aplicarPermissoes() {
 
   // Abas permitidas por perfil
   const abasPermitidas = {
-    'admin':          ['simulador', 'gerencial', 'producao', 'discadora', 'simulador2'],
+    'admin':          ['simulador', 'gerencial', 'producao', 'discadora', 'simulador2', 'churn'],
     'gestor_macro':   ['gerencial', 'discadora'],
     'gestor_macro2':  ['gerencial', 'producao', 'discadora'],
     'gestor_macro3':  ['gerencial', 'producao'],
@@ -7533,6 +7562,171 @@ function discDrillClose() {
   var modal = document.getElementById('disc-modal');
   if (modal) modal.style.display = 'none';
   document.body.style.overflow = '';
+}
+
+// ─── ABA CHURN (alertas de PORT-OUT sincronizados por e-mail) ──────────────
+let CHURN_DADOS = [];
+let CHURN_USUARIOS = [];
+
+async function initChurn() {
+  document.getElementById('churn-table-area').innerHTML = '<div class="loading-state"><div class="loading-spinner"></div><p>Carregando alertas...</p></div>';
+
+  const { data: usuarios } = await supa.from('usuarios_dashboard').select('id,nome').eq('ativo', true).order('nome');
+  CHURN_USUARIOS = usuarios || [];
+  const selAtrib = document.getElementById('churn-atribuido');
+  selAtrib.innerHTML = '<option value="todos">Todos</option><option value="ninguem">Sem atribuição</option>' +
+    CHURN_USUARIOS.map(u => `<option value="${u.id}">${escapeHtml(u.nome)}</option>`).join('');
+
+  const { data, error } = await supa.from('churn_alertas').select('*').order('recebido_em', { ascending: false });
+  if (error) {
+    document.getElementById('churn-table-area').innerHTML = `<div class="error-state"><strong>Erro ao carregar alertas</strong>${escapeHtml(error.message)}</div>`;
+    return;
+  }
+  CHURN_DADOS = data || [];
+  renderChurn();
+}
+
+function renderChurn() {
+  const statusFiltro = document.getElementById('churn-status').value;
+  const linhasFiltro = document.getElementById('churn-linhas').value;
+  const atribuidoFiltro = document.getElementById('churn-atribuido').value;
+
+  const linhas = CHURN_DADOS.filter(r => {
+    if (statusFiltro === 'pendentes' && r.respondido) return false;
+    if (statusFiltro === 'respondidos' && !r.respondido) return false;
+    if (linhasFiltro === '10+' && !(r.qtd_linhas >= 10)) return false;
+    if (atribuidoFiltro === 'ninguem' && r.atribuido_a) return false;
+    if (atribuidoFiltro !== 'todos' && atribuidoFiltro !== 'ninguem' && String(r.atribuido_a) !== atribuidoFiltro) return false;
+    return true;
+  });
+
+  const pendentes = CHURN_DADOS.filter(r => !r.respondido).length;
+  const obrigatorios = CHURN_DADOS.filter(r => !r.respondido && r.qtd_linhas >= 10).length;
+  document.getElementById('churn-stats-area').innerHTML = `<div class="stats-row">
+    <div class="stat-chip"><strong>${CHURN_DADOS.length}</strong> alertas no total</div>
+    <div class="stat-chip"><strong>${pendentes}</strong> pendentes</div>
+    <div class="stat-chip" style="${obrigatorios > 0 ? 'color:#dc2626;font-weight:700;' : ''}"><strong>${obrigatorios}</strong> com resposta obrigatória (10+ linhas)</div>
+  </div>`;
+
+  if (linhas.length === 0) {
+    document.getElementById('churn-table-area').innerHTML = '<div class="coming-soon"><p>Nenhum alerta para os filtros selecionados.</p></div>';
+    return;
+  }
+
+  document.getElementById('churn-table-area').innerHTML = `
+    <div class="table-wrap"><div class="table-scroll">
+      <table>
+        <thead><tr>
+          <th>Recebido</th>
+          <th style="width:22%">Cliente</th>
+          <th>CNPJ</th>
+          <th class="center">Linhas</th>
+          <th>Receptora</th>
+          <th>Data Janela</th>
+          <th style="width:16%">Atribuído a</th>
+          <th class="center">Status</th>
+          <th></th>
+        </tr></thead>
+        <tbody>${linhas.map(r => {
+          const obrigatorio = r.qtd_linhas >= 10;
+          return `<tr>
+            <td style="font-size:11px;color:var(--text-2)">${fmtDate(r.recebido_em)}</td>
+            <td style="font-weight:500">${escapeHtml(r.nome_cliente || '—')}${obrigatorio ? ' <span title="Resposta obrigatória (10+ linhas)" style="color:#dc2626;">●</span>' : ''}</td>
+            <td style="font-family:monospace;font-size:12px">${escapeHtml(r.cnpj || '—')}</td>
+            <td class="center">${r.qtd_linhas ?? '—'}</td>
+            <td>${escapeHtml(r.receptora || '—')}</td>
+            <td>${escapeHtml(r.data_janela || '—')}</td>
+            <td>
+              <select onchange="churnAtribuir(${r.id}, this.value)" style="font-size:12px;padding:3px 6px;max-width:100%;">
+                <option value="">Sem atribuição</option>
+                ${CHURN_USUARIOS.map(u => `<option value="${u.id}" ${String(r.atribuido_a) === String(u.id) ? 'selected' : ''}>${escapeHtml(u.nome)}</option>`).join('')}
+              </select>
+            </td>
+            <td class="center"><span class="badge ${r.respondido ? '' : 'badge-gray'}" style="${r.respondido ? 'background:#dcfce7;color:#16a34a;' : ''}">${r.respondido ? 'Respondido' : 'Pendente'}</span></td>
+            <td class="center"><button class="btn-secondary" style="padding:4px 10px;font-size:11px;white-space:nowrap;" onclick="churnAbrirDetalhe(${r.id})">Ver / Responder</button></td>
+          </tr>`;
+        }).join('')}
+        </tbody>
+      </table>
+    </div></div>`;
+}
+
+async function churnAtribuir(id, usuarioId) {
+  const { error } = await supa.from('churn_alertas').update({ atribuido_a: usuarioId || null, atualizado_em: new Date().toISOString() }).eq('id', id);
+  if (error) { alert('Erro ao atribuir: ' + error.message); return; }
+  const item = CHURN_DADOS.find(r => r.id === id);
+  if (item) item.atribuido_a = usuarioId || null;
+}
+
+function churnAbrirDetalhe(id) {
+  const r = CHURN_DADOS.find(x => x.id === id);
+  if (!r) return;
+
+  let modal = document.getElementById('churn-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'churn-modal';
+    modal.style.cssText = 'position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.5);display:flex;align-items:flex-start;justify-content:center;padding:40px 20px;overflow-y:auto;';
+    modal.onclick = function(e) { if (e.target === modal) churnFecharDetalhe(); };
+    document.body.appendChild(modal);
+  }
+
+  const campos = [
+    ['Nome do Cliente', r.nome_cliente], ['CNPJ', r.cnpj], ['Número de linhas', r.qtd_linhas],
+    ['Receptora', r.receptora], ['Promoção Atual', r.promocao_atual], ['Classificação', r.classificacao],
+    ['Tempo Médio', r.tempo_medio], ['Carteira AACE', r.carteira_aace], ['Gerente de Canal', r.gerente_canal],
+    ['Coordenador', r.coordenador], ['Data da Janela', r.data_janela], ['Multa estimada', r.multa_estimada],
+    ['Oferta de Retenção MKT', r.oferta_retencao_mkt], ['Oferta Pós', r.oferta_pos],
+  ].filter(([, v]) => v !== null && v !== undefined && v !== '');
+
+  modal.innerHTML = `
+    <div style="background:var(--surface);border-radius:var(--radius-xl);width:100%;max-width:640px;box-shadow:0 24px 60px rgba(0,0,0,.3);overflow:hidden;">
+      <div style="background:var(--brand);padding:16px 20px;display:flex;align-items:center;justify-content:space-between;">
+        <div>
+          <div style="font-size:10px;color:rgba(255,255,255,.65);text-transform:uppercase;letter-spacing:.07em;margin-bottom:2px;">Alerta de PORT-OUT</div>
+          <div style="font-size:18px;font-weight:700;color:#fff;">${escapeHtml(r.nome_cliente || '—')}</div>
+        </div>
+        <button onclick="churnFecharDetalhe()" style="background:rgba(255,255,255,.15);border:none;color:#fff;width:32px;height:32px;border-radius:50%;font-size:18px;cursor:pointer;">×</button>
+      </div>
+      <div style="padding:20px;max-height:70vh;overflow-y:auto;">
+        <div class="det-grid">
+          ${campos.map(([label, val]) => `
+            <div class="det-item">
+              <div class="det-label">${escapeHtml(label)}</div>
+              <div class="det-value">${escapeHtml(String(val))}</div>
+            </div>`).join('')}
+        </div>
+        <div style="margin-top:16px;">
+          <label style="font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-2);display:block;margin-bottom:6px;">Feedback / resposta pra Claro</label>
+          <textarea id="churn-feedback-texto" rows="5" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:var(--radius);font-family:inherit;font-size:13px;resize:vertical;">${escapeHtml(r.feedback || '')}</textarea>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:14px;align-items:center;">
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px;">
+            <input type="checkbox" id="churn-respondido-check" ${r.respondido ? 'checked' : ''}> Marcar como respondido
+          </label>
+          <button class="btn-primary" style="margin-left:auto;" onclick="churnSalvarFeedback(${r.id})">Salvar</button>
+        </div>
+      </div>
+    </div>`;
+  modal.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+
+function churnFecharDetalhe() {
+  const modal = document.getElementById('churn-modal');
+  if (modal) modal.style.display = 'none';
+  document.body.style.overflow = '';
+}
+
+async function churnSalvarFeedback(id) {
+  const feedback = document.getElementById('churn-feedback-texto').value;
+  const respondido = document.getElementById('churn-respondido-check').checked;
+  const { error } = await supa.from('churn_alertas').update({ feedback, respondido, atualizado_em: new Date().toISOString() }).eq('id', id);
+  if (error) { alert('Erro ao salvar: ' + error.message); return; }
+  const item = CHURN_DADOS.find(r => r.id === id);
+  if (item) { item.feedback = feedback; item.respondido = respondido; }
+  churnFecharDetalhe();
+  renderChurn();
 }
 
 </script>
