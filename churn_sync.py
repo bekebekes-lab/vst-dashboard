@@ -143,7 +143,13 @@ def buscar_uf_cnpj(cnpj_digitos, cache):
     try:
         req = urllib.request.Request(
             f"https://brasilapi.com.br/api/cnpj/v1/{cnpj_digitos}",
-            headers={"Accept": "application/json"},
+            headers={
+                "Accept": "application/json",
+                # Sem um User-Agent "de navegador" a BrasilAPI devolve 403
+                # (bloqueio anti-bot do lado deles) — o padrão do urllib
+                # ("Python-urllib/3.x") cai nesse filtro.
+                "User-Agent": "Mozilla/5.0 (compatible; vst-dashboard-churn-sync/1.0)",
+            },
         )
         with urllib.request.urlopen(req, timeout=15) as resp:
             dados = json.loads(resp.read())
