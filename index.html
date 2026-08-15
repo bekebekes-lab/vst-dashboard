@@ -7648,12 +7648,12 @@ function churnDonoCliente(r) {
   let equipe = carteiraValor(linha['NEO VST (EQUIPE)']);
 
   // Se NEO VST (CONSULTOR/EQUIPE) não identificou nada, procura nas colunas
-  // de gestor a partir de AE (YAB, ERECHIM, BRS...) — cada coluna é uma
-  // equipe e só tem valor preenchido quando o cliente pertence a ela; usa
-  // o NOME da coluna (não o valor da célula) como equipe.
+  // de gestor a partir de AE (YAB, ERECHIM, BRS...) — usa o VALOR da célula
+  // do cliente naquela coluna (não o nome da coluna) como equipe.
   if (!consultor && !equipe) {
-    for (const nomeEquipe of CARTEIRA_CAMPOS_IGNORADOS) {
-      if (carteiraValor(linha[nomeEquipe])) { equipe = nomeEquipe; break; }
+    for (const nomeColuna of CARTEIRA_CAMPOS_IGNORADOS) {
+      const valor = carteiraValor(linha[nomeColuna]);
+      if (valor) { equipe = valor; break; }
     }
   }
 
