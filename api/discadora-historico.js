@@ -45,10 +45,11 @@ export default async function handler(req, res) {
   const url = `${SUPA_URL}/rest/v1/discadora_ligacoes?${params.toString()}&data_registro=lte.${ate}T23:59:59${grupoTravado ? `&grupo_nome=eq.${encodeURIComponent(grupoTravado)}` : ''}`;
 
   try {
-    // PostgREST devolve no máximo 1000 linhas por requisição (db-max-rows),
-    // não importa o que a gente peça — pagina via header Range até acabar.
-    const PAGE_SIZE = 1000;
-    const MAX_PAGINAS = 500; // trava de segurança (500 mil linhas)
+    // PostgREST devolve no máximo max_rows linhas por requisição, não
+    // importa o que a gente peça (configurado em 50.000 no projeto) —
+    // pagina via header Range até acabar.
+    const PAGE_SIZE = 50000;
+    const MAX_PAGINAS = 20; // trava de segurança (1 milhão de linhas)
     let rows = [];
     let offset = 0;
     while (offset / PAGE_SIZE < MAX_PAGINAS) {
