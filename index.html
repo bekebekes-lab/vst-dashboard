@@ -2002,7 +2002,7 @@
       </div>
       <div class="filter-group" style="min-width:200px;">
         <label>Revenda</label>
-        <select id="carteira-filtro-revenda" onchange="renderCarteiraBusca()">
+        <select id="carteira-filtro-revenda" onchange="renderCarteiraOverview()">
           <option value="">Todas as revendas</option>
         </select>
       </div>
@@ -7895,12 +7895,12 @@ const CARTEIRA_CORES_CLASSE = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87
 // Monta os 3 gráficos de um produto (Voz ou Banda Larga): só considera
 // clientes que TÊM linha desse produto (>0) — um cliente sem BL não entra
 // nas contas de "apto a renovar BL" nem no gráfico de classificação BL.
-function carteiraBlocoProduto(titulo, fnLinhas, fnApto) {
+function carteiraBlocoProduto(titulo, fnLinhas, fnApto, dados) {
   let linhasAptas = 0, linhasNaoAptas = 0;
   const porClasseLinhas = {};
   const porClasseCnpj = {};
 
-  CARTEIRA_DADOS.forEach(r => {
+  dados.forEach(r => {
     const linhas = fnLinhas(r);
     if (linhas <= 0) return;
     if (fnApto(r)) linhasAptas += linhas; else linhasNaoAptas += linhas;
@@ -7925,21 +7925,29 @@ function carteiraBlocoProduto(titulo, fnLinhas, fnApto) {
 }
 
 function renderCarteiraOverview() {
+  // Filtro de revenda: quando selecionado, TODA a visão geral (chips e os
+  // 6 gráficos) recalcula em cima só dos clientes daquela revenda — não
+  // só a tabela de busca.
+  const revendaFiltro = document.getElementById('carteira-filtro-revenda').value;
+  const dados = revendaFiltro ? CARTEIRA_DADOS.filter(r => carteiraUnidade(r) === revendaFiltro) : CARTEIRA_DADOS;
+
   // Clientes sem nenhuma linha ativa (Voz e BL ambos zerados/"-") continuam
   // na base pra busca/detalhe, só não contam no total de clientes.
-  const totalClientes = CARTEIRA_DADOS.filter(carteiraTemAtividade).length;
-  const totalLinhasVoz = CARTEIRA_DADOS.reduce((s, r) => s + carteiraLinhas(r), 0);
-  const totalLinhasBL = CARTEIRA_DADOS.reduce((s, r) => s + carteiraLinhasBL(r), 0);
+  const totalClientes = dados.filter(carteiraTemAtividade).length;
+  const totalLinhasVoz = dados.reduce((s, r) => s + carteiraLinhas(r), 0);
+  const totalLinhasBL = dados.reduce((s, r) => s + carteiraLinhasBL(r), 0);
+  const totalLinhas = totalLinhasVoz + totalLinhasBL;
 
   document.getElementById('carteira-stats-area').innerHTML = `<div class="stats-row">
+    <div class="stat-chip"><strong>${totalLinhas.toLocaleString('pt-BR')}</strong> linhas no total</div>
     <div class="stat-chip"><strong>${totalClientes.toLocaleString('pt-BR')}</strong> clientes</div>
     <div class="stat-chip"><strong>${totalLinhasVoz.toLocaleString('pt-BR')}</strong> linhas (voz)</div>
     <div class="stat-chip"><strong>${totalLinhasBL.toLocaleString('pt-BR')}</strong> linhas (banda larga)</div>
   </div>`;
 
   document.getElementById('carteira-charts-area').innerHTML =
-    carteiraBlocoProduto('Voz', carteiraLinhas, carteiraApto) +
-    carteiraBlocoProduto('Banda Larga', carteiraLinhasBL, carteiraAptoBL);
+    carteiraBlocoProduto('Voz', carteiraLinhas, carteiraApto, dados) +
+    carteiraBlocoProduto('Banda Larga', carteiraLinhasBL, carteiraAptoBL, dados);
 
   renderCarteiraBusca();
 }
