@@ -10,15 +10,18 @@ IMPORTANTE — a caixa de e-mail NUNCA é alterada:
 - Nenhum e-mail é apagado, movido ou arquivado — só lido.
 - O Outlook do usuário continua enxergando tudo exatamente como chegou.
 
-Dedup: cada e-mail tem um Message-ID único (cabeçalho padrão de e-mail);
-a tabela tem esse campo como UNIQUE, e o upsert usa
-"resolution=ignore-duplicates", então rodar de novo sobre o mesmo e-mail
-não duplica nem sobrescreve nada.
+Dedup: pela chave de NEGÓCIO (cnpj, data_janela), não só pelo Message-ID —
+a Claro às vezes reenvia o mesmo alerta de PORT-OUT em e-mails diferentes
+(Message-ID novo, conteúdo idêntico), e isso deve contar como o MESMO caso
+na tela, não duas linhas. O upsert usa "resolution=merge-duplicates", que
+atualiza os campos vindos do e-mail (corrige recebido_em, etc.) mas nunca
+toca em atribuido_a/feedback/respondido — esses são só editados pela tela.
 
 Só usa a biblioteca padrão do Python (imaplib, email, json, urllib) — sem
 dependências externas.
 """
 import email
+import email.utils
 import imaplib
 import json
 import os
@@ -130,21 +133,32 @@ def post_json(url, body, headers, method="POST"):
         return e.code, parsed
 
 
-def gravar_alerta(service_key, message_id, dados):
-    linha = {"message_id": message_id, **dados}
+def gravar_alerta(service_key, message_id, recebido_em, dados):
+    if not dados.get("cnpj") or not dados.get("data_janela"):
+        # Sem CNPJ+janela não dá pra deduplicar pela chave de negócio (Claro
+        # reenvia o mesmo alerta mais de uma vez às vezes) — descarta em vez
+        # de arriscar duplicar ou colidir com outra linha por engano.
+        return
+    linha = {"message_id": message_id, "recebido_em": recebido_em, **dados}
     if "qtd_linhas" in linha:
         try:
             linha["qtd_linhas"] = int(re.sub(r"\D", "", linha["qtd_linhas"]) or 0)
         except ValueError:
             linha["qtd_linhas"] = None
+    # on_conflict na chave de NEGÓCIO (cnpj, data_janela), não no Message-ID —
+    # Claro às vezes reenvia o mesmo alerta via e-mails diferentes; isso é
+    # tratado como o MESMO caso, não uma duplicata na tela. merge-duplicates
+    # atualiza os campos vindos do e-mail (inclusive corrige recebido_em se
+    # precisar), mas nunca toca em atribuido_a/feedback/respondido porque
+    # esses campos não fazem parte do payload enviado aqui.
     status, resp = post_json(
-        f"{SUPA_URL}/rest/v1/churn_alertas?on_conflict=message_id",
+        f"{SUPA_URL}/rest/v1/churn_alertas?on_conflict=cnpj,data_janela",
         linha,
         {
             "Content-Type": "application/json",
             "apikey": service_key,
             "Authorization": f"Bearer {service_key}",
-            "Prefer": "resolution=ignore-duplicates,return=minimal",
+            "Prefer": "resolution=merge-duplicates,return=minimal",
         },
     )
     if status not in (200, 201, 204):
@@ -193,9 +207,17 @@ def main():
                 print(f"  aviso: não consegui extrair dados de '{assunto}' — pulando")
                 continue
 
-            gravar_alerta(service_key, message_id_header.strip(), dados)
+            recebido_em = None
+            data_header = msg.get("Date")
+            if data_header:
+                try:
+                    recebido_em = email.utils.parsedate_to_datetime(data_header).isoformat()
+                except Exception:
+                    recebido_em = None
+
+            gravar_alerta(service_key, message_id_header.strip(), recebido_em, dados)
             novos += 1
-            print(f"  gravado: {dados.get('nome_cliente', '?')} (CNPJ {dados.get('cnpj', '?')})")
+            print(f"  gravado: {dados.get('nome_cliente', '?')} (CNPJ {dados.get('cnpj', '?')}) — recebido em {recebido_em}")
 
         print(f"Sincronização concluída. {novos} alerta(s) processado(s) (novos ou já existentes, ignorados via upsert).")
     finally:

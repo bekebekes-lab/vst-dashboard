@@ -7586,6 +7586,18 @@ async function initChurn() {
   renderChurn();
 }
 
+// Extrai o código de revenda/unidade (ex.: "YI8F") do fim do texto de
+// Carteira AACE ("PS - VST_AGENCIAMENTO_E_SERV - YI8F") e mapeia pro nome
+// da cidade usando o mesmo MAPEAMENTO_TAGS já usado em Produção.
+function churnUnidade(r) {
+  const texto = (r.carteira_aace || '').trim();
+  if (!texto) return '—';
+  const partes = texto.split('-').map(s => s.trim()).filter(Boolean);
+  const codigo = partes[partes.length - 1];
+  if (!codigo) return '—';
+  return MAPEAMENTO_TAGS['#' + codigo.toUpperCase()] || codigo;
+}
+
 function renderChurn() {
   const statusFiltro = document.getElementById('churn-status').value;
   const linhasFiltro = document.getElementById('churn-linhas').value;
@@ -7602,8 +7614,10 @@ function renderChurn() {
 
   const pendentes = CHURN_DADOS.filter(r => !r.respondido).length;
   const obrigatorios = CHURN_DADOS.filter(r => !r.respondido && r.qtd_linhas >= 10).length;
+  const totalLinhas = CHURN_DADOS.reduce((s, r) => s + (parseInt(r.qtd_linhas) || 0), 0);
   document.getElementById('churn-stats-area').innerHTML = `<div class="stats-row">
     <div class="stat-chip"><strong>${CHURN_DADOS.length}</strong> alertas no total</div>
+    <div class="stat-chip"><strong>${totalLinhas}</strong> linhas no total</div>
     <div class="stat-chip"><strong>${pendentes}</strong> pendentes</div>
     <div class="stat-chip" style="${obrigatorios > 0 ? 'color:#dc2626;font-weight:700;' : ''}"><strong>${obrigatorios}</strong> com resposta obrigatória (10+ linhas)</div>
   </div>`;
@@ -7618,23 +7632,29 @@ function renderChurn() {
       <table>
         <thead><tr>
           <th>Recebido</th>
-          <th style="width:22%">Cliente</th>
+          <th style="width:18%">Cliente</th>
           <th>CNPJ</th>
           <th class="center">Linhas</th>
           <th>Receptora</th>
+          <th>Unidade</th>
           <th>Data Janela</th>
-          <th style="width:16%">Atribuído a</th>
+          <th style="width:14%">Atribuído a</th>
           <th class="center">Status</th>
           <th></th>
         </tr></thead>
         <tbody>${linhas.map(r => {
           const obrigatorio = r.qtd_linhas >= 10;
+          const recebidoDt = r.recebido_em ? new Date(r.recebido_em) : null;
+          const recebidoFmt = recebidoDt && !isNaN(recebidoDt)
+            ? recebidoDt.toLocaleDateString('pt-BR') + ' ' + recebidoDt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+            : '—';
           return `<tr>
-            <td style="font-size:11px;color:var(--text-2)">${fmtDate(r.recebido_em)}</td>
+            <td style="font-size:11px;color:var(--text-2);white-space:nowrap;">${recebidoFmt}</td>
             <td style="font-weight:500">${escapeHtml(r.nome_cliente || '—')}${obrigatorio ? ' <span title="Resposta obrigatória (10+ linhas)" style="color:#dc2626;">●</span>' : ''}</td>
             <td style="font-family:monospace;font-size:12px">${escapeHtml(r.cnpj || '—')}</td>
             <td class="center">${r.qtd_linhas ?? '—'}</td>
             <td>${escapeHtml(r.receptora || '—')}</td>
+            <td style="font-size:12px">${escapeHtml(churnUnidade(r))}</td>
             <td>${escapeHtml(r.data_janela || '—')}</td>
             <td>
               <select onchange="churnAtribuir(${r.id}, this.value)" style="font-size:12px;padding:3px 6px;max-width:100%;">
