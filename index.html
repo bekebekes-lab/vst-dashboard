@@ -6587,20 +6587,42 @@ async function discadoraBuscarHistorico(desde, ate) {
   return json.registros || [];
 }
 
-// Busca só um dia (todos os agentes) direto na API ao vivo, usando os filtros
-// de data que a API já suporta (data_hora_minima/maxima) — usado pra
-// preencher a URL da gravação de ligações de dias já arquivados no Supabase
-// (onde a URL não é guardada, só é buscada quando alguém realmente quer
-// ouvir). Continua rápido mesmo pra datas antigas porque filtra no servidor
-// da própria discadora, não precisa paginar desde hoje.
-async function discadoraBuscarGravacoesDia(dataYYYYMMDD) {
+// Acha o id numérico do agente pelo nome (a API filtra ligações por
+// ids_de_usuarios, não por nome) — cache simples pra não repetir a busca
+// toda vez que a mesma pessoa aparecer em dias diferentes.
+const _discIdUsuarioCache = {};
+async function discadoraBuscarIdUsuario(nomeConsultor) {
+  if (_discIdUsuarioCache[nomeConsultor] !== undefined) return _discIdUsuarioCache[nomeConsultor];
+  const query = `{ listar_usuarios(texto_a_pesquisar: "${nomeConsultor.replace(/"/g, '\\"')}", limite: 10) { id nome } }`;
+  const res = await fetch(DISC_API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ query })
+  });
+  const json = await res.json();
+  const lista = json.data?.listar_usuarios || [];
+  const match = lista.find(u => (u.nome || '').toLowerCase() === nomeConsultor.toLowerCase());
+  const id = match ? match.id : null;
+  _discIdUsuarioCache[nomeConsultor] = id;
+  return id;
+}
+
+// Busca só um dia, e só de UM agente (via ids_de_usuarios), direto na API ao
+// vivo — usado pra preencher a URL da gravação de ligações de dias já
+// arquivados no Supabase (onde a URL não é guardada, só é buscada quando
+// alguém realmente quer ouvir). Filtrar por agente + dia mantém a busca
+// pequena mesmo em dias com milhares de ligações de outros agentes.
+async function discadoraBuscarGravacoesDia(dataYYYYMMDD, nomeConsultor) {
+  const idUsuario = nomeConsultor ? await discadoraBuscarIdUsuario(nomeConsultor) : null;
+  const filtroUsuario = idUsuario !== null && idUsuario !== undefined ? `ids_de_usuarios: [${idUsuario}]` : 'contem_usuarios: true';
+
   let todos = [];
   let pagina = 1;
   const MAX_PAGINAS_DIA = 20;
   while (pagina <= MAX_PAGINAS_DIA) {
     const query = `{
       listar_historico_contato(
-        contem_usuarios: true
+        ${filtroUsuario}
         limite: 1000
         pagina: ${pagina}
         data_hora_minima: "${dataYYYYMMDD}T00:00:00-03:00"
@@ -7183,7 +7205,7 @@ function discDrillDown(nomeConsultor) {
     if (diasFaltando.size === 0 || window._discGravacoesBuscando) return;
     window._discGravacoesBuscando = true;
     Promise.all([...diasFaltando].map(function(dia) {
-      return discadoraBuscarGravacoesDia(dia).catch(function(){ return []; });
+      return discadoraBuscarGravacoesDia(dia, nomeConsultor).catch(function(){ return []; });
     })).then(function(resultados) {
       var mapa = {};
       resultados.flat().forEach(function(r) {
