@@ -1,0 +1,37 @@
+name: Sincronizar histórico da discadora
+
+on:
+  schedule:
+    # 03:15 UTC = 00:15 BRT — roda depois da virada do dia, sincroniza "ontem"
+    - cron: "15 3 * * *"
+  workflow_dispatch:
+    inputs:
+      desde:
+        description: "Data inicial (YYYY-MM-DD) — deixe em branco pra sincronizar só ontem"
+        required: false
+      ate:
+        description: "Data final (YYYY-MM-DD) — deixe em branco pra sincronizar só ontem"
+        required: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Sincronizar
+        env:
+          DISCADORA_CRON_SECRET: ${{ secrets.DISCADORA_CRON_SECRET }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          ARGS=""
+          if [ -n "${{ github.event.inputs.desde }}" ]; then ARGS="$ARGS --desde ${{ github.event.inputs.desde }}"; fi
+          if [ -n "${{ github.event.inputs.ate }}" ]; then ARGS="$ARGS --ate ${{ github.event.inputs.ate }}"; fi
+          python discadora_sync.py $ARGS

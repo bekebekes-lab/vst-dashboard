@@ -7,7 +7,13 @@ export default async function handler(req, res) {
 
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-  if (!(await requireAuth(req, res))) return;
+
+  // Job de sincronização diária (GitHub Actions) chama este endpoint sem
+  // sessão de usuário — autentica com um segredo próprio em vez de token
+  // Supabase. Qualquer outra chamada continua exigindo login normal.
+  const isCronJob = process.env.DISCADORA_CRON_SECRET
+    && req.headers['x-cron-secret'] === process.env.DISCADORA_CRON_SECRET;
+  if (!isCronJob && !(await requireAuth(req, res))) return;
 
   const apiKey = process.env.MAKESYSTEM_API_KEY;
   if (!apiKey) return res.status(500).json({ error: 'MAKESYSTEM_API_KEY não configurado no servidor' });
