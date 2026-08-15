@@ -87,8 +87,18 @@ export default async function handler(req, res) {
       cursorDia.setUTCDate(cursorDia.getUTCDate() + DIAS_POR_PEDACO);
     }
 
-    const resultados = await Promise.all(pedacos.map(([de, a]) => buscarPedaco(de, a)));
-    const rows = resultados.flat();
+    // Paralelo, mas em grupos pequenos — todos os pedaços de uma vez (ex.:
+    // 9 pra um range de 44 dias) sobrecarrega o pool de conexões do
+    // Supabase e os deixa lentos o bastante pra estourar o statement
+    // timeout individual. 3 por vez equilibra ganho de paralelismo sem
+    // gerar contenção.
+    const CONCORRENCIA = 3;
+    const rows = [];
+    for (let i = 0; i < pedacos.length; i += CONCORRENCIA) {
+      const grupo = pedacos.slice(i, i + CONCORRENCIA);
+      const parciais = await Promise.all(grupo.map(([de, a]) => buscarPedaco(de, a)));
+      parciais.forEach(p => rows.push(...p));
+    }
 
     // Reformata pro mesmo shape que o cliente já espera de listar_historico_contato
     // (GraphQL aninhado), pra não precisar reescrever discadoraRender()/discDrillDown().
