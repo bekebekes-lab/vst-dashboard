@@ -79,13 +79,23 @@ def buscar_pagina_do_dia(cron_secret, dia, pagina):
     return (data or {}).get("data", {}).get("listar_historico_contato") or []
 
 
+def corrigir_fuso(data_registro):
+    # Espelha _discCorrigirFuso() em index.html: a API marca o horário como
+    # "Z" (UTC) mas o valor já é hora de Brasília — troca só o rótulo do
+    # fuso (não desloca o relógio), senão o histórico fica gravado 3h
+    # adiantado em relação ao que o app mostra pros dados ao vivo.
+    if data_registro and data_registro.endswith("Z"):
+        return data_registro[:-1] + "-03:00"
+    return data_registro
+
+
 def transformar(registro):
     lead = registro.get("lead") or {}
     usuario = registro.get("usuario") or {}
     grupo = registro.get("grupo") or {}
     fila = registro.get("fila") or {}
     return {
-        "data_registro": registro.get("dataRegistro"),
+        "data_registro": corrigir_fuso(registro.get("dataRegistro")),
         "duracao": registro.get("duracao"),
         "telefonia": registro.get("telefonia"),
         "ddd_telefone": str(registro.get("dddTelefone")) if registro.get("dddTelefone") is not None else None,
