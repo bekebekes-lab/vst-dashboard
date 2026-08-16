@@ -359,6 +359,7 @@
   .mobile-drawer-perfil { font-size: 11px; color: var(--text-3); text-transform: uppercase; letter-spacing: .04em; margin-top: 2px; }
   .mobile-drawer-body { flex: 1; overflow-y: auto; padding: 4px 0; }
   .mobile-drawer-section { padding: 14px 18px; border-bottom: 1px solid var(--border); }
+  .mobile-drawer-section:empty { display: none; }
   .mobile-drawer-section-title {
     font-size: 10px; font-weight: 700; color: var(--text-3); text-transform: uppercase;
     letter-spacing: .06em; margin-bottom: 10px;
@@ -395,6 +396,12 @@
     gap: 10px;
     box-shadow: var(--shadow-xs);
   }
+  /* Botão que abre a config da aba (drawer de conta) — só existe no mobile,
+     onde os campos de filtro/config saem da tela e viram itens do drawer. */
+  .btn-config-mobile { display: none; }
+  /* Containers de card do Simulador 2.0 — só existem no mobile; no desktop
+     a tabela de sempre continua a única versão renderizada. */
+  #s2-recebimento-cards, #s2-rampa-cards { display: none; }
   .filter-group label {
     font-size: 10px; color: var(--text-3);
     font-weight: 600; display: block; margin-bottom: 5px;
@@ -1037,6 +1044,47 @@
     .sim-section-metas { min-width: 100%; }
     .section-header { flex-wrap: wrap; gap: 6px; }
     .table-wrap { border-radius: var(--radius); overflow: hidden; }
+
+    /* Cards empilhados (Gerencial/Simulador 2.0) no lugar de tabela larga —
+       reaproveita os mesmos dados já computados pelo render de cada aba,
+       só troca o template de saída. */
+    .row-cards { display: flex; flex-direction: column; gap: 10px; }
+    #s2-recebimento-cards, #s2-rampa-cards { display: flex; }
+    #s2-recebimento-tablewrap, #s2-rampa-tablewrap { display: none; }
+    .row-card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 12px 14px;
+    }
+    .row-card[onclick] { cursor: pointer; }
+    .row-card-title {
+      font-weight: 600; font-size: 14px; color: var(--text); margin-bottom: 8px;
+      display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
+    }
+    .row-card-title .rc-subtitle { font-weight: 400; font-size: 11px; color: var(--text-3); }
+    .row-card-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; }
+    .row-card-field { display: flex; flex-direction: column; gap: 2px; }
+    .row-card-field .rcf-label { font-size: 10px; color: var(--text-3); text-transform: uppercase; letter-spacing: .04em; }
+    .row-card-field .rcf-value { font-size: 13px; font-weight: 600; color: var(--text); }
+
+    /* Botão que abre o drawer de conta (config da aba atual) — colocado
+       onde hoje ficava a barra de filtros/config cheia. */
+    .btn-config-mobile {
+      display: flex; align-items: center; justify-content: center; gap: 6px;
+      width: 100%; padding: 10px 14px; margin-bottom: 10px;
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+      font-size: 13px; font-weight: 600; color: var(--text); cursor: pointer;
+    }
+    .filter-group-full-mobile { grid-column: 1 / -1; }
+
+    /* Drawer: seção de config por unidade/estágio (Simulador 2.0) fica
+       longa — cada mini-bloco com cabeçalho próprio pra não virar lista solta. */
+    .drawer-config-bloco { margin-bottom: 14px; }
+    .drawer-config-bloco-titulo {
+      font-size: 11px; font-weight: 700; color: var(--text-2); text-transform: uppercase;
+      letter-spacing: .04em; margin-bottom: 6px;
+    }
+    .drawer-config-item { margin-bottom: 10px; }
+    .drawer-config-item label { display: block; font-size: 12px; color: var(--text-2); margin-bottom: 4px; }
     .stats-row { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; padding-bottom: 4px; }
     .stats-row::-webkit-scrollbar { display: none; }
     .detail-info-chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
@@ -1368,6 +1416,11 @@
       <label class="mobile-drawer-label">Aba padrão ao abrir</label>
       <select id="drawer-pref-aba" onchange="salvarPrefAbaPadrao(this.value)"></select>
     </div>
+    <!-- Filtros/config da aba atual (mobile only) — populado dinamicamente
+         movendo os campos de verdade pra cá em moverConfigParaDrawer(),
+         e devolvidos ao fechar em restaurarConfigDoDrawer(). Fica vazio
+         (sem seção visível) em abas sem config mapeada ou no desktop. -->
+    <div class="mobile-drawer-section" id="drawer-secao-config"></div>
   </div>
   <button class="mobile-drawer-item" onclick="fecharDrawerConta();fazerLogout()">🚪 Sair</button>
 </div>
@@ -1377,6 +1430,7 @@
 
   <!-- TAB GERENCIAL -->
   <div class="tab-panel" id="tab-gerencial">
+    <button class="btn-config-mobile" onclick="handleUserBadgeClick()">⚙️ Filtros</button>
     <div class="filters-bar">
       <div class="filter-group"><label>Estado</label><select id="f-estado" onchange="onFilterChange('estado')"><option>Todos</option></select></div>
       <div class="filter-group" style="min-width:190px">
@@ -1395,7 +1449,7 @@
       </div>
       <div class="filter-group"><label>Consultor</label><select id="f-consultor" onchange="render()"><option>Todos</option></select></div>
       <div class="filter-group"><label>Tag / Unidade</label><select id="f-tag" onchange="render()"><option>Todas</option></select></div>
-      <div class="filter-group" style="min-width:220px">
+      <div class="filter-group filter-group-full-mobile" style="min-width:220px">
         <label>Buscar (CNPJ, razão social, vinculado ou nº)</label>
         <input type="text" id="f-busca" placeholder="Digite para buscar..." oninput="onFilterChange('busca')" autocomplete="off">
       </div>
@@ -1627,6 +1681,7 @@
 
   <!-- TAB SIMULADOR 2.0 — Política Claro AACE PME (vigência jun/2026) -->
   <div class="tab-panel" id="tab-simulador2">
+    <button class="btn-config-mobile" onclick="handleUserBadgeClick()">⚙️ Configurações</button>
 
     <!-- PARÂMETROS GERAIS DO PERÍODO — usados em várias seções abaixo -->
     <div class="s2-secao">
@@ -1737,7 +1792,8 @@
         <div class="s2-kpi-card"><div class="s2-kpi-label">Teto de Carteira (total)</div><div class="s2-kpi-value" id="s2-kpi-teto">R$ 0,00</div><div class="s2-hint" id="s2-kpi-teto-sub"></div></div>
       </div>
 
-      <div class="s2-table-wrap" style="margin-top:16px">
+      <div class="row-cards" id="s2-recebimento-cards" style="margin-top:16px"></div>
+      <div class="s2-table-wrap" id="s2-recebimento-tablewrap" style="margin-top:16px">
         <table class="s2-table" id="s2-tabela-recebimento">
           <thead>
             <tr>
@@ -1801,7 +1857,8 @@
       </div>
       <div class="s2-hint" style="margin-bottom:14px">"Em HC 100%" = quantos HCs a produção sustentaria SE todos estivessem no último estágio da rampa (100% da meta) — não é uma contagem real de cabeças, é uma unidade de referência para achar o gargalo. A contagem real de HCs, já considerando o mix de estágios que você tem, está na coluna "Sugestão a Declarar" da tabela abaixo.</div>
 
-      <div class="s2-table-wrap">
+      <div class="row-cards" id="s2-rampa-cards"></div>
+      <div class="s2-table-wrap" id="s2-rampa-tablewrap">
         <table class="s2-table" id="s2-tabela-rampa">
           <thead><tr><th>Estágio (meses de casa)</th><th>% meta exigida</th><th>Disponível (tenho)</th><th>Sugestão a Declarar</th></tr></thead>
           <tbody id="s2-rampa-body"></tbody>
@@ -2761,11 +2818,32 @@ function render() {
       return;
     }
     window._drillRows = linhasBusca;
+    const isMobileBusca = window.matchMedia('(max-width: 768px)').matches;
     document.getElementById('table-area').innerHTML = `
       <div class="section-header">
         <span class="section-title">Resultados da busca</span>
         <span class="count-badge">${linhasBusca.length} pedido${linhasBusca.length === 1 ? '' : 's'}</span>
       </div>
+      ${isMobileBusca ? `
+      <div class="row-cards">${linhasBusca.map((r, idx) => {
+        const qtd   = parseInt(r['QUANTIDADE']) || 1;
+        const prop  = r['PROPRIETÁRIO DO PEDIDO'] || '—';
+        const nome  = r['NOME CLIENTE'] || '—';
+        const vinc  = r['VINCULADO'] || '—';
+        const grupo = r['GRUPO'] || '—';
+        const eq    = r['EQUIPE'] || '—';
+        const fla   = r['FILA'] || '—';
+        return `<div class="row-card" onclick="abrirDetalheCliente(${idx})">
+          <div class="row-card-title"><span>${escapeHtml(nome)}</span><span class="badge badge-red">${qtd}</span></div>
+          <div class="row-card-fields">
+            <div class="row-card-field"><span class="rcf-label">Grupo</span><span class="rcf-value">${escapeHtml(grupo)}</span></div>
+            <div class="row-card-field"><span class="rcf-label">Vinculado</span><span class="rcf-value">${escapeHtml(vinc)}</span></div>
+            <div class="row-card-field"><span class="rcf-label">Proprietário</span><span class="rcf-value">${escapeHtml(prop)}</span></div>
+            <div class="row-card-field"><span class="rcf-label">Equipe</span><span class="rcf-value">${escapeHtml(eq)}</span></div>
+            <div class="row-card-field" style="grid-column:1/-1"><span class="rcf-label">Status</span><span class="rcf-value">${escapeHtml(fla)}</span></div>
+          </div>
+        </div>`;
+      }).join('')}</div>` : `
       <div class="table-wrap"><div class="table-scroll">
         <table>
           <thead><tr>
@@ -2802,7 +2880,7 @@ function render() {
           }).join('')}
           </tbody>
         </table>
-      </div></div>`;
+      </div></div>`}`;
     return;
   }
 
@@ -2827,11 +2905,26 @@ function render() {
     { key: 'GERAL', label: 'Total' }
   ];
 
+  const isMobileCons = window.matchMedia('(max-width: 768px)').matches;
   document.getElementById('table-area').innerHTML = `
     <div class="section-header">
       <span class="section-title">Detalhamento por consultor</span>
       <span class="count-badge">${rows.length} consultores</span>
     </div>
+    ${isMobileCons ? `
+    <div class="row-cards">${rows.map(([cn, d]) => `
+      <div class="row-card" onclick="filterByConsultor('${escapeJsAttr(cn)}')">
+        <div class="row-card-title"><span>${escapeHtml(cn)}</span><span class="tag-pill">${d.tag || '—'}</span></div>
+        <div class="row-card-fields">
+          <div class="row-card-field" style="grid-column:1/-1"><span class="rcf-label">Equipe</span><span class="rcf-value">${escapeHtml(d.equipe || '—')}</span></div>
+          <div class="row-card-field"><span class="rcf-label">Total</span><span class="rcf-value">${d.GERAL}</span></div>
+          <div class="row-card-field"><span class="rcf-label">Gross</span><span class="rcf-value">${d.GROSS}</span></div>
+          <div class="row-card-field"><span class="rcf-label">Renov.</span><span class="rcf-value">${d["RENOVAÇÃO"] || 0}</span></div>
+          <div class="row-card-field"><span class="rcf-label">BL</span><span class="rcf-value">${d.BL || 0}</span></div>
+          <div class="row-card-field"><span class="rcf-label">Titular.</span><span class="rcf-value">${d.TITULARIDADE || 0}</span></div>
+          <div class="row-card-field" style="grid-column:1/-1"><span class="rcf-label">Ativo/Instalado</span><span class="rcf-value">${d.ATIVO || 0}</span></div>
+        </div>
+      </div>`).join('')}</div>` : `
     <div class="table-wrap"><div class="table-scroll">
       <table>
         <thead><tr>
@@ -2859,7 +2952,7 @@ function render() {
           </tr>`).join('')}
         </tbody>
       </table>
-    </div></div>`;
+    </div></div>`}`;
 }
 
 // ─── sort (tabela de consultores) ───────────────────────────────────────────
@@ -4825,6 +4918,11 @@ function switchTab(name, el) {
   if (name === 'simulador2') initSimulador2();
   if (name === 'churn') initChurn();
   if (name === 'carteira') initCarteira();
+
+  // Config/filtros dessa aba (se houver) saem da tela e entram no drawer de
+  // conta assim que ela vira ativa (só mobile) — não só enquanto o drawer
+  // está aberto, pra manter a tela principal desafogada o tempo todo.
+  moverConfigParaDrawer(name);
 }
 
 // Bottom nav (mobile) — delega pro switchTab() de sempre usando o botão
@@ -5553,7 +5651,12 @@ function renderSimulador2() {
       totalNaoRecebida = 0, totalMesa = 0, totalLinhasVoz = 0, totalLinhasVirtua = 0, totalLinhasCarteira = 0,
       totalPotencial = 0, totalLinhasRecebidas = 0;
 
-  CODIGOS_AACE2.forEach(({ tag }) => {
+  // Cards do mobile (Recebimento por Unidade) — só leitura, mesmos valores já
+  // calculados abaixo pra cada unidade; a edição de Carteira/Net Adds só
+  // acontece via os inputs que moram no drawer (moverConfigParaDrawer()).
+  const cardsRecebimento = [];
+
+  CODIGOS_AACE2.forEach(({ tag, nome }) => {
     const sid = s2Sid(tag);
     const dAt = sheet.ativacao[tag] || { virtua: { qtd: 0, rec: 0 }, vozNovo: { qtd: 0, rec: 0 }, vozPort: { qtd: 0, rec: 0 } };
     const linhasCarteira = s2num('s2-cart-linhas-' + sid); // manual — carteira reportada pela Claro, não está no BaseCRM
@@ -5594,7 +5697,26 @@ function renderSimulador2() {
     naoRecEl.textContent = s2fmt(naoRecebida); naoRecEl.className = naoRecebida > 0 ? 's2-teto-estourou' : '';
     const mesaEl = document.getElementById('s2-rec-mesa-' + sid);
     mesaEl.textContent = s2fmt(mesa); mesaEl.style.color = mesa > 0 ? '#B45309' : '';
+
+    cardsRecebimento.push(`<div class="row-card">
+      <div class="row-card-title"><span>${escapeHtml(nome)}</span><span class="rc-subtitle">${netAdds < 0 ? 'Net−' : 'Net+'}</span></div>
+      <div class="row-card-fields">
+        <div class="row-card-field"><span class="rcf-label">Comissão</span><span class="rcf-value">${s2fmt(comissao)}</span></div>
+        <div class="row-card-field"><span class="rcf-label">Teto (R$)</span><span class="rcf-value">${s2fmt(teto)}</span></div>
+        <div class="row-card-field"><span class="rcf-label">Potencial</span><span class="rcf-value">${potencial.toLocaleString('pt-BR')}</span></div>
+        <div class="row-card-field"><span class="rcf-label">Unitário</span><span class="rcf-value">R$ ${unit.toFixed(2)}</span></div>
+        <div class="row-card-field"><span class="rcf-label">Carteira (linhas)</span><span class="rcf-value">${linhasCarteira.toLocaleString('pt-BR')}</span></div>
+        <div class="row-card-field"><span class="rcf-label">Net Adds</span><span class="rcf-value">${netAdds.toLocaleString('pt-BR')}</span></div>
+        <div class="row-card-field"><span class="rcf-label">Lin. Recebidas</span><span class="rcf-value">${linhasRecebidas.toLocaleString('pt-BR')}</span></div>
+        <div class="row-card-field"><span class="rcf-label">Din. Carteira</span><span class="rcf-value">${s2fmt(bruto)}</span></div>
+        <div class="row-card-field"><span class="rcf-label">Cart. Recebida</span><span class="rcf-value" style="color:var(--green)">${s2fmt(recebida)}</span></div>
+        <div class="row-card-field"><span class="rcf-label">Cart. Não Recebida</span><span class="rcf-value" style="${naoRecebida > 0 ? 'color:var(--red-sem)' : ''}">${s2fmt(naoRecebida)}</span></div>
+        <div class="row-card-field" style="grid-column:1/-1"><span class="rcf-label">Deixado na Mesa</span><span class="rcf-value" style="${mesa > 0 ? 'color:#B45309' : ''}">${s2fmt(mesa)}</span></div>
+      </div>
+    </div>`);
   });
+
+  document.getElementById('s2-recebimento-cards').innerHTML = cardsRecebimento.join('');
 
   document.getElementById('s2-recebimento-total').innerHTML =
     `<td>TOTAL GERAL</td><td>${s2fmt(totalAtivacaoGeral)}</td><td>${(pctLiberacao*100).toFixed(0)}%</td><td>${s2fmt(totalTeto)}</td>` +
@@ -5633,6 +5755,7 @@ function renderSimulador2() {
   // "meta máxima se declarar todo mundo" — mostrando o tamanho do gap com a produção atual.
   let capRestante = capLimitante, totalDisponivel = 0, pesoTotalDisponivel = 0;
   const sugestaoPorEstagio = [];
+  const cardsRampa = [];
   RAMPA_PRODUTIVIDADE.forEach((r, i) => {
     const disp = s2num('s2-rampa-disp-' + i);
     totalDisponivel += disp;
@@ -5648,7 +5771,16 @@ function renderSimulador2() {
     }
     sugestaoPorEstagio[i] = sugerido;
     document.getElementById('s2-rampa-sugestao-' + i).textContent = sugerido.toLocaleString('pt-BR');
+
+    cardsRampa.push(`<div class="row-card">
+      <div class="row-card-title"><span>${escapeHtml(r.label)}</span><span class="rc-subtitle">${(r.pct * 100).toFixed(0)}% da meta</span></div>
+      <div class="row-card-fields">
+        <div class="row-card-field"><span class="rcf-label">Disponível</span><span class="rcf-value">${disp.toLocaleString('pt-BR')}</span></div>
+        <div class="row-card-field"><span class="rcf-label">Sugestão a Declarar</span><span class="rcf-value" style="color:var(--green)">${sugerido.toLocaleString('pt-BR')}</span></div>
+      </div>
+    </div>`);
   });
+  document.getElementById('s2-rampa-cards').innerHTML = cardsRampa.join('');
 
   let totalVendedores = 0, metaHcPonderada = 0;
   RAMPA_PRODUTIVIDADE.forEach((r, i) => {
@@ -6633,6 +6765,9 @@ function abrirDrawerConta() {
     .map(tab => `<option value="${tab}" ${tab === prefAtual ? 'selected' : ''}>${escapeHtml(TAB_LABELS[tab] || tab)}</option>`)
     .join('');
 
+  // Os campos de config da aba atual (se houver) já estão dentro do drawer
+  // desde que a aba virou ativa (ver switchTab()) — abrir o drawer só revela
+  // o painel, não precisa mover nada aqui.
   document.getElementById('mobile-drawer-conta').classList.add('open');
   document.getElementById('mobile-drawer-backdrop').classList.add('show');
 }
@@ -6643,6 +6778,137 @@ function fecharDrawerConta() {
   document.getElementById('mobile-drawer-conta').classList.remove('open');
   document.getElementById('mobile-drawer-backdrop').classList.remove('show');
 }
+
+// ─── CONFIG DE ABA DENTRO DO DRAWER (só mobile) ─────────────────────────────
+// Move campos de input/filtro que já existem na tela pro drawer de conta
+// assim que a aba vira ativa (não só enquanto ele está aberto), e devolve pro
+// lugar original ao trocar de aba — não duplica elemento nenhum (evita id
+// repetido), então onchange/oninput/ids continuam funcionando exatamente
+// como hoje, só o pai muda temporariamente.
+// Cada entrada retorna { titulo, blocos: [{ titulo, elementos: [{ el, label? }] }] }.
+// "label" é opcional — usado só quando o campo (ex.: input dentro de uma
+// célula de tabela) não já vem com seu próprio <label> junto.
+const DRAWER_CONFIG_POR_ABA = {
+  gerencial: () => ({
+    titulo: 'Filtros — Gerencial',
+    blocos: [{
+      titulo: null,
+      elementos: [
+        { el: document.getElementById('f-estado')?.closest('.filter-group') },
+        { el: document.getElementById('dd-f-gestor')?.closest('.filter-group') },
+        { el: document.getElementById('dd-f-equipe')?.closest('.filter-group') },
+        { el: document.getElementById('f-consultor')?.closest('.filter-group') },
+        { el: document.getElementById('f-tag')?.closest('.filter-group') },
+      ].filter(x => x.el),
+    }],
+  }),
+  simulador2: () => {
+    const campo = (id) => document.getElementById(id)?.closest('.s2-field');
+    const blocos = [
+      { titulo: 'Parâmetros do Período', elementos: [
+        { el: campo('s2-tabela-cnpjhc') },
+        { el: campo('s2-categoria') },
+      ].filter(x => x.el) },
+      { titulo: 'Recebimento de Carteira', elementos: [
+        { el: campo('s2-cluster') },
+        { el: campo('s2-total-cnpjs') }, // mesmo .s2-field do Total HCs
+        { el: campo('s2-meta-movel-voz') },
+        { el: campo('s2-meta-fixa-bl') },
+      ].filter(x => x.el) },
+    ];
+    CODIGOS_AACE2.forEach(({ tag, nome }) => {
+      const sid = s2Sid(tag);
+      const elLinhas = document.getElementById('s2-cart-linhas-' + sid);
+      const elNetAdds = document.getElementById('s2-cart-netadds-' + sid);
+      const elementos = [
+        elLinhas ? { el: elLinhas, label: 'Linhas da Carteira' } : null,
+        elNetAdds ? { el: elNetAdds, label: 'Net Adds' } : null,
+      ].filter(Boolean);
+      if (elementos.length) blocos.push({ titulo: `Unidade — ${nome}`, elementos });
+    });
+    blocos.push({ titulo: 'Bônus Produtividade — Metas', elementos: [
+      { el: campo('s2-meta-voz') },
+      { el: campo('s2-meta-bl') },
+      { el: campo('s2-meta-sd') },
+    ].filter(x => x.el) });
+    RAMPA_PRODUTIVIDADE.forEach((r, i) => {
+      const el = document.getElementById('s2-rampa-disp-' + i);
+      if (el) blocos.push({ titulo: `Rampa — ${r.label}`, elementos: [{ el, label: 'Disponível' }] });
+    });
+    return { titulo: 'Configurações — Simulador 2.0', blocos };
+  },
+};
+
+function moverConfigParaDrawer(tab) {
+  // Sempre desfaz o que estava estacionado no drawer antes de mover algo
+  // novo — nunca limpa o container direto (destruiria os elementos reais).
+  restaurarConfigDoDrawer();
+  if (!window.matchMedia('(max-width: 768px)').matches) return;
+  const registro = DRAWER_CONFIG_POR_ABA[tab];
+  if (!registro) return;
+
+  const secao = document.getElementById('drawer-secao-config');
+  const { titulo, blocos } = registro();
+  if (!blocos.some(b => b.elementos.length)) return;
+
+  const tituloEl = document.createElement('div');
+  tituloEl.className = 'mobile-drawer-section-title';
+  tituloEl.textContent = titulo;
+  secao.appendChild(tituloEl);
+
+  blocos.forEach(bloco => {
+    if (!bloco.elementos.length) return;
+    const wrap = document.createElement('div');
+    wrap.className = 'drawer-config-bloco';
+    if (bloco.titulo) {
+      const bt = document.createElement('div');
+      bt.className = 'drawer-config-bloco-titulo';
+      bt.textContent = bloco.titulo;
+      wrap.appendChild(bt);
+    }
+    bloco.elementos.forEach(({ el, label }) => {
+      el._voltarPara = { pai: el.parentNode, proximo: el.nextSibling };
+      if (label) {
+        const item = document.createElement('div');
+        item.className = 'drawer-config-item';
+        const lab = document.createElement('label');
+        lab.textContent = label;
+        item.appendChild(lab);
+        item.appendChild(el);
+        wrap.appendChild(item);
+      } else {
+        wrap.appendChild(el);
+      }
+    });
+    secao.appendChild(wrap);
+  });
+  secao.dataset.abaAtual = tab;
+}
+
+function restaurarConfigDoDrawer() {
+  const secao = document.getElementById('drawer-secao-config');
+  secao.querySelectorAll('*').forEach(el => {
+    if (el._voltarPara) {
+      el._voltarPara.pai.insertBefore(el, el._voltarPara.proximo);
+      delete el._voltarPara;
+    }
+  });
+  secao.innerHTML = '';
+  delete secao.dataset.abaAtual;
+}
+
+// Alguns celulares maiores cruzam o breakpoint de 768px ao girar pra
+// paisagem — reaplica a config da aba atual quando isso acontece, pra não
+// deixar os campos "presos" no lugar errado (drawer no desktop, ou soltos
+// na tela no mobile) até a próxima troca de aba.
+let _configMobileAtivo = window.matchMedia('(max-width: 768px)').matches;
+window.addEventListener('resize', () => {
+  const agoraMobile = window.matchMedia('(max-width: 768px)').matches;
+  if (agoraMobile === _configMobileAtivo) return;
+  _configMobileAtivo = agoraMobile;
+  const tabAtual = document.querySelector('.tab-panel.active')?.id.replace('tab-', '');
+  if (tabAtual) moverConfigParaDrawer(tabAtual);
+});
 
 // ─── DISCADORA ───────────────────────────────────────────────────────────────
 const DISC_API_URL = '/api/discadora';
