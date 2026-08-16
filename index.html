@@ -270,6 +270,22 @@
     padding: 1px 6px; font-size: 10px; font-family: 'DM Mono', monospace;
   }
 
+  /* ─── SINO DE NOTIFICAÇÕES (admin — alertas de Churn pendentes) ────── */
+  .notif-bell {
+    position: relative; display: none; align-items: center; justify-content: center;
+    width: 32px; height: 32px; border-radius: 50%;
+    background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.2);
+    color: #fff; font-size: 15px; cursor: pointer; transition: background .15s;
+  }
+  .notif-bell:hover { background: rgba(255,255,255,.22); }
+  .notif-badge {
+    display: none; position: absolute; top: -3px; right: -3px;
+    min-width: 16px; height: 16px; padding: 0 3px; border-radius: 8px;
+    background: var(--red-sem); color: #fff; border: 1.5px solid var(--brand);
+    font-size: 10px; font-weight: 700; line-height: 13px; text-align: center;
+    font-family: 'DM Mono', monospace;
+  }
+
   /* ─── TABS NAV ───────────────────────────────────────────── */
   .tabs-nav {
     background: var(--surface);
@@ -317,16 +333,46 @@
   .mobile-bottom-nav .bottom-nav-icon { font-size: 20px; line-height: 1; }
   .mobile-bottom-nav .bottom-nav-label { white-space: nowrap; }
 
-  /* ─── DRAWER DE CONTA (mobile) — mesma lógica: escondido por padrão,
-       só existe visualmente dentro do breakpoint mobile. ─── */
-  .mobile-drawer-backdrop { display: none; }
-  .mobile-drawer { display: none; }
+  /* ─── DRAWER DE CONTA — área de usuário (perfil/preferências/sair),
+       funciona em qualquer largura de tela (não é mais só mobile, apesar
+       do nome das classes ter ficado do trabalho anterior). ─── */
+  .mobile-drawer-backdrop {
+    display: block; position: fixed; inset: 0; z-index: 500;
+    background: rgba(15,23,42,.45);
+    opacity: 0; visibility: hidden;
+    transition: opacity .2s, visibility .2s;
+  }
+  .mobile-drawer-backdrop.show { opacity: 1; visibility: visible; }
+  .mobile-drawer {
+    display: flex; flex-direction: column;
+    position: fixed; top: 0; right: 0; bottom: 0; z-index: 501;
+    width: 78%; max-width: 320px;
+    background: var(--surface);
+    box-shadow: -8px 0 24px rgba(0,0,0,.15);
+    transform: translateX(100%);
+    transition: transform .25s ease;
+    padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom);
+  }
+  .mobile-drawer.open { transform: translateX(0); }
   .mobile-drawer-header { display: flex; align-items: center; gap: 12px; padding: 20px 18px; border-bottom: 1px solid var(--border); }
   .mobile-drawer-nome { font-weight: 600; color: var(--text); font-size: 14px; }
   .mobile-drawer-perfil { font-size: 11px; color: var(--text-3); text-transform: uppercase; letter-spacing: .04em; margin-top: 2px; }
+  .mobile-drawer-body { flex: 1; overflow-y: auto; padding: 4px 0; }
+  .mobile-drawer-section { padding: 14px 18px; border-bottom: 1px solid var(--border); }
+  .mobile-drawer-section-title {
+    font-size: 10px; font-weight: 700; color: var(--text-3); text-transform: uppercase;
+    letter-spacing: .06em; margin-bottom: 10px;
+  }
+  .mobile-drawer-info-row { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; color: var(--text); }
+  .mobile-drawer-info-row span:first-child { color: var(--text-2); }
+  .mobile-drawer-label { display: block; font-size: 12px; color: var(--text-2); margin-bottom: 6px; }
+  .mobile-drawer select {
+    width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius);
+    font-family: inherit; font-size: 13px; color: var(--text); background: var(--surface);
+  }
   .mobile-drawer-item {
     display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
-    padding: 16px 18px; background: none; border: none;
+    padding: 16px 18px; background: none; border: none; border-top: 1px solid var(--border);
     font-size: 14px; color: var(--text); cursor: pointer;
     font-family: 'DM Sans', sans-serif;
   }
@@ -965,24 +1011,6 @@
     .mes-select { font-size: 12px !important; padding: 5px 8px; }
     .tabs-nav { display: none; }
     .mobile-bottom-nav { display: flex; }
-    .mobile-drawer-backdrop {
-      display: block; position: fixed; inset: 0; z-index: 500;
-      background: rgba(15,23,42,.45);
-      opacity: 0; visibility: hidden;
-      transition: opacity .2s, visibility .2s;
-    }
-    .mobile-drawer-backdrop.show { opacity: 1; visibility: visible; }
-    .mobile-drawer {
-      display: flex; flex-direction: column;
-      position: fixed; top: 0; right: 0; bottom: 0; z-index: 501;
-      width: 78%; max-width: 320px;
-      background: var(--surface);
-      box-shadow: -8px 0 24px rgba(0,0,0,.15);
-      transform: translateX(100%);
-      transition: transform .25s ease;
-      padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom);
-    }
-    .mobile-drawer.open { transform: translateX(0); }
     /* Modais de drill-down (montados via JS com style inline) full-screen
        no mobile — !important pra vencer o inline, sem tocar no desktop. */
     #cliente-modal, #disc-modal {
@@ -1279,7 +1307,10 @@
     <span class="last-update" id="last-update"></span>
     <button class="btn-refresh" id="btn-refresh" onclick="triggerBotEAtualizar(this)">↻ Atualizar</button>
     <span class="clock" id="clock"></span>
-    <div class="user-badge" onclick="handleUserBadgeClick()" title="Clique para sair">
+    <button class="notif-bell" id="notif-bell" onclick="abrirNotificacoesChurn()" title="Notificações">
+      🔔<span class="notif-badge" id="notif-badge">0</span>
+    </button>
+    <div class="user-badge" onclick="handleUserBadgeClick()" title="Minha conta">
       <div class="user-avatar" id="user-avatar">?</div>
       <span id="user-nome">...</span>
       <span class="user-perfil-badge" id="user-perfil"></span>
@@ -1317,7 +1348,7 @@
   </button>
 </div>
 
-<!-- DRAWER DE CONTA (mobile) -->
+<!-- DRAWER DE CONTA — área de usuário (perfil, preferências, sair) -->
 <div class="mobile-drawer-backdrop" id="mobile-drawer-backdrop" onclick="fecharDrawerConta()"></div>
 <div class="mobile-drawer" id="mobile-drawer-conta">
   <div class="mobile-drawer-header">
@@ -1325,6 +1356,17 @@
     <div>
       <div class="mobile-drawer-nome" id="drawer-user-nome">—</div>
       <div class="mobile-drawer-perfil" id="drawer-user-perfil">—</div>
+    </div>
+  </div>
+  <div class="mobile-drawer-body">
+    <div class="mobile-drawer-section">
+      <div class="mobile-drawer-section-title">Conta</div>
+      <div class="mobile-drawer-info-row"><span>E-mail</span><span id="drawer-user-email">—</span></div>
+    </div>
+    <div class="mobile-drawer-section">
+      <div class="mobile-drawer-section-title">Preferências</div>
+      <label class="mobile-drawer-label">Aba padrão ao abrir</label>
+      <select id="drawer-pref-aba" onchange="salvarPrefAbaPadrao(this.value)"></select>
     </div>
   </div>
   <button class="mobile-drawer-item" onclick="fecharDrawerConta();fazerLogout()">🚪 Sair</button>
@@ -4794,6 +4836,30 @@ const supa = supabase.createClient(SUPA_URL, SUPA_KEY);
 
 let USUARIO_ATUAL = null;
 
+// Abas permitidas por perfil — nível superior pra ser reutilizado tanto por
+// aplicarPermissoes() quanto pelo preenchimento da preferência "aba padrão
+// ao abrir" no drawer de conta e pelo redirecionamento pós-login.
+const ABAS_PERMITIDAS_POR_PERFIL = {
+  'admin':          ['simulador', 'gerencial', 'producao', 'discadora', 'simulador2', 'churn', 'carteira'],
+  'gestor_macro':   ['gerencial', 'discadora'],
+  'gestor_macro2':  ['gerencial', 'producao', 'discadora'],
+  'gestor_macro3':  ['gerencial', 'producao'],
+  'gestor':         ['gerencial', 'discadora'],
+  'gestor_beta':    ['gerencial'],
+  'supervisao':     ['gerencial', 'discadora'],
+  'supervisao_beta':['gerencial', 'producao'],
+  'consultor':      ['gerencial']
+};
+const TAB_LABELS = {
+  simulador: '🎯 Simulador de Carteira',
+  gerencial: '📊 Gerencial',
+  producao: '🏭 Produção',
+  discadora: '📞 Discadora',
+  simulador2: '🧮 Simulador 2.0',
+  churn: '📉 Churn',
+  carteira: '💼 Carteira',
+};
+
 // Token de sessão do usuário logado, mantido em sincronia pelo Supabase Auth.
 // Necessário porque o autosave (beforeunload, mais abaixo) faz um fetch()
 // cru — sem isso, ele mandaria a anon key como Authorization e as policies
@@ -6143,6 +6209,9 @@ async function carregarPerfil(user) {
     equipe_ref: null,
     consultor_ref: null
   };
+  // usuarios_dashboard/usuarios nem sempre tem coluna de e-mail — garante
+  // que USUARIO_ATUAL.email sempre venha do usuário autenticado do Supabase.
+  USUARIO_ATUAL.email = USUARIO_ATUAL.email || user.email;
 
   // Atualiza topbar
   const nome = USUARIO_ATUAL.nome || USUARIO_ATUAL.email.split('@')[0];
@@ -6153,6 +6222,20 @@ async function carregarPerfil(user) {
 
   // Controla abas visíveis por perfil
   aplicarPermissoes();
+
+  // Se o usuário tiver uma "aba padrão ao abrir" salva (drawer de conta >
+  // Preferências) e ela continuar permitida pro perfil dele, abre direto
+  // nela em vez do padrão (Simulador).
+  const permitidas = ABAS_PERMITIDAS_POR_PERFIL[USUARIO_ATUAL.perfil] || ['gerencial'];
+  const prefAba = localStorage.getItem('vst_pref_aba_padrao');
+  if (prefAba && permitidas.includes(prefAba)) {
+    const btnPref = document.querySelector(`.tab-btn[onclick*="'${prefAba}'"]`);
+    if (btnPref) switchTab(prefAba, btnPref);
+  }
+
+  // Sino de notificações (Churn) — só admin, consulta leve independente
+  // de já ter aberto a aba Churn alguma vez.
+  if (USUARIO_ATUAL.perfil === 'admin') atualizarNotificacoesChurn();
 
   // Esconde login, mostra dashboard
   document.getElementById('login-screen').classList.remove('active');
@@ -6179,20 +6262,7 @@ async function carregarPerfil(user) {
 //  consultor      — nada muda (travado no consultor_ref)
 function aplicarPermissoes() {
   const p = USUARIO_ATUAL.perfil;
-
-  // Abas permitidas por perfil
-  const abasPermitidas = {
-    'admin':          ['simulador', 'gerencial', 'producao', 'discadora', 'simulador2', 'churn', 'carteira'],
-    'gestor_macro':   ['gerencial', 'discadora'],
-    'gestor_macro2':  ['gerencial', 'producao', 'discadora'],
-    'gestor_macro3':  ['gerencial', 'producao'],
-    'gestor':         ['gerencial', 'discadora'],
-    'gestor_beta':    ['gerencial'],
-    'supervisao':     ['gerencial', 'discadora'],
-    'supervisao_beta':['gerencial', 'producao'],
-    'consultor':      ['gerencial']
-  };
-  const permitidas = abasPermitidas[p] || ['gerencial'];
+  const permitidas = ABAS_PERMITIDAS_POR_PERFIL[p] || ['gerencial'];
 
   // Esconde abas não permitidas
   document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -6536,22 +6606,28 @@ async function fazerLogout() {
   document.getElementById('login-btn').textContent = 'Entrar';
 }
 
-// No mobile, tocar no avatar abre o drawer de conta em vez de deslogar
-// direto (o desktop continua exatamente como era: clique = confirm() de
-// logout).
+// Clicar no user-badge sempre abre a área de conta (perfil/preferências/
+// sair) — antes era só no mobile; no desktop deslogava direto.
 function handleUserBadgeClick() {
-  if (window.matchMedia('(max-width: 768px)').matches) {
-    abrirDrawerConta();
-  } else {
-    fazerLogout();
-  }
+  abrirDrawerConta();
 }
 function abrirDrawerConta() {
   document.getElementById('drawer-user-avatar').textContent = document.getElementById('user-avatar').textContent;
   document.getElementById('drawer-user-nome').textContent = document.getElementById('user-nome').textContent;
   document.getElementById('drawer-user-perfil').textContent = document.getElementById('user-perfil').textContent;
+  document.getElementById('drawer-user-email').textContent = USUARIO_ATUAL?.email || '—';
+
+  const permitidas = ABAS_PERMITIDAS_POR_PERFIL[USUARIO_ATUAL?.perfil] || ['gerencial'];
+  const prefAtual = localStorage.getItem('vst_pref_aba_padrao');
+  document.getElementById('drawer-pref-aba').innerHTML = permitidas
+    .map(tab => `<option value="${tab}" ${tab === prefAtual ? 'selected' : ''}>${escapeHtml(TAB_LABELS[tab] || tab)}</option>`)
+    .join('');
+
   document.getElementById('mobile-drawer-conta').classList.add('open');
   document.getElementById('mobile-drawer-backdrop').classList.add('show');
+}
+function salvarPrefAbaPadrao(valor) {
+  localStorage.setItem('vst_pref_aba_padrao', valor);
 }
 function fecharDrawerConta() {
   document.getElementById('mobile-drawer-conta').classList.remove('open');
@@ -7598,6 +7674,36 @@ function discDrillClose() {
 let CHURN_DADOS = [];
 let CHURN_USUARIOS = [];
 
+// Sino de notificações do topbar — só admin (só quem tem a aba Churn).
+// "Notificação" = alerta pendente com resposta obrigatória (10+ linhas),
+// o mesmo critério que a própria aba Churn já destaca em vermelho.
+async function atualizarNotificacoesChurn() {
+  document.getElementById('notif-bell').style.display = 'flex';
+  // Consulta leve (só contagem), independente de CHURN_DADOS/initChurn() —
+  // o sino precisa mostrar o número mesmo se o usuário nunca abriu a aba.
+  const { count } = await supa.from('churn_alertas')
+    .select('id', { count: 'exact', head: true })
+    .eq('respondido', false)
+    .gte('qtd_linhas', 10);
+  atualizarBadgeNotificacoes(count || 0);
+}
+function atualizarBadgeNotificacoes(qtd) {
+  const badge = document.getElementById('notif-badge');
+  badge.textContent = qtd;
+  badge.style.display = qtd > 0 ? 'block' : 'none';
+}
+function abrirNotificacoesChurn() {
+  const btn = document.querySelector(`.tab-btn[onclick*="'churn'"]`);
+  if (!btn) return;
+  // Define os filtros ANTES de trocar de aba — initChurn() é assíncrono
+  // (fire-and-forget dentro de switchTab()) e não mexe nesses dois selects,
+  // só nos de atribuído/unidade/equipe; quando o fetch terminar, o próprio
+  // renderChurn() no fim do initChurn() já vai ler esses valores.
+  document.getElementById('churn-status').value = 'pendentes';
+  document.getElementById('churn-linhas').value = '10+';
+  switchTab('churn', btn);
+}
+
 async function initChurn() {
   document.getElementById('churn-table-area').innerHTML = '<div class="loading-state"><div class="loading-spinner"></div><p>Carregando alertas...</p></div>';
 
@@ -7711,6 +7817,7 @@ function renderChurn() {
 
   const pendentes = CHURN_DADOS.filter(r => !r.respondido).length;
   const obrigatorios = CHURN_DADOS.filter(r => !r.respondido && r.qtd_linhas >= 10).length;
+  atualizarBadgeNotificacoes(obrigatorios);
   const totalLinhas = CHURN_DADOS.reduce((s, r) => s + (parseInt(r.qtd_linhas) || 0), 0);
   document.getElementById('churn-stats-area').innerHTML = `<div class="stats-row">
     <div class="stat-chip"><strong>${CHURN_DADOS.length}</strong> alertas no total</div>
