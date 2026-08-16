@@ -4805,6 +4805,16 @@ async function renderProducao() {
 }
 
 function switchTab(name, el) {
+  // Defesa em profundidade: aplicarPermissoes() já esconde o botão de abas
+  // não permitidas, mas isso não impede alguém de chamar switchTab('churn', ...)
+  // direto pelo console. Trava aqui de novo, contra o perfil real.
+  const permitidas = ABAS_PERMITIDAS_POR_PERFIL[USUARIO_ATUAL?.perfil] || ['gerencial'];
+  if (!permitidas.includes(name)) {
+    if (name === 'gerencial') return;
+    const btnGerencial = document.querySelector('.tab-btn[onclick*="gerencial"]');
+    if (btnGerencial) switchTab('gerencial', btnGerencial);
+    return;
+  }
   document.querySelectorAll('.tab-btn').forEach(t => t.classList.remove('active'));
   el.classList.add('active');
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));

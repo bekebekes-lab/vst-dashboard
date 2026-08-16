@@ -75,6 +75,16 @@ export default async function handler(req, res) {
   const sheetId = PLANILHAS[planilha] || PLANILHAS.basecrm;
   if (!sheetId) return res.status(500).json({ error: `Planilha "${planilha || 'basecrm'}" não configurada no servidor` });
 
+  // Carteira é admin-only na UI (aba só aparece pra perfil='admin') — trava
+  // aqui também, explícito, em vez de confiar no efeito colateral de escopo
+  // nulo (que também vale pra perfil sem escopo configurado, não só admin).
+  if (planilha === 'carteira') {
+    const perfilRowCarteira = await getUsuarioDashboard(req, authUser.id);
+    if ((perfilRowCarteira?.perfil || 'consultor') !== 'admin') {
+      return res.status(403).json({ error: 'Acesso restrito a administradores' });
+    }
+  }
+
   let url;
   if (action === 'list') {
     url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}?fields=sheets.properties.title`;
