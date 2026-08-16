@@ -1988,6 +1988,14 @@
         <label>Atribuído a</label>
         <select id="churn-atribuido" onchange="renderChurn()"><option value="todos">Todos</option></select>
       </div>
+      <div class="filter-group">
+        <label>Tag da Unidade</label>
+        <select id="churn-unidade" onchange="renderChurn()"><option value="todos">Todas</option></select>
+      </div>
+      <div class="filter-group">
+        <label>Equipe</label>
+        <select id="churn-equipe" onchange="renderChurn()"><option value="todos">Todas</option></select>
+      </div>
     </div>
     <div id="churn-stats-area"></div>
     <div id="churn-table-area"></div>
@@ -2001,9 +2009,9 @@
         <input type="text" id="carteira-busca" placeholder="Digite para buscar..." oninput="renderCarteiraBusca()" autocomplete="off">
       </div>
       <div class="filter-group" style="min-width:200px;">
-        <label>Revenda</label>
+        <label>Tag da Unidade</label>
         <select id="carteira-filtro-revenda" onchange="renderCarteiraOverview()">
-          <option value="">Todas as revendas</option>
+          <option value="">Todas as tags</option>
         </select>
       </div>
     </div>
@@ -7611,6 +7619,16 @@ async function initChurn() {
   // carregar, o Churn continua funcionando normalmente, só sem essa info.
   try { await carregarCarteiraDados(); } catch (e) { console.error('Não consegui cruzar Churn com a Carteira:', e); }
 
+  // Filtros de Unidade/Equipe são preenchidos com os valores que de fato
+  // aparecem nos alertas carregados (não a lista inteira da Carteira).
+  const tagsUnidade = [...new Set(CHURN_DADOS.map(churnUnidade))].filter(u => u && u !== '—').sort();
+  document.getElementById('churn-unidade').innerHTML = '<option value="todos">Todas</option>' +
+    tagsUnidade.map(u => `<option value="${escapeHtml(u)}">${escapeHtml(u)}</option>`).join('');
+
+  const equipes = [...new Set(CHURN_DADOS.map(r => churnDonoCliente(r)?.equipe).filter(Boolean))].sort();
+  document.getElementById('churn-equipe').innerHTML = '<option value="todos">Todas</option>' +
+    equipes.map(eq => `<option value="${escapeHtml(eq)}">${escapeHtml(eq)}</option>`).join('');
+
   renderChurn();
 }
 
@@ -7677,6 +7695,8 @@ function renderChurn() {
   const statusFiltro = document.getElementById('churn-status').value;
   const linhasFiltro = document.getElementById('churn-linhas').value;
   const atribuidoFiltro = document.getElementById('churn-atribuido').value;
+  const unidadeFiltro = document.getElementById('churn-unidade').value;
+  const equipeFiltro = document.getElementById('churn-equipe').value;
 
   const linhas = CHURN_DADOS.filter(r => {
     if (statusFiltro === 'pendentes' && r.respondido) return false;
@@ -7684,6 +7704,8 @@ function renderChurn() {
     if (linhasFiltro === '10+' && !(r.qtd_linhas >= 10)) return false;
     if (atribuidoFiltro === 'ninguem' && r.atribuido_a) return false;
     if (atribuidoFiltro !== 'todos' && atribuidoFiltro !== 'ninguem' && String(r.atribuido_a) !== atribuidoFiltro) return false;
+    if (unidadeFiltro !== 'todos' && churnUnidade(r) !== unidadeFiltro) return false;
+    if (equipeFiltro !== 'todos' && (churnDonoCliente(r)?.equipe || '') !== equipeFiltro) return false;
     return true;
   });
 
@@ -7911,8 +7933,19 @@ async function carregarCarteiraDados() {
   CARTEIRA_CARREGADA = true;
 }
 
+// Preenche o <select> de Tag da Unidade da aba Carteira com os valores
+// distintos vistos em CARTEIRA_DADOS — extraído à parte pra poder rodar
+// tanto na primeira carga quanto quando os dados já vieram pré-carregados
+// pelo Churn (CARTEIRA_CARREGADA já true, sem passar pelo fetch de novo).
+function popularFiltroTagUnidadeCarteira() {
+  const tags = [...new Set(CARTEIRA_DADOS.map(carteiraUnidade))].filter(u => u && u !== '—').sort();
+  document.getElementById('carteira-filtro-revenda').innerHTML =
+    '<option value="">Todas as tags</option>' +
+    tags.map(u => `<option value="${escapeHtml(u)}">${escapeHtml(u)}</option>`).join('');
+}
+
 async function initCarteira() {
-  if (CARTEIRA_CARREGADA) { renderCarteiraOverview(); return; }
+  if (CARTEIRA_CARREGADA) { popularFiltroTagUnidadeCarteira(); renderCarteiraOverview(); return; }
 
   document.getElementById('carteira-status-area').innerHTML = '<div class="loading-state"><div class="loading-spinner"></div><p>Carregando carteira (base grande, pode levar um pouco)...</p></div>';
   document.getElementById('carteira-stats-area').innerHTML = '';
@@ -7922,12 +7955,7 @@ async function initCarteira() {
   try {
     await carregarCarteiraDados();
     document.getElementById('carteira-status-area').innerHTML = '';
-
-    const revendas = [...new Set(CARTEIRA_DADOS.map(carteiraUnidade))].filter(u => u && u !== '—').sort();
-    document.getElementById('carteira-filtro-revenda').innerHTML =
-      '<option value="">Todas as revendas</option>' +
-      revendas.map(u => `<option value="${escapeHtml(u)}">${escapeHtml(u)}</option>`).join('');
-
+    popularFiltroTagUnidadeCarteira();
     renderCarteiraOverview();
   } catch (e) {
     document.getElementById('carteira-status-area').innerHTML = `<div class="error-state"><strong>Erro ao carregar carteira</strong>${escapeHtml(e.message)}</div>`;
