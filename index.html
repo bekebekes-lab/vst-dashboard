@@ -8506,9 +8506,18 @@ function carteiraAbrirDetalhe(idx) {
     document.body.appendChild(modal);
   }
 
-  const campos = Object.entries(r).filter(([k, v]) =>
+  // Telefone de Contato e Nome do ADM sempre aparecem (mesmo vazio, como "—")
+  // — são úteis pra contato/gestão da conta, não devem depender de terem
+  // valor preenchido pra aparecer como os demais campos genéricos abaixo.
+  const CAMPOS_DESTACADOS_CARTEIRA = ['Telefone de Contato', 'Nome do ADM'];
+  const camposDestacados = CAMPOS_DESTACADOS_CARTEIRA
+    .filter(k => r[k] !== undefined)
+    .map(k => [k, (r[k] && r[k] !== '#N/A' && r[k] !== '#N/D' && r[k] !== '#NOME?') ? r[k] : '—']);
+
+  const campos = [...camposDestacados, ...Object.entries(r).filter(([k, v]) =>
+    !CAMPOS_DESTACADOS_CARTEIRA.includes(k) &&
     !CARTEIRA_CAMPOS_IGNORADOS.has(k) && v !== '' && v !== '#N/A' && v !== '#N/D' && v !== '#NOME?'
-  );
+  )];
 
   modal.innerHTML = `
     <div style="background:var(--surface);border-radius:var(--radius-xl);width:100%;max-width:720px;box-shadow:0 24px 60px rgba(0,0,0,.3);overflow:hidden;">
