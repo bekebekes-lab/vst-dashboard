@@ -11,11 +11,20 @@ IMPORTANTE — a caixa de e-mail NUNCA é alterada:
 - O Outlook do usuário continua enxergando tudo exatamente como chegou.
 
 Dedup: pela chave de NEGÓCIO (cnpj, data_janela), não só pelo Message-ID —
-a Claro às vezes reenvia o mesmo alerta de PORT-OUT em e-mails diferentes
-(Message-ID novo, conteúdo idêntico), e isso deve contar como o MESMO caso
-na tela, não duas linhas. O upsert usa "resolution=merge-duplicates", que
-atualiza os campos vindos do e-mail (corrige recebido_em, etc.) mas nunca
-toca em atribuido_a/feedback/respondido — esses são só editados pela tela.
+a Claro às vezes reenvia/encaminha o mesmo alerta de PORT-OUT em e-mails
+diferentes (Message-ID novo, conteúdo idêntico), e isso deve contar como o
+MESMO caso na tela, não duas linhas. O upsert usa "resolution=merge-duplicates",
+que atualiza os campos vindos do e-mail mas nunca toca em
+atribuido_a/feedback/respondido — esses são só editados pela tela.
+
+recebido_em = data do e-mail MAIS ANTIGO entre todos os que já bateram nesse
+mesmo (cnpj, data_janela) — não a data do último processado. Como o script
+reprocessa a caixa inteira a cada execução (não só e-mails novos), cada
+Message-ID já contabilizado fica registrado em message_ids_processados
+(coluna text[]) pra: (a) não contar de novo o mesmo e-mail em execuções
+futuras, e (b) quando um Message-ID genuinamente novo aparecer pro mesmo
+alerta (reenvio/encaminhamento), incrementar qtd_emails_recebidos sem
+perder a data original em recebido_em.
 
 Só usa a biblioteca padrão do Python (imaplib, email, json, urllib) — sem
 dependências externas.
@@ -31,6 +40,7 @@ import time
 import unicodedata
 import urllib.request
 import urllib.error
+from datetime import datetime
 from email.header import decode_header
 
 IMAP_HOST = "imap.kinghost.net"
@@ -161,13 +171,19 @@ def buscar_uf_cnpj(cnpj_digitos, cache):
     return resultado
 
 
-def gravar_alerta(service_key, message_id, recebido_em, dados):
+def gravar_alerta(service_key, message_id, recebido_em_dt, qtd_emails, ids_processados, dados):
     if not dados.get("cnpj") or not dados.get("data_janela"):
         # Sem CNPJ+janela não dá pra deduplicar pela chave de negócio (Claro
         # reenvia o mesmo alerta mais de uma vez às vezes) — descarta em vez
         # de arriscar duplicar ou colidir com outra linha por engano.
         return
-    linha = {"message_id": message_id, "recebido_em": recebido_em, **dados}
+    linha = {
+        "message_id": message_id,
+        "recebido_em": recebido_em_dt.isoformat() if recebido_em_dt else None,
+        "qtd_emails_recebidos": qtd_emails,
+        "message_ids_processados": sorted(ids_processados),
+        **dados,
+    }
     if "qtd_linhas" in linha:
         try:
             linha["qtd_linhas"] = int(re.sub(r"\D", "", linha["qtd_linhas"]) or 0)
@@ -176,9 +192,9 @@ def gravar_alerta(service_key, message_id, recebido_em, dados):
     # on_conflict na chave de NEGÓCIO (cnpj, data_janela), não no Message-ID —
     # Claro às vezes reenvia o mesmo alerta via e-mails diferentes; isso é
     # tratado como o MESMO caso, não uma duplicata na tela. merge-duplicates
-    # atualiza os campos vindos do e-mail (inclusive corrige recebido_em se
-    # precisar), mas nunca toca em atribuido_a/feedback/respondido porque
-    # esses campos não fazem parte do payload enviado aqui.
+    # atualiza os campos vindos do e-mail, mas nunca toca em
+    # atribuido_a/feedback/respondido porque esses campos não fazem parte do
+    # payload enviado aqui.
     status, resp = post_json(
         f"{SUPA_URL}/rest/v1/churn_alertas?on_conflict=cnpj,data_janela",
         linha,
@@ -191,6 +207,35 @@ def gravar_alerta(service_key, message_id, recebido_em, dados):
     )
     if status not in (200, 201, 204):
         raise RuntimeError(f"Falha ao gravar alerta no Supabase: HTTP {status} — {resp}")
+
+
+def carregar_cache_alertas(service_key):
+    """Pré-carrega, por (cnpj, data_janela), o estado já gravado no Supabase
+    (data mais antiga já vista, quantos e-mails já contaram, quais
+    Message-IDs já foram contabilizados) — necessário pra decidir, a cada
+    e-mail desta execução, se é a primeira vez que o alerta aparece, uma
+    mensagem já vista antes (não conta de novo) ou um duplicado novo."""
+    status, dados = post_json(
+        f"{SUPA_URL}/rest/v1/churn_alertas?select=cnpj,data_janela,recebido_em,qtd_emails_recebidos,message_ids_processados",
+        None,
+        {"apikey": service_key, "Authorization": f"Bearer {service_key}"},
+        method="GET",
+    )
+    cache = {}
+    if status == 200 and dados:
+        for row in dados:
+            recebido_dt = None
+            if row.get("recebido_em"):
+                try:
+                    recebido_dt = datetime.fromisoformat(row["recebido_em"])
+                except Exception:
+                    recebido_dt = None
+            cache[(row["cnpj"], row["data_janela"])] = {
+                "recebido_em": recebido_dt,
+                "qtd": row.get("qtd_emails_recebidos") or 1,
+                "ids": set(row.get("message_ids_processados") or []),
+            }
+    return cache
 
 
 def carregar_cache_uf(service_key):
@@ -219,6 +264,7 @@ def main():
         sys.exit(1)
 
     cache_uf = carregar_cache_uf(service_key)
+    cache_alertas = carregar_cache_alertas(service_key)
 
     imap = imaplib.IMAP4_SSL(IMAP_HOST, IMAP_PORT)
     try:
@@ -254,13 +300,13 @@ def main():
                 print(f"  aviso: não consegui extrair dados de '{assunto}' — pulando")
                 continue
 
-            recebido_em = None
+            recebido_em_dt = None
             data_header = msg.get("Date")
             if data_header:
                 try:
-                    recebido_em = email.utils.parsedate_to_datetime(data_header).isoformat()
+                    recebido_em_dt = email.utils.parsedate_to_datetime(data_header)
                 except Exception:
-                    recebido_em = None
+                    recebido_em_dt = None
 
             cnpj_digitos = re.sub(r"\D", "", dados.get("cnpj") or "")
             if cnpj_digitos:
@@ -273,9 +319,45 @@ def main():
                 if not era_cache_hit:
                     time.sleep(1)  # não martela a BrasilAPI em consultas novas
 
-            gravar_alerta(service_key, message_id_header.strip(), recebido_em, dados)
+            # Decide, contra o estado já gravado (+ o que já foi visto nesta
+            # mesma execução), se este e-mail é: a primeira vez que o alerta
+            # aparece, uma mensagem já contabilizada antes (reprocessada
+            # porque o script varre a caixa inteira toda vez — não conta de
+            # novo), ou um duplicado genuinamente novo (reenvio/encaminhamento
+            # — conta mais uma vez, mas a data "recebido" continua sendo a
+            # mais antiga entre todas).
+            message_id_str = message_id_header.strip()
+            chave = (dados.get("cnpj"), dados.get("data_janela"))
+            estado = cache_alertas.get(chave)
+
+            if estado is None:
+                qtd_final = 1
+                ids_final = {message_id_str}
+                recebido_final = recebido_em_dt
+                if chave[0] and chave[1]:
+                    cache_alertas[chave] = {"recebido_em": recebido_final, "qtd": qtd_final, "ids": ids_final}
+                duplicado = False
+            elif message_id_str in estado["ids"]:
+                qtd_final = estado["qtd"]
+                ids_final = estado["ids"]
+                recebido_final = estado["recebido_em"]
+                duplicado = False
+            else:
+                estado["ids"].add(message_id_str)
+                if estado["recebido_em"] and recebido_em_dt:
+                    estado["recebido_em"] = min(estado["recebido_em"], recebido_em_dt)
+                elif recebido_em_dt:
+                    estado["recebido_em"] = recebido_em_dt
+                estado["qtd"] += 1
+                qtd_final = estado["qtd"]
+                ids_final = estado["ids"]
+                recebido_final = estado["recebido_em"]
+                duplicado = True
+
+            gravar_alerta(service_key, message_id_str, recebido_final, qtd_final, ids_final, dados)
             novos += 1
-            print(f"  gravado: {dados.get('nome_cliente', '?')} (CNPJ {dados.get('cnpj', '?')}) — recebido em {recebido_em}")
+            marca = f" (duplicado #{qtd_final})" if duplicado else ""
+            print(f"  gravado: {dados.get('nome_cliente', '?')} (CNPJ {dados.get('cnpj', '?')}) — recebido em {recebido_final}{marca}")
 
         print(f"Sincronização concluída. {novos} alerta(s) processado(s) (novos ou já existentes, ignorados via upsert).")
     finally:

@@ -2113,6 +2113,12 @@
           <option value="">Todas as tags</option>
         </select>
       </div>
+      <div class="filter-group" style="min-width:120px;">
+        <label>UF</label>
+        <select id="carteira-filtro-uf" onchange="renderCarteiraOverview()">
+          <option value="">Todas</option>
+        </select>
+      </div>
     </div>
     <div id="carteira-status-area"></div>
     <div id="carteira-stats-area"></div>
@@ -8073,6 +8079,31 @@ function churnUnidade(r) {
   return MAPEAMENTO_TAGS['#' + codigo.toUpperCase()] || codigo;
 }
 
+let churnSortCol = 'recebido_em';
+let churnSortAsc = false;
+function churnSetSort(col) {
+  churnSortAsc = (churnSortCol === col) ? !churnSortAsc : false;
+  churnSortCol = col;
+  renderChurn();
+}
+function churnValorOrdenacao(r, col) {
+  switch (col) {
+    case 'recebido_em': return r.recebido_em ? new Date(r.recebido_em).getTime() : -Infinity;
+    case 'nome_cliente': return (r.nome_cliente || '').toLowerCase();
+    case 'cnpj': return r.cnpj || '';
+    case 'qtd_linhas': return r.qtd_linhas || 0;
+    case 'receptora': return (r.receptora || '').toLowerCase();
+    case 'unidade': return churnUnidade(r).toLowerCase();
+    case 'consultor': return (churnDonoCliente(r)?.consultor || '').toLowerCase();
+    case 'equipe': return (churnDonoCliente(r)?.equipe || '').toLowerCase();
+    case 'cidade': return (r.municipio_cliente || '').toLowerCase();
+    case 'uf': return (r.uf_cliente || '').toLowerCase();
+    case 'data_janela': return r.data_janela || '';
+    case 'status': return r.respondido ? 1 : 0;
+    default: return '';
+  }
+}
+
 function renderChurn() {
   const statusFiltro = document.getElementById('churn-status').value;
   const linhasFiltro = document.getElementById('churn-linhas').value;
@@ -8089,6 +8120,13 @@ function renderChurn() {
     if (unidadeFiltro !== 'todos' && churnUnidade(r) !== unidadeFiltro) return false;
     if (equipeFiltro !== 'todos' && (churnDonoCliente(r)?.equipe || '') !== equipeFiltro) return false;
     return true;
+  });
+
+  linhas.sort((a, b) => {
+    const va = churnValorOrdenacao(a, churnSortCol), vb = churnValorOrdenacao(b, churnSortCol);
+    if (va < vb) return churnSortAsc ? -1 : 1;
+    if (va > vb) return churnSortAsc ? 1 : -1;
+    return 0;
   });
 
   const pendentes = CHURN_DADOS.filter(r => !r.respondido).length;
@@ -8111,18 +8149,18 @@ function renderChurn() {
     <div class="table-wrap"><div class="table-scroll">
       <table>
         <thead><tr>
-          <th>Recebido</th>
-          <th style="width:16%">Cliente</th>
-          <th>CNPJ</th>
-          <th class="center">Linhas</th>
-          <th>Receptora</th>
-          <th>Unidade</th>
-          <th>Consultor</th>
-          <th>Equipe</th>
-          <th>Cidade</th>
-          <th class="center">UF</th>
-          <th>Data Janela</th>
-          <th class="center">Status</th>
+          ${thDrill('recebido_em', 'Recebido', churnSortCol, churnSortAsc, 'churnSetSort')}
+          ${thDrill('nome_cliente', 'Cliente', churnSortCol, churnSortAsc, 'churnSetSort')}
+          ${thDrill('cnpj', 'CNPJ', churnSortCol, churnSortAsc, 'churnSetSort')}
+          ${thDrill('qtd_linhas', 'Linhas', churnSortCol, churnSortAsc, 'churnSetSort')}
+          ${thDrill('receptora', 'Receptora', churnSortCol, churnSortAsc, 'churnSetSort')}
+          ${thDrill('unidade', 'Unidade', churnSortCol, churnSortAsc, 'churnSetSort')}
+          ${thDrill('consultor', 'Consultor', churnSortCol, churnSortAsc, 'churnSetSort')}
+          ${thDrill('equipe', 'Equipe', churnSortCol, churnSortAsc, 'churnSetSort')}
+          ${thDrill('cidade', 'Cidade', churnSortCol, churnSortAsc, 'churnSetSort')}
+          ${thDrill('uf', 'UF', churnSortCol, churnSortAsc, 'churnSetSort')}
+          ${thDrill('data_janela', 'Data Janela', churnSortCol, churnSortAsc, 'churnSetSort')}
+          ${thDrill('status', 'Status', churnSortCol, churnSortAsc, 'churnSetSort')}
           <th></th>
         </tr></thead>
         <tbody>${linhas.map(r => {
@@ -8132,9 +8170,10 @@ function renderChurn() {
             ? recebidoDt.toLocaleDateString('pt-BR') + ' ' + recebidoDt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
             : '—';
           const dono = churnDonoCliente(r);
+          const prefixoDuplicado = r.qtd_emails_recebidos > 1 ? `<span title="Recebido ${r.qtd_emails_recebidos} vezes (reenvio/encaminhamento)" style="color:var(--text-3);font-weight:700;">${r.qtd_emails_recebidos}x </span>` : '';
           return `<tr>
             <td style="font-size:11px;color:var(--text-2);white-space:nowrap;">${recebidoFmt}</td>
-            <td style="font-weight:500">${escapeHtml(r.nome_cliente || '—')}${obrigatorio ? ' <span title="Resposta obrigatória (10+ linhas)" style="color:#dc2626;">●</span>' : ''}</td>
+            <td style="font-weight:500">${prefixoDuplicado}${escapeHtml(r.nome_cliente || '—')}${obrigatorio ? ' <span title="Resposta obrigatória (10+ linhas)" style="color:#dc2626;">●</span>' : ''}</td>
             <td style="font-family:monospace;font-size:12px">${escapeHtml(r.cnpj || '—')}</td>
             <td class="center">${r.qtd_linhas ?? '—'}</td>
             <td>${escapeHtml(r.receptora || '—')}</td>
@@ -8327,8 +8366,17 @@ function popularFiltroTagUnidadeCarteira() {
     tags.map(u => `<option value="${escapeHtml(u)}">${escapeHtml(u)}</option>`).join('');
 }
 
+// Mesma lógica: preenche o <select> de UF com os valores distintos vistos
+// em CARTEIRA_DADOS (coluna 'UF').
+function popularFiltroUFCarteira() {
+  const ufs = [...new Set(CARTEIRA_DADOS.map(r => (r['UF'] || '').trim().toUpperCase()))].filter(Boolean).sort();
+  document.getElementById('carteira-filtro-uf').innerHTML =
+    '<option value="">Todas</option>' +
+    ufs.map(uf => `<option value="${escapeHtml(uf)}">${escapeHtml(uf)}</option>`).join('');
+}
+
 async function initCarteira() {
-  if (CARTEIRA_CARREGADA) { popularFiltroTagUnidadeCarteira(); renderCarteiraOverview(); return; }
+  if (CARTEIRA_CARREGADA) { popularFiltroTagUnidadeCarteira(); popularFiltroUFCarteira(); renderCarteiraOverview(); return; }
 
   document.getElementById('carteira-status-area').innerHTML = '<div class="loading-state"><div class="loading-spinner"></div><p>Carregando carteira (base grande, pode levar um pouco)...</p></div>';
   document.getElementById('carteira-stats-area').innerHTML = '';
@@ -8339,6 +8387,7 @@ async function initCarteira() {
     await carregarCarteiraDados();
     document.getElementById('carteira-status-area').innerHTML = '';
     popularFiltroTagUnidadeCarteira();
+    popularFiltroUFCarteira();
     renderCarteiraOverview();
   } catch (e) {
     document.getElementById('carteira-status-area').innerHTML = `<div class="error-state"><strong>Erro ao carregar carteira</strong>${escapeHtml(e.message)}</div>`;
@@ -8372,18 +8421,19 @@ function carteiraPieCard(titulo, itens) {
 
 const CARTEIRA_CORES_CLASSE = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#4a3aa7', '#e34948', '#94a3b8'];
 
-// Monta os 3 gráficos de um produto (Voz ou Banda Larga): só considera
-// clientes que TÊM linha desse produto (>0) — um cliente sem BL não entra
-// nas contas de "apto a renovar BL" nem no gráfico de classificação BL.
+// Monta os 2 quadros (cada um com 2 gráficos) de um produto (Voz ou Banda
+// Larga): só considera clientes que TÊM linha desse produto (>0) — um
+// cliente sem BL não entra nas contas de "apto a renovar BL" nem no
+// gráfico de classificação BL.
 function carteiraBlocoProduto(titulo, fnLinhas, fnApto, dados) {
-  let linhasAptas = 0, linhasNaoAptas = 0;
+  let linhasAptas = 0, linhasNaoAptas = 0, cnpjsAptos = 0, cnpjsNaoAptos = 0;
   const porClasseLinhas = {};
   const porClasseCnpj = {};
 
   dados.forEach(r => {
     const linhas = fnLinhas(r);
     if (linhas <= 0) return;
-    if (fnApto(r)) linhasAptas += linhas; else linhasNaoAptas += linhas;
+    if (fnApto(r)) { linhasAptas += linhas; cnpjsAptos++; } else { linhasNaoAptas += linhas; cnpjsNaoAptos++; }
     const classe = (r['Classificação'] || '').trim().toUpperCase() || 'Sem classificação';
     porClasseLinhas[classe] = (porClasseLinhas[classe] || 0) + linhas;
     porClasseCnpj[classe] = (porClasseCnpj[classe] || 0) + 1;
@@ -8394,22 +8444,36 @@ function carteiraBlocoProduto(titulo, fnLinhas, fnApto, dados) {
 
   return `
     <div style="margin:20px 0 8px;font-size:13px;font-weight:600;color:var(--text-2);text-transform:uppercase;letter-spacing:.04em;">${escapeHtml(titulo)}</div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;">
-      ${carteiraPieCard('Linhas aptas a renovar', [
+
+    <div style="font-size:12px;font-weight:700;color:var(--text-2);margin-bottom:8px;">Aptas a Renovar</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;margin-bottom:16px;">
+      ${carteiraPieCard('Linhas', [
         { label: 'Aptas', value: linhasAptas, color: '#16a34a' },
         { label: 'Não aptas', value: linhasNaoAptas, color: '#dc2626' },
       ])}
-      ${carteiraPieCard('Linhas por classificação (TM)', classesOrdenadas.map(c => ({ label: c, value: porClasseLinhas[c], color: corDe(c) })))}
-      ${carteiraPieCard('Clientes por classificação (TM)', classesOrdenadas.map(c => ({ label: c, value: porClasseCnpj[c], color: corDe(c) })))}
+      ${carteiraPieCard('CNPJs', [
+        { label: 'Aptos', value: cnpjsAptos, color: '#16a34a' },
+        { label: 'Não aptos', value: cnpjsNaoAptos, color: '#dc2626' },
+      ])}
+    </div>
+
+    <div style="font-size:12px;font-weight:700;color:var(--text-2);margin-bottom:8px;">Por Classificação (TM)</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;">
+      ${carteiraPieCard('Linhas', classesOrdenadas.map(c => ({ label: c, value: porClasseLinhas[c], color: corDe(c) })))}
+      ${carteiraPieCard('Clientes', classesOrdenadas.map(c => ({ label: c, value: porClasseCnpj[c], color: corDe(c) })))}
     </div>`;
 }
 
 function renderCarteiraOverview() {
-  // Filtro de revenda: quando selecionado, TODA a visão geral (chips e os
-  // 6 gráficos) recalcula em cima só dos clientes daquela revenda — não
-  // só a tabela de busca.
+  // Filtros de revenda/UF: quando selecionados, TODA a visão geral (chips e
+  // os gráficos) recalcula em cima só dos clientes que batem — não só a
+  // tabela de busca.
   const revendaFiltro = document.getElementById('carteira-filtro-revenda').value;
-  const dados = revendaFiltro ? CARTEIRA_DADOS.filter(r => carteiraUnidade(r) === revendaFiltro) : CARTEIRA_DADOS;
+  const ufFiltro = document.getElementById('carteira-filtro-uf').value;
+  const dados = CARTEIRA_DADOS.filter(r =>
+    (!revendaFiltro || carteiraUnidade(r) === revendaFiltro) &&
+    (!ufFiltro || (r['UF'] || '').trim().toUpperCase() === ufFiltro)
+  );
 
   // Clientes sem nenhuma linha ativa (Voz e BL ambos zerados/"-") continuam
   // na base pra busca/detalhe, só não contam no total de clientes.
@@ -8435,13 +8499,15 @@ function renderCarteiraOverview() {
 function renderCarteiraBusca() {
   const termo = (document.getElementById('carteira-busca').value || '').trim().toLowerCase();
   const revendaFiltro = document.getElementById('carteira-filtro-revenda').value;
-  if (!termo && !revendaFiltro) {
+  const ufFiltro = document.getElementById('carteira-filtro-uf').value;
+  if (!termo && !revendaFiltro && !ufFiltro) {
     document.getElementById('carteira-table-area').innerHTML = '';
     return;
   }
   const termoDigitos = termo.replace(/\D/g, '');
   const resultados = CARTEIRA_DADOS.filter(r => {
     if (revendaFiltro && carteiraUnidade(r) !== revendaFiltro) return false;
+    if (ufFiltro && (r['UF'] || '').trim().toUpperCase() !== ufFiltro) return false;
     if (!termo) return true;
     const razao = (r['Razão Social'] || '').toLowerCase();
     const cnpj = (r['CNPJ'] || '').replace(/\D/g, '');
