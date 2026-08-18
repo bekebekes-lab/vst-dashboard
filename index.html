@@ -2119,6 +2119,12 @@
           <option value="">Todas</option>
         </select>
       </div>
+      <div class="filter-group" style="min-width:200px;">
+        <label>Carteiras Associados</label>
+        <select id="carteira-filtro-associada" onchange="renderCarteiraOverview()">
+          <option value="">Todas</option>
+        </select>
+      </div>
     </div>
     <div id="carteira-status-area"></div>
     <div id="carteira-stats-area"></div>
@@ -8299,6 +8305,18 @@ function carteiraUnidade(r) {
   return MAPEAMENTO_TAGS['#' + codigo.toUpperCase()] || codigo;
 }
 
+// "Carteiras Associados" — mesmas colunas de gestor a partir de AE (YAB,
+// ERECHIM, BRS, EMERSONPR...) já usadas como fallback no Churn: cada uma é
+// uma operação/carteira, e só tem valor preenchido na célula do cliente
+// quando ele pertence a ela. Usa o VALOR da célula (não o nome da coluna).
+function carteiraAssociada(r) {
+  for (const coluna of CARTEIRA_CAMPOS_IGNORADOS) {
+    const valor = carteiraValor(r[coluna]);
+    if (valor) return valor;
+  }
+  return null;
+}
+
 // Converte valores da planilha (que vêm como "-", "", "#N/A" pra
 // ausência de dado) num número seguro — nunca NaN.
 function carteiraNum(v) {
@@ -8375,8 +8393,23 @@ function popularFiltroUFCarteira() {
     ufs.map(uf => `<option value="${escapeHtml(uf)}">${escapeHtml(uf)}</option>`).join('');
 }
 
+// Preenche o <select> de "Carteiras Associados" com os valores distintos
+// vistos em carteiraAssociada() (colunas de gestor a partir de AE).
+function popularFiltroAssociadaCarteira() {
+  const associadas = [...new Set(CARTEIRA_DADOS.map(carteiraAssociada))].filter(Boolean).sort();
+  document.getElementById('carteira-filtro-associada').innerHTML =
+    '<option value="">Todas</option>' +
+    associadas.map(a => `<option value="${escapeHtml(a)}">${escapeHtml(a)}</option>`).join('');
+}
+
 async function initCarteira() {
-  if (CARTEIRA_CARREGADA) { popularFiltroTagUnidadeCarteira(); popularFiltroUFCarteira(); renderCarteiraOverview(); return; }
+  if (CARTEIRA_CARREGADA) {
+    popularFiltroTagUnidadeCarteira();
+    popularFiltroUFCarteira();
+    popularFiltroAssociadaCarteira();
+    renderCarteiraOverview();
+    return;
+  }
 
   document.getElementById('carteira-status-area').innerHTML = '<div class="loading-state"><div class="loading-spinner"></div><p>Carregando carteira (base grande, pode levar um pouco)...</p></div>';
   document.getElementById('carteira-stats-area').innerHTML = '';
@@ -8388,6 +8421,7 @@ async function initCarteira() {
     document.getElementById('carteira-status-area').innerHTML = '';
     popularFiltroTagUnidadeCarteira();
     popularFiltroUFCarteira();
+    popularFiltroAssociadaCarteira();
     renderCarteiraOverview();
   } catch (e) {
     document.getElementById('carteira-status-area').innerHTML = `<div class="error-state"><strong>Erro ao carregar carteira</strong>${escapeHtml(e.message)}</div>`;
@@ -8534,14 +8568,16 @@ function carteiraBlocoProduto(titulo, fnLinhas, fnApto, fnTM, dados) {
 }
 
 function renderCarteiraOverview() {
-  // Filtros de revenda/UF: quando selecionados, TODA a visão geral (chips e
-  // os gráficos) recalcula em cima só dos clientes que batem — não só a
-  // tabela de busca.
+  // Filtros de revenda/UF/associada: quando selecionados, TODA a visão
+  // geral (chips e os gráficos) recalcula em cima só dos clientes que
+  // batem — não só a tabela de busca.
   const revendaFiltro = document.getElementById('carteira-filtro-revenda').value;
   const ufFiltro = document.getElementById('carteira-filtro-uf').value;
+  const associadaFiltro = document.getElementById('carteira-filtro-associada').value;
   const dados = CARTEIRA_DADOS.filter(r =>
     (!revendaFiltro || carteiraUnidade(r) === revendaFiltro) &&
-    (!ufFiltro || (r['UF'] || '').trim().toUpperCase() === ufFiltro)
+    (!ufFiltro || (r['UF'] || '').trim().toUpperCase() === ufFiltro) &&
+    (!associadaFiltro || carteiraAssociada(r) === associadaFiltro)
   );
 
   // Clientes sem nenhuma linha ativa (Voz e BL ambos zerados/"-") continuam
@@ -8551,11 +8587,15 @@ function renderCarteiraOverview() {
   const totalLinhasBL = dados.reduce((s, r) => s + carteiraLinhasBL(r), 0);
   const totalLinhas = totalLinhasVoz + totalLinhasBL;
 
+  const pctClientes = dados.length ? Math.round(totalClientes / dados.length * 100) : 0;
+  const pctVoz = totalLinhas ? Math.round(totalLinhasVoz / totalLinhas * 100) : 0;
+  const pctBL = totalLinhas ? Math.round(totalLinhasBL / totalLinhas * 100) : 0;
+
   document.getElementById('carteira-stats-area').innerHTML = `<div class="stats-row">
     <div class="stat-chip"><strong>${totalLinhas.toLocaleString('pt-BR')}</strong> linhas no total</div>
-    <div class="stat-chip"><strong>${totalClientes.toLocaleString('pt-BR')}</strong> clientes</div>
-    <div class="stat-chip"><strong>${totalLinhasVoz.toLocaleString('pt-BR')}</strong> linhas (voz)</div>
-    <div class="stat-chip"><strong>${totalLinhasBL.toLocaleString('pt-BR')}</strong> linhas (banda larga)</div>
+    <div class="stat-chip"><strong>${totalClientes.toLocaleString('pt-BR')}</strong> clientes <span style="color:var(--text-3);">(${pctClientes}%)</span></div>
+    <div class="stat-chip"><strong>${totalLinhasVoz.toLocaleString('pt-BR')}</strong> linhas (voz) <span style="color:var(--text-3);">(${pctVoz}%)</span></div>
+    <div class="stat-chip"><strong>${totalLinhasBL.toLocaleString('pt-BR')}</strong> linhas (banda larga) <span style="color:var(--text-3);">(${pctBL}%)</span></div>
   </div>`;
 
   document.getElementById('carteira-charts-area').innerHTML =
@@ -8569,7 +8609,8 @@ function renderCarteiraBusca() {
   const termo = (document.getElementById('carteira-busca').value || '').trim().toLowerCase();
   const revendaFiltro = document.getElementById('carteira-filtro-revenda').value;
   const ufFiltro = document.getElementById('carteira-filtro-uf').value;
-  if (!termo && !revendaFiltro && !ufFiltro) {
+  const associadaFiltro = document.getElementById('carteira-filtro-associada').value;
+  if (!termo && !revendaFiltro && !ufFiltro && !associadaFiltro) {
     document.getElementById('carteira-table-area').innerHTML = '';
     return;
   }
@@ -8577,6 +8618,7 @@ function renderCarteiraBusca() {
   const resultados = CARTEIRA_DADOS.filter(r => {
     if (revendaFiltro && carteiraUnidade(r) !== revendaFiltro) return false;
     if (ufFiltro && (r['UF'] || '').trim().toUpperCase() !== ufFiltro) return false;
+    if (associadaFiltro && carteiraAssociada(r) !== associadaFiltro) return false;
     if (!termo) return true;
     const razao = (r['Razão Social'] || '').toLowerCase();
     const cnpj = (r['CNPJ'] || '').replace(/\D/g, '');
