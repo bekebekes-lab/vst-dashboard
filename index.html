@@ -8421,14 +8421,65 @@ function carteiraPieCard(titulo, itens) {
 
 const CARTEIRA_CORES_CLASSE = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#4a3aa7', '#e34948', '#94a3b8'];
 
-// Monta os 2 quadros (cada um com 2 gráficos) de um produto (Voz ou Banda
+// Faixas de Tempo de Contrato (TM, em meses) e de quantidade de linhas —
+// usadas nos 2 gráficos de barra novos (distribuição de CNPJs/linhas por
+// faixa). max:Infinity fecha a última faixa de cada lista.
+const CARTEIRA_FAIXAS_TM = [
+  { label: '0 a 5 meses', min: 0, max: 5 },
+  { label: '6 a 12 meses', min: 6, max: 12 },
+  { label: '13 a 16 meses', min: 13, max: 16 },
+  { label: '17 a 24 meses', min: 17, max: 24 },
+  { label: '25 a 30 meses', min: 25, max: 30 },
+  { label: '31+ meses', min: 31, max: Infinity },
+];
+const CARTEIRA_FAIXAS_LINHAS = [
+  { label: '1 a 5 linhas', min: 1, max: 5 },
+  { label: '6 a 10 linhas', min: 6, max: 10 },
+  { label: '11 a 20 linhas', min: 11, max: 20 },
+  { label: '21 a 50 linhas', min: 21, max: 50 },
+  { label: '51+ linhas', min: 51, max: Infinity },
+];
+function carteiraFaixaDe(valor, faixas) {
+  return faixas.find(f => valor >= f.min && valor <= f.max)?.label || null;
+}
+
+// Gráfico de barras horizontais (CSS puro, sem lib) — cada item mostra
+// valor absoluto E % ao lado, igual ao pedido ("sempre mantenha o % ao
+// lado de cnpj e linha").
+function carteiraBarCard(titulo, itens) {
+  const total = itens.reduce((s, i) => s + i.value, 0) || 1;
+  const maxValor = Math.max(...itens.map(i => i.value), 1);
+  const linhasHtml = itens.map(i => {
+    const pct = Math.round(i.value / total * 100);
+    const largura = Math.max(Math.round(i.value / maxValor * 100), i.value > 0 ? 2 : 0);
+    return `
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+        <div style="width:100px;font-size:11px;color:var(--text-2);text-align:right;flex-shrink:0;">${escapeHtml(i.label)}</div>
+        <div style="flex:1;background:var(--bg-subtle);border-radius:4px;height:16px;overflow:hidden;">
+          <div style="width:${largura}%;background:var(--brand);height:100%;border-radius:4px;"></div>
+        </div>
+        <div style="width:120px;font-size:12px;font-weight:600;color:var(--text);flex-shrink:0;white-space:nowrap;">${i.value.toLocaleString('pt-BR')} <span style="color:var(--text-3);font-weight:400;">(${pct}%)</span></div>
+      </div>`;
+  }).join('');
+  return `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;">
+      <div style="font-size:12px;font-weight:600;color:var(--text-2);text-transform:uppercase;margin-bottom:12px;">${escapeHtml(titulo)}</div>
+      ${linhasHtml}
+    </div>`;
+}
+
+// Monta os quadros (cada um com 2 gráficos) de um produto (Voz ou Banda
 // Larga): só considera clientes que TÊM linha desse produto (>0) — um
-// cliente sem BL não entra nas contas de "apto a renovar BL" nem no
-// gráfico de classificação BL.
-function carteiraBlocoProduto(titulo, fnLinhas, fnApto, dados) {
+// cliente sem BL não entra nas contas de "apto a renovar BL" nem nos
+// gráficos de classificação/faixa de BL.
+function carteiraBlocoProduto(titulo, fnLinhas, fnApto, fnTM, dados) {
   let linhasAptas = 0, linhasNaoAptas = 0, cnpjsAptos = 0, cnpjsNaoAptos = 0;
   const porClasseLinhas = {};
   const porClasseCnpj = {};
+  const porFaixaTMLinhas = {}, porFaixaTMCnpj = {};
+  const porFaixaLinhasLinhas = {}, porFaixaLinhasCnpj = {};
+  CARTEIRA_FAIXAS_TM.forEach(f => { porFaixaTMLinhas[f.label] = 0; porFaixaTMCnpj[f.label] = 0; });
+  CARTEIRA_FAIXAS_LINHAS.forEach(f => { porFaixaLinhasLinhas[f.label] = 0; porFaixaLinhasCnpj[f.label] = 0; });
 
   dados.forEach(r => {
     const linhas = fnLinhas(r);
@@ -8437,6 +8488,12 @@ function carteiraBlocoProduto(titulo, fnLinhas, fnApto, dados) {
     const classe = (r['Classificação'] || '').trim().toUpperCase() || 'Sem classificação';
     porClasseLinhas[classe] = (porClasseLinhas[classe] || 0) + linhas;
     porClasseCnpj[classe] = (porClasseCnpj[classe] || 0) + 1;
+
+    const faixaTM = carteiraFaixaDe(fnTM(r), CARTEIRA_FAIXAS_TM);
+    if (faixaTM) { porFaixaTMLinhas[faixaTM] += linhas; porFaixaTMCnpj[faixaTM]++; }
+
+    const faixaLinhas = carteiraFaixaDe(linhas, CARTEIRA_FAIXAS_LINHAS);
+    if (faixaLinhas) { porFaixaLinhasLinhas[faixaLinhas] += linhas; porFaixaLinhasCnpj[faixaLinhas]++; }
   });
 
   const classesOrdenadas = Object.keys(porClasseLinhas).sort();
@@ -8458,9 +8515,21 @@ function carteiraBlocoProduto(titulo, fnLinhas, fnApto, dados) {
     </div>
 
     <div style="font-size:12px;font-weight:700;color:var(--text-2);margin-bottom:8px;">Por Classificação (TM)</div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;margin-bottom:16px;">
       ${carteiraPieCard('Linhas', classesOrdenadas.map(c => ({ label: c, value: porClasseLinhas[c], color: corDe(c) })))}
       ${carteiraPieCard('Clientes', classesOrdenadas.map(c => ({ label: c, value: porClasseCnpj[c], color: corDe(c) })))}
+    </div>
+
+    <div style="font-size:12px;font-weight:700;color:var(--text-2);margin-bottom:8px;">Por Tempo de Contrato (TM)</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px;margin-bottom:16px;">
+      ${carteiraBarCard('CNPJs', CARTEIRA_FAIXAS_TM.map(f => ({ label: f.label, value: porFaixaTMCnpj[f.label] })))}
+      ${carteiraBarCard('Linhas', CARTEIRA_FAIXAS_TM.map(f => ({ label: f.label, value: porFaixaTMLinhas[f.label] })))}
+    </div>
+
+    <div style="font-size:12px;font-weight:700;color:var(--text-2);margin-bottom:8px;">Por Faixa de Linhas</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px;">
+      ${carteiraBarCard('CNPJs', CARTEIRA_FAIXAS_LINHAS.map(f => ({ label: f.label, value: porFaixaLinhasCnpj[f.label] })))}
+      ${carteiraBarCard('Linhas', CARTEIRA_FAIXAS_LINHAS.map(f => ({ label: f.label, value: porFaixaLinhasLinhas[f.label] })))}
     </div>`;
 }
 
@@ -8490,8 +8559,8 @@ function renderCarteiraOverview() {
   </div>`;
 
   document.getElementById('carteira-charts-area').innerHTML =
-    carteiraBlocoProduto('Voz', carteiraLinhas, carteiraApto, dados) +
-    carteiraBlocoProduto('Banda Larga', carteiraLinhasBL, carteiraAptoBL, dados);
+    carteiraBlocoProduto('Voz', carteiraLinhas, carteiraApto, carteiraTM, dados) +
+    carteiraBlocoProduto('Banda Larga', carteiraLinhasBL, carteiraAptoBL, carteiraTM_BL, dados);
 
   renderCarteiraBusca();
 }
