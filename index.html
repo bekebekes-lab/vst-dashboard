@@ -8593,12 +8593,15 @@ function renderCarteiraOverview() {
   const totalLinhasVozGeral = CARTEIRA_DADOS.reduce((s, r) => s + carteiraLinhas(r), 0);
   const totalLinhasBLGeral = CARTEIRA_DADOS.reduce((s, r) => s + carteiraLinhasBL(r), 0);
 
+  const totalLinhasGeral = totalLinhasVozGeral + totalLinhasBLGeral;
+
+  const pctLinhas = totalLinhasGeral ? Math.round(totalLinhas / totalLinhasGeral * 100) : 0;
   const pctClientes = totalClientesGeral ? Math.round(totalClientes / totalClientesGeral * 100) : 0;
   const pctVoz = totalLinhasVozGeral ? Math.round(totalLinhasVoz / totalLinhasVozGeral * 100) : 0;
   const pctBL = totalLinhasBLGeral ? Math.round(totalLinhasBL / totalLinhasBLGeral * 100) : 0;
 
   document.getElementById('carteira-stats-area').innerHTML = `<div class="stats-row">
-    <div class="stat-chip"><strong>${totalLinhas.toLocaleString('pt-BR')}</strong> linhas no total</div>
+    <div class="stat-chip"><strong>${totalLinhas.toLocaleString('pt-BR')}</strong> linhas no total <span style="color:var(--text-3);">(${pctLinhas}%)</span></div>
     <div class="stat-chip"><strong>${totalClientes.toLocaleString('pt-BR')}</strong> clientes <span style="color:var(--text-3);">(${pctClientes}%)</span></div>
     <div class="stat-chip"><strong>${totalLinhasVoz.toLocaleString('pt-BR')}</strong> linhas (voz) <span style="color:var(--text-3);">(${pctVoz}%)</span></div>
     <div class="stat-chip"><strong>${totalLinhasBL.toLocaleString('pt-BR')}</strong> linhas (banda larga) <span style="color:var(--text-3);">(${pctBL}%)</span></div>
