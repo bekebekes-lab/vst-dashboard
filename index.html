@@ -8587,9 +8587,16 @@ function renderCarteiraOverview() {
   const totalLinhasBL = dados.reduce((s, r) => s + carteiraLinhasBL(r), 0);
   const totalLinhas = totalLinhasVoz + totalLinhasBL;
 
-  const pctClientes = dados.length ? Math.round(totalClientes / dados.length * 100) : 0;
-  const pctVoz = totalLinhas ? Math.round(totalLinhasVoz / totalLinhas * 100) : 0;
-  const pctBL = totalLinhas ? Math.round(totalLinhasBL / totalLinhas * 100) : 0;
+  // % sempre em relação ao TODO (a base inteira, sem nenhum filtro) — mostra
+  // quanto do total da empresa esse recorte filtrado representa, não a
+  // composição interna do próprio filtro.
+  const totalClientesGeral = CARTEIRA_DADOS.filter(carteiraTemAtividade).length;
+  const totalLinhasVozGeral = CARTEIRA_DADOS.reduce((s, r) => s + carteiraLinhas(r), 0);
+  const totalLinhasBLGeral = CARTEIRA_DADOS.reduce((s, r) => s + carteiraLinhasBL(r), 0);
+
+  const pctClientes = totalClientesGeral ? Math.round(totalClientes / totalClientesGeral * 100) : 0;
+  const pctVoz = totalLinhasVozGeral ? Math.round(totalLinhasVoz / totalLinhasVozGeral * 100) : 0;
+  const pctBL = totalLinhasBLGeral ? Math.round(totalLinhasBL / totalLinhasBLGeral * 100) : 0;
 
   document.getElementById('carteira-stats-area').innerHTML = `<div class="stats-row">
     <div class="stat-chip"><strong>${totalLinhas.toLocaleString('pt-BR')}</strong> linhas no total</div>
