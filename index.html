@@ -8069,8 +8069,14 @@ function churnDonoCliente(r) {
     }
   }
 
-  if (!consultor && !equipe) return null;
-  return { consultor, equipe };
+  // Contato e ADM vêm direto da Carteira, independente de ter achado
+  // consultor/equipe — são úteis pra quem vai tratar o PORT-OUT ligar
+  // pro cliente ou acionar o ADM responsável.
+  const telefone = carteiraValor(linha['Telefone de Contato']);
+  const nomeAdm = carteiraValor(linha['Nome do ADM']);
+
+  if (!consultor && !equipe && !telefone && !nomeAdm) return null;
+  return { consultor, equipe, telefone, nomeAdm };
 }
 
 // Extrai o código de revenda/unidade (ex.: "YI8F") do fim do texto de
@@ -8102,6 +8108,8 @@ function churnValorOrdenacao(r, col) {
     case 'unidade': return churnUnidade(r).toLowerCase();
     case 'consultor': return (churnDonoCliente(r)?.consultor || '').toLowerCase();
     case 'equipe': return (churnDonoCliente(r)?.equipe || '').toLowerCase();
+    case 'contato': return (churnDonoCliente(r)?.telefone || '').toLowerCase();
+    case 'nome_adm': return (churnDonoCliente(r)?.nomeAdm || '').toLowerCase();
     case 'cidade': return (r.municipio_cliente || '').toLowerCase();
     case 'uf': return (r.uf_cliente || '').toLowerCase();
     case 'data_janela': return r.data_janela || '';
@@ -8163,6 +8171,8 @@ function renderChurn() {
           ${thDrill('unidade', 'Unidade', churnSortCol, churnSortAsc, 'churnSetSort')}
           ${thDrill('consultor', 'Consultor', churnSortCol, churnSortAsc, 'churnSetSort')}
           ${thDrill('equipe', 'Equipe', churnSortCol, churnSortAsc, 'churnSetSort')}
+          ${thDrill('contato', 'Contato', churnSortCol, churnSortAsc, 'churnSetSort')}
+          ${thDrill('nome_adm', 'Nome ADM', churnSortCol, churnSortAsc, 'churnSetSort')}
           ${thDrill('cidade', 'Cidade', churnSortCol, churnSortAsc, 'churnSetSort')}
           ${thDrill('uf', 'UF', churnSortCol, churnSortAsc, 'churnSetSort')}
           ${thDrill('data_janela', 'Data Janela', churnSortCol, churnSortAsc, 'churnSetSort')}
@@ -8186,6 +8196,8 @@ function renderChurn() {
             <td style="font-size:12px">${escapeHtml(churnUnidade(r))}</td>
             <td style="font-size:12px">${escapeHtml(dono?.consultor || '—')}</td>
             <td style="font-size:12px">${escapeHtml(dono?.equipe || '—')}</td>
+            <td style="font-size:12px">${escapeHtml(dono?.telefone || '—')}</td>
+            <td style="font-size:12px">${escapeHtml(dono?.nomeAdm || '—')}</td>
             <td style="font-size:12px">${escapeHtml(r.municipio_cliente || '—')}</td>
             <td class="center" style="font-size:12px">${escapeHtml(r.uf_cliente || '—')}</td>
             <td>${escapeHtml(r.data_janela || '—')}</td>
@@ -8223,6 +8235,7 @@ function churnAbrirDetalhe(id) {
     ['Nome do Cliente', r.nome_cliente], ['CNPJ', r.cnpj], ['Número de linhas', r.qtd_linhas],
     ['Cidade', r.municipio_cliente], ['UF', r.uf_cliente], ['Unidade', churnUnidade(r)],
     ['Consultor (Carteira)', dono?.consultor], ['Equipe (Carteira)', dono?.equipe],
+    ['Contato (Carteira)', dono?.telefone], ['Nome do ADM (Carteira)', dono?.nomeAdm],
     ['Receptora', r.receptora], ['Promoção Atual', r.promocao_atual], ['Classificação', r.classificacao],
     ['Tempo Médio', r.tempo_medio], ['Carteira AACE', r.carteira_aace], ['Gerente de Canal', r.gerente_canal],
     ['Coordenador', r.coordenador], ['Data da Janela', r.data_janela], ['Multa estimada', r.multa_estimada],
