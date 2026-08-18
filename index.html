@@ -8311,8 +8311,7 @@ function carteiraUnidade(r) {
 // quando ele pertence a ela. Usa o VALOR da célula (não o nome da coluna).
 function carteiraAssociada(r) {
   for (const coluna of CARTEIRA_CAMPOS_IGNORADOS) {
-    const valor = carteiraValor(r[coluna]);
-    if (valor) return valor;
+    if (carteiraValor(r[coluna])) return coluna;
   }
   return null;
 }
