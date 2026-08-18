@@ -2087,13 +2087,19 @@
         <label>Atribuído a</label>
         <select id="churn-atribuido" onchange="renderChurn()"><option value="todos">Todos</option></select>
       </div>
-      <div class="filter-group">
+      <div class="filter-group" style="min-width:190px">
         <label>Tag da Unidade</label>
-        <select id="churn-unidade" onchange="renderChurn()"><option value="todos">Todas</option></select>
+        <div class="custom-dropdown" id="dd-churn-unidade">
+          <button class="dropdown-btn" onclick="toggleDropdown('dd-content-churn-unidade')">Todas <span>&#9660;</span></button>
+          <div class="dropdown-content" id="dd-content-churn-unidade"></div>
+        </div>
       </div>
-      <div class="filter-group">
+      <div class="filter-group" style="min-width:190px">
         <label>Equipe</label>
-        <select id="churn-equipe" onchange="renderChurn()"><option value="todos">Todas</option></select>
+        <div class="custom-dropdown" id="dd-churn-equipe">
+          <button class="dropdown-btn" onclick="toggleDropdown('dd-content-churn-equipe')">Todas <span>&#9660;</span></button>
+          <div class="dropdown-content" id="dd-content-churn-equipe"></div>
+        </div>
       </div>
     </div>
     <div id="churn-stats-area"></div>
@@ -8013,15 +8019,24 @@ async function initChurn() {
   // carregar, o Churn continua funcionando normalmente, só sem essa info.
   try { await carregarCarteiraDados(); } catch (e) { console.error('Não consegui cruzar Churn com a Carteira:', e); }
 
-  // Filtros de Unidade/Equipe são preenchidos com os valores que de fato
-  // aparecem nos alertas carregados (não a lista inteira da Carteira).
+  // Filtros de Unidade/Equipe (multi-seleção, mesmo padrão de dropdown com
+  // checkbox já usado em Gerencial/Produção) são preenchidos com os valores
+  // que de fato aparecem nos alertas carregados (não a lista inteira da Carteira).
   const tagsUnidade = [...new Set(CHURN_DADOS.map(churnUnidade))].filter(u => u && u !== '—').sort();
-  document.getElementById('churn-unidade').innerHTML = '<option value="todos">Todas</option>' +
-    tagsUnidade.map(u => `<option value="${escapeHtml(u)}">${escapeHtml(u)}</option>`).join('');
+  window._ddOnChange_dd_content_churn_unidade = function() {
+    atualizarBotaoDropdown('dd-content-churn-unidade', '#dd-churn-unidade .dropdown-btn');
+    renderChurn();
+  };
+  ddRegisterCallback('dd-content-churn-unidade', window._ddOnChange_dd_content_churn_unidade);
+  popularDropdownGenerico('dd-content-churn-unidade', tagsUnidade, window._ddOnChange_dd_content_churn_unidade, '#dd-churn-unidade .dropdown-btn');
 
   const equipes = [...new Set(CHURN_DADOS.map(r => churnDonoCliente(r)?.equipe).filter(Boolean))].sort();
-  document.getElementById('churn-equipe').innerHTML = '<option value="todos">Todas</option>' +
-    equipes.map(eq => `<option value="${escapeHtml(eq)}">${escapeHtml(eq)}</option>`).join('');
+  window._ddOnChange_dd_content_churn_equipe = function() {
+    atualizarBotaoDropdown('dd-content-churn-equipe', '#dd-churn-equipe .dropdown-btn');
+    renderChurn();
+  };
+  ddRegisterCallback('dd-content-churn-equipe', window._ddOnChange_dd_content_churn_equipe);
+  popularDropdownGenerico('dd-content-churn-equipe', equipes, window._ddOnChange_dd_content_churn_equipe, '#dd-churn-equipe .dropdown-btn');
 
   renderChurn();
 }
@@ -8122,8 +8137,10 @@ function renderChurn() {
   const statusFiltro = document.getElementById('churn-status').value;
   const linhasFiltro = document.getElementById('churn-linhas').value;
   const atribuidoFiltro = document.getElementById('churn-atribuido').value;
-  const unidadeFiltro = document.getElementById('churn-unidade').value;
-  const equipeFiltro = document.getElementById('churn-equipe').value;
+  // Multi-seleção (mesmo dropdown de checkbox de Gerencial/Produção): array
+  // vazio = "Todas".
+  const unidadeSel = getCheckedValuesDd('dd-content-churn-unidade');
+  const equipeSel = getCheckedValuesDd('dd-content-churn-equipe');
 
   const linhas = CHURN_DADOS.filter(r => {
     if (statusFiltro === 'pendentes' && r.respondido) return false;
@@ -8131,8 +8148,8 @@ function renderChurn() {
     if (linhasFiltro === '10+' && !(r.qtd_linhas >= 10)) return false;
     if (atribuidoFiltro === 'ninguem' && r.atribuido_a) return false;
     if (atribuidoFiltro !== 'todos' && atribuidoFiltro !== 'ninguem' && String(r.atribuido_a) !== atribuidoFiltro) return false;
-    if (unidadeFiltro !== 'todos' && churnUnidade(r) !== unidadeFiltro) return false;
-    if (equipeFiltro !== 'todos' && (churnDonoCliente(r)?.equipe || '') !== equipeFiltro) return false;
+    if (unidadeSel.length > 0 && !unidadeSel.includes(churnUnidade(r))) return false;
+    if (equipeSel.length > 0 && !equipeSel.includes(churnDonoCliente(r)?.equipe || '')) return false;
     return true;
   });
 
