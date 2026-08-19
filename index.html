@@ -1420,7 +1420,7 @@
       <label class="mobile-drawer-label">Aba padrão ao abrir</label>
       <select id="drawer-pref-aba" onchange="salvarPrefAbaPadrao(this.value)"></select>
       <label class="mobile-drawer-label" style="margin-top:12px;">Telefone (aparece na assinatura das propostas)</label>
-      <input type="text" id="drawer-pref-telefone" placeholder="(00) 00000-0000" onchange="salvarTelefoneConsultor(this.value)">
+      <input type="text" id="drawer-pref-telefone" placeholder="(00) 00000-0000" inputmode="numeric" oninput="conectFormatarTelefone(this)" onchange="salvarTelefoneConsultor(this.value)">
       <label class="mobile-drawer-label" style="margin-top:12px;">Cargo/Regional (aparece na assinatura das propostas)</label>
       <input type="text" id="drawer-pref-cargo" placeholder="Ex.: Regional Sul | B2B – B2C" onchange="salvarCargoConsultor(this.value)">
     </div>
@@ -2184,7 +2184,7 @@
         </div>
         <div class="filter-group">
           <label>Telefone do cliente <span style="font-weight:400;text-transform:none;">(opcional, não sai na proposta)</span></label>
-          <input type="text" id="conect-cliente-telefone" placeholder="(00) 00000-0000" autocomplete="off">
+          <input type="text" id="conect-cliente-telefone" placeholder="(00) 00000-0000" autocomplete="off" inputmode="numeric" oninput="conectFormatarTelefone(this)">
         </div>
       </div>
       <div class="filters-bar" style="margin-top:10px;">
@@ -2241,7 +2241,7 @@
       <div class="filters-bar" style="margin-top:10px;">
         <div class="filter-group" style="min-width:170px;">
           <label>Telefone do consultor</label>
-          <input type="text" id="conect-consultor-telefone" placeholder="(00) 00000-0000" autocomplete="off">
+          <input type="text" id="conect-consultor-telefone" placeholder="(00) 00000-0000" autocomplete="off" inputmode="numeric" oninput="conectFormatarTelefone(this)">
         </div>
         <div class="filter-group" style="min-width:220px;flex:1">
           <label>E-mail do consultor</label>
@@ -8981,6 +8981,18 @@ async function conectBuscarCep() {
 
 // Formata enquanto digita (00.000.000/0000-00) e trava em 14 dígitos —
 // impede digitar um CNPJ maior que o formato real.
+// Formata enquanto digita ((00) 00000-0000 pra celular, (00) 0000-0000 pra
+// fixo) e trava em 11 dígitos — impede digitar um telefone maior que o
+// formato real. Usado pelo telefone do cliente, do consultor e do perfil.
+function conectFormatarTelefone(el) {
+  let v = el.value.replace(/\D/g, '').slice(0, 11);
+  if (v.length > 10) v = v.replace(/^(\d{2})(\d{5})(\d{0,4})/, '($1) $2-$3');
+  else if (v.length > 6) v = v.replace(/^(\d{2})(\d{4})(\d{0,4})/, '($1) $2-$3');
+  else if (v.length > 2) v = v.replace(/^(\d{2})(\d{0,5})/, '($1) $2');
+  else if (v.length > 0) v = v.replace(/^(\d{0,2})/, '($1');
+  el.value = v;
+}
+
 function conectFormatarCnpj(el) {
   let v = el.value.replace(/\D/g, '').slice(0, 14);
   if (v.length > 12) v = v.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{0,2})/, '$1.$2.$3/$4-$5');
