@@ -2168,13 +2168,13 @@
       </div>
 
       <div class="filters-bar" style="margin-top:10px;">
-        <div class="filter-group">
+        <div class="filter-group" style="min-width:220px;flex:1">
           <label>Nome do cliente (Razão Social)</label>
           <input type="text" id="conect-cliente-nome" placeholder="Ex.: Viação Colombo LTDA" autocomplete="off">
         </div>
         <div class="filter-group">
           <label>CNPJ</label>
-          <input type="text" id="conect-cliente-cnpj" placeholder="00.000.000/0000-00" autocomplete="off">
+          <input type="text" id="conect-cliente-cnpj" placeholder="00.000.000/0000-00" autocomplete="off" inputmode="numeric" oninput="conectFormatarCnpj(this)" onblur="conectBuscarCnpj()">
         </div>
         <div class="filter-group">
           <label>A/C (contato)</label>
@@ -2182,11 +2182,29 @@
         </div>
       </div>
       <div class="filters-bar" style="margin-top:10px;">
-        <div class="filter-group" style="min-width:260px;flex:1">
-          <label>Endereço completo</label>
-          <input type="text" id="conect-cliente-endereco" placeholder="Logradouro, número – bairro – CEP – cidade – UF" autocomplete="off">
+        <div class="filter-group" style="min-width:110px;">
+          <label>CEP</label>
+          <input type="text" id="conect-cliente-cep" placeholder="00000-000" autocomplete="off" inputmode="numeric" oninput="conectFormatarCep(this)" onblur="conectBuscarCep()">
         </div>
-        <div class="filter-group">
+        <div class="filter-group" style="min-width:220px;flex:1">
+          <label>Rua / Logradouro</label>
+          <input type="text" id="conect-cliente-rua" placeholder="Ex.: Rua XV de Novembro" autocomplete="off">
+        </div>
+        <div class="filter-group" style="min-width:80px;">
+          <label>Número</label>
+          <input type="text" id="conect-cliente-numero" placeholder="Ex.: 123" autocomplete="off">
+        </div>
+        <div class="filter-group" style="min-width:140px;">
+          <label>Complemento</label>
+          <input type="text" id="conect-cliente-complemento" placeholder="Ex.: Sala 2" autocomplete="off">
+        </div>
+      </div>
+      <div class="filters-bar" style="margin-top:10px;">
+        <div class="filter-group" style="min-width:180px;flex:1">
+          <label>Bairro</label>
+          <input type="text" id="conect-cliente-bairro" autocomplete="off">
+        </div>
+        <div class="filter-group" style="min-width:180px;flex:1">
           <label>Cidade</label>
           <input type="text" id="conect-cliente-cidade" placeholder="Ex.: Colombo" autocomplete="off">
         </div>
@@ -2201,6 +2219,21 @@
             <option>RO</option><option>RR</option><option>RS</option><option>SC</option><option>SE</option>
             <option>SP</option><option>TO</option>
           </select>
+        </div>
+      </div>
+
+      <div class="filters-bar" style="margin-top:10px;border-top:1px dashed var(--border);padding-top:10px;">
+        <div class="filter-group" style="min-width:200px;flex:1">
+          <label>Consultor (assinatura da proposta)</label>
+          <input type="text" id="conect-consultor-nome" autocomplete="off">
+        </div>
+        <div class="filter-group" style="min-width:170px;">
+          <label>Telefone do consultor</label>
+          <input type="text" id="conect-consultor-telefone" placeholder="(00) 00000-0000" autocomplete="off">
+        </div>
+        <div class="filter-group" style="min-width:220px;flex:1">
+          <label>E-mail do consultor</label>
+          <input type="text" id="conect-consultor-email" autocomplete="off">
         </div>
       </div>
 
@@ -8892,9 +8925,80 @@ function conectAoTrocarVelocidade() {
 function initConectividade() {
   if (!CONECT_INICIALIZADA) {
     conectAoTrocarTipoOferta();
+    document.getElementById('conect-consultor-nome').value = USUARIO_ATUAL?.nome || '';
+    document.getElementById('conect-consultor-telefone').value = USUARIO_ATUAL?.telefone || '';
+    document.getElementById('conect-consultor-email').value = USUARIO_ATUAL?.email || '';
     CONECT_INICIALIZADA = true;
   }
   conectCarregarFunil();
+}
+
+// Formata enquanto digita e trava em 9 dígitos (00000-000) — impede digitar
+// um CEP maior que o formato real.
+function conectFormatarCep(el) {
+  const digitos = el.value.replace(/\D/g, '').slice(0, 8);
+  el.value = digitos.length > 5 ? `${digitos.slice(0, 5)}-${digitos.slice(5)}` : digitos;
+}
+
+// Busca cidade/rua/bairro/UF automaticamente via ViaCEP quando o CEP fica
+// completo (8 dígitos) — API pública, sem autenticação, com CORS liberado
+// pro navegador.
+async function conectBuscarCep() {
+  const cep = document.getElementById('conect-cliente-cep').value.replace(/\D/g, '');
+  if (cep.length !== 8) return;
+  try {
+    const res = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+    const json = await res.json();
+    if (json.erro) return;
+    if (json.logradouro) document.getElementById('conect-cliente-rua').value = json.logradouro;
+    if (json.bairro) document.getElementById('conect-cliente-bairro').value = json.bairro;
+    if (json.localidade) document.getElementById('conect-cliente-cidade').value = json.localidade;
+    if (json.uf) document.getElementById('conect-cliente-uf').value = json.uf;
+  } catch (e) {
+    // Falha na consulta não deve travar o preenchimento manual do endereço.
+  }
+}
+
+// Formata enquanto digita (00.000.000/0000-00) e trava em 14 dígitos —
+// impede digitar um CNPJ maior que o formato real.
+function conectFormatarCnpj(el) {
+  let v = el.value.replace(/\D/g, '').slice(0, 14);
+  if (v.length > 12) v = v.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{0,2})/, '$1.$2.$3/$4-$5');
+  else if (v.length > 8) v = v.replace(/^(\d{2})(\d{3})(\d{3})(\d{0,4})/, '$1.$2.$3/$4');
+  else if (v.length > 5) v = v.replace(/^(\d{2})(\d{3})(\d{0,3})/, '$1.$2.$3');
+  else if (v.length > 2) v = v.replace(/^(\d{2})(\d{0,3})/, '$1.$2');
+  el.value = v;
+}
+
+// Busca a razão social automaticamente via BrasilAPI quando o CNPJ fica
+// completo (14 dígitos) — API pública, sem autenticação, com CORS liberado
+// pro navegador.
+async function conectBuscarCnpj() {
+  const cnpj = document.getElementById('conect-cliente-cnpj').value.replace(/\D/g, '');
+  if (cnpj.length !== 14) return;
+  try {
+    const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpj}`);
+    if (!res.ok) return;
+    const json = await res.json();
+    if (json.razao_social) document.getElementById('conect-cliente-nome').value = json.razao_social;
+  } catch (e) {
+    // Falha na consulta não deve travar o preenchimento manual do nome.
+  }
+}
+
+function conectMontarEnderecoCompleto() {
+  const rua = document.getElementById('conect-cliente-rua').value.trim();
+  const numero = document.getElementById('conect-cliente-numero').value.trim();
+  const complemento = document.getElementById('conect-cliente-complemento').value.trim();
+  const bairro = document.getElementById('conect-cliente-bairro').value.trim();
+  const cep = document.getElementById('conect-cliente-cep').value.trim();
+  const partes = [
+    [rua, numero].filter(Boolean).join(', '),
+    complemento,
+    bairro,
+    cep,
+  ].filter(Boolean);
+  return partes.join(' - ');
 }
 
 async function conectGerarProposta() {
@@ -8904,9 +9008,12 @@ async function conectGerarProposta() {
   const clienteNome = document.getElementById('conect-cliente-nome').value.trim();
   const clienteCnpj = document.getElementById('conect-cliente-cnpj').value.trim();
   const clienteContato = document.getElementById('conect-cliente-contato').value.trim();
-  const clienteEndereco = document.getElementById('conect-cliente-endereco').value.trim();
+  const clienteEndereco = conectMontarEnderecoCompleto();
   const clienteCidade = document.getElementById('conect-cliente-cidade').value.trim();
   const clienteUf = document.getElementById('conect-cliente-uf').value;
+  const consultorNome = document.getElementById('conect-consultor-nome').value.trim();
+  const consultorTelefone = document.getElementById('conect-consultor-telefone').value.trim();
+  const consultorEmail = document.getElementById('conect-consultor-email').value.trim();
 
   const statusEl = document.getElementById('conect-status-geracao');
   if (!clienteNome) { statusEl.textContent = 'Preencha o nome do cliente.'; statusEl.style.color = 'var(--red-sem)'; return; }
@@ -8924,6 +9031,7 @@ async function conectGerarProposta() {
       body: JSON.stringify({
         tipoOferta, velocidade, roteador,
         clienteNome, clienteCnpj, clienteEndereco, clienteCidade, clienteUf, clienteContato,
+        consultorNome, consultorTelefone, consultorEmail,
       }),
     });
     const json = await res.json();

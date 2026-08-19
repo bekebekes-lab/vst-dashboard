@@ -21,6 +21,7 @@ export default async function handler(req, res) {
   const {
     tipoOferta, velocidade, roteador,
     clienteNome, clienteCnpj, clienteEndereco, clienteCidade, clienteUf, clienteContato,
+    consultorNome: consultorNomeInput, consultorTelefone: consultorTelefoneInput, consultorEmail: consultorEmailInput,
   } = req.body || {};
 
   if (!clienteNome || !clienteNome.trim()) {
@@ -51,10 +52,12 @@ export default async function handler(req, res) {
     }
   }
 
+  // Os campos do consultor vêm editáveis do formulário (o usuário pode
+  // ajustar telefone/e-mail por proposta) — o perfil salvo é só o fallback.
   const perfilRow = await getUsuarioDashboard(req, authUser.id);
-  const consultorNome = perfilRow?.nome || authUser.email?.split('@')[0] || 'Consultor VST';
-  const consultorEmail = perfilRow?.email || authUser.email || '';
-  const consultorTelefone = perfilRow?.telefone || '';
+  const consultorNome = (consultorNomeInput || '').trim() || perfilRow?.nome || authUser.email?.split('@')[0] || 'Consultor VST';
+  const consultorEmail = (consultorEmailInput || '').trim() || perfilRow?.email || authUser.email || '';
+  const consultorTelefone = (consultorTelefoneInput || '').trim() || perfilRow?.telefone || '';
 
   let pdfBytes;
   try {

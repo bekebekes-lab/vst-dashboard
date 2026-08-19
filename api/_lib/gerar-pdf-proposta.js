@@ -107,25 +107,37 @@ export async function gerarPdfProposta(dados) {
 
   let page;
   let y;
+  let totalPaginas = 0;
 
+  // Faixa vinho + logos no topo só entram na 1ª página; a faixa cinza +
+  // logo Claro no rodapé só entram na última — desenhada depois que todo o
+  // conteúdo já foi montado, direto na página final real (ver fim da função).
   function novaPagina() {
     page = pdfDoc.addPage([PAGE_W, PAGE_H]);
-    // Faixa vinho no topo — 50pt de altura, do topo da página (medido: rect
-    // (0,0,595.28,50) em coords top-based = (0, PAGE_H-50, 595.28, PAGE_H) em pdf-lib).
-    page.drawRectangle({ x: 0, y: PAGE_H - 50, width: PAGE_W, height: 50, color: COR_MAROON });
-    // Logo VST: bbox medido (42.5,6)-(128,44) top-based -> largura 85.5, altura 38.
-    const vstDim = vstLogoImg.scale(85.5 / vstLogoImg.width);
-    page.drawImage(vstLogoImg, { x: MARGEM, y: PAGE_H - 44, width: vstDim.width, height: vstDim.height });
-    // Logotipo "Claro empresas": bbox medido (411.4,12)-(552.8,38) top-based.
-    const claroDim = claroEmpresasImg.scale(141.3 / claroEmpresasImg.width);
-    page.drawImage(claroEmpresasImg, { x: PAGE_W - MARGEM - claroDim.width, y: PAGE_H - 38, width: claroDim.width, height: claroDim.height });
+    totalPaginas++;
+    if (totalPaginas === 1) {
+      // Faixa vinho no topo — 50pt de altura, do topo da página (medido: rect
+      // (0,0,595.28,50) em coords top-based = (0, PAGE_H-50, 595.28, PAGE_H) em pdf-lib).
+      page.drawRectangle({ x: 0, y: PAGE_H - 50, width: PAGE_W, height: 50, color: COR_MAROON });
+      // Logo VST: bbox medido (42.5,6)-(128,44) top-based -> largura 85.5, altura 38.
+      const vstDim = vstLogoImg.scale(85.5 / vstLogoImg.width);
+      page.drawImage(vstLogoImg, { x: MARGEM, y: PAGE_H - 44, width: vstDim.width, height: vstDim.height });
+      // Logotipo "Claro empresas": bbox medido (411.4,12)-(552.8,38) top-based.
+      const claroDim = claroEmpresasImg.scale(141.3 / claroEmpresasImg.width);
+      page.drawImage(claroEmpresasImg, { x: PAGE_W - MARGEM - claroDim.width, y: PAGE_H - 38, width: claroDim.width, height: claroDim.height });
+      y = PAGE_H - 82; // logo abaixo da faixa do topo, onde entra a data/local
+    } else {
+      y = PAGE_H - 40; // páginas seguintes não repetem a faixa do topo
+    }
+  }
+
+  function desenharRodapeNaPagina(pg) {
     // Faixa cinza-escura no rodapé — 50pt de altura (medido: rect
     // (0,791.9,595.28,841.89) top-based = (0,0,595.28,50) em pdf-lib).
-    page.drawRectangle({ x: 0, y: 0, width: PAGE_W, height: 50, color: COR_CINZA_ESCURO });
+    pg.drawRectangle({ x: 0, y: 0, width: PAGE_W, height: 50, color: COR_CINZA_ESCURO });
     // Logo Claro (círculo): medido (512.8,796.9)-(552.8,836.9) top-based -> 40x40.
     const circDim = claroCirculoImg.scale(40 / claroCirculoImg.width);
-    page.drawImage(claroCirculoImg, { x: PAGE_W - MARGEM - circDim.width, y: 5, width: circDim.width, height: circDim.height });
-    y = PAGE_H - 82; // logo abaixo da faixa do topo, onde entra a data/local
+    pg.drawImage(claroCirculoImg, { x: PAGE_W - MARGEM - circDim.width, y: 5, width: circDim.width, height: circDim.height });
   }
 
   function garantirEspaco(altura) {
@@ -196,18 +208,29 @@ export async function gerarPdfProposta(dados) {
     ['Endereço:', clienteEndereco || '—'],
     ['A/C:', clienteContato || '—'],
   ];
-  const alturaLinhaTabela = 29.3;
-  const alturaTabela = alturaLinhaTabela * linhasTabela.length;
+  // "Endereço:" pode virar mais de uma linha agora que o campo é montado a
+  // partir de rua+número+complemento+bairro+CEP — cada linha da tabela
+  // cresce conforme o texto precisar, em vez de cortar tudo após a 1ª linha.
+  const alturaMinLinhaTabela = 29.3;
+  const alturaLinhaTextoTabela = 13;
+  const larguraValorTabela = LARGURA_UTIL - 110;
+  const linhasPorCampoTabela = linhasTabela.map(([, valor]) => quebrarLinhas(String(valor), fonte, TAM_CORPO, larguraValorTabela));
+  const alturasLinhasTabela = linhasPorCampoTabela.map(linhas => Math.max(alturaMinLinhaTabela, linhas.length * alturaLinhaTextoTabela + 16));
+  const alturaTabela = alturasLinhasTabela.reduce((a, b) => a + b, 0);
   garantirEspaco(alturaTabela);
   const topoTabela = y;
   page.drawRectangle({ x: MARGEM, y: topoTabela - alturaTabela, width: LARGURA_UTIL, height: alturaTabela, color: COR_MAROON_CLARO, borderColor: COR_LINHA, borderWidth: 1 });
   page.drawLine({ start: { x: MARGEM + 102, y: topoTabela }, end: { x: MARGEM + 102, y: topoTabela - alturaTabela }, thickness: 1, color: COR_LINHA });
-  linhasTabela.forEach(([label, valor], i) => {
-    const linhaY = topoTabela - i * alturaLinhaTabela - 19.5;
-    if (i > 0) page.drawLine({ start: { x: MARGEM, y: topoTabela - i * alturaLinhaTabela }, end: { x: MARGEM + LARGURA_UTIL, y: topoTabela - i * alturaLinhaTabela }, thickness: 1, color: COR_LINHA });
-    page.drawText(label, { x: MARGEM + 7, y: linhaY, size: TAM_CORPO, font: fonteNegrito, color: COR_TEXTO });
-    const linhasValor = quebrarLinhas(String(valor), fonte, TAM_CORPO, LARGURA_UTIL - 110);
-    page.drawText(linhasValor[0] || '', { x: MARGEM + 108, y: linhaY, size: TAM_CORPO, font: fonteNegrito, color: rgb(51 / 255, 51 / 255, 51 / 255) });
+  let offsetTabela = 0;
+  linhasTabela.forEach(([label], i) => {
+    const topoLinha = topoTabela - offsetTabela;
+    if (i > 0) page.drawLine({ start: { x: MARGEM, y: topoLinha }, end: { x: MARGEM + LARGURA_UTIL, y: topoLinha }, thickness: 1, color: COR_LINHA });
+    const yLabel = topoLinha - 19.5;
+    page.drawText(label, { x: MARGEM + 7, y: yLabel, size: TAM_CORPO, font: fonteNegrito, color: COR_TEXTO });
+    linhasPorCampoTabela[i].forEach((linha, li) => {
+      page.drawText(linha, { x: MARGEM + 108, y: yLabel - li * alturaLinhaTextoTabela, size: TAM_CORPO, font: fonteNegrito, color: rgb(51 / 255, 51 / 255, 51 / 255) });
+    });
+    offsetTabela += alturasLinhasTabela[i];
   });
   y = topoTabela - alturaTabela - 26;
 
@@ -235,8 +258,9 @@ export async function gerarPdfProposta(dados) {
   paragrafo('Abaixo, detalhamos o investimento necessário para a implementação da solução no seu endereço matriz.');
 
   const alturaHeaderTabela = 24;
-  const alturaLinhaInvest = 26;
-  garantirEspaco(alturaHeaderTabela + alturaLinhaInvest + 10);
+  const paddingCel = 8;
+  const alturaLinhaTexto = 13;
+  garantirEspaco(alturaHeaderTabela + 26 + 10);
   const colunas = tipoOferta === 'conecta_smart'
     ? ['Serviço', 'Banda', 'Prazo Contratual', 'Valor Mensal']
     : ['Serviço', 'Banda', 'Roteador', 'Valor Mensal'];
@@ -255,10 +279,22 @@ export async function gerarPdfProposta(dados) {
   const colValores = tipoOferta === 'conecta_smart'
     ? [nomeServico, velocidade, '36 Meses', fmtReais(valorMensal)]
     : [nomeServico, velocidade, roteador, fmtReais(valorMensal)];
+  // Cada célula quebra dentro da própria largura de coluna — sem isso, um
+  // nome de serviço longo (ex.: "Conecta Smart (Internet Dedicada + Voz +
+  // GRC)") ultrapassa a coluna "Serviço" e sobrepõe o texto da coluna
+  // seguinte ("Banda"), virando um emaranhado de glifos ilegível.
+  const linhasPorColuna = colValores.map((v, i) => {
+    const fonteCel = i === 3 ? fonteNegrito : fonte;
+    return quebrarLinhas(String(v), fonteCel, TAM_CORPO, larguras[i] - paddingCel * 2);
+  });
+  const maxLinhas = Math.max(...linhasPorColuna.map(l => l.length));
+  const alturaLinhaInvest = Math.max(26, maxLinhas * alturaLinhaTexto + 12);
   page.drawRectangle({ x: MARGEM, y: y - alturaLinhaInvest, width: LARGURA_UTIL, height: alturaLinhaInvest, color: COR_BRANCO, borderColor: COR_LINHA, borderWidth: 1 });
   x = MARGEM;
-  colValores.forEach((v, i) => {
-    page.drawText(String(v), { x: x + 8, y: y - alturaLinhaInvest + 9, size: TAM_CORPO, font: i === 3 ? fonteNegrito : fonte, color: COR_TEXTO });
+  linhasPorColuna.forEach((linhas, i) => {
+    linhas.forEach((linha, li) => {
+      page.drawText(linha, { x: x + paddingCel, y: y - 9 - li * alturaLinhaTexto, size: TAM_CORPO, font: i === 3 ? fonteNegrito : fonte, color: COR_TEXTO });
+    });
     x += larguras[i];
   });
   y -= (alturaLinhaInvest + 20);
@@ -281,6 +317,8 @@ export async function gerarPdfProposta(dados) {
   y -= 20;
   const linhaCargo = ['Consultor B2B | VST Group - Claro Empresas', consultorEmail, consultorTelefone].filter(Boolean).join(' · ');
   paragrafo(linhaCargo, { size: 10, cor: COR_TEXTO_2 });
+
+  desenharRodapeNaPagina(page); // só na última página, gerada por último
 
   return pdfDoc.save();
 }
