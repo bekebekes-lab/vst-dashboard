@@ -21,21 +21,30 @@ function base64url(input) {
     .replace(/=+$/, '');
 }
 
+// Cache do access token em memória do módulo — sobrevive entre invocações
+// enquanto o container da function ficar "quente" (comum na Vercel entre
+// requisições próximas), evitando repetir a assinatura JWT + round-trip ao
+// Google em toda chamada. O token dura 1h; renova com 60s de margem.
+let _cachedToken = null;
+let _cachedTokenExpiraEm = 0;
+
 async function getAccessToken() {
+  const agora = Math.floor(Date.now() / 1000);
+  if (_cachedToken && agora < _cachedTokenExpiraEm - 60) return _cachedToken;
+
   const raw = process.env.GOOGLE_CREDENTIALS;
   if (!raw) throw new Error('GOOGLE_CREDENTIALS não configurado no servidor');
 
   const creds = JSON.parse(raw);
   const privateKey = creds.private_key.replace(/\\n/g, '\n');
 
-  const now = Math.floor(Date.now() / 1000);
   const header = { alg: 'RS256', typ: 'JWT' };
   const claim = {
     iss: creds.client_email,
     scope: 'https://www.googleapis.com/auth/spreadsheets.readonly',
     aud: 'https://oauth2.googleapis.com/token',
-    iat: now,
-    exp: now + 3600,
+    iat: agora,
+    exp: agora + 3600,
   };
 
   const signingInput = `${base64url(JSON.stringify(header))}.${base64url(JSON.stringify(claim))}`;
@@ -50,7 +59,10 @@ async function getAccessToken() {
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error_description || data.error || 'Falha ao obter access token');
-  return data.access_token;
+
+  _cachedToken = data.access_token;
+  _cachedTokenExpiraEm = agora + 3600;
+  return _cachedToken;
 }
 
 export default async function handler(req, res) {
