@@ -339,7 +339,10 @@ export async function gerarPdfProposta(dados) {
     { icon: iconSiteImg, texto: 'vstgroup.com.br' },
   ].filter(l => l.texto);
   for (const linha of linhasContato) {
-    page.drawImage(linha.icon, { x: MARGEM, y: y - iconTam + 2, width: iconTam, height: iconTam });
+    // `y` do texto é a linha de base; o centro visual do texto fica ~0.35
+    // do tamanho da fonte ACIMA dela — o ícone precisa ser centralizado
+    // nesse ponto, não na própria linha de base (senão fica baixo demais).
+    page.drawImage(linha.icon, { x: MARGEM, y: y + 10.5 * 0.35 - iconTam / 2, width: iconTam, height: iconTam });
     page.drawText(linha.texto, { x: MARGEM + iconTam + 7, y, size: 10.5, font: fonte, color: COR_TEXTO_2 });
     y -= 17;
   }
