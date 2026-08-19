@@ -20,7 +20,7 @@ export default async function handler(req, res) {
 
   const {
     tipoOferta, velocidade, roteador,
-    clienteNome, clienteCnpj, clienteEndereco, clienteCidade, clienteUf, clienteContato,
+    clienteNome, clienteCnpj, clienteEndereco, clienteCidade, clienteUf, clienteContato, clienteTelefone,
     consultorNome: consultorNomeInput, consultorTelefone: consultorTelefoneInput, consultorEmail: consultorEmailInput,
     consultorCargo: consultorCargoInput,
   } = req.body || {};
@@ -60,6 +60,10 @@ export default async function handler(req, res) {
   const consultorEmail = (consultorEmailInput || '').trim() || perfilRow?.email || authUser.email || '';
   const consultorTelefone = (consultorTelefoneInput || '').trim() || perfilRow?.telefone || '';
   const consultorCargo = (consultorCargoInput || '').trim() || perfilRow?.cargo || '';
+  // Nome de quem REALMENTE gerou a proposta — nunca sobrescrito pelo campo
+  // "Consultor (assinatura da proposta)" do formulário (que é editável e só
+  // controla o que aparece impresso no PDF); é o que o funil deve mostrar.
+  const geradoPorNome = perfilRow?.nome || authUser.email?.split('@')[0] || authUser.email || 'Usuário';
 
   let pdfBytes;
   try {
@@ -98,12 +102,14 @@ export default async function handler(req, res) {
         body: JSON.stringify({
           consultor_id: authUser.id,
           consultor_nome: consultorNome,
+          gerado_por_nome: geradoPorNome,
           cliente_nome: clienteNome,
           cliente_cnpj: clienteCnpj || null,
           cliente_endereco: clienteEndereco || null,
           cliente_cidade: clienteCidade || null,
           cliente_uf: clienteUf || null,
           cliente_contato: clienteContato || null,
+          cliente_telefone: (clienteTelefone || '').trim() || null,
           tipo_oferta: tipoOferta,
           velocidade,
           roteador: roteador || null,

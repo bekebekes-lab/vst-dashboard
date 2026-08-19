@@ -2182,6 +2182,10 @@
           <label>A/C (contato)</label>
           <input type="text" id="conect-cliente-contato" placeholder="Ex.: Sr. Cleber" autocomplete="off">
         </div>
+        <div class="filter-group">
+          <label>Telefone do cliente <span style="font-weight:400;text-transform:none;">(opcional, não sai na proposta)</span></label>
+          <input type="text" id="conect-cliente-telefone" placeholder="(00) 00000-0000" autocomplete="off">
+        </div>
       </div>
       <div class="filters-bar" style="margin-top:10px;">
         <div class="filter-group" style="min-width:110px;">
@@ -9023,6 +9027,7 @@ async function conectGerarProposta() {
   const clienteNome = document.getElementById('conect-cliente-nome').value.trim();
   const clienteCnpj = document.getElementById('conect-cliente-cnpj').value.trim();
   const clienteContato = document.getElementById('conect-cliente-contato').value.trim();
+  const clienteTelefone = document.getElementById('conect-cliente-telefone').value.trim();
   const clienteEndereco = conectMontarEnderecoCompleto();
   const clienteCidade = document.getElementById('conect-cliente-cidade').value.trim();
   const clienteUf = document.getElementById('conect-cliente-uf').value;
@@ -9046,7 +9051,7 @@ async function conectGerarProposta() {
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: JSON.stringify({
         tipoOferta, velocidade, roteador,
-        clienteNome, clienteCnpj, clienteEndereco, clienteCidade, clienteUf, clienteContato,
+        clienteNome, clienteCnpj, clienteEndereco, clienteCidade, clienteUf, clienteContato, clienteTelefone,
         consultorNome, consultorCargo, consultorTelefone, consultorEmail,
       }),
     });
@@ -9118,9 +9123,10 @@ function conectRenderFunil() {
         <div style="display:flex;flex-direction:column;gap:8px;">
           ${itens.map(item => `
             <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px;">
-              <div style="font-weight:600;font-size:13px;color:var(--text);margin-bottom:4px;">${escapeHtml(item.cliente_nome)}</div>
+              <div style="font-weight:600;font-size:13px;color:var(--brand);margin-bottom:4px;cursor:pointer;text-decoration:underline;text-decoration-style:dotted;" onclick="conectAbrirDetalhe(${item.id})">${escapeHtml(item.cliente_nome)}</div>
               <div style="font-size:11px;color:var(--text-2);margin-bottom:2px;">${item.tipo_oferta === 'conecta_smart' ? 'Conecta Smart' : 'BLD Oferta PME'} · ${escapeHtml(item.velocidade)}</div>
-              <div style="font-size:12px;font-weight:600;color:var(--brand);margin-bottom:8px;">${Number(item.valor_mensal).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}/mês</div>
+              <div style="font-size:12px;font-weight:600;color:var(--brand);margin-bottom:4px;">${Number(item.valor_mensal).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}/mês</div>
+              <div style="font-size:10px;color:var(--text-2);margin-bottom:8px;">Gerado por: ${escapeHtml(item.gerado_por_nome || item.consultor_nome || '—')}</div>
               <select style="width:100%;font-size:11px;padding:4px 6px;" onchange="conectMudarEstagio(${item.id}, this.value)">
                 ${CONECT_ESTAGIOS.map(e2 => `<option value="${e2.key}" ${e2.key === item.estagio_funil ? 'selected' : ''}>${e2.label}</option>`).join('')}
               </select>
@@ -9137,6 +9143,64 @@ async function conectMudarEstagio(id, novoEstagio) {
   const item = (window._conectFunilDados || []).find(d => d.id === id);
   if (item) item.estagio_funil = novoEstagio;
   conectRenderFunil();
+}
+
+function conectAbrirDetalhe(id) {
+  const item = (window._conectFunilDados || []).find(d => d.id === id);
+  if (!item) return;
+
+  let modal = document.getElementById('conect-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'conect-modal';
+    modal.style.cssText = 'position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.5);display:flex;align-items:flex-start;justify-content:center;padding:40px 20px;overflow-y:auto;';
+    modal.onclick = function(e) { if (e.target === modal) conectFecharDetalhe(); };
+    document.body.appendChild(modal);
+  }
+
+  const estagioLabel = (CONECT_ESTAGIOS.find(e => e.key === item.estagio_funil) || {}).label || item.estagio_funil;
+  const campos = [
+    ['Cliente (Razão Social)', item.cliente_nome], ['CNPJ', item.cliente_cnpj],
+    ['Telefone do cliente', item.cliente_telefone], ['A/C (contato)', item.cliente_contato],
+    ['Endereço', item.cliente_endereco], ['Cidade', item.cliente_cidade], ['UF', item.cliente_uf],
+    ['Tipo de oferta', item.tipo_oferta === 'conecta_smart' ? 'Conecta Smart' : 'BLD Oferta PME'],
+    ['Velocidade', item.velocidade], ['Roteador', item.roteador],
+    ['Valor mensal', item.valor_mensal != null ? Number(item.valor_mensal).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : null],
+    ['Valor de (antes do desconto)', item.valor_de != null ? Number(item.valor_de).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : null],
+    ['Desconto aplicado', item.valor_desconto != null ? Number(item.valor_desconto).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : null],
+    ['Estágio no funil', estagioLabel],
+    ['Gerado por', item.gerado_por_nome], ['Consultor (assinatura da proposta)', item.consultor_nome],
+    ['Criado em', item.criado_em ? new Date(item.criado_em).toLocaleString('pt-BR') : null],
+    ['Atualizado em', item.atualizado_em ? new Date(item.atualizado_em).toLocaleString('pt-BR') : null],
+  ].filter(([, v]) => v !== null && v !== undefined && v !== '');
+
+  modal.innerHTML = `
+    <div style="background:var(--surface);border-radius:var(--radius-xl);width:100%;max-width:640px;box-shadow:0 24px 60px rgba(0,0,0,.3);overflow:hidden;">
+      <div style="background:var(--brand);padding:16px 20px;display:flex;align-items:center;justify-content:space-between;">
+        <div>
+          <div style="font-size:10px;color:rgba(255,255,255,.65);text-transform:uppercase;letter-spacing:.07em;margin-bottom:2px;">Oportunidade — Conectividade</div>
+          <div style="font-size:18px;font-weight:700;color:#fff;">${escapeHtml(item.cliente_nome || '—')}</div>
+        </div>
+        <button onclick="conectFecharDetalhe()" style="background:rgba(255,255,255,.15);border:none;color:#fff;width:32px;height:32px;border-radius:50%;font-size:18px;cursor:pointer;">×</button>
+      </div>
+      <div style="padding:20px;max-height:70vh;overflow-y:auto;">
+        <div class="det-grid">
+          ${campos.map(([label, val]) => `
+            <div class="det-item">
+              <div class="det-label">${escapeHtml(label)}</div>
+              <div class="det-value">${escapeHtml(String(val))}</div>
+            </div>`).join('')}
+        </div>
+      </div>
+    </div>`;
+  modal.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+
+function conectFecharDetalhe() {
+  const modal = document.getElementById('conect-modal');
+  if (modal) modal.style.display = 'none';
+  document.body.style.overflow = '';
 }
 
 </script>
