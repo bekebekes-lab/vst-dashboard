@@ -102,6 +102,9 @@ export default async function handler(req, res) {
         body: JSON.stringify({
           consultor_id: authUser.id,
           consultor_nome: consultorNome,
+          consultor_telefone: consultorTelefone || null,
+          consultor_email: consultorEmail || null,
+          consultor_cargo: consultorCargo || null,
           gerado_por_nome: geradoPorNome,
           cliente_nome: clienteNome,
           cliente_cnpj: clienteCnpj || null,

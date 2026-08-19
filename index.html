@@ -8947,6 +8947,7 @@ function initConectividade() {
     document.getElementById('conect-consultor-cargo').value = USUARIO_ATUAL?.cargo || '';
     document.getElementById('conect-consultor-telefone').value = USUARIO_ATUAL?.telefone || '';
     document.getElementById('conect-consultor-email').value = USUARIO_ATUAL?.email || '';
+    document.addEventListener('click', () => document.querySelectorAll('[id^="conect-menu-"]').forEach(m => m.style.display = 'none'));
     CONECT_INICIALIZADA = true;
   }
   conectCarregarFunil();
@@ -9122,8 +9123,17 @@ function conectRenderFunil() {
         </div>
         <div style="display:flex;flex-direction:column;gap:8px;">
           ${itens.map(item => `
-            <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px;">
-              <div style="font-weight:600;font-size:13px;color:var(--brand);margin-bottom:4px;cursor:pointer;text-decoration:underline;text-decoration-style:dotted;" onclick="conectAbrirDetalhe(${item.id})">${escapeHtml(item.cliente_nome)}</div>
+            <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px;position:relative;">
+              <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:4px;">
+                <div style="font-weight:600;font-size:13px;color:var(--brand);margin-bottom:4px;cursor:pointer;text-decoration:underline;text-decoration-style:dotted;" onclick="conectAbrirDetalhe(${item.id})">${escapeHtml(item.cliente_nome)}</div>
+                ${USUARIO_ATUAL?.perfil === 'admin' ? `
+                <div style="position:relative;flex-shrink:0;">
+                  <button onclick="conectToggleMenu(event, ${item.id})" title="Mais opções" style="background:none;border:none;cursor:pointer;font-size:15px;line-height:1;color:var(--text-2);padding:0 3px;">⋮</button>
+                  <div id="conect-menu-${item.id}" style="display:none;position:absolute;right:0;top:100%;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:0 4px 14px rgba(0,0,0,.18);z-index:20;min-width:100px;overflow:hidden;">
+                    <button onclick="conectExcluirProposta(${item.id})" style="width:100%;text-align:left;padding:8px 10px;background:none;border:none;cursor:pointer;font-size:12px;color:var(--red-sem);white-space:nowrap;">🗑️ Excluir</button>
+                  </div>
+                </div>` : ''}
+              </div>
               <div style="font-size:11px;color:var(--text-2);margin-bottom:2px;">${item.tipo_oferta === 'conecta_smart' ? 'Conecta Smart' : 'BLD Oferta PME'} · ${escapeHtml(item.velocidade)}</div>
               <div style="font-size:12px;font-weight:600;color:var(--brand);margin-bottom:4px;">${Number(item.valor_mensal).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}/mês</div>
               <div style="font-size:10px;color:var(--text-2);margin-bottom:8px;">Gerado por: ${escapeHtml(item.gerado_por_nome || item.consultor_nome || '—')}</div>
@@ -9142,6 +9152,29 @@ async function conectMudarEstagio(id, novoEstagio) {
   if (error) { alert('Erro ao mudar estágio: ' + error.message); return; }
   const item = (window._conectFunilDados || []).find(d => d.id === id);
   if (item) item.estagio_funil = novoEstagio;
+  conectRenderFunil();
+}
+
+// Menu "⋮" (só admin) — um só aberto por vez; fecha ao clicar fora (listener
+// registrado uma única vez em initConectividade()).
+function conectToggleMenu(ev, id) {
+  ev.stopPropagation();
+  document.querySelectorAll('[id^="conect-menu-"]').forEach(m => {
+    if (m.id !== `conect-menu-${id}`) m.style.display = 'none';
+  });
+  const menu = document.getElementById(`conect-menu-${id}`);
+  if (menu) menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+}
+
+// Exclusão definitiva — a RLS já trava isso pra admin (conectividade_delete),
+// esse confirm() é só a segunda camada de proteção do lado do usuário.
+async function conectExcluirProposta(id) {
+  const item = (window._conectFunilDados || []).find(d => d.id === id);
+  if (!item) return;
+  if (!confirm(`Excluir definitivamente a oportunidade de "${item.cliente_nome}"? Essa ação não pode ser desfeita.`)) return;
+  const { error } = await supa.from('conectividade_propostas').delete().eq('id', id);
+  if (error) { alert('Erro ao excluir: ' + error.message); return; }
+  window._conectFunilDados = (window._conectFunilDados || []).filter(d => d.id !== id);
   conectRenderFunil();
 }
 
@@ -9171,7 +9204,7 @@ function conectAbrirDetalhe(id) {
     ['Estágio no funil', estagioLabel],
     ['Gerado por', item.gerado_por_nome], ['Consultor (assinatura da proposta)', item.consultor_nome],
     ['Criado em', item.criado_em ? new Date(item.criado_em).toLocaleString('pt-BR') : null],
-    ['Atualizado em', item.atualizado_em ? new Date(item.atualizado_em).toLocaleString('pt-BR') : null],
+    ['Última proposta gerada em', item.ultima_geracao_em ? new Date(item.ultima_geracao_em).toLocaleString('pt-BR') : null],
   ].filter(([, v]) => v !== null && v !== undefined && v !== '');
 
   modal.innerHTML = `
@@ -9191,10 +9224,54 @@ function conectAbrirDetalhe(id) {
               <div class="det-value">${escapeHtml(String(val))}</div>
             </div>`).join('')}
         </div>
+        <div style="margin-top:16px;display:flex;align-items:center;gap:12px;">
+          <button class="btn-primary" onclick="conectGerarNovamente(${item.id})" id="conect-regerar-btn">🔁 Gerar Proposta Novamente (PDF)</button>
+          <span id="conect-regerar-status" style="font-size:12px;color:var(--text-2);"></span>
+        </div>
       </div>
     </div>`;
   modal.style.display = 'flex';
   document.body.style.overflow = 'hidden';
+}
+
+async function conectGerarNovamente(id) {
+  const btn = document.getElementById('conect-regerar-btn');
+  const statusEl = document.getElementById('conect-regerar-status');
+  if (btn) btn.disabled = true;
+  if (statusEl) { statusEl.style.color = 'var(--text-2)'; statusEl.textContent = 'Gerando PDF...'; }
+  try {
+    const res = await fetch('/api/regenerar-proposta', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ propostaId: id }),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || 'Falha ao gerar a proposta');
+
+    const item = (window._conectFunilDados || []).find(d => d.id === id);
+    const bin = atob(json.pdfBase64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    const blob = new Blob([bytes], { type: 'application/pdf' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Proposta_${(item?.cliente_nome || 'cliente').replace(/[^a-zA-Z0-9]+/g, '_')}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+
+    if (item) { item.ultima_geracao_em = json.ultimaGeracaoEm; item.valor_mensal = json.valorMensal; }
+    conectAbrirDetalhe(id); // reabre já com a data/valor atualizados — recria o modal, então o aviso de sucesso vem DEPOIS
+    const statusElNovo = document.getElementById('conect-regerar-status');
+    if (statusElNovo) { statusElNovo.style.color = 'var(--green)'; statusElNovo.textContent = 'PDF gerado novamente!'; }
+    conectRenderFunil();
+  } catch (e) {
+    if (statusEl) { statusEl.style.color = 'var(--red-sem)'; statusEl.textContent = e.message; }
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 }
 
 function conectFecharDetalhe() {
