@@ -15,6 +15,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PAGE_W = 595.28;
 const PAGE_H = 841.89;
 const MARGEM = 42.5;
+const HEADER_MARGEM = 16; // margem das logos nas faixas do topo/rodapé — mais próxima do canto que o corpo do texto
 const LARGURA_UTIL = PAGE_W - 2 * MARGEM;
 
 // Cores exatas medidas no PDF de referência (packed RGB decimal -> 0..1):
@@ -90,7 +91,7 @@ export async function gerarPdfProposta(dados) {
   const {
     tipoOferta, velocidade, roteador,
     clienteNome, clienteCnpj, clienteEndereco, clienteCidade, clienteUf, clienteContato,
-    consultorNome, consultorEmail, consultorTelefone,
+    consultorNome, consultorEmail, consultorTelefone, consultorCargo,
     valorMensal, valorDe, valorDesconto,
   } = dados;
 
@@ -101,9 +102,15 @@ export async function gerarPdfProposta(dados) {
   const vstLogoBytes = readFileSync(path.join(__dirname, 'assets', 'vst_logo_branco.png'));
   const claroEmpresasBytes = readFileSync(path.join(__dirname, 'assets', 'claro_empresas_branco.png'));
   const claroCirculoBytes = readFileSync(path.join(__dirname, 'assets', 'claro_logo_circulo.png'));
+  const iconTelefoneBytes = readFileSync(path.join(__dirname, 'assets', 'icon_telefone.png'));
+  const iconEmailBytes = readFileSync(path.join(__dirname, 'assets', 'icon_email.png'));
+  const iconSiteBytes = readFileSync(path.join(__dirname, 'assets', 'icon_site.png'));
   const vstLogoImg = await pdfDoc.embedPng(vstLogoBytes);
   const claroEmpresasImg = await pdfDoc.embedPng(claroEmpresasBytes);
   const claroCirculoImg = await pdfDoc.embedPng(claroCirculoBytes);
+  const iconTelefoneImg = await pdfDoc.embedPng(iconTelefoneBytes);
+  const iconEmailImg = await pdfDoc.embedPng(iconEmailBytes);
+  const iconSiteImg = await pdfDoc.embedPng(iconSiteBytes);
 
   let page;
   let y;
@@ -119,12 +126,13 @@ export async function gerarPdfProposta(dados) {
       // Faixa vinho no topo — 50pt de altura, do topo da página (medido: rect
       // (0,0,595.28,50) em coords top-based = (0, PAGE_H-50, 595.28, PAGE_H) em pdf-lib).
       page.drawRectangle({ x: 0, y: PAGE_H - 50, width: PAGE_W, height: 50, color: COR_MAROON });
-      // Logo VST: bbox medido (42.5,6)-(128,44) top-based -> largura 85.5, altura 38.
-      const vstDim = vstLogoImg.scale(85.5 / vstLogoImg.width);
-      page.drawImage(vstLogoImg, { x: MARGEM, y: PAGE_H - 44, width: vstDim.width, height: vstDim.height });
-      // Logotipo "Claro empresas": bbox medido (411.4,12)-(552.8,38) top-based.
-      const claroDim = claroEmpresasImg.scale(141.3 / claroEmpresasImg.width);
-      page.drawImage(claroEmpresasImg, { x: PAGE_W - MARGEM - claroDim.width, y: PAGE_H - 38, width: claroDim.width, height: claroDim.height });
+      // Logos mais próximas do canto (margem menor que a do corpo do texto)
+      // e Claro empresas maior — ajuste pedido pelo usuário sobre a versão
+      // anterior, que respeitava a mesma margem do corpo e ficava pequena.
+      const vstDim = vstLogoImg.scale(90 / vstLogoImg.width);
+      page.drawImage(vstLogoImg, { x: HEADER_MARGEM, y: PAGE_H - 50 + (50 - vstDim.height) / 2, width: vstDim.width, height: vstDim.height });
+      const claroDim = claroEmpresasImg.scale(175 / claroEmpresasImg.width);
+      page.drawImage(claroEmpresasImg, { x: PAGE_W - HEADER_MARGEM - claroDim.width, y: PAGE_H - 50 + (50 - claroDim.height) / 2, width: claroDim.width, height: claroDim.height });
       y = PAGE_H - 82; // logo abaixo da faixa do topo, onde entra a data/local
     } else {
       y = PAGE_H - 40; // páginas seguintes não repetem a faixa do topo
@@ -135,9 +143,9 @@ export async function gerarPdfProposta(dados) {
     // Faixa cinza-escura no rodapé — 50pt de altura (medido: rect
     // (0,791.9,595.28,841.89) top-based = (0,0,595.28,50) em pdf-lib).
     pg.drawRectangle({ x: 0, y: 0, width: PAGE_W, height: 50, color: COR_CINZA_ESCURO });
-    // Logo Claro (círculo): medido (512.8,796.9)-(552.8,836.9) top-based -> 40x40.
+    // Logo Claro (círculo): 40x40, mesma margem reduzida do cabeçalho.
     const circDim = claroCirculoImg.scale(40 / claroCirculoImg.width);
-    pg.drawImage(claroCirculoImg, { x: PAGE_W - MARGEM - circDim.width, y: 5, width: circDim.width, height: circDim.height });
+    pg.drawImage(claroCirculoImg, { x: PAGE_W - HEADER_MARGEM - circDim.width, y: 5, width: circDim.width, height: circDim.height });
   }
 
   function garantirEspaco(altura) {
@@ -194,7 +202,8 @@ export async function gerarPdfProposta(dados) {
   page.drawText(dataTexto, { x: PAGE_W - MARGEM - fonte.widthOfTextAtSize(dataTexto, TAM_CORPO), y, size: TAM_CORPO, font: fonte, color: COR_TEXTO_2 });
   y -= 32;
 
-  page.drawText('Proposta Comercial - Conectividade e Voz', { x: MARGEM, y, size: TAM_TITULO, font: fonteNegrito, color: COR_TEXTO });
+  const tituloProposta = tipoOferta === 'conecta_smart' ? 'Proposta Comercial - Conectividade e Voz' : 'Proposta Comercial - Conectividade';
+  page.drawText(tituloProposta, { x: MARGEM, y, size: TAM_TITULO, font: fonteNegrito, color: COR_TEXTO });
   y -= 10;
   page.drawRectangle({ x: MARGEM, y: y - 2, width: LARGURA_UTIL, height: 2, color: COR_MAROON });
   y -= 34;
@@ -309,14 +318,31 @@ export async function gerarPdfProposta(dados) {
   bullet('Fidelidade:', 'O prazo de prestação dos serviços é de 36 meses. Em caso de cancelamento total ou parcial do serviço antes deste prazo, será aplicada uma multa proporcional ao tempo restante para o término do contrato de permanência.');
   bullet('Validade da Proposta:', 'Este documento tem validade comercial de 20 (vinte) dias, contados a partir da data de sua emissão.');
 
+  // Bloco de assinatura: nome em destaque, cargo/regional logo abaixo, e
+  // telefone/e-mail/site cada um numa linha com um ícone à esquerda.
   garantirEspaco(90);
   y -= 26;
   paragrafo('Atenciosamente,');
-  garantirEspaco(16);
-  page.drawText(consultorNome || '', { x: MARGEM, y, size: TAM_CORPO, font: fonteNegrito, color: rgb(0.1, 0.1, 0.1) });
-  y -= 20;
-  const linhaCargo = ['Consultor B2B | VST Group - Claro Empresas', consultorEmail, consultorTelefone].filter(Boolean).join(' · ');
-  paragrafo(linhaCargo, { size: 10, cor: COR_TEXTO_2 });
+  garantirEspaco(85);
+  page.drawText(consultorNome || '', { x: MARGEM, y, size: 15, font: fonteNegrito, color: rgb(0.13, 0.13, 0.13) });
+  y -= 17;
+  if (consultorCargo) {
+    page.drawText(consultorCargo, { x: MARGEM, y, size: 10.5, font: fonte, color: COR_TEXTO_2 });
+    y -= 21;
+  } else {
+    y -= 8;
+  }
+  const iconTam = 11;
+  const linhasContato = [
+    { icon: iconTelefoneImg, texto: consultorTelefone },
+    { icon: iconEmailImg, texto: consultorEmail },
+    { icon: iconSiteImg, texto: 'vstgroup.com.br' },
+  ].filter(l => l.texto);
+  for (const linha of linhasContato) {
+    page.drawImage(linha.icon, { x: MARGEM, y: y - iconTam + 2, width: iconTam, height: iconTam });
+    page.drawText(linha.texto, { x: MARGEM + iconTam + 7, y, size: 10.5, font: fonte, color: COR_TEXTO_2 });
+    y -= 17;
+  }
 
   desenharRodapeNaPagina(page); // só na última página, gerada por último
 

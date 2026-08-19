@@ -22,6 +22,7 @@ export default async function handler(req, res) {
     tipoOferta, velocidade, roteador,
     clienteNome, clienteCnpj, clienteEndereco, clienteCidade, clienteUf, clienteContato,
     consultorNome: consultorNomeInput, consultorTelefone: consultorTelefoneInput, consultorEmail: consultorEmailInput,
+    consultorCargo: consultorCargoInput,
   } = req.body || {};
 
   if (!clienteNome || !clienteNome.trim()) {
@@ -58,13 +59,14 @@ export default async function handler(req, res) {
   const consultorNome = (consultorNomeInput || '').trim() || perfilRow?.nome || authUser.email?.split('@')[0] || 'Consultor VST';
   const consultorEmail = (consultorEmailInput || '').trim() || perfilRow?.email || authUser.email || '';
   const consultorTelefone = (consultorTelefoneInput || '').trim() || perfilRow?.telefone || '';
+  const consultorCargo = (consultorCargoInput || '').trim() || perfilRow?.cargo || '';
 
   let pdfBytes;
   try {
     pdfBytes = await gerarPdfProposta({
       tipoOferta, velocidade, roteador,
       clienteNome, clienteCnpj, clienteEndereco, clienteCidade, clienteUf, clienteContato,
-      consultorNome, consultorEmail, consultorTelefone,
+      consultorNome, consultorEmail, consultorTelefone, consultorCargo,
       valorMensal: calculo.valorMensal,
       valorDe: calculo.valorDe,
       valorDesconto: calculo.valorDesconto,
@@ -74,11 +76,18 @@ export default async function handler(req, res) {
   }
 
   // Grava a oportunidade no funil (service-role — RLS não permite insert
-  // direto do cliente, só leitura/atualização do que já existe).
+  // direto do cliente, só leitura/atualização do que já existe). Falha aqui
+  // NÃO bloqueia a geração/download do PDF, mas o erro real volta pro
+  // cliente em `funilErro` — sem isso, uma falha ficava só no log do
+  // servidor (inacessível) e a proposta "sumia" do funil sem explicação.
+  let funilErro = null;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (serviceKey) {
+  if (!serviceKey) {
+    funilErro = 'SUPABASE_SERVICE_ROLE_KEY não configurado no servidor';
+    console.error(funilErro);
+  } else {
     try {
-      await fetch(`${SUPA_URL}/rest/v1/conectividade_propostas`, {
+      const respFunil = await fetch(`${SUPA_URL}/rest/v1/conectividade_propostas`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -103,12 +112,16 @@ export default async function handler(req, res) {
           valor_desconto: calculo.valorDesconto ?? null,
         }),
       });
+      if (!respFunil.ok) {
+        funilErro = await respFunil.text();
+        console.error('Falha ao gravar oportunidade no funil:', respFunil.status, funilErro);
+      }
     } catch (e) {
-      // Não bloqueia a geração/download do PDF por causa disso — só loga.
+      funilErro = e.message;
       console.error('Falha ao gravar oportunidade no funil:', e.message);
     }
   }
 
   const pdfBase64 = Buffer.from(pdfBytes).toString('base64');
-  res.status(200).json({ pdfBase64, valorMensal: calculo.valorMensal });
+  res.status(200).json({ pdfBase64, valorMensal: calculo.valorMensal, funilErro });
 }

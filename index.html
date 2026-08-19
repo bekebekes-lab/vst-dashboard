@@ -1421,6 +1421,8 @@
       <select id="drawer-pref-aba" onchange="salvarPrefAbaPadrao(this.value)"></select>
       <label class="mobile-drawer-label" style="margin-top:12px;">Telefone (aparece na assinatura das propostas)</label>
       <input type="text" id="drawer-pref-telefone" placeholder="(00) 00000-0000" onchange="salvarTelefoneConsultor(this.value)">
+      <label class="mobile-drawer-label" style="margin-top:12px;">Cargo/Regional (aparece na assinatura das propostas)</label>
+      <input type="text" id="drawer-pref-cargo" placeholder="Ex.: Regional Sul | B2B – B2C" onchange="salvarCargoConsultor(this.value)">
     </div>
     <!-- Filtros/config da aba atual (mobile only) — populado dinamicamente
          movendo os campos de verdade pra cá em moverConfigParaDrawer(),
@@ -2227,6 +2229,12 @@
           <label>Consultor (assinatura da proposta)</label>
           <input type="text" id="conect-consultor-nome" autocomplete="off">
         </div>
+        <div class="filter-group" style="min-width:200px;flex:1">
+          <label>Cargo/Regional</label>
+          <input type="text" id="conect-consultor-cargo" placeholder="Ex.: Regional Sul | B2B – B2C" autocomplete="off">
+        </div>
+      </div>
+      <div class="filters-bar" style="margin-top:10px;">
         <div class="filter-group" style="min-width:170px;">
           <label>Telefone do consultor</label>
           <input type="text" id="conect-consultor-telefone" placeholder="(00) 00000-0000" autocomplete="off">
@@ -6896,6 +6904,7 @@ function abrirDrawerConta() {
   document.getElementById('drawer-user-perfil').textContent = document.getElementById('user-perfil').textContent;
   document.getElementById('drawer-user-email').textContent = USUARIO_ATUAL?.email || '—';
   document.getElementById('drawer-pref-telefone').value = USUARIO_ATUAL?.telefone || '';
+  document.getElementById('drawer-pref-cargo').value = USUARIO_ATUAL?.cargo || '';
 
   const permitidas = ABAS_PERMITIDAS_POR_PERFIL[USUARIO_ATUAL?.perfil] || ['gerencial'];
   const prefAtual = localStorage.getItem('vst_pref_aba_padrao');
@@ -6920,6 +6929,11 @@ async function salvarTelefoneConsultor(valor) {
   const { error } = await supa.from('usuarios_dashboard').update({ telefone: valor, atualizado_em: new Date().toISOString() }).eq('id', USUARIO_ATUAL.id);
   if (error) { console.error('Não consegui salvar o telefone:', error.message); return; }
   if (USUARIO_ATUAL) USUARIO_ATUAL.telefone = valor;
+}
+async function salvarCargoConsultor(valor) {
+  const { error } = await supa.from('usuarios_dashboard').update({ cargo: valor, atualizado_em: new Date().toISOString() }).eq('id', USUARIO_ATUAL.id);
+  if (error) { console.error('Não consegui salvar o cargo:', error.message); return; }
+  if (USUARIO_ATUAL) USUARIO_ATUAL.cargo = valor;
 }
 function fecharDrawerConta() {
   document.getElementById('mobile-drawer-conta').classList.remove('open');
@@ -8926,6 +8940,7 @@ function initConectividade() {
   if (!CONECT_INICIALIZADA) {
     conectAoTrocarTipoOferta();
     document.getElementById('conect-consultor-nome').value = USUARIO_ATUAL?.nome || '';
+    document.getElementById('conect-consultor-cargo').value = USUARIO_ATUAL?.cargo || '';
     document.getElementById('conect-consultor-telefone').value = USUARIO_ATUAL?.telefone || '';
     document.getElementById('conect-consultor-email').value = USUARIO_ATUAL?.email || '';
     CONECT_INICIALIZADA = true;
@@ -9012,6 +9027,7 @@ async function conectGerarProposta() {
   const clienteCidade = document.getElementById('conect-cliente-cidade').value.trim();
   const clienteUf = document.getElementById('conect-cliente-uf').value;
   const consultorNome = document.getElementById('conect-consultor-nome').value.trim();
+  const consultorCargo = document.getElementById('conect-consultor-cargo').value.trim();
   const consultorTelefone = document.getElementById('conect-consultor-telefone').value.trim();
   const consultorEmail = document.getElementById('conect-consultor-email').value.trim();
 
@@ -9031,7 +9047,7 @@ async function conectGerarProposta() {
       body: JSON.stringify({
         tipoOferta, velocidade, roteador,
         clienteNome, clienteCnpj, clienteEndereco, clienteCidade, clienteUf, clienteContato,
-        consultorNome, consultorTelefone, consultorEmail,
+        consultorNome, consultorCargo, consultorTelefone, consultorEmail,
       }),
     });
     const json = await res.json();
@@ -9053,8 +9069,13 @@ async function conectGerarProposta() {
     a.remove();
     URL.revokeObjectURL(url);
 
-    statusEl.style.color = 'var(--green)';
-    statusEl.textContent = `Proposta gerada — valor mensal: ${json.valorMensal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`;
+    if (json.funilErro) {
+      statusEl.style.color = 'var(--red-sem)';
+      statusEl.textContent = `PDF gerado, mas houve um erro ao registrar no funil: ${json.funilErro}`;
+    } else {
+      statusEl.style.color = 'var(--green)';
+      statusEl.textContent = `Proposta gerada — valor mensal: ${json.valorMensal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`;
+    }
     conectCarregarFunil();
   } catch (e) {
     statusEl.style.color = 'var(--red-sem)';
