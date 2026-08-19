@@ -9126,13 +9126,18 @@ function conectRenderFunil() {
   area.innerHTML = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;align-items:start;">
     ${CONECT_ESTAGIOS.map(estagio => {
       const itens = dados.filter(d => d.estagio_funil === estagio.key);
+      // Soma sempre sobre `dados` — que já vem filtrado pela RLS (só as
+      // próprias propostas pro usuário comum, todas pro admin), então essa
+      // receita fica automaticamente "só minha" ou "de todos" sem lógica extra.
+      const receitaEstagio = itens.reduce((soma, i) => soma + (Number(i.valor_mensal) || 0), 0);
       return `
       <div style="background:var(--surface-2);border-radius:var(--radius-lg);padding:12px;min-height:80px;">
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px;">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;">
           <span style="width:8px;height:8px;border-radius:50%;background:${estagio.cor};flex-shrink:0;"></span>
           <span style="font-size:12px;font-weight:700;color:var(--text-2);text-transform:uppercase;">${estagio.label}</span>
           <span class="count-badge" style="margin-left:auto;">${itens.length}</span>
         </div>
+        <div style="font-size:12px;font-weight:600;color:var(--brand);margin-bottom:8px;">${receitaEstagio.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}/mês</div>
         <div style="display:flex;flex-direction:column;gap:8px;">
           ${itens.map(item => `
             <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px;position:relative;">
