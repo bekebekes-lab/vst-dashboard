@@ -367,7 +367,7 @@
   .mobile-drawer-info-row { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; color: var(--text); }
   .mobile-drawer-info-row span:first-child { color: var(--text-2); }
   .mobile-drawer-label { display: block; font-size: 12px; color: var(--text-2); margin-bottom: 6px; }
-  .mobile-drawer select {
+  .mobile-drawer select, .mobile-drawer input[type="text"] {
     width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius);
     font-family: inherit; font-size: 13px; color: var(--text); background: var(--surface);
   }
@@ -1375,6 +1375,7 @@
   <button class="tab-btn" id="tab-btn-simulador2" onclick="switchTab('simulador2', this)">🧮 Simulador 2.0</button>
   <button class="tab-btn" id="tab-btn-churn" onclick="switchTab('churn', this)">📉 Churn</button>
   <button class="tab-btn" id="tab-btn-carteira" onclick="switchTab('carteira', this)">💼 Carteira</button>
+  <button class="tab-btn" id="tab-btn-conectividade" onclick="switchTab('conectividade', this)">🔌 Conectividade</button>
 </div>
 
 <!-- BOTTOM NAV (mobile only — casca visual nova, chama switchTab() já existente) -->
@@ -1393,6 +1394,9 @@
   </button>
   <button class="tab-btn bottom-nav-btn" onclick="mobileSwitchTab('simulador2', this)">
     <span class="bottom-nav-icon">🧮</span><span class="bottom-nav-label">Simul. 2.0</span>
+  </button>
+  <button class="tab-btn bottom-nav-btn" onclick="mobileSwitchTab('conectividade', this)">
+    <span class="bottom-nav-icon">🔌</span><span class="bottom-nav-label">Conect.</span>
   </button>
 </div>
 
@@ -1415,6 +1419,8 @@
       <div class="mobile-drawer-section-title">Preferências</div>
       <label class="mobile-drawer-label">Aba padrão ao abrir</label>
       <select id="drawer-pref-aba" onchange="salvarPrefAbaPadrao(this.value)"></select>
+      <label class="mobile-drawer-label" style="margin-top:12px;">Telefone (aparece na assinatura das propostas)</label>
+      <input type="text" id="drawer-pref-telefone" placeholder="(00) 00000-0000" onchange="salvarTelefoneConsultor(this.value)">
     </div>
     <!-- Filtros/config da aba atual (mobile only) — populado dinamicamente
          movendo os campos de verdade pra cá em moverConfigParaDrawer(),
@@ -2136,6 +2142,78 @@
     <div id="carteira-stats-area"></div>
     <div id="carteira-charts-area"></div>
     <div id="carteira-table-area"></div>
+  </div>
+
+  <!-- TAB CONECTIVIDADE — gerar proposta (PDF) + funil de oportunidades -->
+  <div class="tab-panel" id="tab-conectividade">
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:18px;margin-bottom:16px;box-shadow:var(--shadow-xs);">
+      <div class="section-title" style="margin-bottom:14px;">Gerar Proposta Comercial</div>
+
+      <div class="filters-bar" style="margin-bottom:0;">
+        <div class="filter-group">
+          <label>Tipo de oferta</label>
+          <select id="conect-tipo-oferta" onchange="conectAoTrocarTipoOferta()">
+            <option value="conecta_smart">Conecta Smart</option>
+            <option value="bld_oferta_pme">BLD Oferta PME</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label>Velocidade</label>
+          <select id="conect-velocidade" onchange="conectAoTrocarVelocidade()"></select>
+        </div>
+        <div class="filter-group" id="conect-grupo-roteador" style="display:none;">
+          <label>Roteador</label>
+          <select id="conect-roteador"></select>
+        </div>
+      </div>
+
+      <div class="filters-bar" style="margin-top:10px;">
+        <div class="filter-group">
+          <label>Nome do cliente (Razão Social)</label>
+          <input type="text" id="conect-cliente-nome" placeholder="Ex.: Viação Colombo LTDA" autocomplete="off">
+        </div>
+        <div class="filter-group">
+          <label>CNPJ</label>
+          <input type="text" id="conect-cliente-cnpj" placeholder="00.000.000/0000-00" autocomplete="off">
+        </div>
+        <div class="filter-group">
+          <label>A/C (contato)</label>
+          <input type="text" id="conect-cliente-contato" placeholder="Ex.: Sr. Cleber" autocomplete="off">
+        </div>
+      </div>
+      <div class="filters-bar" style="margin-top:10px;">
+        <div class="filter-group" style="min-width:260px;flex:1">
+          <label>Endereço completo</label>
+          <input type="text" id="conect-cliente-endereco" placeholder="Logradouro, número – bairro – CEP – cidade – UF" autocomplete="off">
+        </div>
+        <div class="filter-group">
+          <label>Cidade</label>
+          <input type="text" id="conect-cliente-cidade" placeholder="Ex.: Colombo" autocomplete="off">
+        </div>
+        <div class="filter-group" style="min-width:90px;">
+          <label>UF</label>
+          <select id="conect-cliente-uf">
+            <option value="">—</option>
+            <option>AC</option><option>AL</option><option>AM</option><option>AP</option><option>BA</option>
+            <option>CE</option><option>DF</option><option>ES</option><option>GO</option><option>MA</option>
+            <option>MG</option><option>MS</option><option>MT</option><option>PA</option><option>PB</option>
+            <option>PE</option><option>PI</option><option>PR</option><option>RJ</option><option>RN</option>
+            <option>RO</option><option>RR</option><option>RS</option><option>SC</option><option>SE</option>
+            <option>SP</option><option>TO</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="margin-top:16px;display:flex;align-items:center;gap:12px;">
+        <button class="btn-primary" onclick="conectGerarProposta()" id="conect-btn-gerar">📄 Gerar Proposta (PDF)</button>
+        <span id="conect-status-geracao" style="font-size:12px;color:var(--text-2);"></span>
+      </div>
+    </div>
+
+    <div class="section-header">
+      <span class="section-title">Funil de Oportunidades</span>
+    </div>
+    <div id="conect-funil-area"></div>
   </div>
 
 </div>
@@ -4942,6 +5020,7 @@ function switchTab(name, el) {
   if (name === 'simulador2') initSimulador2();
   if (name === 'churn') initChurn();
   if (name === 'carteira') initCarteira();
+  if (name === 'conectividade') initConectividade();
 
   // Config/filtros dessa aba (se houver) saem da tela e entram no drawer de
   // conta assim que ela vira ativa (só mobile) — não só enquanto o drawer
@@ -4972,15 +5051,15 @@ let USUARIO_ATUAL = null;
 // aplicarPermissoes() quanto pelo preenchimento da preferência "aba padrão
 // ao abrir" no drawer de conta e pelo redirecionamento pós-login.
 const ABAS_PERMITIDAS_POR_PERFIL = {
-  'admin':          ['simulador', 'gerencial', 'producao', 'discadora', 'simulador2', 'churn', 'carteira'],
-  'gestor_macro':   ['gerencial', 'discadora'],
-  'gestor_macro2':  ['gerencial', 'producao', 'discadora'],
-  'gestor_macro3':  ['gerencial', 'producao'],
-  'gestor':         ['gerencial', 'discadora'],
-  'gestor_beta':    ['gerencial'],
-  'supervisao':     ['gerencial', 'discadora'],
-  'supervisao_beta':['gerencial', 'producao'],
-  'consultor':      ['gerencial']
+  'admin':          ['simulador', 'gerencial', 'producao', 'discadora', 'simulador2', 'churn', 'carteira', 'conectividade'],
+  'gestor_macro':   ['gerencial', 'discadora', 'conectividade'],
+  'gestor_macro2':  ['gerencial', 'producao', 'discadora', 'conectividade'],
+  'gestor_macro3':  ['gerencial', 'producao', 'conectividade'],
+  'gestor':         ['gerencial', 'discadora', 'conectividade'],
+  'gestor_beta':    ['gerencial', 'conectividade'],
+  'supervisao':     ['gerencial', 'discadora', 'conectividade'],
+  'supervisao_beta':['gerencial', 'producao', 'conectividade'],
+  'consultor':      ['gerencial', 'conectividade']
 };
 const TAB_LABELS = {
   simulador: '🎯 Simulador de Carteira',
@@ -4990,6 +5069,7 @@ const TAB_LABELS = {
   simulador2: '🧮 Simulador 2.0',
   churn: '📉 Churn',
   carteira: '💼 Carteira',
+  conectividade: '🔌 Conectividade',
 };
 
 // Token de sessão do usuário logado, mantido em sincronia pelo Supabase Auth.
@@ -6782,6 +6862,7 @@ function abrirDrawerConta() {
   document.getElementById('drawer-user-nome').textContent = document.getElementById('user-nome').textContent;
   document.getElementById('drawer-user-perfil').textContent = document.getElementById('user-perfil').textContent;
   document.getElementById('drawer-user-email').textContent = USUARIO_ATUAL?.email || '—';
+  document.getElementById('drawer-pref-telefone').value = USUARIO_ATUAL?.telefone || '';
 
   const permitidas = ABAS_PERMITIDAS_POR_PERFIL[USUARIO_ATUAL?.perfil] || ['gerencial'];
   const prefAtual = localStorage.getItem('vst_pref_aba_padrao');
@@ -6797,6 +6878,15 @@ function abrirDrawerConta() {
 }
 function salvarPrefAbaPadrao(valor) {
   localStorage.setItem('vst_pref_aba_padrao', valor);
+}
+// Telefone do consultor — usado na assinatura das propostas de
+// Conectividade (não existia campo pra isso antes). Só atualiza
+// usuarios_dashboard; se o usuário estiver na tabela legada "usuarios",
+// falha silenciosamente (perfil legado não tem esse recurso ainda).
+async function salvarTelefoneConsultor(valor) {
+  const { error } = await supa.from('usuarios_dashboard').update({ telefone: valor, atualizado_em: new Date().toISOString() }).eq('id', USUARIO_ATUAL.id);
+  if (error) { console.error('Não consegui salvar o telefone:', error.message); return; }
+  if (USUARIO_ATUAL) USUARIO_ATUAL.telefone = valor;
 }
 function fecharDrawerConta() {
   document.getElementById('mobile-drawer-conta').classList.remove('open');
@@ -8758,6 +8848,166 @@ function carteiraFecharDetalhe() {
   const modal = document.getElementById('carteira-modal');
   if (modal) modal.style.display = 'none';
   document.body.style.overflow = '';
+}
+
+// ─── ABA CONECTIVIDADE (gerar proposta em PDF + funil de oportunidades) ────
+// Espelha SÓ as opções de dropdown das tabelas de preço do servidor
+// (api/_lib/propostas-dados.js) — o valor em R$ é sempre calculado e
+// validado no servidor, nunca aqui no cliente.
+const CONECT_VELOCIDADES = {
+  conecta_smart: ['10 Mega', '20 Mega', '50 Mega', '100 Mega'],
+  bld_oferta_pme: ['10M', '20M', '30M', '50M', '100M', '200M'],
+};
+const CONECT_ROTEADORES = {
+  'HP 954': { excluidoEm: ['200M'] },
+  'Huawei AR651': { excluidoEm: [] },
+  'Meraki MX67': { excluidoEm: [] },
+};
+const CONECT_ESTAGIOS = [
+  { key: 'proposta_gerada', label: 'Proposta Gerada', cor: '#2a78d6' },
+  { key: 'em_negociacao', label: 'Em Negociação', cor: '#eda100' },
+  { key: 'fechado_ganho', label: 'Fechado (Ganho)', cor: '#16a34a' },
+  { key: 'perdido', label: 'Perdido', cor: '#dc2626' },
+];
+
+let CONECT_INICIALIZADA = false;
+
+function conectAoTrocarTipoOferta() {
+  const tipo = document.getElementById('conect-tipo-oferta').value;
+  const selVelocidade = document.getElementById('conect-velocidade');
+  selVelocidade.innerHTML = CONECT_VELOCIDADES[tipo].map(v => `<option value="${v}">${v}</option>`).join('');
+  document.getElementById('conect-grupo-roteador').style.display = tipo === 'bld_oferta_pme' ? '' : 'none';
+  conectAoTrocarVelocidade();
+}
+
+function conectAoTrocarVelocidade() {
+  const tipo = document.getElementById('conect-tipo-oferta').value;
+  if (tipo !== 'bld_oferta_pme') return;
+  const velocidade = document.getElementById('conect-velocidade').value;
+  const selRoteador = document.getElementById('conect-roteador');
+  const disponiveis = Object.entries(CONECT_ROTEADORES).filter(([, r]) => !r.excluidoEm.includes(velocidade)).map(([nome]) => nome);
+  selRoteador.innerHTML = disponiveis.map(n => `<option value="${n}">${n}</option>`).join('');
+}
+
+function initConectividade() {
+  if (!CONECT_INICIALIZADA) {
+    conectAoTrocarTipoOferta();
+    CONECT_INICIALIZADA = true;
+  }
+  conectCarregarFunil();
+}
+
+async function conectGerarProposta() {
+  const tipoOferta = document.getElementById('conect-tipo-oferta').value;
+  const velocidade = document.getElementById('conect-velocidade').value;
+  const roteador = tipoOferta === 'bld_oferta_pme' ? document.getElementById('conect-roteador').value : null;
+  const clienteNome = document.getElementById('conect-cliente-nome').value.trim();
+  const clienteCnpj = document.getElementById('conect-cliente-cnpj').value.trim();
+  const clienteContato = document.getElementById('conect-cliente-contato').value.trim();
+  const clienteEndereco = document.getElementById('conect-cliente-endereco').value.trim();
+  const clienteCidade = document.getElementById('conect-cliente-cidade').value.trim();
+  const clienteUf = document.getElementById('conect-cliente-uf').value;
+
+  const statusEl = document.getElementById('conect-status-geracao');
+  if (!clienteNome) { statusEl.textContent = 'Preencha o nome do cliente.'; statusEl.style.color = 'var(--red-sem)'; return; }
+  if (tipoOferta === 'bld_oferta_pme' && !clienteUf) { statusEl.textContent = 'UF do cliente é obrigatória pro BLD Oferta PME.'; statusEl.style.color = 'var(--red-sem)'; return; }
+
+  const btn = document.getElementById('conect-btn-gerar');
+  btn.disabled = true;
+  statusEl.style.color = 'var(--text-2)';
+  statusEl.textContent = 'Gerando PDF...';
+
+  try {
+    const res = await fetch('/api/gerar-proposta', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({
+        tipoOferta, velocidade, roteador,
+        clienteNome, clienteCnpj, clienteEndereco, clienteCidade, clienteUf, clienteContato,
+      }),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || 'Falha ao gerar a proposta');
+
+    // Decodifica o PDF (base64) e dispara o download no navegador — o PDF
+    // não fica armazenado em lugar nenhum, só o dado do cliente/oferta vai
+    // pro funil.
+    const bin = atob(json.pdfBase64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    const blob = new Blob([bytes], { type: 'application/pdf' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Proposta_${clienteNome.replace(/[^a-zA-Z0-9]+/g, '_')}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+
+    statusEl.style.color = 'var(--green)';
+    statusEl.textContent = `Proposta gerada — valor mensal: ${json.valorMensal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`;
+    conectCarregarFunil();
+  } catch (e) {
+    statusEl.style.color = 'var(--red-sem)';
+    statusEl.textContent = e.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function conectCarregarFunil() {
+  const area = document.getElementById('conect-funil-area');
+  area.innerHTML = '<div class="loading-state"><div class="loading-spinner"></div><p>Carregando funil...</p></div>';
+  const { data, error } = await supa.from('conectividade_propostas').select('*').order('criado_em', { ascending: false });
+  if (error) {
+    area.innerHTML = `<div class="error-state"><strong>Erro ao carregar funil</strong>${escapeHtml(error.message)}</div>`;
+    return;
+  }
+  window._conectFunilDados = data || [];
+  conectRenderFunil();
+}
+
+function conectRenderFunil() {
+  const dados = window._conectFunilDados || [];
+  const area = document.getElementById('conect-funil-area');
+  if (dados.length === 0) {
+    area.innerHTML = '<div class="coming-soon"><p>Nenhuma oportunidade gerada ainda.</p></div>';
+    return;
+  }
+
+  area.innerHTML = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;align-items:start;">
+    ${CONECT_ESTAGIOS.map(estagio => {
+      const itens = dados.filter(d => d.estagio_funil === estagio.key);
+      return `
+      <div style="background:var(--surface-2);border-radius:var(--radius-lg);padding:12px;min-height:80px;">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px;">
+          <span style="width:8px;height:8px;border-radius:50%;background:${estagio.cor};flex-shrink:0;"></span>
+          <span style="font-size:12px;font-weight:700;color:var(--text-2);text-transform:uppercase;">${estagio.label}</span>
+          <span class="count-badge" style="margin-left:auto;">${itens.length}</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          ${itens.map(item => `
+            <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px;">
+              <div style="font-weight:600;font-size:13px;color:var(--text);margin-bottom:4px;">${escapeHtml(item.cliente_nome)}</div>
+              <div style="font-size:11px;color:var(--text-2);margin-bottom:2px;">${item.tipo_oferta === 'conecta_smart' ? 'Conecta Smart' : 'BLD Oferta PME'} · ${escapeHtml(item.velocidade)}</div>
+              <div style="font-size:12px;font-weight:600;color:var(--brand);margin-bottom:8px;">${Number(item.valor_mensal).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}/mês</div>
+              <select style="width:100%;font-size:11px;padding:4px 6px;" onchange="conectMudarEstagio(${item.id}, this.value)">
+                ${CONECT_ESTAGIOS.map(e2 => `<option value="${e2.key}" ${e2.key === item.estagio_funil ? 'selected' : ''}>${e2.label}</option>`).join('')}
+              </select>
+            </div>`).join('')}
+        </div>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+async function conectMudarEstagio(id, novoEstagio) {
+  const { error } = await supa.from('conectividade_propostas').update({ estagio_funil: novoEstagio, atualizado_em: new Date().toISOString() }).eq('id', id);
+  if (error) { alert('Erro ao mudar estágio: ' + error.message); return; }
+  const item = (window._conectFunilDados || []).find(d => d.id === id);
+  if (item) item.estagio_funil = novoEstagio;
+  conectRenderFunil();
 }
 
 </script>
