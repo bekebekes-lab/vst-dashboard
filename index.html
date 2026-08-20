@@ -1963,6 +1963,12 @@
       </div>
     </div>
 
+    <!-- Botão "Centro de Custos" — só admin. Abre/fecha o painel de uso de
+         VoIP por grupo/dia (#disc-voip-area) sob demanda. -->
+    <div id="disc-btn-centro-custos-wrap" style="display:none;margin:-6px 0 14px;">
+      <button onclick="discToggleCentroCustos()" class="disc-btn-buscar" style="background:var(--surface);color:var(--brand);border:1px solid var(--brand);">💰 Centro de Custos</button>
+    </div>
+
     <!-- PROGRESS BAR -->
     <div id="disc-progress-wrap" style="display:none;">
       <div id="disc-progress-label">Carregando...</div>
@@ -2070,6 +2076,30 @@
           <tbody id="disc-hora-tbody"></tbody>
         </table>
       </div>
+    </div>
+
+    <!-- CENTRO DE CUSTOS — uso de VoIP por grupo/dia, só admin. Aberto sob
+         demanda pelo botão #disc-btn-centro-custos-wrap (discToggleCentroCustos()). -->
+    <div class="disc-section-wrap" id="disc-voip-area" style="display:none;">
+      <div class="disc-section-header">
+        <span class="disc-section-title">💰 Centro de Custos — Uso de VoIP por Grupo</span>
+        <span class="disc-section-sub">Usuários distintos com ao menos 1 ligação no dia, por grupo — clique num dia pra ver quem</span>
+      </div>
+      <div class="filters-bar" style="margin-top:0;">
+        <div class="filter-group">
+          <label>Data início</label>
+          <input type="date" id="disc-voip-dt-ini">
+        </div>
+        <div class="filter-group">
+          <label>Data fim</label>
+          <input type="date" id="disc-voip-dt-fim">
+        </div>
+        <div class="filter-group" style="display:flex;flex-direction:column;justify-content:flex-end;">
+          <button onclick="discVoipBuscar()" class="disc-btn-buscar">Buscar</button>
+        </div>
+      </div>
+      <div id="disc-voip-status" style="font-size:12px;color:var(--text-2);margin-bottom:10px;"></div>
+      <div id="disc-voip-resultado"></div>
     </div>
   </div>
 
@@ -7108,6 +7138,120 @@ function initDiscadora() {
     const fim = document.getElementById('disc-dt-fim').value;
     if (fim === discDataHoje()) discadoraCarregar();
   }, 30000);
+
+  // Botão "Centro de Custos" — só admin. O painel em si (#disc-voip-area)
+  // só abre quando clicado (discToggleCentroCustos()), não fica sempre visível.
+  if (USUARIO_ATUAL?.perfil === 'admin') {
+    document.getElementById('disc-btn-centro-custos-wrap').style.display = '';
+    const seteDiasAtras = new Date();
+    seteDiasAtras.setUTCDate(seteDiasAtras.getUTCDate() - 7);
+    document.getElementById('disc-voip-dt-ini').value = seteDiasAtras.toISOString().split('T')[0];
+    document.getElementById('disc-voip-dt-fim').value = discDataOntem();
+  } else {
+    document.getElementById('disc-btn-centro-custos-wrap').style.display = 'none';
+  }
+}
+
+function discToggleCentroCustos() {
+  const area = document.getElementById('disc-voip-area');
+  const abrindo = area.style.display === 'none';
+  area.style.display = abrindo ? '' : 'none';
+  if (abrindo) area.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// Guarda o último resultado buscado pra abrir o detalhe (lista de usuários)
+// sem precisar de outra chamada à API.
+window._discVoipDados = [];
+
+async function discVoipBuscar() {
+  const desde = document.getElementById('disc-voip-dt-ini').value;
+  const ate = document.getElementById('disc-voip-dt-fim').value;
+  const statusEl = document.getElementById('disc-voip-status');
+  const areaResultado = document.getElementById('disc-voip-resultado');
+  if (!desde || !ate) { statusEl.style.color = 'var(--red-sem)'; statusEl.textContent = 'Selecione a data início e fim.'; return; }
+
+  statusEl.style.color = 'var(--text-2)';
+  statusEl.textContent = 'Calculando...';
+  areaResultado.innerHTML = '';
+
+  try {
+    const res = await fetch(`/api/discadora-voip?desde=${desde}&ate=${ate}`, { headers: authHeaders() });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || 'Falha ao buscar uso de VoIP');
+
+    window._discVoipDados = json.grupos || [];
+    if (window._discVoipDados.length === 0) {
+      areaResultado.innerHTML = '<div class="coming-soon"><p>Nenhuma ligação registrada no período selecionado.</p></div>';
+      statusEl.textContent = '';
+      return;
+    }
+
+    areaResultado.innerHTML = window._discVoipDados.map((g, gi) => {
+      const valores = g.dias.map(d => d.usuarios.length);
+      const media = (valores.reduce((a, b) => a + b, 0) / valores.length).toFixed(1);
+      const pico = Math.max(...valores);
+      return `
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px;margin-bottom:12px;">
+        <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:10px;flex-wrap:wrap;">
+          <span style="font-size:14px;font-weight:700;color:var(--text);">${escapeHtml(g.grupo)}</span>
+          <span style="font-size:11px;color:var(--text-2);">média ${media}/dia · pico ${pico}</span>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px;">
+          ${g.dias.map((d, di) => `
+            <div onclick="discVoipAbrirDetalhe(${gi}, ${di})" style="cursor:pointer;font-size:12px;padding:6px 8px;background:var(--surface-2);border-radius:6px;display:flex;justify-content:space-between;gap:8px;">
+              <span style="color:var(--text-2);">${d.data.split('-').reverse().join('/')}</span>
+              <span style="font-weight:600;text-decoration:underline;text-decoration-style:dotted;">${d.usuarios.length} usuário${d.usuarios.length === 1 ? '' : 's'}</span>
+            </div>`).join('')}
+        </div>
+      </div>`;
+    }).join('');
+    statusEl.textContent = '';
+  } catch (e) {
+    statusEl.style.color = 'var(--red-sem)';
+    statusEl.textContent = e.message;
+  }
+}
+
+// Modal com a lista de usuários daquele grupo/dia — sustenta a conferência
+// do custo de licenças (quem exatamente estava ativo).
+function discVoipAbrirDetalhe(indiceGrupo, indiceDia) {
+  const grupo = window._discVoipDados[indiceGrupo];
+  const dia = grupo?.dias[indiceDia];
+  if (!grupo || !dia) return;
+
+  let modal = document.getElementById('disc-voip-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'disc-voip-modal';
+    modal.style.cssText = 'position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.5);display:flex;align-items:flex-start;justify-content:center;padding:40px 20px;overflow-y:auto;';
+    modal.onclick = function(e) { if (e.target === modal) discVoipFecharDetalhe(); };
+    document.body.appendChild(modal);
+  }
+
+  const dataFmt = dia.data.split('-').reverse().join('/');
+  modal.innerHTML = `
+    <div style="background:var(--surface);border-radius:var(--radius-xl);width:100%;max-width:480px;box-shadow:0 24px 60px rgba(0,0,0,.3);overflow:hidden;">
+      <div style="background:var(--brand);padding:16px 20px;display:flex;align-items:center;justify-content:space-between;">
+        <div>
+          <div style="font-size:10px;color:rgba(255,255,255,.65);text-transform:uppercase;letter-spacing:.07em;margin-bottom:2px;">${escapeHtml(grupo.grupo)} · ${dataFmt}</div>
+          <div style="font-size:18px;font-weight:700;color:#fff;">${dia.usuarios.length} usuário${dia.usuarios.length === 1 ? '' : 's'} ativo${dia.usuarios.length === 1 ? '' : 's'}</div>
+        </div>
+        <button onclick="discVoipFecharDetalhe()" style="background:rgba(255,255,255,.15);border:none;color:#fff;width:32px;height:32px;border-radius:50%;font-size:18px;cursor:pointer;">×</button>
+      </div>
+      <div style="padding:20px;max-height:70vh;overflow-y:auto;">
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          ${dia.usuarios.map((u, i) => `<div style="font-size:13px;padding:8px 10px;background:var(--surface-2);border-radius:6px;">${i + 1}. ${escapeHtml(u)}</div>`).join('')}
+        </div>
+      </div>
+    </div>`;
+  modal.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+
+function discVoipFecharDetalhe() {
+  const modal = document.getElementById('disc-voip-modal');
+  if (modal) modal.style.display = 'none';
+  document.body.style.overflow = '';
 }
 
 function discProgressSet(pct, label) {
