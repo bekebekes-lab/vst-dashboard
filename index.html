@@ -7191,6 +7191,7 @@ async function discVoipBuscar() {
 
     window._discVoipDados = json.grupos || [];
     window._discVoipCustoUsuarios = json.usuarios || [];
+    window._discVoipNaoAtribuido = json.naoAtribuido || { chamadas: 0, minutosTarifados: 0, valor: 0 };
     if (window._discVoipDados.length === 0) {
       areaResultado.innerHTML = '<div class="coming-soon"><p>Nenhuma ligação registrada no período selecionado.</p></div>';
       statusEl.textContent = '';
@@ -7279,18 +7280,83 @@ function discVoipRenderizar() {
 function discVoipRenderizarCustoUsuarios() {
   const area = document.getElementById('disc-voip-custo-usuarios');
   if (!area) return;
-  const usuarios = window._discVoipCustoUsuarios || [];
-  if (usuarios.length === 0) {
+  const todosUsuarios = window._discVoipCustoUsuarios || [];
+  const naoAtribuido = window._discVoipNaoAtribuido || { chamadas: 0, minutosTarifados: 0, valor: 0 };
+  const selecionados = getCheckedValuesDd('dd-content-voip-grupo'); // [] = todos
+  const filtrando = selecionados.length > 0;
+
+  // Filtra pelos grupos marcados no mesmo dropdown dos cards acima — cada
+  // linha do backend já vem com o grupo junto, então isso é só um filtro
+  // local, sem nova chamada. Um usuário pode aparecer em mais de um grupo
+  // no período (ex.: trocou de equipe) — junta tudo numa linha só por nome.
+  const usuariosFiltrados = filtrando ? todosUsuarios.filter(u => selecionados.includes(u.grupo)) : todosUsuarios;
+  const porNome = {};
+  for (const u of usuariosFiltrados) {
+    if (!porNome[u.usuario]) porNome[u.usuario] = { usuario: u.usuario, chamadas: 0, minutosTarifados: 0, valor: 0 };
+    porNome[u.usuario].chamadas += u.chamadas;
+    porNome[u.usuario].minutosTarifados += u.minutosTarifados;
+    porNome[u.usuario].valor += u.valor;
+  }
+  const usuarios = Object.values(porNome).sort((a, b) => b.valor - a.valor);
+
+  if (usuarios.length === 0 && (filtrando || naoAtribuido.chamadas === 0)) {
     area.innerHTML = '';
     return;
   }
-  const totalValor = usuarios.reduce((s, u) => s + u.valor, 0);
+  const totalAtribuido = usuarios.reduce((s, u) => s + u.valor, 0);
+  // "Não atribuídas" (caixa postal/abandonada) nunca tem grupo — a Make não
+  // marca isso. Com um grupo específico selecionado não tem como saber
+  // quanto desse valor seria "daquele grupo", então só entra no total
+  // quando a visão é de todos os grupos juntos.
+  const totalGeral = totalAtribuido + (filtrando ? 0 : naoAtribuido.valor);
+  const fmt = v => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+  // % do custo total por grupo — soma o valor dos usuários de cada grupo
+  // (dentro dos grupos visíveis) e divide pelo mesmo totalGeral usado no %
+  // por usuário, pra ficar consistente. Recalcula toda vez que o dropdown
+  // de grupos muda, junto com o resto do painel.
+  const custoPorGrupo = {};
+  for (const u of usuariosFiltrados) {
+    custoPorGrupo[u.grupo] = (custoPorGrupo[u.grupo] || 0) + u.valor;
+  }
+  const gruposOrdenados = Object.entries(custoPorGrupo).sort((a, b) => b[1] - a[1]);
+
   area.innerHTML = `
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px;margin-top:14px;">
       <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:10px;flex-wrap:wrap;">
         <span style="font-size:14px;font-weight:700;color:var(--text);">💰 Custo estimado de VoIP por usuário</span>
-        <span style="font-size:11px;color:var(--text-2);">estimativa via regra de tarifação da Pentágono · total: ${totalValor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+        <span style="font-size:11px;color:var(--text-2);">estimativa via regra de tarifação da Pentágono${filtrando ? ` · ${usuarios.length} usuário${usuarios.length === 1 ? '' : 's'} nos grupos selecionados` : ''}</span>
       </div>
+
+      ${gruposOrdenados.length > 0 ? `
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+        ${gruposOrdenados.map(([grupo, valor]) => {
+          const pctGrupo = totalGeral > 0 ? (valor / totalGeral * 100) : 0;
+          return `
+          <div style="background:var(--surface-2);border-radius:var(--radius);padding:6px 10px;font-size:11px;">
+            <span style="font-weight:600;color:var(--text);">${escapeHtml(grupo)}</span>
+            <span style="color:var(--text-2);"> · ${fmt(valor)} · ${pctGrupo.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%</span>
+          </div>`;
+        }).join('')}
+      </div>` : ''}
+
+      ${filtrando ? `
+      <div style="font-size:11px;color:var(--text-2);background:var(--surface-2);border-radius:var(--radius);padding:8px 12px;margin-bottom:12px;">
+        "Ligações não atribuídas" não aparece com grupo específico selecionado — essas ligações não têm grupo marcado na Make, então não dá pra saber quanto seria de cada grupo. Selecione "Todos" pra ver o total geral com elas incluídas.
+      </div>` : `
+      <div style="background:var(--surface-2);border-radius:var(--radius);padding:10px 12px;margin-bottom:4px;display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px;">
+        <div>
+          <div style="font-size:12px;font-weight:600;color:var(--text);">Ligações não atribuídas</div>
+          <div style="font-size:10px;color:var(--text-2);">caixa postal / abandonada / sem atendente — ${naoAtribuido.chamadas.toLocaleString('pt-BR')} ligações, ${naoAtribuido.minutosTarifados.toLocaleString('pt-BR')} min tarifados</div>
+        </div>
+        <div style="font-size:14px;font-weight:700;color:var(--text-2);">${fmt(naoAtribuido.valor)}</div>
+      </div>`}
+
+      <div style="background:var(--surface-2);border-radius:var(--radius);padding:10px 12px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:baseline;">
+        <div style="font-size:12px;font-weight:700;color:var(--text);">${filtrando ? 'Total dos grupos selecionados (atribuídas)' : 'Total geral (atribuídas + não atribuídas)'}</div>
+        <div style="font-size:16px;font-weight:700;color:var(--brand);">${fmt(totalGeral)}</div>
+      </div>
+
       <div style="max-height:360px;overflow-y:auto;">
         <table style="width:100%;font-size:12px;border-collapse:collapse;">
           <thead>
@@ -7299,16 +7365,21 @@ function discVoipRenderizarCustoUsuarios() {
               <th style="padding:6px 8px;text-align:right;">Ligações</th>
               <th style="padding:6px 8px;text-align:right;">Min. tarifados</th>
               <th style="padding:6px 8px;text-align:right;">Custo estimado</th>
+              <th style="padding:6px 8px;text-align:right;">% do total</th>
             </tr>
           </thead>
           <tbody>
-            ${usuarios.map(u => `
+            ${usuarios.map(u => {
+              const pct = totalGeral > 0 ? (u.valor / totalGeral * 100) : 0;
+              return `
               <tr style="border-bottom:1px solid var(--border);">
                 <td style="padding:6px 8px;">${escapeHtml(u.usuario)}</td>
                 <td style="padding:6px 8px;text-align:right;">${u.chamadas}</td>
                 <td style="padding:6px 8px;text-align:right;">${u.minutosTarifados.toLocaleString('pt-BR')}</td>
-                <td style="padding:6px 8px;text-align:right;font-weight:600;">${u.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
-              </tr>`).join('')}
+                <td style="padding:6px 8px;text-align:right;font-weight:600;">${fmt(u.valor)}</td>
+                <td style="padding:6px 8px;text-align:right;">${pct.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%</td>
+              </tr>`;
+            }).join('')}
           </tbody>
         </table>
       </div>

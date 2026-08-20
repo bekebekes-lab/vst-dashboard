@@ -62,13 +62,15 @@ export default async function handler(req, res) {
 
     // grupo -> dia (YYYY-MM-DD) -> Set de usuarios distintos naquele dia
     const acumulado = {};
-    // usuario -> { chamadas, segundosTarifados, valor } — custo estimado por
-    // pessoa, usando a regra de tarifacao da Pentagono validada contra o
-    // relatorio real deles (30s minimo, depois blocos de 6s) e a tarifa por
-    // tipo de destino (fixo vs movel, pelo tamanho do numero sem o "55").
-    // Só faz sentido por usuário aqui porque essas linhas já são só as
-    // ligações COM atendente (contem_usuarios:true, o que a sincronização
-    // grava) — ligações sem atendente não têm uma pessoa pra atribuir custo.
+    // "grupo|usuario" -> { chamadas, segundosTarifados, valor } — custo
+    // estimado por pessoa, usando a regra de tarifacao da Pentagono validada
+    // contra o relatorio real deles (30s minimo, depois blocos de 6s) e a
+    // tarifa por tipo de destino (fixo vs movel, pelo tamanho do numero sem
+    // o "55"). Guarda o grupo junto pra o painel poder refiltrar por grupo
+    // no cliente sem precisar buscar de novo. Só faz sentido por usuário
+    // aqui porque essas linhas já são só as ligações COM atendente
+    // (contem_usuarios:true) — ligações sem atendente não têm uma pessoa
+    // pra atribuir custo (ver naoAtribuido, calculado separadamente).
     const custoPorUsuario = {};
 
     const TARIFA_FIXO = 0.030;
@@ -93,10 +95,11 @@ export default async function handler(req, res) {
 
       const segundos = tempoTarifado(r.duracao);
       const valor = tarifaPorMinuto(r.ddd_telefone) * segundos / 60;
-      if (!custoPorUsuario[usuario]) custoPorUsuario[usuario] = { chamadas: 0, segundosTarifados: 0, valor: 0 };
-      custoPorUsuario[usuario].chamadas += 1;
-      custoPorUsuario[usuario].segundosTarifados += segundos;
-      custoPorUsuario[usuario].valor += valor;
+      const chave = `${grupo}|${usuario}`;
+      if (!custoPorUsuario[chave]) custoPorUsuario[chave] = { grupo, usuario, chamadas: 0, segundosTarifados: 0, valor: 0 };
+      custoPorUsuario[chave].chamadas += 1;
+      custoPorUsuario[chave].segundosTarifados += segundos;
+      custoPorUsuario[chave].valor += valor;
     }
 
     // Devolve a lista de usuarios (nao só a contagem) — o painel usa isso
@@ -111,16 +114,35 @@ export default async function handler(req, res) {
       }))
       .sort((a, b) => a.grupo.localeCompare(b.grupo));
 
-    const usuarios = Object.entries(custoPorUsuario)
-      .map(([usuario, dados]) => ({
-        usuario,
+    const usuarios = Object.values(custoPorUsuario)
+      .map(dados => ({
+        grupo: dados.grupo,
+        usuario: dados.usuario,
         chamadas: dados.chamadas,
         minutosTarifados: Math.round(dados.segundosTarifados / 60 * 100) / 100,
         valor: Math.round(dados.valor * 100) / 100,
       }))
       .sort((a, b) => b.valor - a.valor);
 
-    res.status(200).json({ grupos, usuarios });
+    // Custo agregado das ligações SEM atendente (caixa postal, abandonada,
+    // etc.) — gravado por dia pelo discadora_sync.py, já que o volume bruto
+    // (150-200k+/dia) é grande demais pra guardar linha a linha. Não tem
+    // como atribuir a um usuário, mas entra no total geral que o financeiro
+    // usa pra ratear o custo real cobrado pela operadora.
+    let naoAtribuido = { chamadas: 0, minutosTarifados: 0, valor: 0 };
+    const respNaoAtrib = await fetch(
+      `${SUPA_URL}/rest/v1/discadora_custo_nao_atribuido?select=chamadas,segundos_tarifados,valor&data=gte.${desde}&data=lte.${ate}`,
+      { headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` } }
+    );
+    if (respNaoAtrib.ok) {
+      const linhasNaoAtrib = await respNaoAtrib.json();
+      const chamadas = linhasNaoAtrib.reduce((s, l) => s + l.chamadas, 0);
+      const segundos = linhasNaoAtrib.reduce((s, l) => s + l.segundos_tarifados, 0);
+      const valor = linhasNaoAtrib.reduce((s, l) => s + Number(l.valor), 0);
+      naoAtribuido = { chamadas, minutosTarifados: Math.round(segundos / 60 * 100) / 100, valor: Math.round(valor * 100) / 100 };
+    }
+
+    res.status(200).json({ grupos, usuarios, naoAtribuido });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

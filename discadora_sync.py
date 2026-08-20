@@ -17,6 +17,7 @@ pra manter esse workflow leve e rápido (não precisa instalar nada).
 """
 import argparse
 import json
+import math
 import os
 import sys
 import urllib.request
@@ -27,7 +28,29 @@ VERCEL_BASE = "https://vst-dashboard.vercel.app"
 SUPA_URL = "https://kzlchetrpsfefwybaaoy.supabase.co"
 BRT = timezone(timedelta(hours=-3))
 MAX_PAGINAS_DIA = 20
+# Ligações sem atendente (contem_usuarios:false) são MUITO mais numerosas
+# (~150-200k/dia, contra ~1-3k/dia das com atendente) — só agregamos o
+# custo, nunca gravamos linha a linha, mas ainda precisamos paginar tudo.
+MAX_PAGINAS_NAO_ATRIBUIDO = 500
 BATCH_SIZE = 500
+
+# Regra de tarifação da Pentágono, validada contra dois dias reais de
+# relatório (99,96% de acerto): 30s mínimo; acima disso, blocos de 6s.
+# Tarifa por tipo de destino: número com 11 dígitos (DDD + 9 dígitos) é
+# móvel, com 10 dígitos (DDD + 8 dígitos) é fixo.
+TARIFA_FIXO = 0.030
+TARIFA_MOVEL = 0.045
+
+
+def tempo_tarifado(duracao):
+    if duracao is None or duracao <= 30:
+        return 30
+    return 30 + 6 * math.ceil((duracao - 30) / 6)
+
+
+def tarifa_por_minuto(ddd_telefone):
+    digitos = "".join(c for c in str(ddd_telefone or "") if c.isdigit())
+    return TARIFA_MOVEL if len(digitos) == 11 else TARIFA_FIXO
 
 
 def post_json(url, body, headers, method="POST"):
@@ -126,6 +149,85 @@ def upsert_supabase(service_key, linhas):
             raise RuntimeError(f"Falha ao gravar lote no Supabase: HTTP {status} — {resp}")
 
 
+def buscar_pagina_nao_atribuida_do_dia(cron_secret, dia, pagina):
+    # Só pede duracao/dddTelefone (o mínimo pra calcular o custo) — ligações
+    # sem atendente não têm usuário/grupo pra guardar, e o volume é grande
+    # o suficiente pra valer a pena manter a resposta pequena.
+    query = """{
+      listar_historico_contato(
+        contem_usuarios: false
+        limite: 1000
+        pagina: %d
+        data_hora_minima: "%sT00:00:00-03:00"
+        data_hora_maxima: "%sT23:59:59-03:00"
+      ) {
+        duracao
+        dddTelefone
+      }
+    }""" % (pagina, dia, dia)
+
+    status, data = post_json(
+        f"{VERCEL_BASE}/api/discadora",
+        {"query": query},
+        {"Content-Type": "application/json", "x-cron-secret": cron_secret},
+    )
+    if status != 200:
+        raise RuntimeError(f"Falha ao buscar não-atribuídas {dia} página {pagina}: HTTP {status} — {data}")
+    if isinstance(data, dict) and data.get("errors"):
+        raise RuntimeError(f"Erro GraphQL (não-atribuídas) em {dia} página {pagina}: {data['errors']}")
+    return (data or {}).get("data", {}).get("listar_historico_contato") or []
+
+
+def upsert_custo_nao_atribuido(service_key, dia_str, chamadas, segundos_tarifados, valor):
+    status, resp = post_json(
+        f"{SUPA_URL}/rest/v1/discadora_custo_nao_atribuido?on_conflict=data",
+        [{
+            "data": dia_str,
+            "chamadas": chamadas,
+            "segundos_tarifados": segundos_tarifados,
+            "valor": round(valor, 4),
+            "atualizado_em": datetime.now(timezone.utc).isoformat(),
+        }],
+        {
+            "Content-Type": "application/json",
+            "apikey": service_key,
+            "Authorization": f"Bearer {service_key}",
+            "Prefer": "resolution=merge-duplicates,return=minimal",
+        },
+    )
+    if status not in (200, 201, 204):
+        raise RuntimeError(f"Falha ao gravar custo não-atribuído no Supabase: HTTP {status} — {resp}")
+
+
+def sincronizar_custo_nao_atribuido_dia(cron_secret, service_key, dia_str):
+    chamadas = 0
+    segundos_tarifados_total = 0
+    valor_total = 0.0
+    pagina = 1
+    estourou_limite = False
+    while pagina <= MAX_PAGINAS_NAO_ATRIBUIDO:
+        lote = buscar_pagina_nao_atribuida_do_dia(cron_secret, dia_str, pagina)
+        if not lote:
+            break
+        for r in lote:
+            chamadas += 1
+            segundos = tempo_tarifado(r.get("duracao"))
+            segundos_tarifados_total += segundos
+            valor_total += tarifa_por_minuto(r.get("dddTelefone")) * segundos / 60
+        if len(lote) < 1000:
+            break
+        pagina += 1
+    else:
+        estourou_limite = True
+
+    if estourou_limite:
+        print(f"  !! AVISO: {dia_str} atingiu o limite de {MAX_PAGINAS_NAO_ATRIBUIDO} páginas de "
+              f"ligações não-atribuídas — o total pode estar subestimado.", file=sys.stderr)
+
+    upsert_custo_nao_atribuido(service_key, dia_str, chamadas, segundos_tarifados_total, valor_total)
+    return chamadas, valor_total
+
+
 def sincronizar_dia(cron_secret, service_key, dia_str):
     todos = []
     pagina = 1
@@ -179,6 +281,10 @@ def main():
         n = sincronizar_dia(cron_secret, service_key, dia_str)
         total_geral += n
         print(f"[{idx}/{total_dias}] {dia_str}: {n} registros gravados (total acumulado: {total_geral})")
+
+        chamadas_na, valor_na = sincronizar_custo_nao_atribuido_dia(cron_secret, service_key, dia_str)
+        print(f"[{idx}/{total_dias}] {dia_str}: {chamadas_na} ligações não-atribuídas, custo estimado R$ {valor_na:.2f}")
+
         dia += timedelta(days=1)
 
     print(f"Sincronização concluída. Total: {total_geral} registros em {total_dias} dia(s).")
