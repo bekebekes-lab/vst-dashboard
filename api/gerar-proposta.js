@@ -2,7 +2,12 @@
 // cliente/oferta em conectividade_propostas (funil de oportunidades) — o
 // PDF em si NÃO é armazenado, só devolvido pro navegador baixar.
 import { requireAuth, getUsuarioDashboard } from './_lib/auth.js';
-import { calcularConectaSmart, calcularBLDOfertaPME, roteadoresDisponiveisPara } from './_lib/propostas-dados.js';
+import {
+  calcularConectaSmart, calcularBLDOfertaPME, roteadoresDisponiveisPara,
+  calcularConectaBLC, calcularCombo2PBLD, ROTEADORES_COMBO_2P_BLD,
+} from './_lib/propostas-dados.js';
+
+const TIPOS_OFERTA_VALIDOS = ['conecta_smart', 'bld_oferta_pme', 'conecta_blc', 'combo_2p_bld'];
 import { gerarPdfProposta } from './_lib/gerar-pdf-proposta.js';
 
 const SUPA_URL = 'https://kzlchetrpsfefwybaaoy.supabase.co';
@@ -28,7 +33,7 @@ export default async function handler(req, res) {
   if (!clienteNome || !clienteNome.trim()) {
     return res.status(400).json({ error: 'Nome do cliente é obrigatório' });
   }
-  if (tipoOferta !== 'conecta_smart' && tipoOferta !== 'bld_oferta_pme') {
+  if (!TIPOS_OFERTA_VALIDOS.includes(tipoOferta)) {
     return res.status(400).json({ error: 'Tipo de oferta inválido' });
   }
 
@@ -37,6 +42,15 @@ export default async function handler(req, res) {
   if (tipoOferta === 'conecta_smart') {
     calculo = calcularConectaSmart(velocidade);
     if (!calculo) return res.status(400).json({ error: `Velocidade "${velocidade}" inválida para Conecta Smart` });
+  } else if (tipoOferta === 'conecta_blc') {
+    calculo = calcularConectaBLC(velocidade);
+    if (!calculo) return res.status(400).json({ error: `Velocidade "${velocidade}" inválida para Conecta com BLC` });
+  } else if (tipoOferta === 'combo_2p_bld') {
+    if (!ROTEADORES_COMBO_2P_BLD.includes(roteador)) {
+      return res.status(400).json({ error: `Roteador "${roteador}" inválido para Combo Conecta 2P BLD` });
+    }
+    calculo = calcularCombo2PBLD(velocidade, roteador);
+    if (!calculo) return res.status(400).json({ error: `Velocidade "${velocidade}" inválida para Combo Conecta 2P BLD` });
   } else {
     if (!clienteUf) {
       return res.status(400).json({ error: 'UF do cliente é obrigatória para calcular o BLD Oferta PME' });

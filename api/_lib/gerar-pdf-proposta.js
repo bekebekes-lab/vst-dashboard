@@ -65,9 +65,34 @@ function fmtReais(v) {
   return `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-// Escopo técnico difere por tipo de oferta: Conecta Smart tem Voz + GRC;
-// BLD Oferta PME é link avulso (dados), sem voz e sem GRC — o roteador
-// aparece como item com custo (à parte), não "incluso".
+const NOMES_OFERTA = {
+  conecta_smart: 'Conecta Smart',
+  conecta_blc: 'Conecta com BLC',
+  combo_2p_bld: 'Combo Conecta 2P BLD',
+  bld_oferta_pme: 'BLD Oferta PME',
+};
+// Só a BLD Oferta PME é link avulso, sem voz — as outras 3 têm voz incluída
+// ou como opção (mesmo quando o padrão vendido é OTT).
+const OFERTAS_COM_VOZ = new Set(['conecta_smart', 'conecta_blc', 'combo_2p_bld']);
+// Ofertas cujo roteador é uma escolha do cliente (mostrada na tabela de
+// investimento) — BLD Oferta PME muda o preço por roteador; Combo 2P BLD
+// só muda o modelo entregue, o preço já é fechado por velocidade.
+const OFERTAS_COM_ROTEADOR_NA_TABELA = new Set(['bld_oferta_pme', 'combo_2p_bld']);
+
+// Cláusula padrão de canais físicos — Book Clareando PME (Ago/2026, pág.
+// 99, produto Vip Único): "Para SIP: mínimo 30 canais por site" e "Para E1
+// (TDM) - exatamente 30 canais por site". Toda oferta com voz leva essa
+// nota, mesmo quando o modelo padrão vendido é OTT (o cliente pode optar
+// pela entrega física em vez da virtual).
+const NOTA_CANAIS_FISICOS = ' Quando a entrega da linha de voz for física (E1/TDM ou SIP, e não virtual/OTT), são fornecidos 30 canais simultâneos por site, conforme padrão Claro empresas.';
+
+// Escopo técnico difere por tipo de oferta:
+// - Conecta Smart: BLD + Voz (OTT ou franquia) + GRC.
+// - Conecta com BLC: BLC + Voz (ilimitada ou franquia) + Microsoft 365 1TB.
+// - Combos Conecta 2P BLD: BLD + Firewall Gerenciado + GRC + Voz (ilimitada
+//   ou PABX físico) + Wi-Fi + Microsoft 365 (2-4TB).
+// - BLD Oferta PME: link avulso (dados), sem voz e sem GRC — o roteador
+//   aparece como item com custo (à parte), não "incluso".
 function montarEscopoTecnico(tipoOferta, dadosOferta) {
   if (tipoOferta === 'conecta_smart') {
     return [
@@ -75,8 +100,26 @@ function montarEscopoTecnico(tipoOferta, dadosOferta) {
       ['Banda Simétrica:', `${dadosOferta.velocidade} de velocidade, com 100% da banda contratada garantida e disponível para download e upload.`],
       ['Endereçamento:', 'Fornecimento de IP Estático, contemplando um bloco com 16 Endereços IP válidos.'],
       ['Equipamento (CPE):', 'Roteador avançado de alta performance incluso na solução (modelos Fortinet 40-F ou Huawei AR651).'],
-      ['Voz Avançada (Vip Único):', 'Telefonia corporativa integrada com voz ilimitada OTT ou franquia de minutos unificados, permitindo originar e receber chamadas telefônicas locais e de longa distância nacional com alta qualidade.'],
+      ['Voz Avançada (Vip Único):', 'Telefonia corporativa integrada com voz ilimitada OTT ou franquia de minutos unificados, permitindo originar e receber chamadas telefônicas locais e de longa distância nacional com alta qualidade.' + NOTA_CANAIS_FISICOS],
       ['Gerência de Rede (GRC):', 'Controle avançado das atividades e monitoramento do uso dos recursos no ambiente da rede, com testes operacionais e acompanhamento contínuo.'],
+    ];
+  }
+  if (tipoOferta === 'conecta_blc') {
+    return [
+      ['Banda Larga Corporativa (BLC):', `Internet empresarial de ${dadosOferta.velocidade}, com IP Fixo ou Dinâmico, Wi-Fi Dual Band incluso e atendimento corporativo centralizado.`],
+      ['Voz Ilimitada ou Franquia de Minutos:', 'Compartilhamento de franquia de voz de 50.000 minutos entre sites da empresa, mais 10.000 minutos ON NET entre matriz, filiais e celulares Claro do mesmo CNPJ.' + NOTA_CANAIS_FISICOS],
+      ['Microsoft 365 Business Basic:', 'Aplicativos Office online e 1TB de armazenamento em nuvem (OneDrive) por usuário.'],
+      ['Contrato único:', 'Todos os serviços desta oferta em um único contrato e faturamento, sem taxa de instalação.'],
+    ];
+  }
+  if (tipoOferta === 'combo_2p_bld') {
+    return [
+      ['Internet Dedicada (Business Link Direct - BLD):', `Conexão contínua e exclusiva à rede de ${dadosOferta.velocidade}, sem necessidade de discagem, com roteador ${dadosOferta.roteador} incluso.`],
+      ['Firewall Gerenciado sem fio:', 'Proteção da rede corporativa contra ataques, hackers e vírus, com suporte 24x7 e atualizações automáticas.'],
+      ['Gerência de Rede (GRC):', 'Controle avançado das atividades e monitoramento do uso dos recursos no ambiente da rede, com testes operacionais e acompanhamento contínuo.'],
+      ['Voz Ilimitada ou PABX Físico:', 'Telefonia corporativa com voz ilimitada, ou solução de PABX físico dedicado para a empresa.' + NOTA_CANAIS_FISICOS],
+      ['Wi-Fi:', 'Rede sem fio incluída em todas as velocidades contratadas.'],
+      ['Microsoft 365 Business Basic:', 'Aplicativos Office online e de 2TB a 4TB de armazenamento em nuvem (OneDrive), conforme a velocidade contratada.'],
     ];
   }
   return [
@@ -202,7 +245,7 @@ export async function gerarPdfProposta(dados) {
   page.drawText(dataTexto, { x: PAGE_W - MARGEM - fonte.widthOfTextAtSize(dataTexto, TAM_CORPO), y, size: TAM_CORPO, font: fonte, color: COR_TEXTO_2 });
   y -= 32;
 
-  const tituloProposta = tipoOferta === 'conecta_smart' ? 'Proposta Comercial - Conectividade e Voz' : 'Proposta Comercial - Conectividade';
+  const tituloProposta = OFERTAS_COM_VOZ.has(tipoOferta) ? 'Proposta Comercial - Conectividade e Voz' : 'Proposta Comercial - Conectividade';
   page.drawText(tituloProposta, { x: MARGEM, y, size: TAM_TITULO, font: fonteNegrito, color: COR_TEXTO });
   y -= 10;
   page.drawRectangle({ x: MARGEM, y: y - 2, width: LARGURA_UTIL, height: 2, color: COR_MAROON });
@@ -248,11 +291,14 @@ export async function gerarPdfProposta(dados) {
   paragrafo('Esta proposta é baseada em soluções de altíssima qualidade, disponibilidade e desempenho, projetadas para contribuir com o aumento de produtividade e agilidade nos seus negócios, proporcionando uma sólida vantagem competitiva frente ao mercado.');
 
   titulo('1. Sobre a Solução');
-  const nomeOferta = tipoOferta === 'conecta_smart' ? 'Conecta Smart' : 'BLD Oferta PME';
-  const textoSolucao = tipoOferta === 'conecta_smart'
-    ? `A solução ${nomeOferta} oferece múltiplos serviços de alta performance, unindo link dedicado, comunicação de voz e IP Fixo. Com esta estrutura, sua empresa acessa a internet com qualidade, segurança e alta confiabilidade o tempo todo.`
-    : `A solução ${nomeOferta} oferece um link de internet dedicado de alta performance com IP Fixo, unindo qualidade, segurança e alta confiabilidade — ideal para quem precisa de conectividade robusta e estável, sem os serviços de voz agregados.`;
-  paragrafo(textoSolucao);
+  const nomeOferta = NOMES_OFERTA[tipoOferta] || tipoOferta;
+  const TEXTOS_SOLUCAO = {
+    conecta_smart: `A solução ${nomeOferta} oferece múltiplos serviços de alta performance, unindo link dedicado, comunicação de voz e IP Fixo. Com esta estrutura, sua empresa acessa a internet com qualidade, segurança e alta confiabilidade o tempo todo.`,
+    conecta_blc: `A solução ${nomeOferta} une internet corporativa (Banda Larga Corporativa) com atendimento dedicado, comunicação de voz e as ferramentas do Microsoft 365, em um único contrato — ideal para empresas que buscam equilíbrio entre custo-benefício e atendimento corporativo.`,
+    combo_2p_bld: `A solução ${nomeOferta} une link dedicado de alta performance, firewall gerenciado, gerência de rede e comunicação de voz em um único contrato. Com esta estrutura, sua empresa acessa a internet com qualidade, segurança e alta confiabilidade o tempo todo.`,
+    bld_oferta_pme: `A solução ${nomeOferta} oferece um link de internet dedicado de alta performance com IP Fixo, unindo qualidade, segurança e alta confiabilidade — ideal para quem precisa de conectividade robusta e estável, sem os serviços de voz agregados.`,
+  };
+  paragrafo(TEXTOS_SOLUCAO[tipoOferta] || TEXTOS_SOLUCAO.bld_oferta_pme);
 
   titulo('2. Escopo Técnico do Serviço');
   for (const [label, texto] of montarEscopoTecnico(tipoOferta, { velocidade, roteador })) {
@@ -270,9 +316,9 @@ export async function gerarPdfProposta(dados) {
   const paddingCel = 8;
   const alturaLinhaTexto = 13;
   garantirEspaco(alturaHeaderTabela + 26 + 10);
-  const colunas = tipoOferta === 'conecta_smart'
-    ? ['Serviço', 'Banda', 'Prazo Contratual', 'Valor Mensal']
-    : ['Serviço', 'Banda', 'Roteador', 'Valor Mensal'];
+  const colunas = OFERTAS_COM_ROTEADOR_NA_TABELA.has(tipoOferta)
+    ? ['Serviço', 'Banda', 'Roteador', 'Valor Mensal']
+    : ['Serviço', 'Banda', 'Prazo Contratual', 'Valor Mensal'];
   const larguras = [LARGURA_UTIL * 0.4, LARGURA_UTIL * 0.18, LARGURA_UTIL * 0.22, LARGURA_UTIL * 0.2];
   let x = MARGEM;
   page.drawRectangle({ x: MARGEM, y: y - alturaHeaderTabela, width: LARGURA_UTIL, height: alturaHeaderTabela, color: COR_MAROON });
@@ -282,12 +328,16 @@ export async function gerarPdfProposta(dados) {
   });
   y -= alturaHeaderTabela;
 
-  const nomeServico = tipoOferta === 'conecta_smart'
-    ? `${nomeOferta} (Internet Dedicada + Voz + GRC)`
-    : `${nomeOferta} (Internet Dedicada)`;
-  const colValores = tipoOferta === 'conecta_smart'
-    ? [nomeServico, velocidade, '36 Meses', fmtReais(valorMensal)]
-    : [nomeServico, velocidade, roteador, fmtReais(valorMensal)];
+  const DESCRICOES_SERVICO = {
+    conecta_smart: 'Internet Dedicada + Voz + GRC',
+    conecta_blc: 'BLC + Voz',
+    combo_2p_bld: 'Internet Dedicada + Voz + GRC',
+    bld_oferta_pme: 'Internet Dedicada',
+  };
+  const nomeServico = `${nomeOferta} (${DESCRICOES_SERVICO[tipoOferta] || 'Internet Dedicada'})`;
+  const colValores = OFERTAS_COM_ROTEADOR_NA_TABELA.has(tipoOferta)
+    ? [nomeServico, velocidade, roteador, fmtReais(valorMensal)]
+    : [nomeServico, velocidade, '36 Meses', fmtReais(valorMensal)];
   // Cada célula quebra dentro da própria largura de coluna — sem isso, um
   // nome de serviço longo (ex.: "Conecta Smart (Internet Dedicada + Voz +
   // GRC)") ultrapassa a coluna "Serviço" e sobrepõe o texto da coluna

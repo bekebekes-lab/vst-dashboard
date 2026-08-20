@@ -1375,7 +1375,7 @@
   <button class="tab-btn" id="tab-btn-simulador2" onclick="switchTab('simulador2', this)">🧮 Simulador 2.0</button>
   <button class="tab-btn" id="tab-btn-churn" onclick="switchTab('churn', this)">📉 Churn</button>
   <button class="tab-btn" id="tab-btn-carteira" onclick="switchTab('carteira', this)">💼 Carteira</button>
-  <button class="tab-btn" id="tab-btn-conectividade" onclick="switchTab('conectividade', this)">🔌 Conectividade</button>
+  <button class="tab-btn" id="tab-btn-conectividade" onclick="switchTab('conectividade', this)">🔌 Conectividade/SD</button>
 </div>
 
 <!-- BOTTOM NAV (mobile only — casca visual nova, chama switchTab() já existente) -->
@@ -2196,6 +2196,8 @@
           <select id="conect-tipo-oferta" onchange="conectAoTrocarTipoOferta()">
             <option value="conecta_smart">Conecta Smart</option>
             <option value="bld_oferta_pme">BLD Oferta PME</option>
+            <option value="conecta_blc">Conecta com BLC</option>
+            <option value="combo_2p_bld">Combo Conecta 2P BLD</option>
           </select>
         </div>
         <div class="filter-group">
@@ -5153,7 +5155,7 @@ const TAB_LABELS = {
   simulador2: '🧮 Simulador 2.0',
   churn: '📉 Churn',
   carteira: '💼 Carteira',
-  conectividade: '🔌 Conectividade',
+  conectividade: '🔌 Conectividade/SD',
 };
 
 // Token de sessão do usuário logado, mantido em sincronia pelo Supabase Auth.
@@ -9226,11 +9228,29 @@ function carteiraFecharDetalhe() {
 const CONECT_VELOCIDADES = {
   conecta_smart: ['10 Mega', '20 Mega', '50 Mega', '100 Mega'],
   bld_oferta_pme: ['10M', '20M', '30M', '50M', '100M', '200M'],
+  conecta_blc: ['150 Mega', '300 Mega'],
+  combo_2p_bld: ['10 Mega', '20 Mega', '50 Mega', '100 Mega', '200 Mega', '500 Mega'],
 };
-const CONECT_ROTEADORES = {
-  'HP 954': { excluidoEm: ['200M'] },
-  'Huawei AR651': { excluidoEm: [] },
-  'Meraki MX67': { excluidoEm: [] },
+// Só ofertas com escolha de roteador aparecem com o grupo de roteador
+// visível — BLD Oferta PME (preço muda por modelo) e Combo Conecta 2P BLD
+// (só escolhe o modelo entregue, preço já é fechado por velocidade).
+const CONECT_TIPOS_COM_ROTEADOR = ['bld_oferta_pme', 'combo_2p_bld'];
+const CONECT_ROTEADORES_POR_TIPO = {
+  bld_oferta_pme: {
+    'HP 954': { excluidoEm: ['200M'] },
+    'Huawei AR651': { excluidoEm: [] },
+    'Meraki MX67': { excluidoEm: [] },
+  },
+  combo_2p_bld: {
+    'Fortigate 40F': { excluidoEm: [] },
+    'Huawei AR651': { excluidoEm: [] },
+  },
+};
+const CONECT_NOMES_OFERTA = {
+  conecta_smart: 'Conecta Smart',
+  bld_oferta_pme: 'BLD Oferta PME',
+  conecta_blc: 'Conecta com BLC',
+  combo_2p_bld: 'Combo Conecta 2P BLD',
 };
 const CONECT_ESTAGIOS = [
   { key: 'proposta_gerada', label: 'Proposta Gerada', cor: '#2a78d6' },
@@ -9245,16 +9265,17 @@ function conectAoTrocarTipoOferta() {
   const tipo = document.getElementById('conect-tipo-oferta').value;
   const selVelocidade = document.getElementById('conect-velocidade');
   selVelocidade.innerHTML = CONECT_VELOCIDADES[tipo].map(v => `<option value="${v}">${v}</option>`).join('');
-  document.getElementById('conect-grupo-roteador').style.display = tipo === 'bld_oferta_pme' ? '' : 'none';
+  document.getElementById('conect-grupo-roteador').style.display = CONECT_TIPOS_COM_ROTEADOR.includes(tipo) ? '' : 'none';
   conectAoTrocarVelocidade();
 }
 
 function conectAoTrocarVelocidade() {
   const tipo = document.getElementById('conect-tipo-oferta').value;
-  if (tipo !== 'bld_oferta_pme') return;
+  const roteadoresDoTipo = CONECT_ROTEADORES_POR_TIPO[tipo];
+  if (!roteadoresDoTipo) return;
   const velocidade = document.getElementById('conect-velocidade').value;
   const selRoteador = document.getElementById('conect-roteador');
-  const disponiveis = Object.entries(CONECT_ROTEADORES).filter(([, r]) => !r.excluidoEm.includes(velocidade)).map(([nome]) => nome);
+  const disponiveis = Object.entries(roteadoresDoTipo).filter(([, r]) => !r.excluidoEm.includes(velocidade)).map(([nome]) => nome);
   selRoteador.innerHTML = disponiveis.map(n => `<option value="${n}">${n}</option>`).join('');
 }
 
@@ -9354,7 +9375,7 @@ function conectMontarEnderecoCompleto() {
 async function conectGerarProposta() {
   const tipoOferta = document.getElementById('conect-tipo-oferta').value;
   const velocidade = document.getElementById('conect-velocidade').value;
-  const roteador = tipoOferta === 'bld_oferta_pme' ? document.getElementById('conect-roteador').value : null;
+  const roteador = CONECT_TIPOS_COM_ROTEADOR.includes(tipoOferta) ? document.getElementById('conect-roteador').value : null;
   const clienteNome = document.getElementById('conect-cliente-nome').value.trim();
   const clienteCnpj = document.getElementById('conect-cliente-cnpj').value.trim();
   const clienteContato = document.getElementById('conect-cliente-contato').value.trim();
@@ -9469,7 +9490,7 @@ function conectRenderFunil() {
                   </div>
                 </div>` : ''}
               </div>
-              <div style="font-size:11px;color:var(--text-2);margin-bottom:2px;">${item.tipo_oferta === 'conecta_smart' ? 'Conecta Smart' : 'BLD Oferta PME'} · ${escapeHtml(item.velocidade)}</div>
+              <div style="font-size:11px;color:var(--text-2);margin-bottom:2px;">${CONECT_NOMES_OFERTA[item.tipo_oferta] || item.tipo_oferta} · ${escapeHtml(item.velocidade)}</div>
               <div style="font-size:12px;font-weight:600;color:var(--brand);margin-bottom:4px;">${Number(item.valor_mensal).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}/mês</div>
               <div style="font-size:10px;color:var(--text-2);margin-bottom:8px;">Gerado por: ${escapeHtml(item.gerado_por_nome || item.consultor_nome || '—')}</div>
               <select style="width:100%;font-size:11px;padding:4px 6px;" onchange="conectMudarEstagio(${item.id}, this.value)">
@@ -9531,7 +9552,7 @@ function conectAbrirDetalhe(id) {
     ['Cliente (Razão Social)', item.cliente_nome], ['CNPJ', item.cliente_cnpj],
     ['Telefone do cliente', item.cliente_telefone], ['A/C (contato)', item.cliente_contato],
     ['Endereço', item.cliente_endereco], ['Cidade', item.cliente_cidade], ['UF', item.cliente_uf],
-    ['Tipo de oferta', item.tipo_oferta === 'conecta_smart' ? 'Conecta Smart' : 'BLD Oferta PME'],
+    ['Tipo de oferta', CONECT_NOMES_OFERTA[item.tipo_oferta] || item.tipo_oferta],
     ['Velocidade', item.velocidade], ['Roteador', item.roteador],
     ['Valor mensal', item.valor_mensal != null ? Number(item.valor_mensal).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : null],
     ['Valor de (antes do desconto)', item.valor_de != null ? Number(item.valor_de).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : null],

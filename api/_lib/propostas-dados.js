@@ -60,6 +60,45 @@ export const ALICOTAS_UF = {
   TO: 0.7707999999999999,
 };
 
+// Conecta com BLC — tabela fechada (Book Clareando PME, Agosto/2026, pág.
+// 118), já com imposto, não varia por UF. Inclui Voz Ilimitada ou Franquia
+// de Minutos (50.000+10.000 ON NET) + Microsoft 365 Business Basic 1TB.
+export const CONECTA_BLC_PRECOS = {
+  '150 Mega': 350.00,
+  '300 Mega': 400.00,
+};
+
+// Combos Conecta 2P BLD — tabela fechada (Book Clareando PME, Agosto/2026,
+// pág. 117), já com imposto, não varia por UF. Roteador incluso é só uma
+// escolha de modelo (não altera o preço, diferente do BLD Oferta PME).
+export const COMBO_2P_BLD_PRECOS = {
+  '10 Mega': 1035.23,
+  '20 Mega': 1392.23,
+  '50 Mega': 1606.23,
+  '100 Mega': 1796.22,
+  '200 Mega': 1906.22,
+  '500 Mega': 3236.22,
+};
+
+export const ROTEADORES_COMBO_2P_BLD = ['Fortigate 40F', 'Huawei AR651'];
+
+// Retorna { valorMensal } ou null se a velocidade não existir na tabela.
+export function calcularConectaBLC(velocidade) {
+  const valorMensal = CONECTA_BLC_PRECOS[velocidade];
+  if (valorMensal === undefined) return null;
+  return { valorMensal };
+}
+
+// Retorna { valorMensal } ou null se velocidade/roteador não forem
+// reconhecidos — o roteador aqui só troca o modelo entregue, o preço do
+// combo já é fechado por velocidade.
+export function calcularCombo2PBLD(velocidade, roteador) {
+  const valorMensal = COMBO_2P_BLD_PRECOS[velocidade];
+  if (valorMensal === undefined) return null;
+  if (!ROTEADORES_COMBO_2P_BLD.includes(roteador)) return null;
+  return { valorMensal };
+}
+
 export function roteadoresDisponiveisPara(velocidade) {
   return Object.entries(ROTEADORES)
     .filter(([, r]) => !r.velocidadesExcluidas.includes(velocidade))
