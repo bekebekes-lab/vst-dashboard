@@ -2097,7 +2097,15 @@
         <div class="filter-group" style="display:flex;flex-direction:column;justify-content:flex-end;">
           <button onclick="discVoipBuscar()" class="disc-btn-buscar">Buscar</button>
         </div>
+        <div class="filter-group" style="min-width:220px;">
+          <label>Grupos</label>
+          <div class="custom-dropdown" id="dd-voip-grupo">
+            <button class="dropdown-btn" onclick="toggleDropdown('dd-content-voip-grupo')">Todos <span>&#9660;</span></button>
+            <div class="dropdown-content" id="dd-content-voip-grupo"></div>
+          </div>
+        </div>
       </div>
+      <div id="disc-voip-resumo"></div>
       <div id="disc-voip-status" style="font-size:12px;color:var(--text-2);margin-bottom:10px;"></div>
       <div id="disc-voip-resultado"></div>
     </div>
@@ -7173,6 +7181,7 @@ async function discVoipBuscar() {
   statusEl.style.color = 'var(--text-2)';
   statusEl.textContent = 'Calculando...';
   areaResultado.innerHTML = '';
+  document.getElementById('disc-voip-resumo').innerHTML = '';
 
   try {
     const res = await fetch(`/api/discadora-voip?desde=${desde}&ate=${ate}`, { headers: authHeaders() });
@@ -7186,30 +7195,77 @@ async function discVoipBuscar() {
       return;
     }
 
-    areaResultado.innerHTML = window._discVoipDados.map((g, gi) => {
-      const valores = g.dias.map(d => d.usuarios.length);
-      const media = (valores.reduce((a, b) => a + b, 0) / valores.length).toFixed(1);
-      const pico = Math.max(...valores);
-      return `
-      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px;margin-bottom:12px;">
-        <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:10px;flex-wrap:wrap;">
-          <span style="font-size:14px;font-weight:700;color:var(--text);">${escapeHtml(g.grupo)}</span>
-          <span style="font-size:11px;color:var(--text-2);">média ${media}/dia · pico ${pico}</span>
-        </div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px;">
-          ${g.dias.map((d, di) => `
-            <div onclick="discVoipAbrirDetalhe(${gi}, ${di})" style="cursor:pointer;font-size:12px;padding:6px 8px;background:var(--surface-2);border-radius:6px;display:flex;justify-content:space-between;gap:8px;">
-              <span style="color:var(--text-2);">${d.data.split('-').reverse().join('/')}</span>
-              <span style="font-weight:600;text-decoration:underline;text-decoration-style:dotted;">${d.usuarios.length} usuário${d.usuarios.length === 1 ? '' : 's'}</span>
-            </div>`).join('')}
-        </div>
-      </div>`;
-    }).join('');
+    // Dropdown de grupos — reaproveita o mesmo mecanismo já usado no Churn
+    // (custom-dropdown com checkbox). Selecionar/desmarcar recalcula tudo
+    // (total geral, total por grupo, %) direto no cliente, sem nova chamada.
+    const nomesGrupos = window._discVoipDados.map(g => g.grupo);
+    window._ddOnChange_dd_content_voip_grupo = function () {
+      atualizarBotaoDropdown('dd-content-voip-grupo', '#dd-voip-grupo .dropdown-btn');
+      discVoipRenderizar();
+    };
+    ddRegisterCallback('dd-content-voip-grupo', window._ddOnChange_dd_content_voip_grupo);
+    popularDropdownGenerico('dd-content-voip-grupo', nomesGrupos, window._ddOnChange_dd_content_voip_grupo, '#dd-voip-grupo .dropdown-btn');
+
+    discVoipRenderizar();
     statusEl.textContent = '';
   } catch (e) {
     statusEl.style.color = 'var(--red-sem)';
     statusEl.textContent = e.message;
   }
+}
+
+// Recalcula e redesenha tudo (resumo + cards por grupo) a partir do que já
+// está em window._discVoipDados, filtrado pelos grupos marcados no dropdown
+// — nenhuma chamada nova ao servidor acontece aqui.
+function discVoipRenderizar() {
+  const resumoEl = document.getElementById('disc-voip-resumo');
+  const areaResultado = document.getElementById('disc-voip-resultado');
+  const todosGrupos = window._discVoipDados || [];
+  const selecionados = getCheckedValuesDd('dd-content-voip-grupo'); // [] = todos
+  const gruposVisiveis = selecionados.length
+    ? todosGrupos.filter(g => selecionados.includes(g.grupo))
+    : todosGrupos;
+
+  if (gruposVisiveis.length === 0) {
+    resumoEl.innerHTML = '';
+    areaResultado.innerHTML = '<div class="coming-soon"><p>Nenhum grupo selecionado.</p></div>';
+    return;
+  }
+
+  const totaisPorGrupo = gruposVisiveis.map(g => ({
+    grupo: g.grupo,
+    total: g.dias.reduce((soma, d) => soma + d.usuarios.length, 0),
+  }));
+  const totalPeriodo = totaisPorGrupo.reduce((soma, g) => soma + g.total, 0);
+
+  resumoEl.innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px;margin-bottom:14px;">
+      <div style="font-size:11px;color:var(--text-2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">Total do período ${selecionados.length ? `(${gruposVisiveis.length} grupo${gruposVisiveis.length === 1 ? '' : 's'} selecionado${gruposVisiveis.length === 1 ? '' : 's'})` : '(todos os grupos)'} — soma de usuários ativos por dia</div>
+      <div style="font-size:22px;font-weight:700;color:var(--brand);">${totalPeriodo.toLocaleString('pt-BR')}</div>
+    </div>`;
+
+  areaResultado.innerHTML = gruposVisiveis.map(g => {
+    const gi = todosGrupos.indexOf(g); // índice real em window._discVoipDados, pro modal de detalhe
+    const valores = g.dias.map(d => d.usuarios.length);
+    const media = (valores.reduce((a, b) => a + b, 0) / valores.length).toFixed(1);
+    const pico = Math.max(...valores);
+    const totalGrupo = valores.reduce((a, b) => a + b, 0);
+    const pct = totalPeriodo > 0 ? ((totalGrupo / totalPeriodo) * 100).toFixed(1) : '0.0';
+    return `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px;margin-bottom:12px;">
+      <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:10px;flex-wrap:wrap;">
+        <span style="font-size:14px;font-weight:700;color:var(--text);">${escapeHtml(g.grupo)}</span>
+        <span style="font-size:11px;color:var(--text-2);">total ${totalGrupo} · ${pct}% do período · média ${media}/dia · pico ${pico}</span>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px;">
+        ${g.dias.map((d, di) => `
+          <div onclick="discVoipAbrirDetalhe(${gi}, ${di})" style="cursor:pointer;font-size:12px;padding:6px 8px;background:var(--surface-2);border-radius:6px;display:flex;justify-content:space-between;gap:8px;">
+            <span style="color:var(--text-2);">${d.data.split('-').reverse().join('/')}</span>
+            <span style="font-weight:600;text-decoration:underline;text-decoration-style:dotted;">${d.usuarios.length} usuário${d.usuarios.length === 1 ? '' : 's'}</span>
+          </div>`).join('')}
+      </div>
+    </div>`;
+  }).join('');
 }
 
 // Modal com a lista de usuários daquele grupo/dia — sustenta a conferência
