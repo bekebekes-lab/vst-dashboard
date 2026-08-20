@@ -33,7 +33,7 @@ export default async function handler(req, res) {
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!serviceKey) return res.status(500).json({ error: 'SUPABASE_SERVICE_ROLE_KEY não configurado no servidor' });
 
-  const selectCols = 'data_registro,usuario_nome,grupo_nome';
+  const selectCols = 'data_registro,usuario_nome,grupo_nome,duracao,ddd_telefone';
   const filtro = `select=${selectCols}&data_registro=gte.${desde}T00:00:00&data_registro=lte.${ate}T23:59:59&order=data_registro.asc`;
 
   try {
@@ -62,6 +62,26 @@ export default async function handler(req, res) {
 
     // grupo -> dia (YYYY-MM-DD) -> Set de usuarios distintos naquele dia
     const acumulado = {};
+    // usuario -> { chamadas, segundosTarifados, valor } — custo estimado por
+    // pessoa, usando a regra de tarifacao da Pentagono validada contra o
+    // relatorio real deles (30s minimo, depois blocos de 6s) e a tarifa por
+    // tipo de destino (fixo vs movel, pelo tamanho do numero sem o "55").
+    // Só faz sentido por usuário aqui porque essas linhas já são só as
+    // ligações COM atendente (contem_usuarios:true, o que a sincronização
+    // grava) — ligações sem atendente não têm uma pessoa pra atribuir custo.
+    const custoPorUsuario = {};
+
+    const TARIFA_FIXO = 0.030;
+    const TARIFA_MOVEL = 0.045;
+    function tempoTarifado(duracaoReal) {
+      if (duracaoReal == null || duracaoReal <= 30) return 30;
+      return 30 + 6 * Math.ceil((duracaoReal - 30) / 6);
+    }
+    function tarifaPorMinuto(dddTelefone) {
+      const digitos = String(dddTelefone || '').replace(/\D/g, '');
+      return digitos.length === 11 ? TARIFA_MOVEL : TARIFA_FIXO; // 11 = DDD+9 digitos (movel)
+    }
+
     for (const r of rows) {
       const grupo = r.grupo_nome || '(sem grupo)';
       const dia = (r.data_registro || '').slice(0, 10);
@@ -70,6 +90,13 @@ export default async function handler(req, res) {
       if (!acumulado[grupo]) acumulado[grupo] = {};
       if (!acumulado[grupo][dia]) acumulado[grupo][dia] = new Set();
       acumulado[grupo][dia].add(usuario);
+
+      const segundos = tempoTarifado(r.duracao);
+      const valor = tarifaPorMinuto(r.ddd_telefone) * segundos / 60;
+      if (!custoPorUsuario[usuario]) custoPorUsuario[usuario] = { chamadas: 0, segundosTarifados: 0, valor: 0 };
+      custoPorUsuario[usuario].chamadas += 1;
+      custoPorUsuario[usuario].segundosTarifados += segundos;
+      custoPorUsuario[usuario].valor += valor;
     }
 
     // Devolve a lista de usuarios (nao só a contagem) — o painel usa isso
@@ -84,7 +111,16 @@ export default async function handler(req, res) {
       }))
       .sort((a, b) => a.grupo.localeCompare(b.grupo));
 
-    res.status(200).json({ grupos });
+    const usuarios = Object.entries(custoPorUsuario)
+      .map(([usuario, dados]) => ({
+        usuario,
+        chamadas: dados.chamadas,
+        minutosTarifados: Math.round(dados.segundosTarifados / 60 * 100) / 100,
+        valor: Math.round(dados.valor * 100) / 100,
+      }))
+      .sort((a, b) => b.valor - a.valor);
+
+    res.status(200).json({ grupos, usuarios });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
