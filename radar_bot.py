@@ -179,12 +179,17 @@ def selecionar_lookup(page, aria_label: str, texto_busca: str, timeout=15_000) -
     if campo is None:
         log.warning(f"  Campo de busca '{aria_label}' não encontrado.")
         return False
-    campo.click()
-    campo.fill(texto_busca)
+    # force=True: o painel/overlay do lookup anterior às vezes ainda não
+    # terminou de fechar e intercepta o clique no próximo campo (confirmado
+    # em execução real — "lightning-overlay-container ... intercepts
+    # pointer events").
+    campo.click(force=True)
+    campo.fill(texto_busca, force=True)
     try:
         opcao = page.locator("lightning-base-combobox-item[role='option']").first
         opcao.wait_for(state="visible", timeout=timeout)
-        opcao.click()
+        opcao.click(force=True)
+        page.keyboard.press("Escape")  # fecha qualquer resquício do painel antes do próximo campo
         return True
     except Exception:
         log.warning(f"  Nenhuma opção encontrada para '{aria_label}' = '{texto_busca}'")
