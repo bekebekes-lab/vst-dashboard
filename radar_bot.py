@@ -192,7 +192,10 @@ def criar_estudo(page, item: dict) -> tuple[str, str]:
     )
 
     # Modal 1: escolher tipo de registro — só usamos "Estudo Agregador".
-    page.locator("input[type='radio']").nth(1).check()  # 2ª opção = Estudo Agregador
+    # force=True: o círculo visual customizado do SLDS fica por cima do
+    # <input type="radio"> real e intercepta o clique — confirmado em
+    # execução real (Playwright ficava tentando e desistia no timeout).
+    page.locator("input[type='radio']").nth(1).check(force=True)  # 2ª opção = Estudo Agregador
     page.locator("button:has-text('Avançar')").click()
     page.wait_for_selector("text=Criar Estudo de Viabilidade: Estudo Agregador", timeout=20_000)
 
