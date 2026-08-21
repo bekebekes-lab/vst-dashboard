@@ -230,6 +230,13 @@ def selecionar_lookup(page, aria_label: str, texto_completo: str, timeout=15_000
         return True
     except Exception:
         log.warning(f"  Nenhuma opção encontrada para '{aria_label}' = '{texto_completo}'")
+        DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
+        nome_arquivo = aria_label.lower().replace(' ', '_')
+        try:
+            page.screenshot(path=str(DOWNLOAD_DIR / f"lookup_sem_opcao_{nome_arquivo}.png"))
+            (DOWNLOAD_DIR / f"lookup_sem_opcao_{nome_arquivo}.html").write_text(page.content(), encoding="utf-8")
+        except Exception:
+            pass
         return False
 
 
