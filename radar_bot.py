@@ -349,14 +349,15 @@ def consultar_viabilidade(page, ev_record_id: str):
     base = RADAR_URL.replace(".my.salesforce.com", ".lightning.force.com")
     page.goto(f"{base}/lightning/r/Estudo_de_Viabilidade__c/{ev_record_id}/view", wait_until="networkidle")
 
-    page.locator("button[name='Estudo_de_Viabilidade__c.Consultar_Viabilidade']").click(timeout=15_000)
-    page.wait_for_selector("text=Consultar Viabilidade", timeout=15_000)
+    page.locator("button[name='Estudo_de_Viabilidade__c.Consultar_Viabilidade']").click(timeout=15_000, force=True)
 
-    # SEM tentativa de clicar num botão de confirmação: no vídeo de
-    # referência esse modal só mostra um spinner e fecha sozinho, sem botão
-    # nenhum — e um clique "Consultar" aqui podia acertar o botão ORIGINAL
-    # da página (ainda visível atrás do modal, mesmo texto "Consultar
-    # Viabilidade"), reabrindo a ação por engano em vez de só confirmar.
+    # Debug: "text=Consultar Viabilidade" sempre bate de cara com o próprio
+    # rótulo do botão da página (já existe ANTES do clique) — não prova que
+    # o modal abriu. Tira um print logo após o clique pra saber de fato se
+    # algo mudou na tela, em vez de confiar num wait que nunca falha.
+    DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    page.wait_for_timeout(1500)
+    page.screenshot(path=str(DOWNLOAD_DIR / f"pos_clique_consultar_{ev_record_id}.png"))
 
     # O toast real diz "entregue com sucesso" (confirmado no vídeo de
     # referência) — "enviado" (usado antes) nunca aparece, daí o timeout.
