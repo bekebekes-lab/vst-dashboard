@@ -194,7 +194,14 @@ def selecionar_lookup(page, aria_label: str, texto_completo: str, timeout=15_000
         log.warning(f"  Campo de busca '{aria_label}' não encontrado.")
         return False
     texto_busca = texto_completo.split('(')[0].strip()
-    campo.click()
+    # Selecionar um lookup pai (ex.: Produto) pode disparar um re-render do
+    # próximo campo dependente (ex.: Item de Produto) — se o clique cair
+    # bem nesse momento, o Playwright vê o elemento "instável" e, no limite,
+    # "detached from the DOM" (confirmado em execução real). force=True
+    # ignora a checagem de estabilidade; seguro aqui porque já garantimos
+    # acima que o overlay do campo anterior fechou de verdade antes de
+    # chegar neste ponto.
+    campo.click(force=True)
     campo.fill(texto_busca)
     try:
         opcoes = page.locator("lightning-base-combobox-item[role='option']")
@@ -213,6 +220,7 @@ def selecionar_lookup(page, aria_label: str, texto_completo: str, timeout=15_000
             page.locator("lightning-overlay-container").last.wait_for(state="hidden", timeout=5_000)
         except Exception:
             pass  # nem sempre existe um overlay-container pra esperar sumir
+        page.wait_for_timeout(800)  # dá tempo do layout assentar antes do próximo campo
         return True
     except Exception:
         log.warning(f"  Nenhuma opção encontrada para '{aria_label}' = '{texto_completo}'")
