@@ -1376,7 +1376,6 @@
   <button class="tab-btn" id="tab-btn-churn" onclick="switchTab('churn', this)">📉 Churn</button>
   <button class="tab-btn" id="tab-btn-carteira" onclick="switchTab('carteira', this)">💼 Carteira</button>
   <button class="tab-btn" id="tab-btn-conectividade" onclick="switchTab('conectividade', this)">🔌 Conectividade/SD</button>
-  <button class="tab-btn" id="tab-btn-ev" onclick="switchTab('ev', this)">🔎 EV - Viabilidade</button>
 </div>
 
 <!-- BOTTOM NAV (mobile only — casca visual nova, chama switchTab() já existente) -->
@@ -2186,8 +2185,14 @@
     <div id="carteira-table-area"></div>
   </div>
 
-  <!-- TAB CONECTIVIDADE — gerar proposta (PDF) + funil de oportunidades -->
+  <!-- TAB CONECTIVIDADE — gerar proposta (PDF) + funil de oportunidades + EV -->
   <div class="tab-panel" id="tab-conectividade">
+    <div style="display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:16px;">
+      <button class="tab-btn active" id="conect-subtab-btn-proposta" onclick="conectSwitchSubTab('proposta')" style="padding:10px 16px;">📄 Proposta Comercial</button>
+      <button class="tab-btn" id="conect-subtab-btn-ev" onclick="conectSwitchSubTab('ev')" style="padding:10px 16px;display:none;">🔎 EV - Viabilidade</button>
+    </div>
+
+    <div id="conect-subtab-proposta">
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:18px;margin-bottom:16px;box-shadow:var(--shadow-xs);">
       <div class="section-title" style="margin-bottom:14px;">Gerar Proposta Comercial</div>
 
@@ -2319,9 +2324,9 @@
       <span class="section-title">Funil de Oportunidades</span>
     </div>
     <div id="conect-funil-area"></div>
-  </div>
+    </div>
 
-  <div class="tab-panel" id="tab-ev">
+    <div id="conect-subtab-ev" style="display:none;">
   <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:18px;margin-bottom:16px;box-shadow:var(--shadow-xs);">
     <div class="section-title" style="margin-bottom:4px;">🔎 EV - Estudo de Viabilidade</div>
     <div style="font-size:12px;font-weight:600;color:#eda100;background:#fff8e6;border:1px solid #f5d78a;border-radius:6px;padding:6px 10px;margin-bottom:10px;">⚠️ Em teste — visível só pra admin por enquanto, ainda validando o robô de consulta no Radar.</div>
@@ -2378,6 +2383,7 @@
   </div>
   <div id="ev-lista-area"></div>
 </div>
+  </div>
 
 </div>
 
@@ -5184,7 +5190,6 @@ function switchTab(name, el) {
   if (name === 'churn') initChurn();
   if (name === 'carteira') initCarteira();
   if (name === 'conectividade') initConectividade();
-  if (name === 'ev') initEv();
 
   // Config/filtros dessa aba (se houver) saem da tela e entram no drawer de
   // conta assim que ela vira ativa (só mobile) — não só enquanto o drawer
@@ -5215,7 +5220,7 @@ let USUARIO_ATUAL = null;
 // aplicarPermissoes() quanto pelo preenchimento da preferência "aba padrão
 // ao abrir" no drawer de conta e pelo redirecionamento pós-login.
 const ABAS_PERMITIDAS_POR_PERFIL = {
-  'admin':          ['simulador', 'gerencial', 'producao', 'discadora', 'simulador2', 'churn', 'carteira', 'conectividade', 'ev'],
+  'admin':          ['simulador', 'gerencial', 'producao', 'discadora', 'simulador2', 'churn', 'carteira', 'conectividade'],
   'gestor_macro':   ['gerencial', 'discadora', 'conectividade'],
   'gestor_macro2':  ['gerencial', 'producao', 'discadora', 'conectividade'],
   'gestor_macro3':  ['gerencial', 'producao', 'conectividade'],
@@ -5244,7 +5249,6 @@ const TAB_LABELS = {
   churn: '📉 Churn',
   carteira: '💼 Carteira',
   conectividade: '🔌 Conectividade/SD',
-  ev: '🔎 EV - Viabilidade',
 };
 
 // Token de sessão do usuário logado, mantido em sincronia pelo Supabase Auth.
@@ -9554,9 +9558,25 @@ function initConectividade() {
     document.getElementById('conect-consultor-telefone').value = USUARIO_ATUAL?.telefone || '';
     document.getElementById('conect-consultor-email').value = USUARIO_ATUAL?.email || '';
     document.addEventListener('click', () => document.querySelectorAll('[id^="conect-menu-"]').forEach(m => m.style.display = 'none'));
+    if (USUARIO_ATUAL?.perfil === 'admin') {
+      document.getElementById('conect-subtab-btn-ev').style.display = '';
+    }
     CONECT_INICIALIZADA = true;
   }
   conectCarregarFunil();
+}
+
+// Sub-abas dentro de Conectividade/SD — Proposta Comercial (padrão) e EV -
+// Viabilidade (admin only). Ficam lado a lado no mesmo painel em vez de
+// virar uma aba própria no menu principal, pra não competir por espaço
+// com as abas de verdade (pedido explícito: "não pedi uma aba fora da
+// conectividade").
+function conectSwitchSubTab(nome) {
+  document.getElementById('conect-subtab-btn-proposta').classList.toggle('active', nome === 'proposta');
+  document.getElementById('conect-subtab-btn-ev').classList.toggle('active', nome === 'ev');
+  document.getElementById('conect-subtab-proposta').style.display = nome === 'proposta' ? '' : 'none';
+  document.getElementById('conect-subtab-ev').style.display = nome === 'ev' ? '' : 'none';
+  if (nome === 'ev') initEv();
 }
 
 let EV_INICIALIZADA = false;
