@@ -185,9 +185,11 @@ def selecionar_lookup(page, aria_label: str, texto_completo: str, timeout=15_000
     funcionava antes, encontrava opção alguma). O que causava a falha
     entre dois lookups seguidos (Produto -> Item de Produto) era o overlay
     do primeiro lookup ainda não ter fechado de verdade quando o clique do
-    segundo campo acontecia — por isso agora espera esse overlay sumir de
-    fato (hidden) antes de devolver, em vez de só mandar um Escape e seguir
-    em frente torcendo pra já ter fechado.
+    segundo campo acontecia — por isso espera esse overlay sumir de fato
+    (hidden) antes de devolver. NÃO usa Escape pra fechar o painel: dentro
+    de um modal, Escape pode fechar o MODAL INTEIRO em vez de só o dropdown
+    do lookup (suspeita forte após o campo seguinte sumir por completo em
+    execução real — sem Escape, o overlay-hidden já basta).
     """
     campo = localizar_campo_lookup(page, aria_label, timeout)
     if campo is None:
@@ -215,7 +217,6 @@ def selecionar_lookup(page, aria_label: str, texto_completo: str, timeout=15_000
         if alvo.count() == 0:
             alvo = opcoes.filter(has_text=texto_busca)
         (alvo.first if alvo.count() > 0 else opcoes.first).click()
-        page.keyboard.press("Escape")
         try:
             page.locator("lightning-overlay-container").last.wait_for(state="hidden", timeout=5_000)
         except Exception:
