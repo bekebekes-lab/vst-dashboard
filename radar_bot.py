@@ -235,7 +235,13 @@ def criar_estudo(page, item: dict) -> tuple[str, str]:
         raise RuntimeError(f"Produto '{item['produto']}' não encontrado no Radar")
 
     if item.get("item_produto") and not selecionar_lookup(page, "Item de Produto", item["item_produto"]):
-        log.warning("  Item de Produto não encontrado — segue sem selecionar (Salvar pode bloquear).")
+        # Sem opção selecionada da lista, o Salesforce bloqueia o Salvar
+        # ("Selecione uma opção...") — desiste na hora em vez de esperar o
+        # timeout do Salvar à toa, e limpa o texto solto do campo.
+        campo = localizar_campo_lookup(page, "Item de Produto", timeout=5_000)
+        if campo:
+            campo.fill("", force=True)
+        raise RuntimeError(f"Item de Produto '{item['item_produto']}' não encontrado no Radar")
 
     qtd_input = page.locator("input[name='Quantidade_de_Circuitos__c']").first
     qtd_input.fill(str(item.get("quantidade_circuitos", 1)))
