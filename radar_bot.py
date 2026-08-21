@@ -216,7 +216,14 @@ def selecionar_lookup(page, aria_label: str, texto_completo: str, timeout=30_000
     campo.click(force=True)
     campo.fill(texto_busca)
     try:
-        opcoes = page.locator("lightning-base-combobox-item[role='option']")
+        # Cada lookup mantém sua lista de opções no DOM mesmo depois de
+        # fechada (só fica escondida) — um seletor sem escopo pega a 1ª
+        # ocorrência na página inteira, quase sempre a sobra ESCONDIDA de um
+        # lookup anterior, nunca a lista realmente visível deste campo
+        # (confirmado em execução real: "locator resolved to hidden..."
+        # repetido dezenas de vezes, timeout nos 30s inteiros). Restringe a
+        # busca ao dropdown VISÍVEL no momento.
+        opcoes = page.locator("[role='listbox']:visible").locator("lightning-base-combobox-item[role='option']")
         opcoes.first.wait_for(state="visible", timeout=timeout)
         # Pode aparecer mais de uma opção parecida (ex.: mesma velocidade,
         # com/sem "SMART") — identifica a certa pelo atributo title do
