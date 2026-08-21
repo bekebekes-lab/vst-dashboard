@@ -233,8 +233,8 @@ def selecionar_lookup(page, aria_label: str, texto_completo: str, timeout=30_000
             pass  # nem sempre existe um overlay-container pra esperar sumir
         page.wait_for_timeout(800)  # dá tempo do layout assentar antes do próximo campo
         return True
-    except Exception:
-        log.warning(f"  Nenhuma opção encontrada para '{aria_label}' = '{texto_completo}'")
+    except Exception as e:
+        log.warning(f"  Nenhuma opção encontrada para '{aria_label}' = '{texto_completo}': {type(e).__name__}: {e}")
         DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
         nome_arquivo = aria_label.lower().replace(' ', '_')
         try:
