@@ -421,6 +421,12 @@ def processar_pendentes(page):
             })
         except Exception as e:
             log.error(f"  Falha ao processar consulta {item['id']}: {e}", exc_info=True)
+            DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
+            try:
+                page.screenshot(path=str(DOWNLOAD_DIR / f"falha_consulta_{item['id']}.png"))
+                (DOWNLOAD_DIR / f"falha_consulta_{item['id']}.html").write_text(page.content(), encoding="utf-8")
+            except Exception:
+                pass
             supa_atualizar(item["id"], {"status": "erro", "erro_mensagem": str(e)[:500]})
 
 
