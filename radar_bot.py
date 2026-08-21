@@ -418,6 +418,19 @@ def consultar_viabilidade(page, ev_record_id: str):
     page.wait_for_timeout(1500)
     page.screenshot(path=str(DOWNLOAD_DIR / f"pos_clique_consultar_{ev_record_id}.png"))
 
+    # O Salesforce às vezes recusa a consulta na hora, com um banner
+    # vermelho "Não é possível consultar, pois o estudo não possui os
+    # critérios para consulta" — achado real (print pos_clique_consultar):
+    # isso é uma rejeição de regra de negócio, não uma demora, e esperar os
+    # 60s do toast só desperdiça tempo e mascara o motivo real da falha.
+    try:
+        page.locator("text=não possui os critérios para consulta").wait_for(state="visible", timeout=3_000)
+        raise RuntimeError("Salesforce recusou a consulta: estudo não possui os critérios para consulta.")
+    except RuntimeError:
+        raise
+    except Exception:
+        pass
+
     # O toast real diz "entregue com sucesso" (confirmado no vídeo de
     # referência) — "enviado" (usado antes) nunca aparece, daí o timeout.
     page.wait_for_selector("text=entregue com sucesso", timeout=60_000)
