@@ -180,22 +180,22 @@ def selecionar_lookup(page, aria_label: str, texto_completo: str, timeout=15_000
     quanto, principalmente, pra identificar a opção certa entre as que a
     busca retornar).
 
-    Sem .click() antes do .fill() de propósito: confirmado manualmente que
-    colar o texto completo no campo real funciona (a busca do Salesforce
-    aceita o texto com preço e tudo) — o problema não era o conteúdo, era
-    o .click(force=True) feito antes, que dispara um clique físico na
-    posição da tela e pode acertar o overlay residual do campo anterior em
-    vez do input (o force=True só faz o Playwright não reclamar disso, não
-    muda pra onde o clique realmente vai). locator.fill() já foca o
-    elemento internamente via API do DOM, sem depender de clique/posição
-    na tela — não sofre desse problema.
+    O clique aqui É necessário (sem ele o dropdown de busca nem abre —
+    confirmado em execução real: sem clique, nem o Produto, que já
+    funcionava antes, encontrava opção alguma). O que causava a falha
+    entre dois lookups seguidos (Produto -> Item de Produto) era o overlay
+    do primeiro lookup ainda não ter fechado de verdade quando o clique do
+    segundo campo acontecia — por isso agora espera esse overlay sumir de
+    fato (hidden) antes de devolver, em vez de só mandar um Escape e seguir
+    em frente torcendo pra já ter fechado.
     """
     campo = localizar_campo_lookup(page, aria_label, timeout)
     if campo is None:
         log.warning(f"  Campo de busca '{aria_label}' não encontrado.")
         return False
     texto_busca = texto_completo.split('(')[0].strip()
-    campo.fill(texto_busca, force=True)
+    campo.click()
+    campo.fill(texto_busca)
     try:
         opcoes = page.locator("lightning-base-combobox-item[role='option']")
         opcoes.first.wait_for(state="visible", timeout=timeout)
@@ -207,8 +207,12 @@ def selecionar_lookup(page, aria_label: str, texto_completo: str, timeout=15_000
         alvo = opcoes.filter(has=page.locator(f"[title='{texto_completo}']"))
         if alvo.count() == 0:
             alvo = opcoes.filter(has_text=texto_busca)
-        (alvo.first if alvo.count() > 0 else opcoes.first).click(force=True)
-        page.keyboard.press("Escape")  # fecha qualquer resquício do painel antes do próximo campo
+        (alvo.first if alvo.count() > 0 else opcoes.first).click()
+        page.keyboard.press("Escape")
+        try:
+            page.locator("lightning-overlay-container").last.wait_for(state="hidden", timeout=5_000)
+        except Exception:
+            pass  # nem sempre existe um overlay-container pra esperar sumir
         return True
     except Exception:
         log.warning(f"  Nenhuma opção encontrada para '{aria_label}' = '{texto_completo}'")
