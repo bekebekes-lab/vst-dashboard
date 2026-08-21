@@ -353,7 +353,14 @@ def definir_endereco_sev(page, ev_record_id: str, cep: str, numero: str = None):
     if not clicar_botao_com_texto(page, "Validar", "Inserir"):
         log.warning("  Nenhum botão de confirmação encontrado após buscar CEP — screenshot salvo.")
         page.screenshot(path=str(DOWNLOAD_DIR / f"erro_endereco_{ev_record_id}.png"))
-    time.sleep(2)
+
+    # Debug: "Validar" ainda não deixa o endereço "normalizado" (a consulta
+    # de viabilidade recusa mesmo depois) — precisa ver se é falta de
+    # espera pra uma validação assíncrona terminar, ou se falta clicar em
+    # outra coisa depois do Validar.
+    page.wait_for_timeout(5_000)
+    page.screenshot(path=str(DOWNLOAD_DIR / f"pos_validar_{ev_record_id}.png"))
+    (DOWNLOAD_DIR / f"pos_validar_{ev_record_id}.html").write_text(page.content(), encoding="utf-8")
 
 
 # ─── 3. Disparar "Consultar Viabilidade" ───────────────────────────────────
