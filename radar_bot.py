@@ -172,13 +172,22 @@ def localizar_campo_lookup(page, aria_label: str, timeout=15_000):
     return None
 
 
-def selecionar_lookup(page, aria_label: str, texto_busca: str, timeout=15_000) -> bool:
-    """Digita no campo de busca (lookup) e clica na 1ª opção da lista —
-    usado pra campos tipo Cliente/Produto/Item de Produto."""
+def selecionar_lookup(page, aria_label: str, texto_completo: str, timeout=15_000) -> bool:
+    """Digita no campo de busca (lookup) e clica na opção certa da lista —
+    usado pra campos tipo Cliente/Produto/Item de Produto.
+
+    `texto_completo` é o nome EXATO do registro (usado tanto pra buscar
+    quanto, principalmente, pra identificar a opção certa entre as que a
+    busca retornar). A digitação em si usa só o trecho antes do primeiro
+    "(" — nomes de catálogo com pontuação colada no preço (ex.: "SMART
+    (R$575...)", sem espaço) atrapalhavam a busca do Salesforce quando
+    digitados por inteiro (confirmado em execução real: zero resultados).
+    """
     campo = localizar_campo_lookup(page, aria_label, timeout)
     if campo is None:
         log.warning(f"  Campo de busca '{aria_label}' não encontrado.")
         return False
+    texto_busca = texto_completo.split('(')[0].strip()
     # force=True: o painel/overlay do lookup anterior às vezes ainda não
     # terminou de fechar e intercepta o clique no próximo campo (confirmado
     # em execução real — "lightning-overlay-container ... intercepts
@@ -186,13 +195,21 @@ def selecionar_lookup(page, aria_label: str, texto_busca: str, timeout=15_000) -
     campo.click(force=True)
     campo.fill(texto_busca, force=True)
     try:
-        opcao = page.locator("lightning-base-combobox-item[role='option']").first
-        opcao.wait_for(state="visible", timeout=timeout)
-        opcao.click(force=True)
+        opcoes = page.locator("lightning-base-combobox-item[role='option']")
+        opcoes.first.wait_for(state="visible", timeout=timeout)
+        # Pode aparecer mais de uma opção parecida (ex.: mesma velocidade,
+        # com/sem "SMART") — identifica a certa pelo atributo title do
+        # rótulo, que carrega o nome completo e exato do item; se não achar
+        # por title (campo sem essa marcação, ex. "Produto"), cai pra
+        # texto visível e por fim pra 1ª opção.
+        alvo = opcoes.filter(has=page.locator(f"[title='{texto_completo}']"))
+        if alvo.count() == 0:
+            alvo = opcoes.filter(has_text=texto_busca)
+        (alvo.first if alvo.count() > 0 else opcoes.first).click(force=True)
         page.keyboard.press("Escape")  # fecha qualquer resquício do painel antes do próximo campo
         return True
     except Exception:
-        log.warning(f"  Nenhuma opção encontrada para '{aria_label}' = '{texto_busca}'")
+        log.warning(f"  Nenhuma opção encontrada para '{aria_label}' = '{texto_completo}'")
         return False
 
 
