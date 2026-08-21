@@ -490,13 +490,23 @@ def revisar_em_andamento(page):
     for item in em_andamento:
         try:
             resultado = ler_resultado(page, item["ev_salesforce_id"])
-            # "Status das SEVs" pode vir preenchido antes de "Status da
-            # Consulta" virar "Concluído" — qualquer um dos dois já conta
-            # como resultado disponível.
-            if resultado.get("status_consulta") == "Concluído" or resultado.get("status_sevs"):
+            if resultado.get("status_consulta") == "Concluído":
+                # Só aqui é seguro travar Habilitado Para Pricing/Facilidade/
+                # Custo como definitivos — confirmado em execução real que
+                # esses campos podem ainda não estar sincronizados no
+                # instante em que "Status das SEVs" já mostra um resultado
+                # (Habilitado Para Pricing chegou a ficar preso em "Não"
+                # mesmo com o resultado real sendo "Sim").
                 supa_atualizar(item["id"], {**resultado, "status": "concluido"})
             else:
-                supa_atualizar(item["id"], {"status_consulta": resultado.get("status_consulta")})
+                # Ainda não é o estado final, mas já atualiza Status da
+                # Consulta/SEVs como prévia (sem tocar em pricing/
+                # facilidade/custo) — a linha continua "aguardando_
+                # resultado" e é reconferida na próxima rodada.
+                supa_atualizar(item["id"], {
+                    "status_consulta": resultado.get("status_consulta"),
+                    "status_sevs": resultado.get("status_sevs"),
+                })
         except Exception as e:
             log.error(f"  Falha ao ler resultado da consulta {item['id']}: {e}", exc_info=True)
 
