@@ -407,7 +407,12 @@ def ler_resultado(page, ev_record_id: str) -> dict:
 
     status_consulta = ler_texto_do_campo(page, "Status da Consulta")
     status_sevs = ler_texto_do_campo(page, "Status das SEVs")
-    resultado = {"status_consulta": status_consulta, "status_sevs": status_sevs}
+    habilitado_pricing = ler_texto_do_campo(page, "Habilitado Para Pricing")
+    resultado = {
+        "status_consulta": status_consulta,
+        "status_sevs": status_sevs,
+        "habilitado_pricing": habilitado_pricing,
+    }
 
     # "Status das SEVs" às vezes já vem preenchido (Viável/Inviável...)
     # antes de "Status da Consulta" virar "Concluído" (confirmado em
