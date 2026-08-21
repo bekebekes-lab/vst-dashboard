@@ -1,0 +1,53 @@
+name: Radar Bot
+
+on:
+  schedule:
+    # A cada 15 minutos em dias úteis, das 6h às 22h BRT (UTC-3 = UTC+0 9h às 1h)
+    - cron: "*/15 9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,0,1 * * 1-5"
+  workflow_dispatch:
+
+jobs:
+  bot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Instalar dependências Python
+        run: pip install -r requirements.txt
+
+      - name: Instalar dependências do sistema para Playwright
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libnss3 libnspr4 libatk1.0-0 libatk-bridge2.0-0 \
+            libcups2 libdrm2 libxkbcommon0 libxcomposite1 \
+            libxdamage1 libxfixes3 libxrandr2 libgbm1 \
+            libpango-1.0-0 libcairo2 libasound2t64
+
+      - name: Instalar Playwright + Chromium
+        run: playwright install chromium
+
+      - name: Executar bot
+        env:
+          RADAR_USER: ${{ secrets.RADAR_USER }}
+          RADAR_PASS: ${{ secrets.RADAR_PASS }}
+          RADAR_TOTP_SECRET: ${{ secrets.RADAR_TOTP_SECRET }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: python radar_bot.py
+
+      - name: Salvar artefatos em caso de erro
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-erro-radar
+          path: /tmp/radar_bot/
+          retention-days: 3

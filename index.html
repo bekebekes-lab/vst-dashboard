@@ -2314,6 +2314,54 @@
       </div>
     </div>
 
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:18px;margin-bottom:16px;box-shadow:var(--shadow-xs);">
+      <div class="section-title" style="margin-bottom:4px;">🔎 EV - Estudo de Viabilidade</div>
+      <div style="font-size:12px;color:var(--text-2);margin-bottom:14px;">Consulta a viabilidade técnica no Radar (Claro/Embratel) — envia a consulta e o robô traz a resposta (viável/inviável, facilidade e custo) aqui na lista abaixo assim que sair. Disponível só pras ofertas Conecta Smart, Conecta com BLC e Combo Conecta 2P BLD por enquanto.</div>
+
+      <div class="filters-bar">
+        <div class="filter-group">
+          <label>Tipo de oferta</label>
+          <select id="ev-tipo-oferta" onchange="evAoTrocarTipoOferta()">
+            <option value="conecta_smart">Conecta Smart</option>
+            <option value="conecta_blc">Conecta com BLC</option>
+            <option value="combo_2p_bld">Combo Conecta 2P BLD</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label>Velocidade</label>
+          <select id="ev-velocidade"></select>
+        </div>
+        <div class="filter-group" style="min-width:100px;">
+          <label>Qtde. Circuitos</label>
+          <input type="number" id="ev-quantidade-circuitos" value="1" min="1" style="width:100%;">
+        </div>
+      </div>
+      <div class="filters-bar" style="margin-top:10px;">
+        <div class="filter-group" style="min-width:220px;flex:1">
+          <label>Cliente Final (Razão Social)</label>
+          <input type="text" id="ev-cliente-final" placeholder="Ex.: Viação Colombo LTDA" autocomplete="off">
+        </div>
+        <div class="filter-group">
+          <label>CNPJ <span style="font-weight:400;text-transform:none;">(opcional)</span></label>
+          <input type="text" id="ev-cnpj" placeholder="00.000.000/0000-00" autocomplete="off" inputmode="numeric" oninput="conectFormatarCnpj(this)">
+        </div>
+        <div class="filter-group" style="min-width:110px;">
+          <label>CEP</label>
+          <input type="text" id="ev-cep" placeholder="00000-000" autocomplete="off" inputmode="numeric" oninput="conectFormatarCep(this)">
+        </div>
+      </div>
+      <div style="margin-top:16px;display:flex;align-items:center;gap:12px;">
+        <button class="btn-primary" onclick="evConsultarViabilidade()" id="ev-btn-consultar">🔎 Consultar Viabilidade</button>
+        <span id="ev-status-consulta" style="font-size:12px;color:var(--text-2);"></span>
+      </div>
+    </div>
+
+    <div class="section-header">
+      <span class="section-title">Estudos de Viabilidade</span>
+      <button class="btn-refresh" onclick="evCarregarLista()">↻ Atualizar</button>
+    </div>
+    <div id="ev-lista-area"></div>
+
     <div class="section-header">
       <span class="section-title">Funil de Oportunidades</span>
     </div>
@@ -9483,9 +9531,114 @@ function initConectividade() {
     document.getElementById('conect-consultor-telefone').value = USUARIO_ATUAL?.telefone || '';
     document.getElementById('conect-consultor-email').value = USUARIO_ATUAL?.email || '';
     document.addEventListener('click', () => document.querySelectorAll('[id^="conect-menu-"]').forEach(m => m.style.display = 'none'));
+    evAoTrocarTipoOferta();
     CONECT_INICIALIZADA = true;
   }
   conectCarregarFunil();
+  evCarregarLista();
+}
+
+// ─── EV - Estudo de Viabilidade (consulta ao Radar via radar_bot.py) ───────
+// Só cobre as ofertas com correspondência confirmada no catálogo do Radar —
+// mesma tabela de api/_lib/radar-catalogo.js, só pra montar o dropdown de
+// velocidade aqui (o servidor sempre resolve e valida de novo antes de
+// enfileirar a consulta).
+const EV_VELOCIDADES_POR_TIPO = {
+  conecta_smart: ['10 Mega', '20 Mega', '50 Mega', '100 Mega'],
+  conecta_blc: ['150 Mega', '300 Mega'],
+  combo_2p_bld: ['10 Mega', '20 Mega', '50 Mega', '100 Mega', '200 Mega', '500 Mega'],
+};
+const EV_ESTAGIOS = {
+  pendente: { label: 'Pendente', cor: '#6b7280' },
+  processando: { label: 'Processando', cor: '#eda100' },
+  aguardando_resultado: { label: 'Aguardando GAIA', cor: '#2a78d6' },
+  concluido: { label: 'Concluído', cor: '#16a34a' },
+  erro: { label: 'Erro', cor: '#dc2626' },
+};
+
+function evAoTrocarTipoOferta() {
+  const tipo = document.getElementById('ev-tipo-oferta').value;
+  const sel = document.getElementById('ev-velocidade');
+  sel.innerHTML = EV_VELOCIDADES_POR_TIPO[tipo].map(v => `<option value="${v}">${v}</option>`).join('');
+}
+
+async function evConsultarViabilidade() {
+  const tipoOferta = document.getElementById('ev-tipo-oferta').value;
+  const velocidade = document.getElementById('ev-velocidade').value;
+  const quantidadeCircuitos = document.getElementById('ev-quantidade-circuitos').value;
+  const clienteFinal = document.getElementById('ev-cliente-final').value.trim();
+  const razaoSocial = clienteFinal;
+  const cnpj = document.getElementById('ev-cnpj').value.trim();
+  const cep = document.getElementById('ev-cep').value.trim();
+
+  const statusEl = document.getElementById('ev-status-consulta');
+  if (!clienteFinal) { statusEl.textContent = 'Preencha o Cliente Final.'; statusEl.style.color = 'var(--red-sem)'; return; }
+  if (cep.replace(/\D/g, '').length !== 8) { statusEl.textContent = 'CEP inválido.'; statusEl.style.color = 'var(--red-sem)'; return; }
+
+  const btn = document.getElementById('ev-btn-consultar');
+  btn.disabled = true;
+  statusEl.style.color = 'var(--text-2)';
+  statusEl.textContent = 'Enviando consulta...';
+
+  try {
+    const res = await fetch('/api/radar-consulta', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ tipoOferta, velocidade, clienteFinal, razaoSocial, cnpj, cep, quantidadeCircuitos }),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || 'Falha ao enviar a consulta');
+
+    statusEl.style.color = 'var(--green)';
+    statusEl.textContent = 'Consulta enviada — o resultado aparece na lista abaixo assim que o robô processar (alguns minutos).';
+    document.getElementById('ev-cliente-final').value = '';
+    document.getElementById('ev-cnpj').value = '';
+    document.getElementById('ev-cep').value = '';
+    evCarregarLista();
+  } catch (e) {
+    statusEl.style.color = 'var(--red-sem)';
+    statusEl.textContent = e.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function evCarregarLista() {
+  const area = document.getElementById('ev-lista-area');
+  area.innerHTML = '<div class="loading-state"><div class="loading-spinner"></div><p>Carregando...</p></div>';
+  const { data, error } = await supa.from('conectividade_estudos_viabilidade').select('*').order('criado_em', { ascending: false }).limit(50);
+  if (error) {
+    area.innerHTML = `<div class="error-state"><strong>Erro ao carregar</strong>${escapeHtml(error.message)}</div>`;
+    return;
+  }
+  if (!data || data.length === 0) {
+    area.innerHTML = '<div class="coming-soon"><p>Nenhum estudo de viabilidade consultado ainda.</p></div>';
+    return;
+  }
+  area.innerHTML = `<div style="overflow-x:auto;"><table style="width:100%;font-size:12px;">
+    <thead><tr>
+      <th>Cliente Final</th><th>Item de Produto</th><th>CEP</th><th>Status</th>
+      <th>Status da Consulta</th><th>Resultado</th><th>Facilidade</th><th>Custo (CAPEX)</th><th>Enviado em</th>
+    </tr></thead>
+    <tbody>
+      ${data.map(item => {
+        const estagio = EV_ESTAGIOS[item.status] || { label: item.status, cor: '#6b7280' };
+        const resultado = item.status_sevs || '—';
+        const corResultado = item.status_sevs === 'Viável' ? 'var(--green)' : (item.status_sevs && item.status_sevs.startsWith('Inviável') ? 'var(--red-sem)' : 'var(--text-2)');
+        return `<tr>
+          <td>${escapeHtml(item.cliente_final)}${item.ev_numero ? ` <span style="color:var(--text-2);">(${escapeHtml(item.ev_numero)})</span>` : ''}</td>
+          <td>${escapeHtml(item.item_produto || '—')}</td>
+          <td>${escapeHtml(item.cep)}</td>
+          <td><span style="color:${estagio.cor};font-weight:600;">${estagio.label}</span></td>
+          <td>${escapeHtml(item.status_consulta || '—')}</td>
+          <td style="color:${corResultado};font-weight:600;">${escapeHtml(resultado)}</td>
+          <td>${escapeHtml(item.facilidade || '—')}</td>
+          <td>${item.custo_capex != null ? Number(item.custo_capex).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '—'}</td>
+          <td>${item.criado_em ? new Date(item.criado_em).toLocaleString('pt-BR') : '—'}</td>
+        </tr>`;
+      }).join('')}
+    </tbody>
+  </table></div>`;
 }
 
 // Formata enquanto digita e trava em 9 dígitos (00000-000) — impede digitar
