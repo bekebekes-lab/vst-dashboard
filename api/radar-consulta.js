@@ -19,6 +19,13 @@ export default async function handler(req, res) {
   const authUser = await requireAuth(req, res);
   if (!authUser) return;
 
+  // EV - Estudo de Viabilidade ainda em teste — restrito a admin por
+  // enquanto, mesma trava aplicada no front (initConectividade()).
+  const perfilRowAcesso = await getUsuarioDashboard(req, authUser.id);
+  if (perfilRowAcesso?.perfil !== 'admin') {
+    return res.status(403).json({ error: 'Consulta de viabilidade (EV) ainda em teste — disponível só pra admin.' });
+  }
+
   const {
     tipoOferta, velocidade, clienteFinal, razaoSocial, cnpj, cep,
     quantidadeCircuitos,
@@ -42,8 +49,7 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'Configuração do servidor incompleta (service role ou token do GitHub ausente)' });
   }
 
-  const perfilRow = await getUsuarioDashboard(req, authUser.id);
-  const consultorNome = perfilRow?.nome || authUser.email?.split('@')[0] || authUser.email || 'Usuário';
+  const consultorNome = perfilRowAcesso?.nome || authUser.email?.split('@')[0] || authUser.email || 'Usuário';
 
   let novaLinha;
   try {
