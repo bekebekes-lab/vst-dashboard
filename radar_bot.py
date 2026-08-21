@@ -332,13 +332,20 @@ def definir_endereco_sev(page, ev_record_id: str, cep: str):
 
     page.locator("lightning-input.cepField input").first.fill(cep)
     page.locator("button.buscarCepButton").click()
+    time.sleep(3)
+
+    # Debug: a consulta de viabilidade recusou com "Endereços não
+    # normalizados" mesmo depois de clicar Validar/Inserir — precisa ver
+    # com que opções o modal realmente responde depois da busca do CEP
+    # pra saber qual botão de fato completa a normalização (MPE).
+    DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    page.screenshot(path=str(DOWNLOAD_DIR / f"pos_buscar_cep_{ev_record_id}.png"))
+    (DOWNLOAD_DIR / f"pos_buscar_cep_{ev_record_id}.html").write_text(page.content(), encoding="utf-8")
 
     # Depois da busca, confirma com o botão que aparecer (varia conforme o
     # CEP já vir com número/complemento resolvidos ou não).
-    time.sleep(3)
     if not clicar_botao_com_texto(page, "Validar", "Inserir"):
         log.warning("  Nenhum botão de confirmação encontrado após buscar CEP — screenshot salvo.")
-        DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
         page.screenshot(path=str(DOWNLOAD_DIR / f"erro_endereco_{ev_record_id}.png"))
     time.sleep(2)
 
