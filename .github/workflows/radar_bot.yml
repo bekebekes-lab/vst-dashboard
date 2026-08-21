@@ -5,6 +5,15 @@ on:
     # A cada 15 minutos em dias úteis, das 6h às 22h BRT (UTC-3 = UTC+0 9h às 1h)
     - cron: "*/15 9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,0,1 * * 1-5"
   workflow_dispatch:
+    inputs:
+      modo:
+        description: "Modo de execução"
+        required: false
+        default: "normal"
+        type: choice
+        options:
+          - normal
+          - explorar
 
 jobs:
   bot:
@@ -42,6 +51,7 @@ jobs:
           RADAR_PASS: ${{ secrets.RADAR_PASS }}
           RADAR_TOTP_SECRET: ${{ secrets.RADAR_TOTP_SECRET }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          MODO: ${{ github.event.inputs.modo || 'normal' }}
         run: python radar_bot.py
 
       - name: Salvar artefatos de debug

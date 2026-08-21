@@ -556,16 +556,44 @@ def revisar_em_andamento(page):
             log.error(f"  Falha ao ler resultado da consulta {item['id']}: {e}", exc_info=True)
 
 
+def explorar_evs_existentes(page, quantidade: int = 8):
+    """Diagnóstico manual (MODO=explorar) — abre a lista de EVs mais
+    recentes no Radar e entra nos primeiros registros pra ler 'Quantidade
+    de Circuitos' junto do Item de Produto, só pra descobrir o padrão real
+    antes de travar esse campo no Dash. Não roda no fluxo normal."""
+    base = RADAR_URL.replace(".my.salesforce.com", ".lightning.force.com")
+    DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    page.goto(f"{base}/lightning/o/Estudo_de_Viabilidade__c/home", wait_until="networkidle")
+    page.wait_for_timeout(1500)
+    page.screenshot(path=str(DOWNLOAD_DIR / "explorar_lista.png"), full_page=True)
+
+    links = page.locator("lightning-datatable a[href*='/lightning/r/Estudo_de_Viabilidade__c/']")
+    total = min(links.count(), quantidade)
+    log.info(f"Explorando {total} EVs existentes...")
+    hrefs = [links.nth(i).get_attribute("href") for i in range(total)]
+    for i, href in enumerate(hrefs):
+        try:
+            page.goto(f"{base}{href}", wait_until="networkidle")
+            page.wait_for_timeout(1000)
+            page.screenshot(path=str(DOWNLOAD_DIR / f"explorar_ev_{i}.png"), full_page=True)
+        except Exception as e:
+            log.warning(f"  Falha ao abrir EV {i} ({href}): {e}")
+    log.info("Exploração concluída — prints salvos.")
+
+
 def main():
     log.info("=" * 60)
     log.info("Radar Bot")
     log.info("=" * 60)
 
-    pendentes = supa_listar("pendente")
-    em_andamento = supa_listar("aguardando_resultado")
-    if not pendentes and not em_andamento:
-        log.info("Nada a fazer — nenhuma consulta pendente ou aguardando resultado.")
-        return
+    modo = os.environ.get("MODO", "normal")
+
+    if modo != "explorar":
+        pendentes = supa_listar("pendente")
+        em_andamento = supa_listar("aguardando_resultado")
+        if not pendentes and not em_andamento:
+            log.info("Nada a fazer — nenhuma consulta pendente ou aguardando resultado.")
+            return
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True, args=["--no-sandbox", "--disable-dev-shm-usage"])
@@ -574,8 +602,11 @@ def main():
 
         try:
             login(page)
-            processar_pendentes(page)
-            revisar_em_andamento(page)
+            if modo == "explorar":
+                explorar_evs_existentes(page)
+            else:
+                processar_pendentes(page)
+                revisar_em_andamento(page)
         except Exception:
             DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
             try:
