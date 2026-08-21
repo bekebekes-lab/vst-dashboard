@@ -416,7 +416,15 @@ def processar_pendentes(page):
     for item in pendentes:
         try:
             supa_atualizar(item["id"], {"status": "processando"})
-            record_id, numero_ev = criar_estudo(page, item)
+            # Se uma tentativa anterior já criou o EV mas falhou depois
+            # (endereço ou "Consultar Viabilidade"), reaproveita o registro
+            # em vez de criar outro duplicado no Radar a cada retry.
+            if item.get("ev_salesforce_id"):
+                record_id, numero_ev = item["ev_salesforce_id"], item.get("ev_numero")
+                log.info(f"  Reaproveitando EV já criado: {numero_ev} ({record_id})")
+            else:
+                record_id, numero_ev = criar_estudo(page, item)
+                supa_atualizar(item["id"], {"ev_salesforce_id": record_id, "ev_numero": numero_ev})
             definir_endereco_sev(page, record_id, item["cep"])
             consultar_viabilidade(page, record_id)
             supa_atualizar(item["id"], {
