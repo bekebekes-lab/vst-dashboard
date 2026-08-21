@@ -406,11 +406,16 @@ def ler_resultado(page, ev_record_id: str) -> dict:
     page.goto(f"{base}/lightning/r/Estudo_de_Viabilidade__c/{ev_record_id}/view", wait_until="networkidle")
 
     status_consulta = ler_texto_do_campo(page, "Status da Consulta")
-    resultado = {"status_consulta": status_consulta}
-    if status_consulta != "Concluído":
-        return resultado
+    status_sevs = ler_texto_do_campo(page, "Status das SEVs")
+    resultado = {"status_consulta": status_consulta, "status_sevs": status_sevs}
 
-    resultado["status_sevs"] = ler_texto_do_campo(page, "Status das SEVs")
+    # "Status das SEVs" às vezes já vem preenchido (Viável/Inviável...)
+    # antes de "Status da Consulta" virar "Concluído" (confirmado em
+    # execução real) — trata qualquer um dos dois como sinal de que já dá
+    # pra buscar o resultado detalhado (facilidade/custo), em vez de exigir
+    # só o "Concluído" e perder o resultado real por atraso desse campo.
+    if status_consulta != "Concluído" and not status_sevs:
+        return resultado
 
     # Lê a 1ª linha da lista relacionada de SEV's (Facilidade + custos).
     try:
@@ -480,7 +485,10 @@ def revisar_em_andamento(page):
     for item in em_andamento:
         try:
             resultado = ler_resultado(page, item["ev_salesforce_id"])
-            if resultado.get("status_consulta") == "Concluído":
+            # "Status das SEVs" pode vir preenchido antes de "Status da
+            # Consulta" virar "Concluído" — qualquer um dos dois já conta
+            # como resultado disponível.
+            if resultado.get("status_consulta") == "Concluído" or resultado.get("status_sevs"):
                 supa_atualizar(item["id"], {**resultado, "status": "concluido"})
             else:
                 supa_atualizar(item["id"], {"status_consulta": resultado.get("status_consulta")})
