@@ -178,21 +178,23 @@ def selecionar_lookup(page, aria_label: str, texto_completo: str, timeout=15_000
 
     `texto_completo` é o nome EXATO do registro (usado tanto pra buscar
     quanto, principalmente, pra identificar a opção certa entre as que a
-    busca retornar). A digitação em si usa só o trecho antes do primeiro
-    "(" — nomes de catálogo com pontuação colada no preço (ex.: "SMART
-    (R$575...)", sem espaço) atrapalhavam a busca do Salesforce quando
-    digitados por inteiro (confirmado em execução real: zero resultados).
+    busca retornar).
+
+    Sem .click() antes do .fill() de propósito: confirmado manualmente que
+    colar o texto completo no campo real funciona (a busca do Salesforce
+    aceita o texto com preço e tudo) — o problema não era o conteúdo, era
+    o .click(force=True) feito antes, que dispara um clique físico na
+    posição da tela e pode acertar o overlay residual do campo anterior em
+    vez do input (o force=True só faz o Playwright não reclamar disso, não
+    muda pra onde o clique realmente vai). locator.fill() já foca o
+    elemento internamente via API do DOM, sem depender de clique/posição
+    na tela — não sofre desse problema.
     """
     campo = localizar_campo_lookup(page, aria_label, timeout)
     if campo is None:
         log.warning(f"  Campo de busca '{aria_label}' não encontrado.")
         return False
     texto_busca = texto_completo.split('(')[0].strip()
-    # force=True: o painel/overlay do lookup anterior às vezes ainda não
-    # terminou de fechar e intercepta o clique no próximo campo (confirmado
-    # em execução real — "lightning-overlay-container ... intercepts
-    # pointer events").
-    campo.click(force=True)
     campo.fill(texto_busca, force=True)
     try:
         opcoes = page.locator("lightning-base-combobox-item[role='option']")
