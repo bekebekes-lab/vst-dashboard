@@ -352,9 +352,11 @@ def consultar_viabilidade(page, ev_record_id: str):
     page.locator("button[name='Estudo_de_Viabilidade__c.Consultar_Viabilidade']").click(timeout=15_000)
     page.wait_for_selector("text=Consultar Viabilidade", timeout=15_000)
 
-    # Modal pode ter um botão de confirmação (varia por org) — clica se
-    # existir; se a ação for auto-executada (só um spinner), segue direto.
-    clicar_botao_com_texto(page, "Confirmar", "Consultar", "OK", "Enviar", timeout=5_000)
+    # SEM tentativa de clicar num botão de confirmação: no vídeo de
+    # referência esse modal só mostra um spinner e fecha sozinho, sem botão
+    # nenhum — e um clique "Consultar" aqui podia acertar o botão ORIGINAL
+    # da página (ainda visível atrás do modal, mesmo texto "Consultar
+    # Viabilidade"), reabrindo a ação por engano em vez de só confirmar.
 
     # O toast real diz "entregue com sucesso" (confirmado no vídeo de
     # referência) — "enviado" (usado antes) nunca aparece, daí o timeout.
