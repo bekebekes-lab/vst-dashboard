@@ -90,9 +90,12 @@ export default async function handler(req, res) {
   // Carteira é admin-only na UI (aba só aparece pra perfil='admin') — trava
   // aqui também, explícito, em vez de confiar no efeito colateral de escopo
   // nulo (que também vale pra perfil sem escopo configurado, não só admin).
+  // Exceção: usuários com 'carteira' em acesso_extra_abas (concessão pontual
+  // por usuário, sem mudar o perfil nem a trava de escopo dele).
   if (planilha === 'carteira') {
     const perfilRowCarteira = await getUsuarioDashboard(req, authUser.id);
-    if ((perfilRowCarteira?.perfil || 'consultor') !== 'admin') {
+    const temAcessoExtra = (perfilRowCarteira?.acesso_extra_abas || []).includes('carteira');
+    if ((perfilRowCarteira?.perfil || 'consultor') !== 'admin' && !temAcessoExtra) {
       return res.status(403).json({ error: 'Acesso restrito a administradores' });
     }
   }

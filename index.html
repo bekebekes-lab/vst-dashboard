@@ -5165,7 +5165,7 @@ function switchTab(name, el) {
   // Defesa em profundidade: aplicarPermissoes() já esconde o botão de abas
   // não permitidas, mas isso não impede alguém de chamar switchTab('churn', ...)
   // direto pelo console. Trava aqui de novo, contra o perfil real.
-  const permitidas = ABAS_PERMITIDAS_POR_PERFIL[USUARIO_ATUAL?.perfil] || ['gerencial'];
+  const permitidas = getAbasPermitidas(USUARIO_ATUAL);
   if (!permitidas.includes(name)) {
     if (name === 'gerencial') return;
     const btnGerencial = document.querySelector('.tab-btn[onclick*="gerencial"]');
@@ -5223,6 +5223,16 @@ const ABAS_PERMITIDAS_POR_PERFIL = {
   'supervisao_beta':['gerencial', 'producao', 'conectividade'],
   'consultor':      ['gerencial', 'conectividade']
 };
+// Concessão pontual por usuário (usuarios_dashboard.acesso_extra_abas), além
+// do que o perfil já dá — usada pra liberar Churn/Carteira só pra pessoas
+// específicas sem trocar o perfil delas (o que quebraria a trava de escopo
+// em aplicarPermissoes()/aplicarFiltrosGerencial, que é ligada ao nome do
+// perfil, não ao usuário).
+function getAbasPermitidas(usuario) {
+  const base = ABAS_PERMITIDAS_POR_PERFIL[usuario?.perfil] || ['gerencial'];
+  const extras = usuario?.acesso_extra_abas || [];
+  return extras.length ? [...new Set([...base, ...extras])] : base;
+}
 const TAB_LABELS = {
   simulador: '🎯 Simulador de Carteira',
   gerencial: '📊 Gerencial',
@@ -6634,7 +6644,7 @@ async function carregarPerfil(user) {
   // Se o usuário tiver uma "aba padrão ao abrir" salva (drawer de conta >
   // Preferências) e ela continuar permitida pro perfil dele, abre direto
   // nela em vez do padrão (Simulador).
-  const permitidas = ABAS_PERMITIDAS_POR_PERFIL[USUARIO_ATUAL.perfil] || ['gerencial'];
+  const permitidas = getAbasPermitidas(USUARIO_ATUAL);
   const prefAba = localStorage.getItem('vst_pref_aba_padrao');
   if (prefAba && permitidas.includes(prefAba)) {
     const btnPref = document.querySelector(`.tab-btn[onclick*="'${prefAba}'"]`);
@@ -6670,7 +6680,7 @@ async function carregarPerfil(user) {
 //  consultor      — nada muda (travado no consultor_ref)
 function aplicarPermissoes() {
   const p = USUARIO_ATUAL.perfil;
-  const permitidas = ABAS_PERMITIDAS_POR_PERFIL[p] || ['gerencial'];
+  const permitidas = getAbasPermitidas(USUARIO_ATUAL);
 
   // Esconde abas não permitidas
   document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -7027,7 +7037,7 @@ function abrirDrawerConta() {
   document.getElementById('drawer-pref-telefone').value = USUARIO_ATUAL?.telefone || '';
   document.getElementById('drawer-pref-cargo').value = USUARIO_ATUAL?.cargo || '';
 
-  const permitidas = ABAS_PERMITIDAS_POR_PERFIL[USUARIO_ATUAL?.perfil] || ['gerencial'];
+  const permitidas = getAbasPermitidas(USUARIO_ATUAL);
   const prefAtual = localStorage.getItem('vst_pref_aba_padrao');
   document.getElementById('drawer-pref-aba').innerHTML = permitidas
     .map(tab => `<option value="${tab}" ${tab === prefAtual ? 'selected' : ''}>${escapeHtml(TAB_LABELS[tab] || tab)}</option>`)
