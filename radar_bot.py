@@ -348,19 +348,26 @@ def definir_endereco_sev(page, ev_record_id: str, cep: str, numero: str = None):
     page.screenshot(path=str(DOWNLOAD_DIR / f"pos_buscar_cep_{ev_record_id}.png"))
     (DOWNLOAD_DIR / f"pos_buscar_cep_{ev_record_id}.html").write_text(page.content(), encoding="utf-8")
 
-    # Depois da busca, confirma com o botão que aparecer (varia conforme o
-    # CEP já vir com número/complemento resolvidos ou não).
-    if not clicar_botao_com_texto(page, "Validar", "Inserir"):
-        log.warning("  Nenhum botão de confirmação encontrado após buscar CEP — screenshot salvo.")
+    # "Validar" e "Inserir" NÃO são alternativas — são duas etapas em
+    # sequência (confirmado com print real): "Validar" só confirma que o
+    # endereço é padronizável (toast "ENDERECO CONFIRMADO E PADRONIZADO"),
+    # o modal continua aberto, e só o clique em "Inserir" (que fica
+    # habilitado depois do Validar) de fato salva o endereço no SEV. Sem
+    # esse 2º clique, a consulta de viabilidade recusava com "Endereços não
+    # normalizados" — o formulário nunca tinha sido realmente submetido.
+    if not clicar_botao_com_texto(page, "Validar", timeout=15_000):
+        log.warning("  Botão 'Validar' não encontrado após buscar CEP — screenshot salvo.")
         page.screenshot(path=str(DOWNLOAD_DIR / f"erro_endereco_{ev_record_id}.png"))
+        return
+    page.wait_for_selector("text=CONFIRMADO E PADRONIZADO", timeout=15_000)
 
-    # Debug: "Validar" ainda não deixa o endereço "normalizado" (a consulta
-    # de viabilidade recusa mesmo depois) — precisa ver se é falta de
-    # espera pra uma validação assíncrona terminar, ou se falta clicar em
-    # outra coisa depois do Validar.
-    page.wait_for_timeout(5_000)
-    page.screenshot(path=str(DOWNLOAD_DIR / f"pos_validar_{ev_record_id}.png"))
-    (DOWNLOAD_DIR / f"pos_validar_{ev_record_id}.html").write_text(page.content(), encoding="utf-8")
+    if not clicar_botao_com_texto(page, "Inserir", timeout=15_000):
+        log.warning("  Botão 'Inserir' não encontrado depois de Validar — screenshot salvo.")
+        page.screenshot(path=str(DOWNLOAD_DIR / f"erro_endereco_{ev_record_id}.png"))
+        return
+
+    page.wait_for_timeout(3_000)
+    page.screenshot(path=str(DOWNLOAD_DIR / f"pos_inserir_{ev_record_id}.png"))
 
 
 # ─── 3. Disparar "Consultar Viabilidade" ───────────────────────────────────
