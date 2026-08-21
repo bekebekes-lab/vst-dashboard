@@ -317,7 +317,7 @@ def criar_estudo(page, item: dict) -> tuple[str, str]:
 
 
 # ─── 2. Definir endereço do SEV (auto-criado junto com o EV) ───────────────
-def definir_endereco_sev(page, ev_record_id: str, cep: str):
+def definir_endereco_sev(page, ev_record_id: str, cep: str, numero: str = None):
     log.info(f"Definindo endereço (CEP {cep}) do SEV...")
     base = RADAR_URL.replace(".my.salesforce.com", ".lightning.force.com")
     page.goto(f"{base}/lightning/r/Estudo_de_Viabilidade__c/{ev_record_id}/related/SEV_s__r/view", wait_until="networkidle")
@@ -334,10 +334,16 @@ def definir_endereco_sev(page, ev_record_id: str, cep: str):
     page.locator("button.buscarCepButton").click()
     time.sleep(3)
 
-    # Debug: a consulta de viabilidade recusou com "Endereços não
-    # normalizados" mesmo depois de clicar Validar/Inserir — precisa ver
-    # com que opções o modal realmente responde depois da busca do CEP
-    # pra saber qual botão de fato completa a normalização (MPE).
+    # O CEP sozinho não traz o número do imóvel — sem ele, a consulta de
+    # viabilidade recusa com "Endereços não normalizados" mesmo depois de
+    # clicar Validar (confirmado em execução real, print mostrando o campo
+    # "Número" vazio). O Dash ainda não coleta esse dado do consultor — usa
+    # um valor provisório só pra não travar a normalização por enquanto.
+    try:
+        page.locator("lightning-input.numeroField input").first.fill(numero or "1")
+    except Exception:
+        log.warning("  Campo 'Número' não encontrado no modal de endereço.")
+
     DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
     page.screenshot(path=str(DOWNLOAD_DIR / f"pos_buscar_cep_{ev_record_id}.png"))
     (DOWNLOAD_DIR / f"pos_buscar_cep_{ev_record_id}.html").write_text(page.content(), encoding="utf-8")
@@ -435,7 +441,7 @@ def processar_pendentes(page):
             else:
                 record_id, numero_ev = criar_estudo(page, item)
                 supa_atualizar(item["id"], {"ev_salesforce_id": record_id, "ev_numero": numero_ev})
-            definir_endereco_sev(page, record_id, item["cep"])
+            definir_endereco_sev(page, record_id, item["cep"], item.get("numero"))
             consultar_viabilidade(page, record_id)
             supa_atualizar(item["id"], {
                 "status": "aguardando_resultado",
