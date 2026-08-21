@@ -284,7 +284,11 @@ def criar_estudo(page, item: dict) -> tuple[str, str]:
 
     # Modal 2: formulário — preenche só por atributo `name` (API name real).
     preencher_input_por_name(page, "Razao_Social__c", item.get("razao_social") or item["cliente_final"])
-    preencher_input_por_name(page, "CNPJ__c", item.get("cnpj"))
+    # Só dígitos — CNPJ formatado com pontuação (ex.: "02.680.623/0001-88")
+    # é rejeitado pelo Salesforce ("Revise os seguintes campos: CNPJ"),
+    # confirmado em execução real. O Dash manda formatado, então limpa aqui.
+    cnpj_limpo = re.sub(r"\D", "", item.get("cnpj") or "")
+    preencher_input_por_name(page, "CNPJ__c", cnpj_limpo or None)
     preencher_input_por_name(page, "Cliente_Final__c", item["cliente_final"])
 
     if not selecionar_lookup(page, "Produto", item["produto"]):
@@ -352,7 +356,9 @@ def consultar_viabilidade(page, ev_record_id: str):
     # existir; se a ação for auto-executada (só um spinner), segue direto.
     clicar_botao_com_texto(page, "Confirmar", "Consultar", "OK", "Enviar", timeout=5_000)
 
-    page.wait_for_selector("text=enviado com sucesso", timeout=60_000)
+    # O toast real diz "entregue com sucesso" (confirmado no vídeo de
+    # referência) — "enviado" (usado antes) nunca aparece, daí o timeout.
+    page.wait_for_selector("text=entregue com sucesso", timeout=60_000)
     log.info("  Consulta enviada ao GAIA com sucesso.")
 
 
