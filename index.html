@@ -2198,10 +2198,27 @@
             <option value="bld_oferta_pme">BLD Oferta PME</option>
             <option value="conecta_blc">Conecta com BLC</option>
             <option value="combo_2p_bld">Combo Conecta 2P BLD</option>
+            <option value="oitocentos">0800-Flex</option>
+            <option value="mpls">MPLS</option>
+            <option value="lan_epl">LAN EPL</option>
+          </select>
+        </div>
+        <div class="filter-group" id="conect-grupo-tipo-lanepl" style="display:none;">
+          <label>Tipo de circuito</label>
+          <select id="conect-tipo-lanepl" onchange="conectAtualizarValorEstimado()">
+            <option value="A1">A1</option>
+            <option value="MEF-B1">MEF-B1</option>
+          </select>
+        </div>
+        <div class="filter-group" id="conect-grupo-trajeto-lanepl" style="display:none;">
+          <label>Trajeto</label>
+          <select id="conect-trajeto-lanepl" onchange="conectAtualizarValorEstimado()">
+            <option value="Local">Local</option>
+            <option value="Interurbano">Interurbano</option>
           </select>
         </div>
         <div class="filter-group">
-          <label>Velocidade</label>
+          <label id="conect-label-velocidade">Velocidade</label>
           <select id="conect-velocidade" onchange="conectAoTrocarVelocidade()"></select>
         </div>
         <div class="filter-group" id="conect-grupo-roteador" style="display:none;">
@@ -2254,7 +2271,7 @@
         </div>
         <div class="filter-group" style="min-width:180px;flex:1">
           <label>Cidade</label>
-          <input type="text" id="conect-cliente-cidade" placeholder="Ex.: Colombo" autocomplete="off">
+          <input type="text" id="conect-cliente-cidade" placeholder="Ex.: Colombo" autocomplete="off" oninput="conectAoAlterarCidade()">
         </div>
         <div class="filter-group" style="min-width:90px;">
           <label>UF</label>
@@ -9226,16 +9243,39 @@ function carteiraFecharDetalhe() {
 // Espelha SÓ as opções de dropdown das tabelas de preço do servidor
 // (api/_lib/propostas-dados.js) — o valor em R$ é sempre calculado e
 // validado no servidor, nunca aqui no cliente.
+// 0800-Flex usa "pacote de minutos" em vez de velocidade — reaproveita o
+// mesmo <select> de velocidade (relabelado) pra não duplicar a UI. MPLS
+// mostra por padrão as velocidades da Região I (a maioria das cidades);
+// a lista é atualizada dinamicamente conforme a cidade digitada, em
+// conectAoAlterarCidade(). LAN EPL tem o mesmo conjunto de velocidades pros
+// 4 combos de tipo/trajeto, então não precisa variar com esses campos.
 const CONECT_VELOCIDADES = {
   conecta_smart: ['10 Mega', '20 Mega', '50 Mega', '100 Mega'],
   bld_oferta_pme: ['10M', '20M', '30M', '50M', '100M', '200M'],
   conecta_blc: ['150 Mega', '300 Mega'],
   combo_2p_bld: ['10 Mega', '20 Mega', '50 Mega', '100 Mega', '200 Mega', '500 Mega'],
+  oitocentos: ['1.000 minutos', '5.000 minutos', '10.000 minutos', '20.000 minutos'],
+  mpls: ['20M', '50M', '100M', '200M', '500M', '700M', '1G'],
+  lan_epl: ['10M', '20M', '30M', '50M', '70M', '100M', '200M', '500M', '700M', '1G'],
 };
+const CONECT_MPLS_VELOCIDADES_POR_REGIAO = {
+  I: ['20M', '50M', '100M', '200M', '500M', '700M', '1G'],
+  II: ['20M', '50M', '100M', '200M', '1G'],
+  V: ['20M', '34M'],
+};
+const CONECT_MPLS_CIDADES_REGIAO_II = ['BOA VISTA', 'MACAPÁ', 'MACAPA', 'MANAUS'];
+const CONECT_MPLS_CIDADES_REGIAO_V = ['CORUMBÁ', 'CORUMBA', 'ITAITUBA', 'TUCURUÍ', 'TUCURUI', 'GUAJARÁ-MIRIM', 'GUAJARA-MIRIM'];
+function conectMplsDetectarRegiao(cidade) {
+  const c = (cidade || '').trim().toUpperCase();
+  if (CONECT_MPLS_CIDADES_REGIAO_II.some(nome => c.includes(nome))) return 'II';
+  if (CONECT_MPLS_CIDADES_REGIAO_V.some(nome => c.includes(nome))) return 'V';
+  return 'I';
+}
 // Só ofertas com escolha de roteador aparecem com o grupo de roteador
 // visível — BLD Oferta PME (preço muda por modelo) e Combo Conecta 2P BLD
-// (só escolhe o modelo entregue, preço já é fechado por velocidade).
-const CONECT_TIPOS_COM_ROTEADOR = ['bld_oferta_pme', 'combo_2p_bld'];
+// (só escolhe o modelo entregue, preço já é fechado por velocidade) têm
+// roteador obrigatório; MPLS e LAN EPL têm roteador opcional ("Nenhum").
+const CONECT_TIPOS_COM_ROTEADOR = ['bld_oferta_pme', 'combo_2p_bld', 'mpls', 'lan_epl'];
 const CONECT_ROTEADORES_POR_TIPO = {
   bld_oferta_pme: {
     'HP 954': { excluidoEm: ['200M'] },
@@ -9246,12 +9286,33 @@ const CONECT_ROTEADORES_POR_TIPO = {
     'Fortigate 40F': { excluidoEm: [] },
     'Huawei AR651': { excluidoEm: [] },
   },
+  mpls: {
+    'Nenhum': { excluidoEm: [] },
+    'Huawei AR651': { excluidoEm: [] },
+    'Huawei AR6121E': { excluidoEm: [] },
+  },
+  lan_epl: {
+    'Nenhum': { excluidoEm: [] },
+    'Huawei AR651': { excluidoEm: [] },
+    'Huawei AR6121E': { excluidoEm: [] },
+  },
 };
+// 0800 grava o "pacote" (não "velocidade") na oportunidade; LAN EPL grava
+// tipo/trajeto além da velocidade — esse helper decide o que mostrar no
+// card/detalhe do funil pra cada tipo de oferta.
+function conectDescricaoBanda(item) {
+  if (item.tipo_oferta === 'oitocentos') return item.pacote;
+  if (item.tipo_oferta === 'lan_epl' && item.tipo && item.trajeto) return `${item.tipo} - ${item.trajeto} - ${item.velocidade}`;
+  return item.velocidade;
+}
 const CONECT_NOMES_OFERTA = {
   conecta_smart: 'Conecta Smart',
   bld_oferta_pme: 'BLD Oferta PME',
   conecta_blc: 'Conecta com BLC',
   combo_2p_bld: 'Combo Conecta 2P BLD',
+  oitocentos: '0800-Flex',
+  mpls: 'MPLS',
+  lan_epl: 'LAN EPL',
 };
 const CONECT_ESTAGIOS = [
   { key: 'proposta_gerada', label: 'Proposta Gerada', cor: '#2a78d6' },
@@ -9264,10 +9325,31 @@ let CONECT_INICIALIZADA = false;
 
 function conectAoTrocarTipoOferta() {
   const tipo = document.getElementById('conect-tipo-oferta').value;
-  const selVelocidade = document.getElementById('conect-velocidade');
-  selVelocidade.innerHTML = CONECT_VELOCIDADES[tipo].map(v => `<option value="${v}">${v}</option>`).join('');
+  document.getElementById('conect-label-velocidade').textContent = tipo === 'oitocentos' ? 'Pacote de minutos' : 'Velocidade';
+  document.getElementById('conect-grupo-tipo-lanepl').style.display = tipo === 'lan_epl' ? '' : 'none';
+  document.getElementById('conect-grupo-trajeto-lanepl').style.display = tipo === 'lan_epl' ? '' : 'none';
   document.getElementById('conect-grupo-roteador').style.display = CONECT_TIPOS_COM_ROTEADOR.includes(tipo) ? '' : 'none';
+  conectAtualizarVelocidadesDisponiveis();
+}
+
+// Recalcula as opções de velocidade/pacote — separado de
+// conectAoTrocarTipoOferta() porque o MPLS precisa reconstruir essa lista
+// quando a CIDADE muda (região), sem o usuário trocar o tipo de oferta.
+function conectAtualizarVelocidadesDisponiveis() {
+  const tipo = document.getElementById('conect-tipo-oferta').value;
+  const selVelocidade = document.getElementById('conect-velocidade');
+  const opcoes = tipo === 'mpls'
+    ? CONECT_MPLS_VELOCIDADES_POR_REGIAO[conectMplsDetectarRegiao(document.getElementById('conect-cliente-cidade').value)]
+    : CONECT_VELOCIDADES[tipo];
+  const valorAnterior = selVelocidade.value;
+  selVelocidade.innerHTML = opcoes.map(v => `<option value="${v}">${v}</option>`).join('');
+  if (opcoes.includes(valorAnterior)) selVelocidade.value = valorAnterior;
   conectAoTrocarVelocidade();
+}
+
+function conectAoAlterarCidade() {
+  if (document.getElementById('conect-tipo-oferta').value === 'mpls') conectAtualizarVelocidadesDisponiveis();
+  else conectAtualizarValorEstimado();
 }
 
 function conectAoTrocarVelocidade() {
@@ -9291,6 +9373,24 @@ const CONECT_PRECOS_BLC = { '150 Mega': 350.00, '300 Mega': 400.00 };
 const CONECT_PRECOS_COMBO_2P_BLD = { '10 Mega': 1035.23, '20 Mega': 1392.23, '50 Mega': 1606.23, '100 Mega': 1796.22, '200 Mega': 1906.22, '500 Mega': 3236.22 };
 const CONECT_PRECOS_BLD_SEM_ROTEADOR = { '10M': 475.00, '20M': 505.00, '30M': 565.00, '50M': 590.00, '100M': 647.00, '200M': 1101.00 };
 const CONECT_PRECO_ROTEADOR_BLD = { 'HP 954': 88.77, 'Huawei AR651': 173.43, 'Meraki MX67': 201.53 };
+const CONECT_PRECOS_OITOCENTOS = { '1.000 minutos': 350.00, '5.000 minutos': 500.00, '10.000 minutos': 800.00, '20.000 minutos': 1200.00 };
+const CONECT_PRECOS_MPLS_POR_REGIAO = {
+  I: { '20M': 486.00, '50M': 658.00, '100M': 843.00, '200M': 1083.00, '500M': 2150.00, '700M': 2612.00, '1G': 3191.00 },
+  II: { '20M': 510.00, '50M': 691.00, '100M': 885.00, '200M': 1137.00, '1G': 3351.00 },
+  V: { '20M': 2727.00, '34M': 4412.00 },
+};
+const CONECT_PRECOS_LAN_EPL = {
+  A1: {
+    Local: { '10M': 909.00, '20M': 913.00, '30M': 1043.00, '50M': 1329.00, '70M': 1589.00, '100M': 1940.00, '200M': 2521.00, '500M': 4708.00, '700M': 6012.00, '1G': 7645.00 },
+    Interurbano: { '10M': 1037.00, '20M': 1063.00, '30M': 1171.00, '50M': 1456.00, '70M': 1742.00, '100M': 2140.00, '200M': 3157.00, '500M': 5894.00, '700M': 7528.00, '1G': 9572.00 },
+  },
+  'MEF-B1': {
+    Local: { '10M': 1196.00, '20M': 1229.00, '30M': 1364.00, '50M': 1530.00, '70M': 1777.00, '100M': 2122.00, '200M': 2440.00, '500M': 4195.00, '700M': 5548.00, '1G': 7108.00 },
+    Interurbano: { '10M': 1547.00, '20M': 1581.00, '30M': 1666.00, '50M': 1931.00, '70M': 2244.00, '100M': 2679.00, '200M': 3451.00, '500M': 6441.00, '700M': 8226.00, '1G': 10161.00 },
+  },
+};
+const CONECT_PRECO_ROTEADOR_MPLS_LAN_EPL = { 'Huawei AR651': 173.43, 'Huawei AR6121E': 302.50 };
+const CONECT_DESCONTO_36_MESES_MPLS_LAN_EPL = 0.10;
 const CONECT_ALICOTAS_UF = {
   AC: 0.7804350000000001, AL: 0.7707999999999999, AM: 0.7707999999999999, AP: 0.6840849999999999,
   BA: 0.7659825, CE: 0.7707999999999999, DF: 0.7707999999999999, ES: 0.7997049999999999,
@@ -9330,6 +9430,38 @@ function conectAtualizarValorEstimado() {
       const precoRoteador = CONECT_PRECO_ROTEADOR_BLD[roteador];
       if (!fator) aviso = `UF "${uf}" não está na tabela de alíquotas.`;
       else if (base != null && precoRoteador != null) valor = Math.round(((base + precoRoteador) / fator) * 100) / 100;
+    }
+  } else if (tipo === 'oitocentos') {
+    if (!uf) {
+      aviso = 'Informe o CEP do cliente pra calcular o valor — o 0800 depende do imposto por UF.';
+    } else {
+      const fator = CONECT_ALICOTAS_UF[uf];
+      const base = CONECT_PRECOS_OITOCENTOS[velocidade];
+      if (!fator) aviso = `UF "${uf}" não está na tabela de alíquotas.`;
+      else if (base != null) valor = Math.round((base / fator) * 100) / 100;
+    }
+  } else if (tipo === 'mpls') {
+    if (!uf) {
+      aviso = 'Informe o CEP do cliente pra calcular o valor — o MPLS depende do imposto por UF.';
+    } else {
+      const regiao = conectMplsDetectarRegiao(document.getElementById('conect-cliente-cidade').value);
+      const fator = CONECT_ALICOTAS_UF[uf];
+      const base = CONECT_PRECOS_MPLS_POR_REGIAO[regiao]?.[velocidade];
+      const precoRoteador = (roteador && roteador !== 'Nenhum') ? CONECT_PRECO_ROTEADOR_MPLS_LAN_EPL[roteador] : 0;
+      if (!fator) aviso = `UF "${uf}" não está na tabela de alíquotas.`;
+      else if (base != null) valor = Math.round(((base * (1 - CONECT_DESCONTO_36_MESES_MPLS_LAN_EPL) + precoRoteador) / fator) * 100) / 100;
+    }
+  } else if (tipo === 'lan_epl') {
+    if (!uf) {
+      aviso = 'Informe o CEP do cliente pra calcular o valor — o LAN EPL depende do imposto por UF.';
+    } else {
+      const tipoCircuito = document.getElementById('conect-tipo-lanepl').value;
+      const trajeto = document.getElementById('conect-trajeto-lanepl').value;
+      const fator = CONECT_ALICOTAS_UF[uf];
+      const base = CONECT_PRECOS_LAN_EPL[tipoCircuito]?.[trajeto]?.[velocidade];
+      const precoRoteador = (roteador && roteador !== 'Nenhum') ? CONECT_PRECO_ROTEADOR_MPLS_LAN_EPL[roteador] : 0;
+      if (!fator) aviso = `UF "${uf}" não está na tabela de alíquotas.`;
+      else if (base != null) valor = Math.round(((base * (1 - CONECT_DESCONTO_36_MESES_MPLS_LAN_EPL) + precoRoteador) / fator) * 100) / 100;
     }
   }
 
@@ -9378,7 +9510,7 @@ async function conectBuscarCep() {
     if (json.bairro) document.getElementById('conect-cliente-bairro').value = json.bairro;
     if (json.localidade) document.getElementById('conect-cliente-cidade').value = json.localidade;
     if (json.uf) document.getElementById('conect-cliente-uf').value = json.uf;
-    conectAtualizarValorEstimado(); // a UF pode ter acabado de ser preenchida pelo CEP
+    conectAoAlterarCidade(); // UF/cidade podem ter acabado de ser preenchidas pelo CEP (cidade decide a região do MPLS)
   } catch (e) {
     // Falha na consulta não deve travar o preenchimento manual do endereço.
   }
@@ -9440,8 +9572,15 @@ function conectMontarEnderecoCompleto() {
 
 async function conectGerarProposta() {
   const tipoOferta = document.getElementById('conect-tipo-oferta').value;
-  const velocidade = document.getElementById('conect-velocidade').value;
-  const roteador = CONECT_TIPOS_COM_ROTEADOR.includes(tipoOferta) ? document.getElementById('conect-roteador').value : null;
+  // No 0800 o mesmo <select> de velocidade é reaproveitado (relabelado) pra
+  // "pacote de minutos" — o valor vai pro campo `pacote`, não `velocidade`.
+  const velocidadeOuPacote = document.getElementById('conect-velocidade').value;
+  const velocidade = tipoOferta === 'oitocentos' ? null : velocidadeOuPacote;
+  const pacote = tipoOferta === 'oitocentos' ? velocidadeOuPacote : null;
+  const tipo = tipoOferta === 'lan_epl' ? document.getElementById('conect-tipo-lanepl').value : null;
+  const trajeto = tipoOferta === 'lan_epl' ? document.getElementById('conect-trajeto-lanepl').value : null;
+  const roteadorSelecionado = CONECT_TIPOS_COM_ROTEADOR.includes(tipoOferta) ? document.getElementById('conect-roteador').value : null;
+  const roteador = (roteadorSelecionado && roteadorSelecionado !== 'Nenhum') ? roteadorSelecionado : null;
   const clienteNome = document.getElementById('conect-cliente-nome').value.trim();
   const clienteCnpj = document.getElementById('conect-cliente-cnpj').value.trim();
   const clienteContato = document.getElementById('conect-cliente-contato').value.trim();
@@ -9456,7 +9595,9 @@ async function conectGerarProposta() {
 
   const statusEl = document.getElementById('conect-status-geracao');
   if (!clienteNome) { statusEl.textContent = 'Preencha o nome do cliente.'; statusEl.style.color = 'var(--red-sem)'; return; }
-  if (tipoOferta === 'bld_oferta_pme' && !clienteUf) { statusEl.textContent = 'UF do cliente é obrigatória pro BLD Oferta PME.'; statusEl.style.color = 'var(--red-sem)'; return; }
+  const TIPOS_QUE_EXIGEM_UF = ['bld_oferta_pme', 'oitocentos', 'mpls', 'lan_epl'];
+  if (TIPOS_QUE_EXIGEM_UF.includes(tipoOferta) && !clienteUf) { statusEl.textContent = `UF do cliente é obrigatória pro ${CONECT_NOMES_OFERTA[tipoOferta]}.`; statusEl.style.color = 'var(--red-sem)'; return; }
+  if (tipoOferta === 'mpls' && !clienteCidade) { statusEl.textContent = 'Cidade do cliente é obrigatória pro MPLS (define a região de preço).'; statusEl.style.color = 'var(--red-sem)'; return; }
 
   const btn = document.getElementById('conect-btn-gerar');
   btn.disabled = true;
@@ -9468,7 +9609,7 @@ async function conectGerarProposta() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: JSON.stringify({
-        tipoOferta, velocidade, roteador,
+        tipoOferta, velocidade, roteador, pacote, tipo, trajeto,
         clienteNome, clienteCnpj, clienteEndereco, clienteCidade, clienteUf, clienteContato, clienteTelefone,
         consultorNome, consultorCargo, consultorTelefone, consultorEmail,
       }),
@@ -9556,7 +9697,7 @@ function conectRenderFunil() {
                   </div>
                 </div>` : ''}
               </div>
-              <div style="font-size:11px;color:var(--text-2);margin-bottom:2px;">${CONECT_NOMES_OFERTA[item.tipo_oferta] || item.tipo_oferta} · ${escapeHtml(item.velocidade)}</div>
+              <div style="font-size:11px;color:var(--text-2);margin-bottom:2px;">${CONECT_NOMES_OFERTA[item.tipo_oferta] || item.tipo_oferta} · ${escapeHtml(conectDescricaoBanda(item))}</div>
               <div style="font-size:12px;font-weight:600;color:var(--brand);margin-bottom:4px;">${Number(item.valor_mensal).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}/mês</div>
               <div style="font-size:10px;color:var(--text-2);margin-bottom:8px;">Gerado por: ${escapeHtml(item.gerado_por_nome || item.consultor_nome || '—')}</div>
               <select style="width:100%;font-size:11px;padding:4px 6px;" onchange="conectMudarEstagio(${item.id}, this.value)">
@@ -9619,7 +9760,7 @@ function conectAbrirDetalhe(id) {
     ['Telefone do cliente', item.cliente_telefone], ['A/C (contato)', item.cliente_contato],
     ['Endereço', item.cliente_endereco], ['Cidade', item.cliente_cidade], ['UF', item.cliente_uf],
     ['Tipo de oferta', CONECT_NOMES_OFERTA[item.tipo_oferta] || item.tipo_oferta],
-    ['Velocidade', item.velocidade], ['Roteador', item.roteador],
+    [item.tipo_oferta === 'oitocentos' ? 'Pacote' : 'Velocidade', conectDescricaoBanda(item)], ['Roteador', item.roteador],
     ['Valor mensal', item.valor_mensal != null ? Number(item.valor_mensal).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : null],
     ['Valor de (antes do desconto)', item.valor_de != null ? Number(item.valor_de).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : null],
     ['Desconto aplicado', item.valor_desconto != null ? Number(item.valor_desconto).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : null],

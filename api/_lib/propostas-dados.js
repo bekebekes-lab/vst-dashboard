@@ -99,6 +99,114 @@ export function calcularCombo2PBLD(velocidade, roteador) {
   return { valorMensal };
 }
 
+// 0800-Flex (Book Clareando PME, Ago/2026, pág. 95 + aba "0800" da
+// calculadora) — valores sem imposto, varia por UF (mesmo fator do BLD).
+export const OITOCENTOS_PRECOS = {
+  '1.000 minutos': 350.00,
+  '5.000 minutos': 500.00,
+  '10.000 minutos': 800.00,
+  '20.000 minutos': 1200.00,
+};
+export const OITOCENTOS_EXCEDENTE_POR_MINUTO = 0.06; // sem imposto, fixo, independente da origem
+
+export function calcularOitocentos(pacote, uf) {
+  const semImposto = OITOCENTOS_PRECOS[pacote];
+  if (semImposto === undefined) return null;
+  const fatorUF = ALICOTAS_UF[(uf || '').trim().toUpperCase()];
+  if (!fatorUF) return null;
+  const valorMensal = Math.round((semImposto / fatorUF) * 100) / 100;
+  return { valorMensal };
+}
+
+// MPLS (Book Clareando PME, Ago/2026, pág. 110 + aba "MPLS") — valores sem
+// imposto, "Acesso + Porta". Varia por REGIÃO (decidida pela cidade do
+// cliente, não pela UF) e depois por UF (imposto, igual aos outros
+// produtos). Região I é a padrão ("Demais localidades"); II e V são
+// exceções por cidade específica.
+export const MPLS_PRECOS_POR_REGIAO = {
+  I: { '20M': 486.00, '50M': 658.00, '100M': 843.00, '200M': 1083.00, '500M': 2150.00, '700M': 2612.00, '1G': 3191.00 },
+  II: { '20M': 510.00, '50M': 691.00, '100M': 885.00, '200M': 1137.00, '1G': 3351.00 },
+  V: { '20M': 2727.00, '34M': 4412.00 },
+};
+export const MPLS_CIDADES_REGIAO_II = ['BOA VISTA', 'MACAPÁ', 'MACAPA', 'MANAUS'];
+export const MPLS_CIDADES_REGIAO_V = ['CORUMBÁ', 'CORUMBA', 'ITAITUBA', 'TUCURUÍ', 'TUCURUI', 'GUAJARÁ-MIRIM', 'GUAJARA-MIRIM'];
+export const MPLS_ROTEADORES = {
+  'Huawei AR651': 173.43, // até 500Mbps
+  'Huawei AR6121E': 302.50, // até 1Gbps
+};
+// "Valores informados para contratos de 12 meses" — fidelidade de 36 meses
+// dá até 10% de desconto sobre a tabela (aplicado só no link, não no
+// roteador, que é item avulso sem essa condição de fidelidade).
+export const MPLS_LAN_EPL_DESCONTO_36_MESES = 0.10;
+
+export function mplsDetectarRegiao(cidade) {
+  const c = (cidade || '').trim().toUpperCase();
+  if (MPLS_CIDADES_REGIAO_II.some(nome => c.includes(nome))) return 'II';
+  if (MPLS_CIDADES_REGIAO_V.some(nome => c.includes(nome))) return 'V';
+  return 'I';
+}
+
+// roteador é opcional — passe null/'' pra não incluir nenhum.
+export function calcularMPLS(velocidade, roteador, uf, cidade) {
+  const regiao = mplsDetectarRegiao(cidade);
+  const linkSemImposto = MPLS_PRECOS_POR_REGIAO[regiao]?.[velocidade];
+  if (linkSemImposto === undefined) return null;
+
+  let roteadorSemImposto = 0;
+  if (roteador) {
+    roteadorSemImposto = MPLS_ROTEADORES[roteador];
+    if (roteadorSemImposto === undefined) return null;
+  }
+
+  const fatorUF = ALICOTAS_UF[(uf || '').trim().toUpperCase()];
+  if (!fatorUF) return null;
+
+  const linkComDesconto = linkSemImposto * (1 - MPLS_LAN_EPL_DESCONTO_36_MESES);
+  const valorMensal = Math.round(((linkComDesconto + roteadorSemImposto) / fatorUF) * 100) / 100;
+  const valorDe = Math.round(((linkSemImposto + roteadorSemImposto) / fatorUF) * 100) / 100;
+  return { valorMensal, valorDe, valorDesconto: Math.round((valorDe - valorMensal) * 100) / 100, regiao };
+}
+
+// LAN EPL (Book Clareando PME, Ago/2026, pág. 114 + aba "LAN EPL") —
+// valores sem imposto, por tipo de circuito (A1 ou MEF-B1) e trajeto
+// (Local ou Interurbano). Mesmo desconto de 36 meses do MPLS.
+export const LAN_EPL_PRECOS = {
+  A1: {
+    Local: { '10M': 909.00, '20M': 913.00, '30M': 1043.00, '50M': 1329.00, '70M': 1589.00, '100M': 1940.00, '200M': 2521.00, '500M': 4708.00, '700M': 6012.00, '1G': 7645.00 },
+    Interurbano: { '10M': 1037.00, '20M': 1063.00, '30M': 1171.00, '50M': 1456.00, '70M': 1742.00, '100M': 2140.00, '200M': 3157.00, '500M': 5894.00, '700M': 7528.00, '1G': 9572.00 },
+  },
+  'MEF-B1': {
+    Local: { '10M': 1196.00, '20M': 1229.00, '30M': 1364.00, '50M': 1530.00, '70M': 1777.00, '100M': 2122.00, '200M': 2440.00, '500M': 4195.00, '700M': 5548.00, '1G': 7108.00 },
+    Interurbano: { '10M': 1547.00, '20M': 1581.00, '30M': 1666.00, '50M': 1931.00, '70M': 2244.00, '100M': 2679.00, '200M': 3451.00, '500M': 6441.00, '700M': 8226.00, '1G': 10161.00 },
+  },
+};
+// Mesmos 2 modelos usados no MPLS — a planilha tem mais opções (Meraki,
+// SFPs), deixadas de fora por agora pra simplificar o formulário.
+export const LAN_EPL_ROTEADORES = {
+  'Huawei AR651': 173.43,
+  'Huawei AR6121E': 302.50,
+};
+
+// roteador é opcional — passe null/'' pra não incluir nenhum.
+export function calcularLANEPL(velocidade, tipo, trajeto, roteador, uf) {
+  const linkSemImposto = LAN_EPL_PRECOS[tipo]?.[trajeto]?.[velocidade];
+  if (linkSemImposto === undefined) return null;
+
+  let roteadorSemImposto = 0;
+  if (roteador) {
+    roteadorSemImposto = LAN_EPL_ROTEADORES[roteador];
+    if (roteadorSemImposto === undefined) return null;
+  }
+
+  const fatorUF = ALICOTAS_UF[(uf || '').trim().toUpperCase()];
+  if (!fatorUF) return null;
+
+  const linkComDesconto = linkSemImposto * (1 - MPLS_LAN_EPL_DESCONTO_36_MESES);
+  const valorMensal = Math.round(((linkComDesconto + roteadorSemImposto) / fatorUF) * 100) / 100;
+  const valorDe = Math.round(((linkSemImposto + roteadorSemImposto) / fatorUF) * 100) / 100;
+  return { valorMensal, valorDe, valorDesconto: Math.round((valorDe - valorMensal) * 100) / 100 };
+}
+
 export function roteadoresDisponiveisPara(velocidade) {
   return Object.entries(ROTEADORES)
     .filter(([, r]) => !r.velocidadesExcluidas.includes(velocidade))

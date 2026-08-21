@@ -70,14 +70,21 @@ const NOMES_OFERTA = {
   conecta_blc: 'Conecta com BLC',
   combo_2p_bld: 'Combo Conecta 2P BLD',
   bld_oferta_pme: 'BLD Oferta PME',
+  oitocentos: '0800-Flex',
+  mpls: 'MPLS',
+  lan_epl: 'LAN EPL',
 };
-// Só a BLD Oferta PME é link avulso, sem voz — as outras 3 têm voz incluída
-// ou como opção (mesmo quando o padrão vendido é OTT).
+// Só a BLD Oferta PME, o MPLS e o LAN EPL são link/serviço de dados avulso,
+// sem voz — as outras têm voz incluída ou como opção (mesmo quando o
+// padrão vendido é OTT). 0800 não conta como "oferta com voz" aqui porque
+// não é uma linha com canais — é um número de recebimento que direciona
+// pra uma linha já existente do cliente.
 const OFERTAS_COM_VOZ = new Set(['conecta_smart', 'conecta_blc', 'combo_2p_bld']);
 // Ofertas cujo roteador é uma escolha do cliente (mostrada na tabela de
-// investimento) — BLD Oferta PME muda o preço por roteador; Combo 2P BLD
-// só muda o modelo entregue, o preço já é fechado por velocidade.
-const OFERTAS_COM_ROTEADOR_NA_TABELA = new Set(['bld_oferta_pme', 'combo_2p_bld']);
+// investimento) — BLD Oferta PME muda o preço por roteador; Combo 2P BLD só
+// muda o modelo entregue; MPLS e LAN EPL têm roteador opcional (mostra
+// "—" se o cliente não pediu).
+const OFERTAS_COM_ROTEADOR_NA_TABELA = new Set(['bld_oferta_pme', 'combo_2p_bld', 'mpls', 'lan_epl']);
 
 // Cláusula padrão de canais físicos — Book Clareando PME (Ago/2026, pág.
 // 99, produto Vip Único): "Para SIP: mínimo 30 canais por site" e "Para E1
@@ -122,6 +129,29 @@ function montarEscopoTecnico(tipoOferta, dadosOferta) {
       ['Microsoft 365 Business Basic:', 'Aplicativos Office online e de 2TB a 4TB de armazenamento em nuvem (OneDrive), conforme a velocidade contratada.'],
     ];
   }
+  if (tipoOferta === 'oitocentos') {
+    return [
+      ['Número 0800:', 'Canal de comunicação gratuito para quem liga de qualquer lugar do Brasil — o custo da chamada é assumido pela empresa contratante, com as ligações direcionadas a um número fixo comutado da Claro.'],
+      ['Franquia de Minutos:', `Pacote de ${dadosOferta.pacote} incluído sem custo adicional. Minutos excedentes são tarifados à parte, em valor fixo por minuto, independente da origem da chamada.`],
+      ['Pré-requisito:', 'Para contratar o 0800, a empresa precisa já possuir (ou adquirir) uma linha telefônica fixa Claro — PABX Virtual, PABX Físico ou Claro Fixo — pois é para essa linha que as ligações recebidas são direcionadas.'],
+    ];
+  }
+  if (tipoOferta === 'mpls') {
+    const bullets = [
+      ['Rede Privada MPLS:', 'Rede corporativa privada que conecta filiais, unidades e sistemas internos com tráfego isolado da internet pública, garantindo segurança, estabilidade, baixa latência e alta disponibilidade para aplicações críticas de negócio.'],
+      ['Banda Dedicada:', `${dadosOferta.velocidade} de acesso e porta, com disponibilidade e performance dedicadas ao tráfego da empresa.`],
+    ];
+    if (dadosOferta.roteador) bullets.push(['Equipamento (CPE):', `Roteador ${dadosOferta.roteador} incluso na solução.`]);
+    return bullets;
+  }
+  if (tipoOferta === 'lan_epl') {
+    const bullets = [
+      ['Circuito Ponto a Ponto (LAN EPL):', `Conectividade dedicada, tipo ${dadosOferta.tipo}, com trajeto ${dadosOferta.trajeto.toLowerCase()}, interligando as duas unidades da empresa como se estivessem na mesma rede local — sem passar pela internet pública.`],
+      ['Banda Simétrica:', `${dadosOferta.velocidade} de velocidade, disponível de forma dedicada e exclusiva entre as duas pontas do circuito.`],
+    ];
+    if (dadosOferta.roteador) bullets.push(['Equipamento (CPE):', `Roteador ${dadosOferta.roteador} incluso na solução.`]);
+    return bullets;
+  }
   return [
     ['Internet Dedicada (Business Link Direct - BLD):', 'Conexão contínua e exclusiva à rede, sem necessidade de discagem, para tráfego de dados.'],
     ['Banda Simétrica:', `${dadosOferta.velocidade} de velocidade, com 100% da banda contratada garantida e disponível para download e upload.`],
@@ -132,7 +162,7 @@ function montarEscopoTecnico(tipoOferta, dadosOferta) {
 
 export async function gerarPdfProposta(dados) {
   const {
-    tipoOferta, velocidade, roteador,
+    tipoOferta, velocidade, roteador, pacote, tipo, trajeto,
     clienteNome, clienteCnpj, clienteEndereco, clienteCidade, clienteUf, clienteContato,
     consultorNome, consultorEmail, consultorTelefone, consultorCargo,
     valorMensal, valorDe, valorDesconto,
@@ -245,7 +275,11 @@ export async function gerarPdfProposta(dados) {
   page.drawText(dataTexto, { x: PAGE_W - MARGEM - fonte.widthOfTextAtSize(dataTexto, TAM_CORPO), y, size: TAM_CORPO, font: fonte, color: COR_TEXTO_2 });
   y -= 32;
 
-  const tituloProposta = OFERTAS_COM_VOZ.has(tipoOferta) ? 'Proposta Comercial - Conectividade e Voz' : 'Proposta Comercial - Conectividade';
+  const tituloProposta = tipoOferta === 'oitocentos'
+    ? 'Proposta Comercial - Telefonia 0800'
+    : OFERTAS_COM_VOZ.has(tipoOferta)
+      ? 'Proposta Comercial - Conectividade e Voz'
+      : 'Proposta Comercial - Conectividade';
   page.drawText(tituloProposta, { x: MARGEM, y, size: TAM_TITULO, font: fonteNegrito, color: COR_TEXTO });
   y -= 10;
   page.drawRectangle({ x: MARGEM, y: y - 2, width: LARGURA_UTIL, height: 2, color: COR_MAROON });
@@ -297,11 +331,14 @@ export async function gerarPdfProposta(dados) {
     conecta_blc: `A solução ${nomeOferta} une internet corporativa (Banda Larga Corporativa) com atendimento dedicado, comunicação de voz e as ferramentas do Microsoft 365, em um único contrato — ideal para empresas que buscam equilíbrio entre custo-benefício e atendimento corporativo.`,
     combo_2p_bld: `A solução ${nomeOferta} une link dedicado de alta performance, firewall gerenciado, gerência de rede e comunicação de voz em um único contrato. Com esta estrutura, sua empresa acessa a internet com qualidade, segurança e alta confiabilidade o tempo todo.`,
     bld_oferta_pme: `A solução ${nomeOferta} oferece um link de internet dedicado de alta performance com IP Fixo, unindo qualidade, segurança e alta confiabilidade — ideal para quem precisa de conectividade robusta e estável, sem os serviços de voz agregados.`,
+    oitocentos: `A solução ${nomeOferta} oferece um canal de comunicação gratuito para os clientes da sua empresa entrarem em contato de qualquer lugar do Brasil, fortalecendo o relacionamento e abrindo novas oportunidades de negócio.`,
+    mpls: `A solução ${nomeOferta} conecta as unidades da sua empresa através de uma rede privada, com tráfego isolado da internet pública, garantindo segurança, estabilidade e alta performance para as aplicações críticas do negócio.`,
+    lan_epl: `A solução ${nomeOferta} interliga as unidades da sua empresa em um circuito privado ponto a ponto, com máxima estabilidade, segurança e desempenho para a comunicação contínua entre elas.`,
   };
   paragrafo(TEXTOS_SOLUCAO[tipoOferta] || TEXTOS_SOLUCAO.bld_oferta_pme);
 
   titulo('2. Escopo Técnico do Serviço');
-  for (const [label, texto] of montarEscopoTecnico(tipoOferta, { velocidade, roteador })) {
+  for (const [label, texto] of montarEscopoTecnico(tipoOferta, { velocidade, roteador, pacote, tipo, trajeto })) {
     bullet(label, texto);
   }
 
@@ -310,7 +347,12 @@ export async function gerarPdfProposta(dados) {
   bullet('Tempo de Reparo:', 'Para incidentes com impacto crítico ao negócio, o atendimento é imediato com prazo de solução de até 4 horas.');
 
   titulo('4. Investimento Comercial');
-  paragrafo('Abaixo, detalhamos o investimento necessário para a implementação da solução no seu endereço matriz.');
+  const INTRO_INVESTIMENTO = {
+    lan_epl: 'Abaixo, detalhamos o investimento necessário para a implementação do circuito dedicado entre as duas unidades contratadas.',
+    oitocentos: 'Abaixo, detalhamos o investimento necessário para a disponibilização do número 0800 e sua franquia de minutos.',
+    mpls: 'Abaixo, detalhamos o investimento necessário para a implementação da rede privada MPLS na(s) unidade(s) contratada(s).',
+  };
+  paragrafo(INTRO_INVESTIMENTO[tipoOferta] || 'Abaixo, detalhamos o investimento necessário para a implementação da solução no seu endereço matriz.');
 
   const alturaHeaderTabela = 24;
   const paddingCel = 8;
@@ -333,11 +375,17 @@ export async function gerarPdfProposta(dados) {
     conecta_blc: 'BLC + Voz',
     combo_2p_bld: 'Internet Dedicada + Voz + GRC',
     bld_oferta_pme: 'Internet Dedicada',
+    oitocentos: 'Número 0800',
+    mpls: 'Rede Privada',
+    lan_epl: `${tipo} - ${trajeto}`,
   };
   const nomeServico = `${nomeOferta} (${DESCRICOES_SERVICO[tipoOferta] || 'Internet Dedicada'})`;
+  // 0800 não tem "Banda" (é um pacote de minutos) — mostra o pacote na
+  // mesma coluna, pra não precisar de uma tabela com layout diferente.
+  const bandaExibida = tipoOferta === 'oitocentos' ? pacote : velocidade;
   const colValores = OFERTAS_COM_ROTEADOR_NA_TABELA.has(tipoOferta)
-    ? [nomeServico, velocidade, roteador, fmtReais(valorMensal)]
-    : [nomeServico, velocidade, '36 Meses', fmtReais(valorMensal)];
+    ? [nomeServico, bandaExibida, roteador || '—', fmtReais(valorMensal)]
+    : [nomeServico, bandaExibida, '36 Meses', fmtReais(valorMensal)];
   // Cada célula quebra dentro da própria largura de coluna — sem isso, um
   // nome de serviço longo (ex.: "Conecta Smart (Internet Dedicada + Voz +
   // GRC)") ultrapassa a coluna "Serviço" e sobrepõe o texto da coluna
@@ -358,7 +406,7 @@ export async function gerarPdfProposta(dados) {
   });
   y -= (alturaLinhaInvest + 20);
 
-  if (tipoOferta === 'conecta_smart' && valorDesconto) {
+  if (valorDesconto) {
     bullet('Desconto Aplicado:', `O valor mensal apresentado já contempla um desconto de ${fmtReais(valorDesconto)} (reduzido do valor original de ${fmtReais(valorDe)}).`);
   }
   bullet('Taxa de Instalação e Ativação:', 'Isenta, condicionada ao cumprimento do prazo de permanência estipulado.');

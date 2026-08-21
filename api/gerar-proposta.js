@@ -5,9 +5,10 @@ import { requireAuth, getUsuarioDashboard } from './_lib/auth.js';
 import {
   calcularConectaSmart, calcularBLDOfertaPME, roteadoresDisponiveisPara,
   calcularConectaBLC, calcularCombo2PBLD, ROTEADORES_COMBO_2P_BLD,
+  calcularOitocentos, calcularMPLS, calcularLANEPL,
 } from './_lib/propostas-dados.js';
 
-const TIPOS_OFERTA_VALIDOS = ['conecta_smart', 'bld_oferta_pme', 'conecta_blc', 'combo_2p_bld'];
+const TIPOS_OFERTA_VALIDOS = ['conecta_smart', 'bld_oferta_pme', 'conecta_blc', 'combo_2p_bld', 'oitocentos', 'mpls', 'lan_epl'];
 import { gerarPdfProposta } from './_lib/gerar-pdf-proposta.js';
 
 const SUPA_URL = 'https://kzlchetrpsfefwybaaoy.supabase.co';
@@ -24,7 +25,7 @@ export default async function handler(req, res) {
   if (!authUser) return;
 
   const {
-    tipoOferta, velocidade, roteador,
+    tipoOferta, velocidade, roteador, pacote, tipo, trajeto,
     clienteNome, clienteCnpj, clienteEndereco, clienteCidade, clienteUf, clienteContato, clienteTelefone,
     consultorNome: consultorNomeInput, consultorTelefone: consultorTelefoneInput, consultorEmail: consultorEmailInput,
     consultorCargo: consultorCargoInput,
@@ -51,7 +52,7 @@ export default async function handler(req, res) {
     }
     calculo = calcularCombo2PBLD(velocidade, roteador);
     if (!calculo) return res.status(400).json({ error: `Velocidade "${velocidade}" inválida para Combo Conecta 2P BLD` });
-  } else {
+  } else if (tipoOferta === 'bld_oferta_pme') {
     if (!clienteUf) {
       return res.status(400).json({ error: 'UF do cliente é obrigatória para calcular o BLD Oferta PME' });
     }
@@ -64,6 +65,36 @@ export default async function handler(req, res) {
       // Regra de segurança do prompt: UF fora da tabela de Alíquotas
       // bloqueia a geração — nunca gerar com preço errado.
       return res.status(400).json({ error: `UF "${clienteUf}" não reconhecida na tabela de Alíquotas — confirme a UF do cliente antes de gerar a proposta.` });
+    }
+  } else if (tipoOferta === 'oitocentos') {
+    if (!clienteUf) {
+      return res.status(400).json({ error: 'UF do cliente é obrigatória para calcular o 0800' });
+    }
+    calculo = calcularOitocentos(pacote, clienteUf);
+    if (!calculo) {
+      return res.status(400).json({ error: `Pacote "${pacote}" ou UF "${clienteUf}" inválidos para o 0800` });
+    }
+  } else if (tipoOferta === 'mpls') {
+    if (!clienteUf) {
+      return res.status(400).json({ error: 'UF do cliente é obrigatória para calcular o MPLS' });
+    }
+    if (!clienteCidade || !clienteCidade.trim()) {
+      return res.status(400).json({ error: 'Cidade do cliente é obrigatória para calcular o MPLS (define a região de preço)' });
+    }
+    calculo = calcularMPLS(velocidade, roteador || null, clienteUf, clienteCidade);
+    if (!calculo) {
+      return res.status(400).json({ error: `Velocidade "${velocidade}", roteador "${roteador}" ou UF "${clienteUf}" inválidos para o MPLS` });
+    }
+  } else {
+    if (!clienteUf) {
+      return res.status(400).json({ error: 'UF do cliente é obrigatória para calcular o LAN EPL' });
+    }
+    if (!tipo || !trajeto) {
+      return res.status(400).json({ error: 'Tipo e trajeto são obrigatórios para calcular o LAN EPL' });
+    }
+    calculo = calcularLANEPL(velocidade, tipo, trajeto, roteador || null, clienteUf);
+    if (!calculo) {
+      return res.status(400).json({ error: `Velocidade "${velocidade}", tipo "${tipo}", trajeto "${trajeto}" ou roteador "${roteador}" inválidos para o LAN EPL` });
     }
   }
 
@@ -82,7 +113,7 @@ export default async function handler(req, res) {
   let pdfBytes;
   try {
     pdfBytes = await gerarPdfProposta({
-      tipoOferta, velocidade, roteador,
+      tipoOferta, velocidade, roteador, pacote, tipo, trajeto,
       clienteNome, clienteCnpj, clienteEndereco, clienteCidade, clienteUf, clienteContato,
       consultorNome, consultorEmail, consultorTelefone, consultorCargo,
       valorMensal: calculo.valorMensal,
@@ -128,8 +159,11 @@ export default async function handler(req, res) {
           cliente_contato: clienteContato || null,
           cliente_telefone: (clienteTelefone || '').trim() || null,
           tipo_oferta: tipoOferta,
-          velocidade,
+          velocidade: velocidade || null,
           roteador: roteador || null,
+          pacote: pacote || null,
+          tipo: tipo || null,
+          trajeto: trajeto || null,
           valor_mensal: calculo.valorMensal,
           valor_de: calculo.valorDe ?? null,
           valor_desconto: calculo.valorDesconto ?? null,
