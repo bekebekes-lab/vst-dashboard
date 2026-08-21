@@ -1376,6 +1376,7 @@
   <button class="tab-btn" id="tab-btn-churn" onclick="switchTab('churn', this)">📉 Churn</button>
   <button class="tab-btn" id="tab-btn-carteira" onclick="switchTab('carteira', this)">💼 Carteira</button>
   <button class="tab-btn" id="tab-btn-conectividade" onclick="switchTab('conectividade', this)">🔌 Conectividade/SD</button>
+  <button class="tab-btn" id="tab-btn-ev" onclick="switchTab('ev', this)">🔎 EV - Viabilidade</button>
 </div>
 
 <!-- BOTTOM NAV (mobile only — casca visual nova, chama switchTab() já existente) -->
@@ -2314,69 +2315,69 @@
       </div>
     </div>
 
-    <div id="ev-secao-admin" style="display:none;">
-      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:18px;margin-bottom:16px;box-shadow:var(--shadow-xs);">
-        <div class="section-title" style="margin-bottom:4px;">🔎 EV - Estudo de Viabilidade</div>
-        <div style="font-size:12px;font-weight:600;color:#eda100;background:#fff8e6;border:1px solid #f5d78a;border-radius:6px;padding:6px 10px;margin-bottom:10px;">⚠️ Em teste — visível só pra admin por enquanto, ainda validando o robô de consulta no Radar.</div>
-        <div style="font-size:12px;color:var(--text-2);margin-bottom:14px;">Consulta a viabilidade técnica no Radar (Claro/Embratel) — envia a consulta e o robô traz a resposta (viável/inviável, facilidade e custo) aqui na lista abaixo assim que sair. Disponível só pras ofertas Conecta Smart, Conecta com BLC e Combo Conecta 2P BLD por enquanto.</div>
-
-        <div class="filters-bar">
-          <div class="filter-group">
-            <label>Tipo de oferta</label>
-            <select id="ev-tipo-oferta" onchange="evAoTrocarTipoOferta()">
-              <option value="conecta_smart">Conecta Smart</option>
-              <option value="conecta_blc">Conecta com BLC</option>
-              <option value="combo_2p_bld">Combo Conecta 2P BLD</option>
-            </select>
-          </div>
-          <div class="filter-group">
-            <label>Velocidade</label>
-            <select id="ev-velocidade"></select>
-          </div>
-          <div class="filter-group" style="min-width:100px;">
-            <label>Qtde. Circuitos</label>
-            <input type="number" id="ev-quantidade-circuitos" value="1" min="1" style="width:100%;">
-          </div>
-          <div class="filter-group" style="justify-content:flex-end;">
-            <label>&nbsp;</label>
-            <button class="btn-secondary" onclick="evAdicionarPlanoNaLista()">+ Adicionar plano</button>
-          </div>
-        </div>
-
-        <div id="ev-carrinho-area" style="margin-top:10px;"></div>
-
-        <div class="filters-bar" style="margin-top:10px;">
-          <div class="filter-group" style="min-width:220px;flex:1">
-            <label>Cliente Final (Razão Social)</label>
-            <input type="text" id="ev-cliente-final" placeholder="Ex.: Viação Colombo LTDA" autocomplete="off">
-          </div>
-          <div class="filter-group">
-            <label>CNPJ <span style="font-weight:400;text-transform:none;">(opcional)</span></label>
-            <input type="text" id="ev-cnpj" placeholder="00.000.000/0000-00" autocomplete="off" inputmode="numeric" oninput="conectFormatarCnpj(this)">
-          </div>
-          <div class="filter-group">
-            <label>CEP</label>
-            <input type="text" id="ev-cep" placeholder="00000-000" autocomplete="off" inputmode="numeric" oninput="conectFormatarCep(this)">
-          </div>
-        </div>
-        <div style="margin-top:16px;display:flex;align-items:center;gap:12px;">
-          <button class="btn-primary" onclick="evConsultarViabilidade()" id="ev-btn-consultar">🔎 Consultar Viabilidade</button>
-          <span id="ev-status-consulta" style="font-size:12px;color:var(--text-2);"></span>
-        </div>
-      </div>
-
-      <div class="section-header">
-        <span class="section-title">Estudos de Viabilidade</span>
-        <button class="btn-refresh" onclick="evCarregarLista()">↻ Atualizar</button>
-      </div>
-      <div id="ev-lista-area"></div>
-    </div>
-
     <div class="section-header">
       <span class="section-title">Funil de Oportunidades</span>
     </div>
     <div id="conect-funil-area"></div>
   </div>
+
+  <div class="tab-panel" id="tab-ev">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:18px;margin-bottom:16px;box-shadow:var(--shadow-xs);">
+    <div class="section-title" style="margin-bottom:4px;">🔎 EV - Estudo de Viabilidade</div>
+    <div style="font-size:12px;font-weight:600;color:#eda100;background:#fff8e6;border:1px solid #f5d78a;border-radius:6px;padding:6px 10px;margin-bottom:10px;">⚠️ Em teste — visível só pra admin por enquanto, ainda validando o robô de consulta no Radar.</div>
+    <div style="font-size:12px;color:var(--text-2);margin-bottom:14px;">Consulta a viabilidade técnica no Radar (Claro/Embratel) — envia a consulta e o robô traz a resposta (viável/inviável, facilidade e custo) aqui na lista abaixo assim que sair. Disponível só pras ofertas Conecta Smart, Conecta com BLC e Combo Conecta 2P BLD por enquanto.</div>
+
+    <div class="filters-bar">
+      <div class="filter-group">
+        <label>Tipo de oferta</label>
+        <select id="ev-tipo-oferta" onchange="evAoTrocarTipoOferta()">
+          <option value="conecta_smart">Conecta Smart</option>
+          <option value="conecta_blc">Conecta com BLC</option>
+          <option value="combo_2p_bld">Combo Conecta 2P BLD</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label>Velocidade</label>
+        <select id="ev-velocidade"></select>
+      </div>
+      <div class="filter-group" style="min-width:100px;">
+        <label>Qtde. Circuitos</label>
+        <input type="number" id="ev-quantidade-circuitos" value="1" min="1" style="width:100%;">
+      </div>
+      <div class="filter-group" style="justify-content:flex-end;">
+        <label>&nbsp;</label>
+        <button class="btn-secondary" onclick="evAdicionarPlanoNaLista()">+ Adicionar plano</button>
+      </div>
+    </div>
+
+    <div id="ev-carrinho-area" style="margin-top:10px;"></div>
+
+    <div class="filters-bar" style="margin-top:10px;">
+      <div class="filter-group" style="min-width:220px;flex:1">
+        <label>Cliente Final (Razão Social)</label>
+        <input type="text" id="ev-cliente-final" placeholder="Ex.: Viação Colombo LTDA" autocomplete="off">
+      </div>
+      <div class="filter-group">
+        <label>CNPJ <span style="font-weight:400;text-transform:none;">(opcional)</span></label>
+        <input type="text" id="ev-cnpj" placeholder="00.000.000/0000-00" autocomplete="off" inputmode="numeric" oninput="conectFormatarCnpj(this)">
+      </div>
+      <div class="filter-group">
+        <label>CEP</label>
+        <input type="text" id="ev-cep" placeholder="00000-000" autocomplete="off" inputmode="numeric" oninput="conectFormatarCep(this)">
+      </div>
+    </div>
+    <div style="margin-top:16px;display:flex;align-items:center;gap:12px;">
+      <button class="btn-primary" onclick="evConsultarViabilidade()" id="ev-btn-consultar">🔎 Consultar Viabilidade</button>
+      <span id="ev-status-consulta" style="font-size:12px;color:var(--text-2);"></span>
+    </div>
+  </div>
+
+  <div class="section-header">
+    <span class="section-title">Estudos de Viabilidade</span>
+    <button class="btn-secondary" onclick="evCarregarLista()">↻ Atualizar</button>
+  </div>
+  <div id="ev-lista-area"></div>
+</div>
 
 </div>
 
@@ -5183,6 +5184,7 @@ function switchTab(name, el) {
   if (name === 'churn') initChurn();
   if (name === 'carteira') initCarteira();
   if (name === 'conectividade') initConectividade();
+  if (name === 'ev') initEv();
 
   // Config/filtros dessa aba (se houver) saem da tela e entram no drawer de
   // conta assim que ela vira ativa (só mobile) — não só enquanto o drawer
@@ -5213,7 +5215,7 @@ let USUARIO_ATUAL = null;
 // aplicarPermissoes() quanto pelo preenchimento da preferência "aba padrão
 // ao abrir" no drawer de conta e pelo redirecionamento pós-login.
 const ABAS_PERMITIDAS_POR_PERFIL = {
-  'admin':          ['simulador', 'gerencial', 'producao', 'discadora', 'simulador2', 'churn', 'carteira', 'conectividade'],
+  'admin':          ['simulador', 'gerencial', 'producao', 'discadora', 'simulador2', 'churn', 'carteira', 'conectividade', 'ev'],
   'gestor_macro':   ['gerencial', 'discadora', 'conectividade'],
   'gestor_macro2':  ['gerencial', 'producao', 'discadora', 'conectividade'],
   'gestor_macro3':  ['gerencial', 'producao', 'conectividade'],
@@ -5242,6 +5244,7 @@ const TAB_LABELS = {
   churn: '📉 Churn',
   carteira: '💼 Carteira',
   conectividade: '🔌 Conectividade/SD',
+  ev: '🔎 EV - Viabilidade',
 };
 
 // Token de sessão do usuário logado, mantido em sincronia pelo Supabase Auth.
@@ -9551,15 +9554,19 @@ function initConectividade() {
     document.getElementById('conect-consultor-telefone').value = USUARIO_ATUAL?.telefone || '';
     document.getElementById('conect-consultor-email').value = USUARIO_ATUAL?.email || '';
     document.addEventListener('click', () => document.querySelectorAll('[id^="conect-menu-"]').forEach(m => m.style.display = 'none'));
-    if (USUARIO_ATUAL?.perfil === 'admin') {
-      document.getElementById('ev-secao-admin').style.display = '';
-      evAoTrocarTipoOferta();
-      evRenderCarrinho();
-    }
     CONECT_INICIALIZADA = true;
   }
   conectCarregarFunil();
-  if (USUARIO_ATUAL?.perfil === 'admin') evCarregarLista();
+}
+
+let EV_INICIALIZADA = false;
+function initEv() {
+  if (!EV_INICIALIZADA) {
+    evAoTrocarTipoOferta();
+    evRenderCarrinho();
+    EV_INICIALIZADA = true;
+  }
+  evCarregarLista();
 }
 
 // ─── EV - Estudo de Viabilidade (consulta ao Radar via radar_bot.py) ───────
