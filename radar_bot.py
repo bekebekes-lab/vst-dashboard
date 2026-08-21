@@ -195,7 +195,12 @@ def selecionar_lookup(page, aria_label: str, texto_completo: str, timeout=15_000
     if campo is None:
         log.warning(f"  Campo de busca '{aria_label}' não encontrado.")
         return False
-    texto_busca = texto_completo.split('(')[0].strip()
+    # Digita o nome COMPLETO (com preço e tudo) — confirmado manualmente
+    # pelo usuário que colar o texto assim, por inteiro, encontra o item
+    # normalmente. Uma tentativa anterior de digitar só o trecho antes do
+    # preço (achando que a pontuação colada atrapalhava) não retornava
+    # opção nenhuma — o texto completo é o que de fato funciona.
+    texto_busca = texto_completo
     # Selecionar um lookup pai (ex.: Produto) pode disparar um re-render do
     # próximo campo dependente (ex.: Item de Produto) — se o clique cair
     # bem nesse momento, o Playwright vê o elemento "instável" e, no limite,
