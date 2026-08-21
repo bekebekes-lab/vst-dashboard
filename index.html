@@ -2206,9 +2206,10 @@
         </div>
         <div class="filter-group" id="conect-grupo-roteador" style="display:none;">
           <label>Roteador</label>
-          <select id="conect-roteador"></select>
+          <select id="conect-roteador" onchange="conectAtualizarValorEstimado()"></select>
         </div>
       </div>
+      <div id="conect-valor-estimado" style="font-size:13px;font-weight:600;margin:8px 0 0;"></div>
 
       <div class="filters-bar" style="margin-top:10px;">
         <div class="filter-group" style="min-width:220px;flex:1">
@@ -2257,7 +2258,7 @@
         </div>
         <div class="filter-group" style="min-width:90px;">
           <label>UF</label>
-          <select id="conect-cliente-uf">
+          <select id="conect-cliente-uf" onchange="conectAtualizarValorEstimado()">
             <option value="">—</option>
             <option>AC</option><option>AL</option><option>AM</option><option>AP</option><option>BA</option>
             <option>CE</option><option>DF</option><option>ES</option><option>GO</option><option>MA</option>
@@ -9272,11 +9273,75 @@ function conectAoTrocarTipoOferta() {
 function conectAoTrocarVelocidade() {
   const tipo = document.getElementById('conect-tipo-oferta').value;
   const roteadoresDoTipo = CONECT_ROTEADORES_POR_TIPO[tipo];
-  if (!roteadoresDoTipo) return;
+  if (roteadoresDoTipo) {
+    const velocidade = document.getElementById('conect-velocidade').value;
+    const selRoteador = document.getElementById('conect-roteador');
+    const disponiveis = Object.entries(roteadoresDoTipo).filter(([, r]) => !r.excluidoEm.includes(velocidade)).map(([nome]) => nome);
+    selRoteador.innerHTML = disponiveis.map(n => `<option value="${n}">${n}</option>`).join('');
+  }
+  conectAtualizarValorEstimado();
+}
+
+// Espelha as tabelas de preço de api/_lib/propostas-dados.js só pra mostrar
+// uma ESTIMATIVA instantânea no formulário, sem round-trip ao servidor a
+// cada troca de campo — o servidor sempre recalcula do zero na hora de
+// gerar o PDF e é a única fonte de verdade sobre o valor real cobrado.
+const CONECT_PRECOS_SMART = { '10 Mega': 575.00, '20 Mega': 625.00, '50 Mega': 680.00, '100 Mega': 950.00 };
+const CONECT_PRECOS_BLC = { '150 Mega': 350.00, '300 Mega': 400.00 };
+const CONECT_PRECOS_COMBO_2P_BLD = { '10 Mega': 1035.23, '20 Mega': 1392.23, '50 Mega': 1606.23, '100 Mega': 1796.22, '200 Mega': 1906.22, '500 Mega': 3236.22 };
+const CONECT_PRECOS_BLD_SEM_ROTEADOR = { '10M': 475.00, '20M': 505.00, '30M': 565.00, '50M': 590.00, '100M': 647.00, '200M': 1101.00 };
+const CONECT_PRECO_ROTEADOR_BLD = { 'HP 954': 88.77, 'Huawei AR651': 173.43, 'Meraki MX67': 201.53 };
+const CONECT_ALICOTAS_UF = {
+  AC: 0.7804350000000001, AL: 0.7707999999999999, AM: 0.7707999999999999, AP: 0.6840849999999999,
+  BA: 0.7659825, CE: 0.7707999999999999, DF: 0.7707999999999999, ES: 0.7997049999999999,
+  GO: 0.7804350000000001, MA: 0.7418950000000001, MG: 0.7900699999999999, MS: 0.7804350000000001,
+  MT: 0.7804350000000001, PA: 0.7804350000000001, PB: 0.75153, PE: 0.7659825, PI: 0.7467125,
+  PR: 0.7756175, RJ: 0.73226, RN: 0.7707999999999999, RO: 0.7756175, RR: 0.7707999999999999,
+  RS: 0.7997049999999999, SC: 0.7997049999999999, SE: 0.7707999999999999, SP: 0.7900699999999999,
+  TO: 0.7707999999999999,
+};
+
+// Ofertas fechadas (sem imposto por UF) mostram o valor na hora. A BLD
+// Oferta PME depende da alíquota da UF do cliente — sem CEP/UF preenchido,
+// mostra um aviso pedindo o CEP em vez de um valor errado.
+function conectAtualizarValorEstimado() {
+  const el = document.getElementById('conect-valor-estimado');
+  if (!el) return;
+  const tipo = document.getElementById('conect-tipo-oferta').value;
   const velocidade = document.getElementById('conect-velocidade').value;
-  const selRoteador = document.getElementById('conect-roteador');
-  const disponiveis = Object.entries(roteadoresDoTipo).filter(([, r]) => !r.excluidoEm.includes(velocidade)).map(([nome]) => nome);
-  selRoteador.innerHTML = disponiveis.map(n => `<option value="${n}">${n}</option>`).join('');
+  const roteador = document.getElementById('conect-roteador').value;
+  const uf = document.getElementById('conect-cliente-uf').value;
+
+  let valor = null;
+  let aviso = null;
+
+  if (tipo === 'conecta_smart') {
+    valor = CONECT_PRECOS_SMART[velocidade];
+  } else if (tipo === 'conecta_blc') {
+    valor = CONECT_PRECOS_BLC[velocidade];
+  } else if (tipo === 'combo_2p_bld') {
+    valor = CONECT_PRECOS_COMBO_2P_BLD[velocidade];
+  } else if (tipo === 'bld_oferta_pme') {
+    if (!uf) {
+      aviso = 'Informe o CEP do cliente pra calcular o valor — a BLD Oferta PME depende do imposto por UF.';
+    } else {
+      const fator = CONECT_ALICOTAS_UF[uf];
+      const base = CONECT_PRECOS_BLD_SEM_ROTEADOR[velocidade];
+      const precoRoteador = CONECT_PRECO_ROTEADOR_BLD[roteador];
+      if (!fator) aviso = `UF "${uf}" não está na tabela de alíquotas.`;
+      else if (base != null && precoRoteador != null) valor = Math.round(((base + precoRoteador) / fator) * 100) / 100;
+    }
+  }
+
+  if (aviso) {
+    el.style.color = 'var(--red-sem)';
+    el.textContent = aviso;
+  } else if (valor != null) {
+    el.style.color = 'var(--brand)';
+    el.textContent = `Valor estimado: ${valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}/mês`;
+  } else {
+    el.textContent = '';
+  }
 }
 
 function initConectividade() {
@@ -9313,6 +9378,7 @@ async function conectBuscarCep() {
     if (json.bairro) document.getElementById('conect-cliente-bairro').value = json.bairro;
     if (json.localidade) document.getElementById('conect-cliente-cidade').value = json.localidade;
     if (json.uf) document.getElementById('conect-cliente-uf').value = json.uf;
+    conectAtualizarValorEstimado(); // a UF pode ter acabado de ser preenchida pelo CEP
   } catch (e) {
     // Falha na consulta não deve travar o preenchimento manual do endereço.
   }
