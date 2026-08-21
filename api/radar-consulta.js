@@ -27,8 +27,7 @@ export default async function handler(req, res) {
   }
 
   const {
-    tipoOferta, velocidade, clienteFinal, razaoSocial, cnpj, cep,
-    quantidadeCircuitos,
+    clienteFinal, razaoSocial, cnpj, cep, quantidadeCircuitos, planos,
   } = req.body || {};
 
   if (!clienteFinal || !clienteFinal.trim()) {
@@ -37,10 +36,20 @@ export default async function handler(req, res) {
   if (!cep || !/^\d{8}$/.test(cep.replace(/\D/g, ''))) {
     return res.status(400).json({ error: 'CEP inválido' });
   }
+  if (!Array.isArray(planos) || planos.length === 0) {
+    return res.status(400).json({ error: 'Selecione ao menos um plano/velocidade pra consultar' });
+  }
 
-  const catalogo = resolverItemDeProdutoRadar(tipoOferta, velocidade);
-  if (!catalogo) {
-    return res.status(400).json({ error: `Não há correspondência no catálogo do Radar para "${tipoOferta}" / "${velocidade}" — consulta de viabilidade ainda não disponível pra essa oferta.` });
+  // Cada plano (tipoOferta+velocidade) vira sua PRÓPRIA linha na fila — o
+  // bot já processa a fila item por item, então uma consulta "múltipla" é
+  // só várias linhas com o mesmo cliente/CEP enfileiradas de uma vez.
+  const catalogos = [];
+  for (const plano of planos) {
+    const catalogo = resolverItemDeProdutoRadar(plano?.tipoOferta, plano?.velocidade);
+    if (!catalogo) {
+      return res.status(400).json({ error: `Não há correspondência no catálogo do Radar para "${plano?.tipoOferta}" / "${plano?.velocidade}" — consulta de viabilidade ainda não disponível pra essa oferta.` });
+    }
+    catalogos.push(catalogo);
   }
 
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -51,7 +60,18 @@ export default async function handler(req, res) {
 
   const consultorNome = perfilRowAcesso?.nome || authUser.email?.split('@')[0] || authUser.email || 'Usuário';
 
-  let novaLinha;
+  const linhaBase = {
+    consultor_id: authUser.id,
+    consultor_nome: consultorNome,
+    razao_social: (razaoSocial || '').trim() || null,
+    cnpj: (cnpj || '').trim() || null,
+    cliente_final: clienteFinal.trim(),
+    quantidade_circuitos: Number(quantidadeCircuitos) || 1,
+    cep: cep.replace(/\D/g, ''),
+    status: 'pendente',
+  };
+
+  let novasLinhas;
   try {
     const respInsert = await fetch(`${SUPA_URL}/rest/v1/conectividade_estudos_viabilidade`, {
       method: 'POST',
@@ -61,24 +81,17 @@ export default async function handler(req, res) {
         Authorization: `Bearer ${serviceKey}`,
         Prefer: 'return=representation',
       },
-      body: JSON.stringify({
-        consultor_id: authUser.id,
-        consultor_nome: consultorNome,
-        razao_social: (razaoSocial || '').trim() || null,
-        cnpj: (cnpj || '').trim() || null,
-        cliente_final: clienteFinal.trim(),
+      body: JSON.stringify(catalogos.map(catalogo => ({
+        ...linhaBase,
         produto: catalogo.produto,
         item_produto: catalogo.itemProduto,
-        quantidade_circuitos: Number(quantidadeCircuitos) || 1,
-        cep: cep.replace(/\D/g, ''),
-        status: 'pendente',
-      }),
+      }))),
     });
     if (!respInsert.ok) {
       const erro = await respInsert.text();
       return res.status(500).json({ error: `Falha ao gravar a consulta: ${erro}` });
     }
-    [novaLinha] = await respInsert.json();
+    novasLinhas = await respInsert.json();
   } catch (e) {
     return res.status(500).json({ error: `Falha ao gravar a consulta: ${e.message}` });
   }
@@ -107,5 +120,5 @@ export default async function handler(req, res) {
     console.error('Falha ao disparar o Radar Bot:', e.message);
   }
 
-  res.status(200).json({ ok: true, id: novaLinha.id });
+  res.status(200).json({ ok: true, ids: novasLinhas.map(l => l.id) });
 }

@@ -2337,7 +2337,14 @@
             <label>Qtde. Circuitos</label>
             <input type="number" id="ev-quantidade-circuitos" value="1" min="1" style="width:100%;">
           </div>
+          <div class="filter-group" style="justify-content:flex-end;">
+            <label>&nbsp;</label>
+            <button class="btn-refresh" onclick="evAdicionarPlanoNaLista()">+ Adicionar plano</button>
+          </div>
         </div>
+
+        <div id="ev-carrinho-area" style="margin-top:10px;"></div>
+
         <div class="filters-bar" style="margin-top:10px;">
           <div class="filter-group" style="min-width:220px;flex:1">
             <label>Cliente Final (Razão Social)</label>
@@ -2347,7 +2354,7 @@
             <label>CNPJ <span style="font-weight:400;text-transform:none;">(opcional)</span></label>
             <input type="text" id="ev-cnpj" placeholder="00.000.000/0000-00" autocomplete="off" inputmode="numeric" oninput="conectFormatarCnpj(this)">
           </div>
-          <div class="filter-group" style="min-width:110px;">
+          <div class="filter-group">
             <label>CEP</label>
             <input type="text" id="ev-cep" placeholder="00000-000" autocomplete="off" inputmode="numeric" oninput="conectFormatarCep(this)">
           </div>
@@ -9537,6 +9544,7 @@ function initConectividade() {
     if (USUARIO_ATUAL?.perfil === 'admin') {
       document.getElementById('ev-secao-admin').style.display = '';
       evAoTrocarTipoOferta();
+      evRenderCarrinho();
     }
     CONECT_INICIALIZADA = true;
   }
@@ -9568,6 +9576,40 @@ function evAoTrocarTipoOferta() {
   sel.innerHTML = EV_VELOCIDADES_POR_TIPO[tipo].map(v => `<option value="${v}">${v}</option>`).join('');
 }
 
+// Lista de planos (tipo+velocidade) montada antes de enviar — permite
+// consultar viabilidade de vários planos/velocidades numa só consulta
+// (mesmo cliente/CEP). Cada item vira sua própria linha na fila do bot.
+let EV_CARRINHO = [];
+
+function evAdicionarPlanoNaLista() {
+  const tipoOferta = document.getElementById('ev-tipo-oferta').value;
+  const velocidade = document.getElementById('ev-velocidade').value;
+  const jaTem = EV_CARRINHO.some(p => p.tipoOferta === tipoOferta && p.velocidade === velocidade);
+  if (jaTem) return;
+  EV_CARRINHO.push({ tipoOferta, velocidade });
+  evRenderCarrinho();
+}
+
+function evRemoverPlanoDaLista(indice) {
+  EV_CARRINHO.splice(indice, 1);
+  evRenderCarrinho();
+}
+
+function evRenderCarrinho() {
+  const area = document.getElementById('ev-carrinho-area');
+  if (EV_CARRINHO.length === 0) {
+    area.innerHTML = '<div style="font-size:11px;color:var(--text-2);">Nenhum plano adicionado ainda — clique em "+ Adicionar plano" pra consultar vários de uma vez, ou deixe em branco pra consultar só o selecionado acima.</div>';
+    return;
+  }
+  area.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:6px;">
+    ${EV_CARRINHO.map((p, i) => `
+      <span style="display:inline-flex;align-items:center;gap:6px;background:var(--surface-2);border:1px solid var(--border);border-radius:999px;padding:4px 6px 4px 10px;font-size:11px;">
+        ${escapeHtml(CONECT_NOMES_OFERTA[p.tipoOferta] || p.tipoOferta)} · ${escapeHtml(p.velocidade)}
+        <button onclick="evRemoverPlanoDaLista(${i})" style="border:none;background:none;cursor:pointer;color:var(--text-2);font-size:13px;line-height:1;padding:2px;" title="Remover">×</button>
+      </span>`).join('')}
+  </div>`;
+}
+
 async function evConsultarViabilidade() {
   const tipoOferta = document.getElementById('ev-tipo-oferta').value;
   const velocidade = document.getElementById('ev-velocidade').value;
@@ -9577,6 +9619,10 @@ async function evConsultarViabilidade() {
   const cnpj = document.getElementById('ev-cnpj').value.trim();
   const cep = document.getElementById('ev-cep').value.trim();
 
+  // Sem nada no carrinho, consulta só o plano selecionado no momento —
+  // não obriga clicar em "+ Adicionar" pra uma consulta simples.
+  const planos = EV_CARRINHO.length > 0 ? EV_CARRINHO : [{ tipoOferta, velocidade }];
+
   const statusEl = document.getElementById('ev-status-consulta');
   if (!clienteFinal) { statusEl.textContent = 'Preencha o Cliente Final.'; statusEl.style.color = 'var(--red-sem)'; return; }
   if (cep.replace(/\D/g, '').length !== 8) { statusEl.textContent = 'CEP inválido.'; statusEl.style.color = 'var(--red-sem)'; return; }
@@ -9584,22 +9630,24 @@ async function evConsultarViabilidade() {
   const btn = document.getElementById('ev-btn-consultar');
   btn.disabled = true;
   statusEl.style.color = 'var(--text-2)';
-  statusEl.textContent = 'Enviando consulta...';
+  statusEl.textContent = planos.length > 1 ? `Enviando ${planos.length} consultas...` : 'Enviando consulta...';
 
   try {
     const res = await fetch('/api/radar-consulta', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
-      body: JSON.stringify({ tipoOferta, velocidade, clienteFinal, razaoSocial, cnpj, cep, quantidadeCircuitos }),
+      body: JSON.stringify({ clienteFinal, razaoSocial, cnpj, cep, quantidadeCircuitos, planos }),
     });
     const json = await res.json();
     if (!res.ok) throw new Error(json.error || 'Falha ao enviar a consulta');
 
     statusEl.style.color = 'var(--green)';
-    statusEl.textContent = 'Consulta enviada — o resultado aparece na lista abaixo assim que o robô processar (alguns minutos).';
+    statusEl.textContent = `${json.ids.length} consulta(s) enviada(s) — o resultado aparece na lista abaixo assim que o robô processar (alguns minutos).`;
     document.getElementById('ev-cliente-final').value = '';
     document.getElementById('ev-cnpj').value = '';
     document.getElementById('ev-cep').value = '';
+    EV_CARRINHO = [];
+    evRenderCarrinho();
     evCarregarLista();
   } catch (e) {
     statusEl.style.color = 'var(--red-sem)';
@@ -9624,7 +9672,7 @@ async function evCarregarLista() {
   area.innerHTML = `<div style="overflow-x:auto;"><table style="width:100%;font-size:12px;">
     <thead><tr>
       <th>Cliente Final</th><th>Item de Produto</th><th>CEP</th><th>Status</th>
-      <th>Status da Consulta</th><th>Resultado</th><th>Pricing Habilitado</th><th>Facilidade</th><th>Custo (CAPEX)</th><th>Enviado em</th>
+      <th>Status da Consulta</th><th>Status das SEVs</th><th>Habilitado Para Pricing</th><th>Facilidade</th><th>Custo (CAPEX)</th><th>Data de criação</th><th>Data da última modificação</th>
     </tr></thead>
     <tbody>
       ${data.map(item => {
@@ -9642,6 +9690,7 @@ async function evCarregarLista() {
           <td>${escapeHtml(item.facilidade || '—')}</td>
           <td>${item.custo_capex != null ? Number(item.custo_capex).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '—'}</td>
           <td>${item.criado_em ? new Date(item.criado_em).toLocaleString('pt-BR') : '—'}</td>
+          <td>${item.atualizado_em ? new Date(item.atualizado_em).toLocaleString('pt-BR') : '—'}</td>
         </tr>`;
       }).join('')}
     </tbody>
