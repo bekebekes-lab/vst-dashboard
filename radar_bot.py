@@ -172,7 +172,7 @@ def localizar_campo_lookup(page, aria_label: str, timeout=15_000):
     return None
 
 
-def selecionar_lookup(page, aria_label: str, texto_completo: str, timeout=15_000) -> bool:
+def selecionar_lookup(page, aria_label: str, texto_completo: str, timeout=30_000) -> bool:
     """Digita no campo de busca (lookup) e clica na opção certa da lista —
     usado pra campos tipo Cliente/Produto/Item de Produto.
 
@@ -190,6 +190,11 @@ def selecionar_lookup(page, aria_label: str, texto_completo: str, timeout=15_000
     de um modal, Escape pode fechar o MODAL INTEIRO em vez de só o dropdown
     do lookup (suspeita forte após o campo seguinte sumir por completo em
     execução real — sem Escape, o overlay-hidden já basta).
+
+    timeout default de 30s (não 15s): "Item de Produto" é uma busca
+    dependente/filtrada pelo Produto já selecionado — o print de debug
+    mostrou o resultado certo aparecendo NA TELA depois que o código já
+    tinha desistido em 15s (confirmado via artefato de debug real).
     """
     campo = localizar_campo_lookup(page, aria_label, timeout)
     if campo is None:
