@@ -93,16 +93,42 @@ def aguardar_totp_fresco() -> str:
 # ─── Login ──────────────────────────────────────────────────────────────────
 def login(page):
     log.info("Fazendo login no Radar...")
+    DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
     page.goto(RADAR_URL, wait_until="networkidle")
     page.fill("#username", RADAR_USER)
-    page.fill("#password", RADAR_PASS)
-    page.click("#Login")
+    page.screenshot(path=str(DOWNLOAD_DIR / "01_username_preenchido.png"))
+
+    # Domínios customizados do Salesforce (My Domain, caso do
+    # embratel.my.salesforce.com) costumam usar login em DUAS etapas:
+    # usuário -> "Próximo"/"Continuar" -> só então aparece a senha, numa
+    # tela separada. Detecta qual dos dois formatos é este antes de mexer
+    # no campo de senha.
+    campo_senha = page.locator("#password")
+    if not campo_senha.is_visible():
+        log.info("  Campo de senha não visível ainda — tentando avançar (login em duas etapas)...")
+        for sel in ["#Login", "button:has-text('Próximo')", "button:has-text('Next')", "button:has-text('Continuar')"]:
+            try:
+                page.locator(sel).first.click(timeout=3_000)
+                break
+            except Exception:
+                continue
+        campo_senha.wait_for(state="visible", timeout=20_000)
+        page.screenshot(path=str(DOWNLOAD_DIR / "02_tela_senha.png"))
+
+    campo_senha.fill(RADAR_PASS)
+    for sel in ["#Login", "button:has-text('Fazer login')", "button:has-text('Log In')"]:
+        try:
+            page.locator(sel).first.click(timeout=3_000)
+            break
+        except Exception:
+            continue
 
     # Tela de verificação (2FA) — só aparece se o dispositivo não for
     # lembrado; seletores padrão do Salesforce, com fallback por texto.
     try:
         campo_codigo = page.locator("input#tc, input[name='emc'], input[type='tel']").first
         campo_codigo.wait_for(state="visible", timeout=15_000)
+        page.screenshot(path=str(DOWNLOAD_DIR / "03_tela_2fa.png"))
         codigo = aguardar_totp_fresco()
         campo_codigo.fill(codigo)
         for sel in ["#save", "button:has-text('Verificar')", "input[type='submit']"]:
@@ -116,6 +142,7 @@ def login(page):
         log.info("Nenhuma tela de 2FA apareceu (dispositivo já confiável).")
 
     page.wait_for_url(lambda url: "login" not in url, timeout=60_000)
+    page.screenshot(path=str(DOWNLOAD_DIR / "04_pos_login.png"))
     log.info("Login OK.")
 
 
@@ -335,11 +362,19 @@ def main():
         page = browser.new_context().new_page()
         page.set_default_timeout(30_000)
 
-        login(page)
-        processar_pendentes(page)
-        revisar_em_andamento(page)
-
-        browser.close()
+        try:
+            login(page)
+            processar_pendentes(page)
+            revisar_em_andamento(page)
+        except Exception:
+            DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
+            try:
+                page.screenshot(path=str(DOWNLOAD_DIR / "99_erro_fatal.png"))
+            except Exception:
+                pass
+            raise
+        finally:
+            browser.close()
 
     log.info("Concluído.")
 
