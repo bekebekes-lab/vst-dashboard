@@ -125,21 +125,43 @@ def login(page):
 
     # Tela de verificação (2FA) — só aparece se o dispositivo não for
     # lembrado; seletores padrão do Salesforce, com fallback por texto.
+    tela_2fa = False
     try:
         campo_codigo = page.locator("input#tc, input[name='emc'], input[type='tel']").first
         campo_codigo.wait_for(state="visible", timeout=15_000)
-        page.screenshot(path=str(DOWNLOAD_DIR / "03_tela_2fa.png"))
-        codigo = aguardar_totp_fresco()
-        campo_codigo.fill(codigo)
-        for sel in ["#save", "button:has-text('Verificar')", "input[type='submit']"]:
-            try:
-                page.locator(sel).first.click(timeout=5_000)
-                break
-            except Exception:
-                continue
-        log.info("2FA preenchido.")
+        tela_2fa = True
     except Exception:
         log.info("Nenhuma tela de 2FA apareceu (dispositivo já confiável).")
+
+    if tela_2fa:
+        page.screenshot(path=str(DOWNLOAD_DIR / "03_tela_2fa.png"))
+        for tentativa in range(1, 4):
+            codigo = aguardar_totp_fresco()
+            campo_codigo.fill(codigo)
+            for sel in ["#save", "button:has-text('Verificar')", "input[type='submit']"]:
+                try:
+                    page.locator(sel).first.click(timeout=5_000)
+                    break
+                except Exception:
+                    continue
+            # Confirma que o Salesforce aceitou o código antes de seguir —
+            # achado real (print 04_pos_login.png de uma execução com falha
+            # em cascata): ele às vezes rejeita ("Código de verificação
+            # inválido ou expirado", provavelmente cruzou a janela de 30s
+            # entre gerar o TOTP e o servidor validar), e o wait_for_url
+            # abaixo não pegava isso (a URL de erro do 2FA não contém
+            # "login"), então o bot seguia como se tivesse logado — e tudo
+            # dali pra frente falhava (Access Denied / tela de login).
+            try:
+                page.locator("text=inválido ou expirado").wait_for(state="visible", timeout=4_000)
+                log.warning(f"  Código 2FA rejeitado (tentativa {tentativa}/3) — gerando um novo.")
+                continue
+            except Exception:
+                break
+        else:
+            page.screenshot(path=str(DOWNLOAD_DIR / "2fa_rejeitado_3x.png"))
+            raise RuntimeError("Salesforce rejeitou o código 2FA 3 vezes seguidas.")
+        log.info("2FA preenchido.")
 
     page.wait_for_url(lambda url: "login" not in url, timeout=60_000)
     page.screenshot(path=str(DOWNLOAD_DIR / "04_pos_login.png"))
@@ -359,10 +381,20 @@ def definir_endereco_sev(page, ev_record_id: str, cep: str, numero: str = None):
         log.warning("  Botão 'Validar' não encontrado após buscar CEP — screenshot salvo.")
         page.screenshot(path=str(DOWNLOAD_DIR / f"erro_endereco_{ev_record_id}.png"))
         return
-    page.wait_for_selector("text=CONFIRMADO E PADRONIZADO", timeout=15_000)
+    try:
+        page.wait_for_selector("text=CONFIRMADO E PADRONIZADO", timeout=15_000)
+    except Exception:
+        # O toast nem sempre aparece a tempo — achado real (print
+        # falha_consulta_13/11): quando o Salesforce corrige/padroniza o CEP
+        # digitado pra um diferente (ex.: 81460050 virou 81170230 na tela),
+        # o botão "Inserir" fica habilitado normalmente mas esse toast
+        # específico não aparece dentro do timeout. O sinal real de que a
+        # validação terminou é "Inserir" ficar clicável, checado abaixo (o
+        # .click() sem force já espera o botão ficar habilitado).
+        log.info("  Toast 'CONFIRMADO E PADRONIZADO' não apareceu a tempo — seguindo pro clique em 'Inserir' mesmo assim.")
 
-    if not clicar_botao_com_texto(page, "Inserir", timeout=15_000):
-        log.warning("  Botão 'Inserir' não encontrado depois de Validar — screenshot salvo.")
+    if not clicar_botao_com_texto(page, "Inserir", timeout=20_000):
+        log.warning("  Botão 'Inserir' não encontrado/habilitado depois de Validar — screenshot salvo.")
         page.screenshot(path=str(DOWNLOAD_DIR / f"erro_endereco_{ev_record_id}.png"))
         return
 
