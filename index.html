@@ -9390,7 +9390,6 @@ const CONECT_PRECOS_LAN_EPL = {
   },
 };
 const CONECT_PRECO_ROTEADOR_MPLS_LAN_EPL = { 'Huawei AR651': 173.43, 'Huawei AR6121E': 302.50 };
-const CONECT_DESCONTO_36_MESES_MPLS_LAN_EPL = 0.10;
 const CONECT_ALICOTAS_UF = {
   AC: 0.7804350000000001, AL: 0.7707999999999999, AM: 0.7707999999999999, AP: 0.6840849999999999,
   BA: 0.7659825, CE: 0.7707999999999999, DF: 0.7707999999999999, ES: 0.7997049999999999,
@@ -9449,7 +9448,7 @@ function conectAtualizarValorEstimado() {
       const base = CONECT_PRECOS_MPLS_POR_REGIAO[regiao]?.[velocidade];
       const precoRoteador = (roteador && roteador !== 'Nenhum') ? CONECT_PRECO_ROTEADOR_MPLS_LAN_EPL[roteador] : 0;
       if (!fator) aviso = `UF "${uf}" não está na tabela de alíquotas.`;
-      else if (base != null) valor = Math.round(((base * (1 - CONECT_DESCONTO_36_MESES_MPLS_LAN_EPL) + precoRoteador) / fator) * 100) / 100;
+      else if (base != null) valor = Math.round(((base + precoRoteador) / fator) * 100) / 100;
     }
   } else if (tipo === 'lan_epl') {
     if (!uf) {
@@ -9461,7 +9460,7 @@ function conectAtualizarValorEstimado() {
       const base = CONECT_PRECOS_LAN_EPL[tipoCircuito]?.[trajeto]?.[velocidade];
       const precoRoteador = (roteador && roteador !== 'Nenhum') ? CONECT_PRECO_ROTEADOR_MPLS_LAN_EPL[roteador] : 0;
       if (!fator) aviso = `UF "${uf}" não está na tabela de alíquotas.`;
-      else if (base != null) valor = Math.round(((base * (1 - CONECT_DESCONTO_36_MESES_MPLS_LAN_EPL) + precoRoteador) / fator) * 100) / 100;
+      else if (base != null) valor = Math.round(((base + precoRoteador) / fator) * 100) / 100;
     }
   }
 

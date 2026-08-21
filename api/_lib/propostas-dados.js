@@ -134,10 +134,13 @@ export const MPLS_ROTEADORES = {
   'Huawei AR651': 173.43, // até 500Mbps
   'Huawei AR6121E': 302.50, // até 1Gbps
 };
-// "Valores informados para contratos de 12 meses" — fidelidade de 36 meses
-// dá até 10% de desconto sobre a tabela (aplicado só no link, não no
-// roteador, que é item avulso sem essa condição de fidelidade).
-export const MPLS_LAN_EPL_DESCONTO_36_MESES = 0.10;
+// A aba "MPLS" da calculadora oficial (a mesma usada pela VST hoje) não
+// aplica nenhum desconto de fidelidade nas colunas "Mensal s/imposto"/"c/
+// imposto" — confirmado comparando o cálculo daqui com a planilha real
+// (1G, Região I, PR: 3191,00 / 0,7756175 = 4.114,14, sem desconto). Um
+// desconto de até 10% por fidelidade de 36 meses é mencionado no Book como
+// condição comercial negociável, mas não é parte do valor de tabela — por
+// isso não é aplicado automaticamente aqui.
 
 export function mplsDetectarRegiao(cidade) {
   const c = (cidade || '').trim().toUpperCase();
@@ -161,15 +164,14 @@ export function calcularMPLS(velocidade, roteador, uf, cidade) {
   const fatorUF = ALICOTAS_UF[(uf || '').trim().toUpperCase()];
   if (!fatorUF) return null;
 
-  const linkComDesconto = linkSemImposto * (1 - MPLS_LAN_EPL_DESCONTO_36_MESES);
-  const valorMensal = Math.round(((linkComDesconto + roteadorSemImposto) / fatorUF) * 100) / 100;
-  const valorDe = Math.round(((linkSemImposto + roteadorSemImposto) / fatorUF) * 100) / 100;
-  return { valorMensal, valorDe, valorDesconto: Math.round((valorDe - valorMensal) * 100) / 100, regiao };
+  const valorMensal = Math.round(((linkSemImposto + roteadorSemImposto) / fatorUF) * 100) / 100;
+  return { valorMensal, regiao };
 }
 
 // LAN EPL (Book Clareando PME, Ago/2026, pág. 114 + aba "LAN EPL") —
 // valores sem imposto, por tipo de circuito (A1 ou MEF-B1) e trajeto
-// (Local ou Interurbano). Mesmo desconto de 36 meses do MPLS.
+// (Local ou Interurbano). Mesma regra do MPLS: sem desconto de fidelidade
+// aplicado automaticamente (não faz parte do valor de tabela).
 export const LAN_EPL_PRECOS = {
   A1: {
     Local: { '10M': 909.00, '20M': 913.00, '30M': 1043.00, '50M': 1329.00, '70M': 1589.00, '100M': 1940.00, '200M': 2521.00, '500M': 4708.00, '700M': 6012.00, '1G': 7645.00 },
@@ -201,10 +203,8 @@ export function calcularLANEPL(velocidade, tipo, trajeto, roteador, uf) {
   const fatorUF = ALICOTAS_UF[(uf || '').trim().toUpperCase()];
   if (!fatorUF) return null;
 
-  const linkComDesconto = linkSemImposto * (1 - MPLS_LAN_EPL_DESCONTO_36_MESES);
-  const valorMensal = Math.round(((linkComDesconto + roteadorSemImposto) / fatorUF) * 100) / 100;
-  const valorDe = Math.round(((linkSemImposto + roteadorSemImposto) / fatorUF) * 100) / 100;
-  return { valorMensal, valorDe, valorDesconto: Math.round((valorDe - valorMensal) * 100) / 100 };
+  const valorMensal = Math.round(((linkSemImposto + roteadorSemImposto) / fatorUF) * 100) / 100;
+  return { valorMensal };
 }
 
 export function roteadoresDisponiveisPara(velocidade) {
