@@ -153,10 +153,32 @@ def preencher_input_por_name(page, name: str, valor: str):
     page.locator(f"input[name='{name}']").first.fill(str(valor))
 
 
+def localizar_campo_lookup(page, aria_label: str, timeout=15_000):
+    """Localiza o <input> do lookup pelo aria-label — 'Produto' é substring
+    de 'Item de Produto', então get_by_role(name=...) sem exact=True pode
+    resolver ambos; exact=True primeiro, e o atributo aria-label cru como
+    fallback (mais literal, sem depender do cálculo de nome acessível)."""
+    tentativas = [
+        lambda: page.get_by_role("combobox", name=aria_label, exact=True).first,
+        lambda: page.locator(f"input[aria-label='{aria_label}']").first,
+    ]
+    for tentativa in tentativas:
+        try:
+            campo = tentativa()
+            campo.wait_for(state="visible", timeout=timeout)
+            return campo
+        except Exception:
+            continue
+    return None
+
+
 def selecionar_lookup(page, aria_label: str, texto_busca: str, timeout=15_000) -> bool:
     """Digita no campo de busca (lookup) e clica na 1ª opção da lista —
     usado pra campos tipo Cliente/Produto/Item de Produto."""
-    campo = page.get_by_role("combobox", name=aria_label).first
+    campo = localizar_campo_lookup(page, aria_label, timeout)
+    if campo is None:
+        log.warning(f"  Campo de busca '{aria_label}' não encontrado.")
+        return False
     campo.click()
     campo.fill(texto_busca)
     try:
