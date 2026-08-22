@@ -9820,7 +9820,7 @@ function evRenderListaTabela(data) {
   area.innerHTML = `<div style="overflow-x:auto;"><table style="width:100%;font-size:12px;">
     <thead><tr>
       <th>Cliente Final</th><th>Item de Produto</th><th>CEP</th><th>Status</th>
-      <th>Status da Consulta</th><th>Status das SEVs</th><th>Habilitado Para Pricing</th><th>Facilidade</th><th>Custo (CAPEX)</th><th>Data de criação</th><th>Data da última modificação</th>
+      <th>Status da Consulta</th><th>Status das SEVs</th><th>Habilitado Para Pricing</th><th>Facilidade</th><th>Data de criação</th><th>Data da última modificação</th>
     </tr></thead>
     <tbody>
       ${data.map(item => {
@@ -9836,7 +9836,6 @@ function evRenderListaTabela(data) {
           <td style="color:${corResultado};font-weight:600;">${escapeHtml(resultado)}</td>
           <td>${item.habilitado_pricing ? `<span style="color:${item.habilitado_pricing === 'Sim' ? 'var(--green)' : 'var(--red-sem)'};font-weight:600;">${escapeHtml(item.habilitado_pricing)}</span>` : '—'}</td>
           <td>${escapeHtml(item.facilidade || '—')}</td>
-          <td>${item.custo_capex != null ? Number(item.custo_capex).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '—'}</td>
           <td>${item.criado_em ? new Date(item.criado_em).toLocaleString('pt-BR') : '—'}</td>
           <td>${item.atualizado_em ? new Date(item.atualizado_em).toLocaleString('pt-BR') : '—'}</td>
         </tr>`;
