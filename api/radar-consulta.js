@@ -52,7 +52,23 @@ export default async function handler(req, res) {
     if (!catalogo) {
       return res.status(400).json({ error: `Não há correspondência no catálogo do Radar para "${item?.tipoOferta}" / "${item?.velocidade}" — consulta de viabilidade ainda não disponível pra essa oferta.` });
     }
-    linhas.push({ clienteFinal, cep, catalogo, item });
+    // Coordenadas são opcionais, mas se vierem precisam ser um número de
+    // verdade, nunca lixo indo pro Salesforce.
+    const numeroValido = (v) => v === null || v === undefined || v === '' || /^-?\d{1,3}(\.\d+)?$/.test(String(v).trim());
+    if (!numeroValido(item?.latitude) || !numeroValido(item?.longitude)) {
+      return res.status(400).json({ error: `Latitude/Longitude inválida para "${clienteFinal}"` });
+    }
+    // Prioridade pra localizar o endereço no Radar (pedido explícito): 1)
+    // coordenada exata informada pelo consultor; 2) sem coordenada, mas com
+    // o Número do imóvel, o robô geocodifica CEP+Número; sem nenhum dos
+    // dois não dá pra prosseguir — mesma trava já feita no front, repetida
+    // aqui porque a validação do cliente nunca é suficiente sozinha.
+    const numeroImovel = (item?.numero || '').trim();
+    const temCoordenadas = (item?.latitude || '').trim() && (item?.longitude || '').trim();
+    if (!temCoordenadas && !numeroImovel) {
+      return res.status(400).json({ error: `Informe as Coordenadas ou o Número do imóvel para "${clienteFinal}"` });
+    }
+    linhas.push({ clienteFinal, cep, catalogo, item, numeroImovel });
   }
 
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -73,14 +89,16 @@ export default async function handler(req, res) {
         Authorization: `Bearer ${serviceKey}`,
         Prefer: 'return=representation',
       },
-      body: JSON.stringify(linhas.map(({ clienteFinal, cep, catalogo, item }) => ({
+      body: JSON.stringify(linhas.map(({ clienteFinal, cep, catalogo, item, numeroImovel }) => ({
         consultor_id: authUser.id,
         consultor_nome: consultorNome,
         razao_social: (item.razaoSocial || clienteFinal || '').trim() || null,
-        cnpj: (item.cnpj || '').trim() || null,
         cliente_final: clienteFinal,
         quantidade_circuitos: Number(item.quantidadeCircuitos) || 1,
         cep,
+        numero: numeroImovel || null,
+        latitude: item.latitude || null,
+        longitude: item.longitude || null,
         status: 'pendente',
         produto: catalogo.produto,
         item_produto: catalogo.itemProduto,

@@ -100,6 +100,47 @@ def gerar_cnpj_aleatorio() -> str:
     return "".join(map(str, base + [d1, d2]))
 
 
+def geocodificar_endereco(cep: str, numero: str):
+    """Geocodifica CEP+Número — fallback quando o consultor não informa a
+    coordenada exata (Google Maps), mas informa o número do imóvel. Busca
+    logradouro/bairro/cidade/UF via ViaCEP e manda pro Nominatim
+    (OpenStreetMap, gratuito, sem chave). Tenta do mais específico ao mais
+    genérico: o OSM raramente tem o número exato indexado no Brasil
+    (confirmado testando CEPs reais — só a busca sem número/bairro
+    resolveu), então cai pra rua+cidade se a busca completa vier vazia, em
+    vez de desistir e deixar sem coordenada nenhuma."""
+    try:
+        via_cep = requests.get(f"https://viacep.com.br/ws/{cep}/json/", timeout=10).json()
+        if via_cep.get("erro"):
+            return None, None
+        logradouro = via_cep.get("logradouro", "")
+        bairro = via_cep.get("bairro", "")
+        cidade = via_cep.get("localidade", "")
+        uf = via_cep.get("uf", "")
+
+        tentativas = [
+            f"{logradouro}, {numero} - {bairro}, {cidade} - {uf}, Brasil",
+            f"{logradouro}, {bairro}, {cidade} - {uf}, Brasil",
+            f"{logradouro}, {cidade} - {uf}, Brasil",
+        ]
+        for i, endereco in enumerate(tentativas):
+            if i > 0:
+                time.sleep(1)  # Nominatim: máx. 1 req/s
+            resp = requests.get(
+                "https://nominatim.openstreetmap.org/search",
+                params={"q": endereco, "format": "json", "limit": 1},
+                headers={"User-Agent": "vst-dashboard-radar-bot/1.0"},
+                timeout=10,
+            )
+            resultados = resp.json()
+            if resultados:
+                return resultados[0]["lat"], resultados[0]["lon"]
+        return None, None
+    except Exception as e:
+        log.warning(f"  Falha ao geocodificar CEP {cep} nº{numero}: {e}")
+        return None, None
+
+
 # O mapeamento "nossa oferta (tipo+velocidade) -> texto de busca no Item de
 # Produto do Radar" mora no backend JS (api/_lib/radar-catalogo.js) — é lá
 # que o consultor escolhe a oferta na tela; a linha já chega aqui em
@@ -354,7 +395,7 @@ def criar_estudo(page, item: dict) -> tuple[str, str]:
 
 
 # ─── 2. Definir endereço do SEV (auto-criado junto com o EV) ───────────────
-def definir_endereco_sev(page, ev_record_id: str, cep: str, numero: str = None):
+def definir_endereco_sev(page, ev_record_id: str, cep: str, numero: str = None, latitude: str = None, longitude: str = None):
     log.info(f"Definindo endereço (CEP {cep}) do SEV...")
     base = RADAR_URL.replace(".my.salesforce.com", ".lightning.force.com")
     page.goto(f"{base}/lightning/r/Estudo_de_Viabilidade__c/{ev_record_id}/related/SEV_s__r/view", wait_until="networkidle")
@@ -371,21 +412,34 @@ def definir_endereco_sev(page, ev_record_id: str, cep: str, numero: str = None):
     page.locator("button.buscarCepButton").click()
     time.sleep(3)
 
-    # Lat/Long saem prontas da busca de CEP (mesmo painel) — guardadas só
-    # pra exibir no Dash; o consultor usa pra imputar no Solar depois,
-    # nada aqui depende delas (achado real: classes latitudeField/
-    # longitudeField, mesmo padrão de cepField/numeroField).
-    try:
-        latitude = page.locator("lightning-input.latitudeField input").first.input_value()
-        longitude = page.locator("lightning-input.longitudeField input").first.input_value()
-    except Exception:
-        latitude, longitude = None, None
+    # "Buscar CEP" já preenche Latitude/Longitude sozinho (geocode
+    # aproximado, só pelo CEP) — mas isso não é preciso o bastante pro
+    # ponto de instalação. Prioridade (pedido explícito):
+    # 1) coordenada exata informada pelo consultor (Google Maps);
+    # 2) sem coordenada, mas com Número, geocodifica CEP+Número aqui;
+    # 3) sem os dois, mantém o que o Radar já calculou sozinho (o Dash
+    #    bloqueia esse caso antes de chegar aqui, mas não custa ter um
+    #    fallback seguro).
+    if not latitude or not longitude:
+        if numero:
+            latitude, longitude = geocodificar_endereco(cep, numero)
+        else:
+            latitude, longitude = None, None
+    if latitude:
+        try:
+            page.locator("lightning-input.latitudeField input").first.fill(str(latitude))
+        except Exception:
+            log.warning("  Campo 'Latitude' não encontrado no modal de endereço.")
+    if longitude:
+        try:
+            page.locator("lightning-input.longitudeField input").first.fill(str(longitude))
+        except Exception:
+            log.warning("  Campo 'Longitude' não encontrado no modal de endereço.")
 
     # O CEP sozinho não traz o número do imóvel — sem ele, a consulta de
     # viabilidade recusa com "Endereços não normalizados" mesmo depois de
     # clicar Validar (confirmado em execução real, print mostrando o campo
-    # "Número" vazio). O Dash ainda não coleta esse dado do consultor — usa
-    # um valor provisório só pra não travar a normalização por enquanto.
+    # "Número" vazio).
     try:
         page.locator("lightning-input.numeroField input").first.fill(numero or "1")
     except Exception:
@@ -405,7 +459,7 @@ def definir_endereco_sev(page, ev_record_id: str, cep: str, numero: str = None):
     if not clicar_botao_com_texto(page, "Validar", timeout=15_000):
         log.warning("  Botão 'Validar' não encontrado após buscar CEP — screenshot salvo.")
         page.screenshot(path=str(DOWNLOAD_DIR / f"erro_endereco_{ev_record_id}.png"))
-        return latitude, longitude
+        return
     try:
         page.wait_for_selector("text=CONFIRMADO E PADRONIZADO", timeout=15_000)
     except Exception:
@@ -421,11 +475,10 @@ def definir_endereco_sev(page, ev_record_id: str, cep: str, numero: str = None):
     if not clicar_botao_com_texto(page, "Inserir", timeout=20_000):
         log.warning("  Botão 'Inserir' não encontrado/habilitado depois de Validar — screenshot salvo.")
         page.screenshot(path=str(DOWNLOAD_DIR / f"erro_endereco_{ev_record_id}.png"))
-        return latitude, longitude
+        return
 
     page.wait_for_timeout(3_000)
     page.screenshot(path=str(DOWNLOAD_DIR / f"pos_inserir_{ev_record_id}.png"))
-    return latitude, longitude
 
 
 # ─── 3. Disparar "Consultar Viabilidade" ───────────────────────────────────
@@ -536,15 +589,13 @@ def processar_pendentes(page):
             else:
                 record_id, numero_ev = criar_estudo(page, item)
                 supa_atualizar(item["id"], {"ev_salesforce_id": record_id, "ev_numero": numero_ev})
-            latitude, longitude = definir_endereco_sev(page, record_id, item["cep"], item.get("numero"))
+            definir_endereco_sev(page, record_id, item["cep"], item.get("numero"), item.get("latitude"), item.get("longitude"))
             consultar_viabilidade(page, record_id)
             supa_atualizar(item["id"], {
                 "status": "aguardando_resultado",
                 "ev_salesforce_id": record_id,
                 "ev_numero": numero_ev,
                 "status_consulta": "Aguardando Consulta",
-                "latitude": latitude,
-                "longitude": longitude,
             })
         except Exception as e:
             log.error(f"  Falha ao processar consulta {item['id']}: {e}", exc_info=True)

@@ -2360,6 +2360,25 @@
         <label>Rua <span style="font-weight:400;text-transform:none;">(preenchida automático pelo CEP)</span></label>
         <div id="ev-rua-exibicao" style="font-size:13px;color:var(--text-2);padding:8px 0;">—</div>
       </div>
+    </div>
+
+    <div class="filters-bar" style="margin-top:10px;">
+      <div class="filter-group">
+        <label>Latitude</label>
+        <input type="text" id="ev-latitude" placeholder="Ex.: -25.543765" autocomplete="off">
+      </div>
+      <div class="filter-group">
+        <label>Longitude</label>
+        <input type="text" id="ev-longitude" placeholder="Ex.: -49.323678" autocomplete="off">
+      </div>
+      <div class="filter-group" style="min-width:100px;">
+        <label>Número</label>
+        <input type="text" id="ev-numero" placeholder="Ex.: 123" autocomplete="off">
+      </div>
+      <div class="filter-group" style="min-width:260px;flex:1">
+        <label>&nbsp;</label>
+        <div style="font-size:11px;color:var(--text-2);padding-top:6px;">Obrigatório: Coordenadas (mais preciso) ou Número.</div>
+      </div>
       <div class="filter-group" style="justify-content:flex-end;">
         <label>&nbsp;</label>
         <button class="btn-secondary" onclick="evAdicionarPlanoNaLista()">+ Adicionar à lista</button>
@@ -9622,18 +9641,36 @@ let EV_CARRINHO = [];
 // padrão sem precisar variar por consulta.
 const EV_QUANTIDADE_CIRCUITOS_PADRAO = 1;
 
+// Prioridade pra localizar o endereço no Radar (pedido explícito):
+// 1) Coordenadas informadas pelo consultor (as mais exatas — Google Maps);
+// 2) sem coordenada, mas com Número, o robô geocodifica CEP+Número;
+// 3) sem os dois, não dá pra consultar — bloqueia aqui e no servidor.
+function evValidarLocalizacao(cep, latitude, longitude, numero, statusEl) {
+  if (cep.replace(/\D/g, '').length !== 8) { statusEl.textContent = 'CEP inválido.'; statusEl.style.color = 'var(--red-sem)'; return false; }
+  const temCoordenadas = latitude && longitude;
+  if (!temCoordenadas && !numero) {
+    statusEl.textContent = 'Informe as Coordenadas ou o Número.';
+    statusEl.style.color = 'var(--red-sem)';
+    return false;
+  }
+  return true;
+}
+
 function evAdicionarPlanoNaLista() {
   const tipoOferta = document.getElementById('ev-tipo-oferta').value;
   const velocidade = document.getElementById('ev-velocidade').value;
   const clienteFinal = document.getElementById('ev-cliente-final').value.trim();
   const cep = document.getElementById('ev-cep').value.trim();
+  const latitude = document.getElementById('ev-latitude').value.trim();
+  const longitude = document.getElementById('ev-longitude').value.trim();
+  const numero = document.getElementById('ev-numero').value.trim();
 
   const statusEl = document.getElementById('ev-status-consulta');
   if (!clienteFinal) { statusEl.textContent = 'Preencha o Cliente Final antes de adicionar.'; statusEl.style.color = 'var(--red-sem)'; return; }
-  if (cep.replace(/\D/g, '').length !== 8) { statusEl.textContent = 'CEP inválido.'; statusEl.style.color = 'var(--red-sem)'; return; }
+  if (!evValidarLocalizacao(cep, latitude, longitude, numero, statusEl)) return;
   statusEl.textContent = '';
 
-  EV_CARRINHO.push({ tipoOferta, velocidade, quantidadeCircuitos: EV_QUANTIDADE_CIRCUITOS_PADRAO, clienteFinal, cep });
+  EV_CARRINHO.push({ tipoOferta, velocidade, quantidadeCircuitos: EV_QUANTIDADE_CIRCUITOS_PADRAO, clienteFinal, cep, latitude, longitude, numero });
   evRenderCarrinho();
 
   // Limpa os campos pra facilitar digitar o próximo cliente/endereço —
@@ -9641,6 +9678,9 @@ function evAdicionarPlanoNaLista() {
   document.getElementById('ev-cliente-final').value = '';
   document.getElementById('ev-cep').value = '';
   document.getElementById('ev-rua-exibicao').textContent = '—';
+  document.getElementById('ev-latitude').value = '';
+  document.getElementById('ev-longitude').value = '';
+  document.getElementById('ev-numero').value = '';
   document.getElementById('ev-cliente-final').focus();
 }
 
@@ -9675,7 +9715,7 @@ function evRenderCarrinho() {
   area.innerHTML = `<div style="display:flex;flex-direction:column;gap:6px;">
     ${EV_CARRINHO.map((p, i) => `
       <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:6px 6px 6px 10px;font-size:11px;">
-        <span><strong>${escapeHtml(p.clienteFinal)}</strong> · CEP ${escapeHtml(p.cep)} · ${escapeHtml(CONECT_NOMES_OFERTA[p.tipoOferta] || p.tipoOferta)} · ${escapeHtml(p.velocidade)}</span>
+        <span><strong>${escapeHtml(p.clienteFinal)}</strong> · CEP ${escapeHtml(p.cep)}${p.latitude && p.longitude ? ` · ${escapeHtml(p.latitude)}, ${escapeHtml(p.longitude)}` : (p.numero ? ` · Nº ${escapeHtml(p.numero)}` : '')} · ${escapeHtml(CONECT_NOMES_OFERTA[p.tipoOferta] || p.tipoOferta)} · ${escapeHtml(p.velocidade)}</span>
         <button onclick="evRemoverPlanoDaLista(${i})" style="border:none;background:none;cursor:pointer;color:var(--text-2);font-size:13px;line-height:1;padding:2px;" title="Remover">×</button>
       </div>`).join('')}
   </div>`;
@@ -9694,9 +9734,12 @@ async function evConsultarViabilidade() {
     const velocidade = document.getElementById('ev-velocidade').value;
     const clienteFinal = document.getElementById('ev-cliente-final').value.trim();
     const cep = document.getElementById('ev-cep').value.trim();
+    const latitude = document.getElementById('ev-latitude').value.trim();
+    const longitude = document.getElementById('ev-longitude').value.trim();
+    const numero = document.getElementById('ev-numero').value.trim();
     if (!clienteFinal) { statusEl.textContent = 'Preencha o Cliente Final.'; statusEl.style.color = 'var(--red-sem)'; return; }
-    if (cep.replace(/\D/g, '').length !== 8) { statusEl.textContent = 'CEP inválido.'; statusEl.style.color = 'var(--red-sem)'; return; }
-    itens = [{ tipoOferta, velocidade, quantidadeCircuitos: EV_QUANTIDADE_CIRCUITOS_PADRAO, clienteFinal, cep }];
+    if (!evValidarLocalizacao(cep, latitude, longitude, numero, statusEl)) return;
+    itens = [{ tipoOferta, velocidade, quantidadeCircuitos: EV_QUANTIDADE_CIRCUITOS_PADRAO, clienteFinal, cep, latitude, longitude, numero }];
   }
 
   const btn = document.getElementById('ev-btn-consultar');
@@ -9716,6 +9759,8 @@ async function evConsultarViabilidade() {
           quantidadeCircuitos: it.quantidadeCircuitos,
           tipoOferta: it.tipoOferta,
           velocidade: it.velocidade,
+          latitude: it.latitude || null,
+          longitude: it.longitude || null,
         })),
       }),
     });
@@ -9727,6 +9772,8 @@ async function evConsultarViabilidade() {
     document.getElementById('ev-cliente-final').value = '';
     document.getElementById('ev-cep').value = '';
     document.getElementById('ev-rua-exibicao').textContent = '—';
+    document.getElementById('ev-latitude').value = '';
+    document.getElementById('ev-longitude').value = '';
     EV_CARRINHO = [];
     evRenderCarrinho();
     evCarregarLista();
@@ -9772,7 +9819,7 @@ function evRenderListaTabela(data) {
   }
   area.innerHTML = `<div style="overflow-x:auto;"><table style="width:100%;font-size:12px;">
     <thead><tr>
-      <th>Cliente Final</th><th>Item de Produto</th><th>CEP</th><th>Coordenadas</th><th>Status</th>
+      <th>Cliente Final</th><th>Item de Produto</th><th>CEP</th><th>Status</th>
       <th>Status da Consulta</th><th>Status das SEVs</th><th>Habilitado Para Pricing</th><th>Facilidade</th><th>Custo (CAPEX)</th><th>Data de criação</th><th>Data da última modificação</th>
     </tr></thead>
     <tbody>
@@ -9784,9 +9831,6 @@ function evRenderListaTabela(data) {
           <td>${escapeHtml(item.cliente_final)}${item.ev_numero ? ` <span style="color:var(--text-2);">(${escapeHtml(item.ev_numero)})</span>` : ''}</td>
           <td>${escapeHtml(item.item_produto || '—')}</td>
           <td>${escapeHtml(item.cep)}</td>
-          <td>${item.latitude && item.longitude
-            ? `<span class="ev-coord-copy" data-lat="${escapeHtml(item.latitude)}" data-lng="${escapeHtml(item.longitude)}" style="cursor:pointer;text-decoration:underline dotted;white-space:nowrap;" title="Clique para copiar (pra imputar no Solar)" onclick="evCopiarCoordenadas(this)">${escapeHtml(item.latitude)}, ${escapeHtml(item.longitude)}</span>`
-            : '—'}</td>
           <td><span style="color:${estagio.cor};font-weight:600;">${estagio.label}</span></td>
           <td>${escapeHtml(item.status_consulta || '—')}</td>
           <td style="color:${corResultado};font-weight:600;">${escapeHtml(resultado)}</td>
@@ -9799,17 +9843,6 @@ function evRenderListaTabela(data) {
       }).join('')}
     </tbody>
   </table></div>`;
-}
-
-// Clique na coluna Coordenadas copia "lat, long" — poupa digitar/selecionar
-// manualmente na hora de imputar no Solar.
-function evCopiarCoordenadas(el) {
-  const texto = `${el.dataset.lat}, ${el.dataset.lng}`;
-  navigator.clipboard.writeText(texto).then(() => {
-    const original = el.textContent;
-    el.textContent = 'Copiado!';
-    setTimeout(() => { el.textContent = original; }, 1200);
-  }).catch(() => {});
 }
 
 let EV_DADOS_CACHE = [];
