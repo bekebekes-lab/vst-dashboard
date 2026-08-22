@@ -52,11 +52,13 @@ export default async function handler(req, res) {
     if (!catalogo) {
       return res.status(400).json({ error: `Não há correspondência no catálogo do Radar para "${item?.tipoOferta}" / "${item?.velocidade}" — consulta de viabilidade ainda não disponível pra essa oferta.` });
     }
-    // Coordenadas são opcionais, mas se vierem precisam ser um número de
-    // verdade, nunca lixo indo pro Salesforce.
-    const numeroValido = (v) => v === null || v === undefined || v === '' || /^-?\d{1,3}(\.\d+)?$/.test(String(v).trim());
-    if (!numeroValido(item?.latitude) || !numeroValido(item?.longitude)) {
-      return res.status(400).json({ error: `Latitude/Longitude inválida para "${clienteFinal}"` });
+    // Coordenadas chegam num campo único "lat, long" (igual o Google Maps
+    // copia) — só valida o formato aqui; quem separa em lat/long de verdade
+    // é o robô, na hora de preencher os dois campos do Radar (pedido
+    // explícito, pra não duplicar esse parsing em dois lugares).
+    const coordenadas = (item?.coordenadas || '').trim();
+    if (coordenadas && !/^-?\d{1,3}(\.\d+)?\s*,\s*-?\d{1,3}(\.\d+)?$/.test(coordenadas)) {
+      return res.status(400).json({ error: `Coordenadas em formato inválido para "${clienteFinal}" — use "lat, long" (ex.: -25.543765, -49.323678)` });
     }
     // Prioridade pra localizar o endereço no Radar (pedido explícito): 1)
     // coordenada exata informada pelo consultor; 2) sem coordenada, mas com
@@ -64,11 +66,10 @@ export default async function handler(req, res) {
     // dois não dá pra prosseguir — mesma trava já feita no front, repetida
     // aqui porque a validação do cliente nunca é suficiente sozinha.
     const numeroImovel = (item?.numero || '').trim();
-    const temCoordenadas = (item?.latitude || '').trim() && (item?.longitude || '').trim();
-    if (!temCoordenadas && !numeroImovel) {
+    if (!coordenadas && !numeroImovel) {
       return res.status(400).json({ error: `Informe as Coordenadas ou o Número do imóvel para "${clienteFinal}"` });
     }
-    linhas.push({ clienteFinal, cep, catalogo, item, numeroImovel });
+    linhas.push({ clienteFinal, cep, catalogo, item, numeroImovel, coordenadas });
   }
 
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -89,7 +90,7 @@ export default async function handler(req, res) {
         Authorization: `Bearer ${serviceKey}`,
         Prefer: 'return=representation',
       },
-      body: JSON.stringify(linhas.map(({ clienteFinal, cep, catalogo, item, numeroImovel }) => ({
+      body: JSON.stringify(linhas.map(({ clienteFinal, cep, catalogo, item, numeroImovel, coordenadas }) => ({
         consultor_id: authUser.id,
         consultor_nome: consultorNome,
         razao_social: (item.razaoSocial || clienteFinal || '').trim() || null,
@@ -97,8 +98,7 @@ export default async function handler(req, res) {
         quantidade_circuitos: Number(item.quantidadeCircuitos) || 1,
         cep,
         numero: numeroImovel || null,
-        latitude: item.latitude || null,
-        longitude: item.longitude || null,
+        coordenadas: coordenadas || null,
         status: 'pendente',
         produto: catalogo.produto,
         item_produto: catalogo.itemProduto,

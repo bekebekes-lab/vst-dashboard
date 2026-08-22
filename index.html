@@ -2363,13 +2363,9 @@
     </div>
 
     <div class="filters-bar" style="margin-top:10px;">
-      <div class="filter-group">
-        <label>Latitude</label>
-        <input type="text" id="ev-latitude" placeholder="Ex.: -25.543765" autocomplete="off">
-      </div>
-      <div class="filter-group">
-        <label>Longitude</label>
-        <input type="text" id="ev-longitude" placeholder="Ex.: -49.323678" autocomplete="off">
+      <div class="filter-group" style="min-width:220px;">
+        <label>Coordenadas</label>
+        <input type="text" id="ev-coordenadas" placeholder="Ex.: -25.543765, -49.323678" autocomplete="off">
       </div>
       <div class="filter-group" style="min-width:100px;">
         <label>Número</label>
@@ -9642,13 +9638,14 @@ let EV_CARRINHO = [];
 const EV_QUANTIDADE_CIRCUITOS_PADRAO = 1;
 
 // Prioridade pra localizar o endereço no Radar (pedido explícito):
-// 1) Coordenadas informadas pelo consultor (as mais exatas — Google Maps);
+// 1) Coordenadas informadas pelo consultor (as mais exatas — Google Maps,
+//    num campo único "lat, long", igual o Maps já copia — o robô separa
+//    na hora de preencher os dois campos do Radar, não aqui);
 // 2) sem coordenada, mas com Número, o robô geocodifica CEP+Número;
 // 3) sem os dois, não dá pra consultar — bloqueia aqui e no servidor.
-function evValidarLocalizacao(cep, latitude, longitude, numero, statusEl) {
+function evValidarLocalizacao(cep, coordenadas, numero, statusEl) {
   if (cep.replace(/\D/g, '').length !== 8) { statusEl.textContent = 'CEP inválido.'; statusEl.style.color = 'var(--red-sem)'; return false; }
-  const temCoordenadas = latitude && longitude;
-  if (!temCoordenadas && !numero) {
+  if (!coordenadas && !numero) {
     statusEl.textContent = 'Informe as Coordenadas ou o Número.';
     statusEl.style.color = 'var(--red-sem)';
     return false;
@@ -9661,16 +9658,15 @@ function evAdicionarPlanoNaLista() {
   const velocidade = document.getElementById('ev-velocidade').value;
   const clienteFinal = document.getElementById('ev-cliente-final').value.trim();
   const cep = document.getElementById('ev-cep').value.trim();
-  const latitude = document.getElementById('ev-latitude').value.trim();
-  const longitude = document.getElementById('ev-longitude').value.trim();
+  const coordenadas = document.getElementById('ev-coordenadas').value.trim();
   const numero = document.getElementById('ev-numero').value.trim();
 
   const statusEl = document.getElementById('ev-status-consulta');
   if (!clienteFinal) { statusEl.textContent = 'Preencha o Cliente Final antes de adicionar.'; statusEl.style.color = 'var(--red-sem)'; return; }
-  if (!evValidarLocalizacao(cep, latitude, longitude, numero, statusEl)) return;
+  if (!evValidarLocalizacao(cep, coordenadas, numero, statusEl)) return;
   statusEl.textContent = '';
 
-  EV_CARRINHO.push({ tipoOferta, velocidade, quantidadeCircuitos: EV_QUANTIDADE_CIRCUITOS_PADRAO, clienteFinal, cep, latitude, longitude, numero });
+  EV_CARRINHO.push({ tipoOferta, velocidade, quantidadeCircuitos: EV_QUANTIDADE_CIRCUITOS_PADRAO, clienteFinal, cep, coordenadas, numero });
   evRenderCarrinho();
 
   // Limpa os campos pra facilitar digitar o próximo cliente/endereço —
@@ -9678,8 +9674,7 @@ function evAdicionarPlanoNaLista() {
   document.getElementById('ev-cliente-final').value = '';
   document.getElementById('ev-cep').value = '';
   document.getElementById('ev-rua-exibicao').textContent = '—';
-  document.getElementById('ev-latitude').value = '';
-  document.getElementById('ev-longitude').value = '';
+  document.getElementById('ev-coordenadas').value = '';
   document.getElementById('ev-numero').value = '';
   document.getElementById('ev-cliente-final').focus();
 }
@@ -9715,7 +9710,7 @@ function evRenderCarrinho() {
   area.innerHTML = `<div style="display:flex;flex-direction:column;gap:6px;">
     ${EV_CARRINHO.map((p, i) => `
       <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:6px 6px 6px 10px;font-size:11px;">
-        <span><strong>${escapeHtml(p.clienteFinal)}</strong> · CEP ${escapeHtml(p.cep)}${p.latitude && p.longitude ? ` · ${escapeHtml(p.latitude)}, ${escapeHtml(p.longitude)}` : (p.numero ? ` · Nº ${escapeHtml(p.numero)}` : '')} · ${escapeHtml(CONECT_NOMES_OFERTA[p.tipoOferta] || p.tipoOferta)} · ${escapeHtml(p.velocidade)}</span>
+        <span><strong>${escapeHtml(p.clienteFinal)}</strong> · CEP ${escapeHtml(p.cep)}${p.coordenadas ? ` · ${escapeHtml(p.coordenadas)}` : (p.numero ? ` · Nº ${escapeHtml(p.numero)}` : '')} · ${escapeHtml(CONECT_NOMES_OFERTA[p.tipoOferta] || p.tipoOferta)} · ${escapeHtml(p.velocidade)}</span>
         <button onclick="evRemoverPlanoDaLista(${i})" style="border:none;background:none;cursor:pointer;color:var(--text-2);font-size:13px;line-height:1;padding:2px;" title="Remover">×</button>
       </div>`).join('')}
   </div>`;
@@ -9734,12 +9729,11 @@ async function evConsultarViabilidade() {
     const velocidade = document.getElementById('ev-velocidade').value;
     const clienteFinal = document.getElementById('ev-cliente-final').value.trim();
     const cep = document.getElementById('ev-cep').value.trim();
-    const latitude = document.getElementById('ev-latitude').value.trim();
-    const longitude = document.getElementById('ev-longitude').value.trim();
+    const coordenadas = document.getElementById('ev-coordenadas').value.trim();
     const numero = document.getElementById('ev-numero').value.trim();
     if (!clienteFinal) { statusEl.textContent = 'Preencha o Cliente Final.'; statusEl.style.color = 'var(--red-sem)'; return; }
-    if (!evValidarLocalizacao(cep, latitude, longitude, numero, statusEl)) return;
-    itens = [{ tipoOferta, velocidade, quantidadeCircuitos: EV_QUANTIDADE_CIRCUITOS_PADRAO, clienteFinal, cep, latitude, longitude, numero }];
+    if (!evValidarLocalizacao(cep, coordenadas, numero, statusEl)) return;
+    itens = [{ tipoOferta, velocidade, quantidadeCircuitos: EV_QUANTIDADE_CIRCUITOS_PADRAO, clienteFinal, cep, coordenadas, numero }];
   }
 
   const btn = document.getElementById('ev-btn-consultar');
@@ -9759,8 +9753,8 @@ async function evConsultarViabilidade() {
           quantidadeCircuitos: it.quantidadeCircuitos,
           tipoOferta: it.tipoOferta,
           velocidade: it.velocidade,
-          latitude: it.latitude || null,
-          longitude: it.longitude || null,
+          coordenadas: it.coordenadas || null,
+          numero: it.numero || null,
         })),
       }),
     });
@@ -9772,8 +9766,8 @@ async function evConsultarViabilidade() {
     document.getElementById('ev-cliente-final').value = '';
     document.getElementById('ev-cep').value = '';
     document.getElementById('ev-rua-exibicao').textContent = '—';
-    document.getElementById('ev-latitude').value = '';
-    document.getElementById('ev-longitude').value = '';
+    document.getElementById('ev-coordenadas').value = '';
+    document.getElementById('ev-numero').value = '';
     EV_CARRINHO = [];
     evRenderCarrinho();
     evCarregarLista();

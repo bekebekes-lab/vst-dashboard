@@ -100,6 +100,19 @@ def gerar_cnpj_aleatorio() -> str:
     return "".join(map(str, base + [d1, d2]))
 
 
+def separar_coordenadas(coordenadas: str):
+    """O Dash manda as coordenadas num campo único "lat, long" (igual o
+    Google Maps copia) — separa em (latitude, longitude) aqui, na hora de
+    preencher os dois campos do Radar (pedido explícito: quem separa é o
+    robô, não o Dash)."""
+    if not coordenadas:
+        return None, None
+    partes = coordenadas.split(",")
+    if len(partes) != 2:
+        return None, None
+    return partes[0].strip(), partes[1].strip()
+
+
 def geocodificar_endereco(cep: str, numero: str):
     """Geocodifica CEP+Número — fallback quando o consultor não informa a
     coordenada exata (Google Maps), mas informa o número do imóvel. Busca
@@ -395,7 +408,7 @@ def criar_estudo(page, item: dict) -> tuple[str, str]:
 
 
 # ─── 2. Definir endereço do SEV (auto-criado junto com o EV) ───────────────
-def definir_endereco_sev(page, ev_record_id: str, cep: str, numero: str = None, latitude: str = None, longitude: str = None):
+def definir_endereco_sev(page, ev_record_id: str, cep: str, numero: str = None, coordenadas: str = None):
     log.info(f"Definindo endereço (CEP {cep}) do SEV...")
     base = RADAR_URL.replace(".my.salesforce.com", ".lightning.force.com")
     page.goto(f"{base}/lightning/r/Estudo_de_Viabilidade__c/{ev_record_id}/related/SEV_s__r/view", wait_until="networkidle")
@@ -415,11 +428,14 @@ def definir_endereco_sev(page, ev_record_id: str, cep: str, numero: str = None, 
     # "Buscar CEP" já preenche Latitude/Longitude sozinho (geocode
     # aproximado, só pelo CEP) — mas isso não é preciso o bastante pro
     # ponto de instalação. Prioridade (pedido explícito):
-    # 1) coordenada exata informada pelo consultor (Google Maps);
+    # 1) coordenada exata informada pelo consultor (Google Maps, "lat, long"
+    #    num campo único — separa aqui, na hora de preencher os dois campos
+    #    do Radar);
     # 2) sem coordenada, mas com Número, geocodifica CEP+Número aqui;
     # 3) sem os dois, mantém o que o Radar já calculou sozinho (o Dash
     #    bloqueia esse caso antes de chegar aqui, mas não custa ter um
     #    fallback seguro).
+    latitude, longitude = separar_coordenadas(coordenadas)
     if not latitude or not longitude:
         if numero:
             latitude, longitude = geocodificar_endereco(cep, numero)
@@ -589,7 +605,7 @@ def processar_pendentes(page):
             else:
                 record_id, numero_ev = criar_estudo(page, item)
                 supa_atualizar(item["id"], {"ev_salesforce_id": record_id, "ev_numero": numero_ev})
-            definir_endereco_sev(page, record_id, item["cep"], item.get("numero"), item.get("latitude"), item.get("longitude"))
+            definir_endereco_sev(page, record_id, item["cep"], item.get("numero"), item.get("coordenadas"))
             consultar_viabilidade(page, record_id)
             supa_atualizar(item["id"], {
                 "status": "aguardando_resultado",
