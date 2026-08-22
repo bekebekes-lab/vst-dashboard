@@ -14,6 +14,7 @@ frequência, mas os nomes de campo (ex.: Razao_Social__c) não mudam.
 import os
 import re
 import time
+import random
 import logging
 from pathlib import Path
 
@@ -82,6 +83,21 @@ def aguardar_totp_fresco() -> str:
     if segundos_restantes < 8:
         time.sleep(segundos_restantes + 1)
     return pyotp.TOTP(RADAR_TOTP_SECRET).now()
+
+
+def gerar_cnpj_aleatorio() -> str:
+    """CNPJ com dígitos verificadores válidos, de empresa fictícia — o Dash
+    não coleta CNPJ real do consultor (campo removido), mas o Salesforce
+    exige o campo preenchido em formato válido."""
+    def digito_verificador(numeros, pesos):
+        soma = sum(n * p for n, p in zip(numeros, pesos))
+        resto = soma % 11
+        return 0 if resto < 2 else 11 - resto
+
+    base = [random.randint(0, 9) for _ in range(8)] + [0, 0, 0, 1]  # filial 0001
+    d1 = digito_verificador(base, [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2])
+    d2 = digito_verificador(base + [d1], [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2])
+    return "".join(map(str, base + [d1, d2]))
 
 
 # O mapeamento "nossa oferta (tipo+velocidade) -> texto de busca no Item de
@@ -306,11 +322,10 @@ def criar_estudo(page, item: dict) -> tuple[str, str]:
 
     # Modal 2: formulário — preenche só por atributo `name` (API name real).
     preencher_input_por_name(page, "Razao_Social__c", item.get("razao_social") or item["cliente_final"])
-    # Só dígitos — CNPJ formatado com pontuação (ex.: "02.680.623/0001-88")
-    # é rejeitado pelo Salesforce ("Revise os seguintes campos: CNPJ"),
-    # confirmado em execução real. O Dash manda formatado, então limpa aqui.
-    cnpj_limpo = re.sub(r"\D", "", item.get("cnpj") or "")
-    preencher_input_por_name(page, "CNPJ__c", cnpj_limpo or None)
+    # O Dash não coleta CNPJ do consultor (campo removido) — o Salesforce
+    # exige o campo preenchido e com dígitos verificadores válidos, então
+    # gera um CNPJ fictício aqui na hora, só pra passar da validação.
+    preencher_input_por_name(page, "CNPJ__c", gerar_cnpj_aleatorio())
     preencher_input_por_name(page, "Cliente_Final__c", item["cliente_final"])
 
     if not selecionar_lookup(page, "Produto", item["produto"]):
@@ -356,6 +371,16 @@ def definir_endereco_sev(page, ev_record_id: str, cep: str, numero: str = None):
     page.locator("button.buscarCepButton").click()
     time.sleep(3)
 
+    # Lat/Long saem prontas da busca de CEP (mesmo painel) — guardadas só
+    # pra exibir no Dash; o consultor usa pra imputar no Solar depois,
+    # nada aqui depende delas (achado real: classes latitudeField/
+    # longitudeField, mesmo padrão de cepField/numeroField).
+    try:
+        latitude = page.locator("lightning-input.latitudeField input").first.input_value()
+        longitude = page.locator("lightning-input.longitudeField input").first.input_value()
+    except Exception:
+        latitude, longitude = None, None
+
     # O CEP sozinho não traz o número do imóvel — sem ele, a consulta de
     # viabilidade recusa com "Endereços não normalizados" mesmo depois de
     # clicar Validar (confirmado em execução real, print mostrando o campo
@@ -380,7 +405,7 @@ def definir_endereco_sev(page, ev_record_id: str, cep: str, numero: str = None):
     if not clicar_botao_com_texto(page, "Validar", timeout=15_000):
         log.warning("  Botão 'Validar' não encontrado após buscar CEP — screenshot salvo.")
         page.screenshot(path=str(DOWNLOAD_DIR / f"erro_endereco_{ev_record_id}.png"))
-        return
+        return latitude, longitude
     try:
         page.wait_for_selector("text=CONFIRMADO E PADRONIZADO", timeout=15_000)
     except Exception:
@@ -396,10 +421,11 @@ def definir_endereco_sev(page, ev_record_id: str, cep: str, numero: str = None):
     if not clicar_botao_com_texto(page, "Inserir", timeout=20_000):
         log.warning("  Botão 'Inserir' não encontrado/habilitado depois de Validar — screenshot salvo.")
         page.screenshot(path=str(DOWNLOAD_DIR / f"erro_endereco_{ev_record_id}.png"))
-        return
+        return latitude, longitude
 
     page.wait_for_timeout(3_000)
     page.screenshot(path=str(DOWNLOAD_DIR / f"pos_inserir_{ev_record_id}.png"))
+    return latitude, longitude
 
 
 # ─── 3. Disparar "Consultar Viabilidade" ───────────────────────────────────
@@ -510,13 +536,15 @@ def processar_pendentes(page):
             else:
                 record_id, numero_ev = criar_estudo(page, item)
                 supa_atualizar(item["id"], {"ev_salesforce_id": record_id, "ev_numero": numero_ev})
-            definir_endereco_sev(page, record_id, item["cep"], item.get("numero"))
+            latitude, longitude = definir_endereco_sev(page, record_id, item["cep"], item.get("numero"))
             consultar_viabilidade(page, record_id)
             supa_atualizar(item["id"], {
                 "status": "aguardando_resultado",
                 "ev_salesforce_id": record_id,
                 "ev_numero": numero_ev,
                 "status_consulta": "Aguardando Consulta",
+                "latitude": latitude,
+                "longitude": longitude,
             })
         except Exception as e:
             log.error(f"  Falha ao processar consulta {item['id']}: {e}", exc_info=True)

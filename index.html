@@ -2345,10 +2345,6 @@
         <label>Velocidade</label>
         <select id="ev-velocidade"></select>
       </div>
-      <div class="filter-group" style="min-width:100px;">
-        <label>Qtde. Circuitos</label>
-        <input type="number" id="ev-quantidade-circuitos" value="1" min="1" style="width:100%;">
-      </div>
     </div>
 
     <div class="filters-bar" style="margin-top:10px;">
@@ -2357,12 +2353,12 @@
         <input type="text" id="ev-cliente-final" placeholder="Ex.: Viação Colombo LTDA" autocomplete="off">
       </div>
       <div class="filter-group">
-        <label>CNPJ <span style="font-weight:400;text-transform:none;">(opcional)</span></label>
-        <input type="text" id="ev-cnpj" placeholder="00.000.000/0000-00" autocomplete="off" inputmode="numeric" oninput="conectFormatarCnpj(this)">
-      </div>
-      <div class="filter-group">
         <label>CEP</label>
-        <input type="text" id="ev-cep" placeholder="00000-000" autocomplete="off" inputmode="numeric" oninput="conectFormatarCep(this)">
+        <input type="text" id="ev-cep" placeholder="00000-000" autocomplete="off" inputmode="numeric" oninput="conectFormatarCep(this)" onblur="evBuscarRuaPorCep()">
+      </div>
+      <div class="filter-group" style="min-width:220px;flex:1">
+        <label>Rua <span style="font-weight:400;text-transform:none;">(preenchida automático pelo CEP)</span></label>
+        <div id="ev-rua-exibicao" style="font-size:13px;color:var(--text-2);padding:8px 0;">—</div>
       </div>
       <div class="filter-group" style="justify-content:flex-end;">
         <label>&nbsp;</label>
@@ -9622,12 +9618,14 @@ function evAoTrocarTipoOferta() {
 // numa mesma leva, cada um virando sua própria linha na fila do bot.
 let EV_CARRINHO = [];
 
+// Qtde. Circuitos não é mais coletada do consultor — o Radar aceita o
+// padrão sem precisar variar por consulta.
+const EV_QUANTIDADE_CIRCUITOS_PADRAO = 1;
+
 function evAdicionarPlanoNaLista() {
   const tipoOferta = document.getElementById('ev-tipo-oferta').value;
   const velocidade = document.getElementById('ev-velocidade').value;
-  const quantidadeCircuitos = document.getElementById('ev-quantidade-circuitos').value;
   const clienteFinal = document.getElementById('ev-cliente-final').value.trim();
-  const cnpj = document.getElementById('ev-cnpj').value.trim();
   const cep = document.getElementById('ev-cep').value.trim();
 
   const statusEl = document.getElementById('ev-status-consulta');
@@ -9635,15 +9633,32 @@ function evAdicionarPlanoNaLista() {
   if (cep.replace(/\D/g, '').length !== 8) { statusEl.textContent = 'CEP inválido.'; statusEl.style.color = 'var(--red-sem)'; return; }
   statusEl.textContent = '';
 
-  EV_CARRINHO.push({ tipoOferta, velocidade, quantidadeCircuitos, clienteFinal, cnpj, cep });
+  EV_CARRINHO.push({ tipoOferta, velocidade, quantidadeCircuitos: EV_QUANTIDADE_CIRCUITOS_PADRAO, clienteFinal, cep });
   evRenderCarrinho();
 
   // Limpa os campos pra facilitar digitar o próximo cliente/endereço —
   // mantém tipo de oferta/velocidade selecionados (repetem com frequência).
   document.getElementById('ev-cliente-final').value = '';
-  document.getElementById('ev-cnpj').value = '';
   document.getElementById('ev-cep').value = '';
+  document.getElementById('ev-rua-exibicao').textContent = '—';
   document.getElementById('ev-cliente-final').focus();
+}
+
+// Espelha conectBuscarCep() — mesma métrica da Proposta Comercial: o CEP
+// puxa a rua via ViaCEP, só pra exibir/conferir (nunca editável, nunca
+// enviado ao bot — o Radar já resolve o próprio Logradouro a partir do
+// CEP na hora de validar o endereço).
+async function evBuscarRuaPorCep() {
+  const cep = document.getElementById('ev-cep').value.replace(/\D/g, '');
+  const exibicao = document.getElementById('ev-rua-exibicao');
+  if (cep.length !== 8) { exibicao.textContent = '—'; return; }
+  try {
+    const res = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+    const json = await res.json();
+    exibicao.textContent = json.erro ? 'CEP não encontrado' : (json.logradouro || '(sem logradouro nessa faixa de CEP)');
+  } catch (e) {
+    exibicao.textContent = '—';
+  }
 }
 
 function evRemoverPlanoDaLista(indice) {
@@ -9677,13 +9692,11 @@ async function evConsultarViabilidade() {
   if (itens.length === 0) {
     const tipoOferta = document.getElementById('ev-tipo-oferta').value;
     const velocidade = document.getElementById('ev-velocidade').value;
-    const quantidadeCircuitos = document.getElementById('ev-quantidade-circuitos').value;
     const clienteFinal = document.getElementById('ev-cliente-final').value.trim();
-    const cnpj = document.getElementById('ev-cnpj').value.trim();
     const cep = document.getElementById('ev-cep').value.trim();
     if (!clienteFinal) { statusEl.textContent = 'Preencha o Cliente Final.'; statusEl.style.color = 'var(--red-sem)'; return; }
     if (cep.replace(/\D/g, '').length !== 8) { statusEl.textContent = 'CEP inválido.'; statusEl.style.color = 'var(--red-sem)'; return; }
-    itens = [{ tipoOferta, velocidade, quantidadeCircuitos, clienteFinal, cnpj, cep }];
+    itens = [{ tipoOferta, velocidade, quantidadeCircuitos: EV_QUANTIDADE_CIRCUITOS_PADRAO, clienteFinal, cep }];
   }
 
   const btn = document.getElementById('ev-btn-consultar');
@@ -9699,7 +9712,6 @@ async function evConsultarViabilidade() {
         itens: itens.map(it => ({
           clienteFinal: it.clienteFinal,
           razaoSocial: it.clienteFinal,
-          cnpj: it.cnpj,
           cep: it.cep,
           quantidadeCircuitos: it.quantidadeCircuitos,
           tipoOferta: it.tipoOferta,
@@ -9713,8 +9725,8 @@ async function evConsultarViabilidade() {
     statusEl.style.color = 'var(--green)';
     statusEl.textContent = `${json.ids.length} consulta(s) enviada(s) — o resultado aparece na lista abaixo assim que o robô processar (alguns minutos).`;
     document.getElementById('ev-cliente-final').value = '';
-    document.getElementById('ev-cnpj').value = '';
     document.getElementById('ev-cep').value = '';
+    document.getElementById('ev-rua-exibicao').textContent = '—';
     EV_CARRINHO = [];
     evRenderCarrinho();
     evCarregarLista();
@@ -9760,7 +9772,7 @@ function evRenderListaTabela(data) {
   }
   area.innerHTML = `<div style="overflow-x:auto;"><table style="width:100%;font-size:12px;">
     <thead><tr>
-      <th>Cliente Final</th><th>Item de Produto</th><th>CEP</th><th>Status</th>
+      <th>Cliente Final</th><th>Item de Produto</th><th>CEP</th><th>Coordenadas</th><th>Status</th>
       <th>Status da Consulta</th><th>Status das SEVs</th><th>Habilitado Para Pricing</th><th>Facilidade</th><th>Custo (CAPEX)</th><th>Data de criação</th><th>Data da última modificação</th>
     </tr></thead>
     <tbody>
@@ -9772,6 +9784,9 @@ function evRenderListaTabela(data) {
           <td>${escapeHtml(item.cliente_final)}${item.ev_numero ? ` <span style="color:var(--text-2);">(${escapeHtml(item.ev_numero)})</span>` : ''}</td>
           <td>${escapeHtml(item.item_produto || '—')}</td>
           <td>${escapeHtml(item.cep)}</td>
+          <td>${item.latitude && item.longitude
+            ? `<span class="ev-coord-copy" data-lat="${escapeHtml(item.latitude)}" data-lng="${escapeHtml(item.longitude)}" style="cursor:pointer;text-decoration:underline dotted;white-space:nowrap;" title="Clique para copiar (pra imputar no Solar)" onclick="evCopiarCoordenadas(this)">${escapeHtml(item.latitude)}, ${escapeHtml(item.longitude)}</span>`
+            : '—'}</td>
           <td><span style="color:${estagio.cor};font-weight:600;">${estagio.label}</span></td>
           <td>${escapeHtml(item.status_consulta || '—')}</td>
           <td style="color:${corResultado};font-weight:600;">${escapeHtml(resultado)}</td>
@@ -9784,6 +9799,17 @@ function evRenderListaTabela(data) {
       }).join('')}
     </tbody>
   </table></div>`;
+}
+
+// Clique na coluna Coordenadas copia "lat, long" — poupa digitar/selecionar
+// manualmente na hora de imputar no Solar.
+function evCopiarCoordenadas(el) {
+  const texto = `${el.dataset.lat}, ${el.dataset.lng}`;
+  navigator.clipboard.writeText(texto).then(() => {
+    const original = el.textContent;
+    el.textContent = 'Copiado!';
+    setTimeout(() => { el.textContent = original; }, 1200);
+  }).catch(() => {});
 }
 
 let EV_DADOS_CACHE = [];
