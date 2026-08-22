@@ -295,7 +295,7 @@
     position: sticky; top: 52px; z-index: 99;
     box-shadow: var(--shadow-xs);
   }
-  .tab-btn {
+  .tab-btn, .conect-subtab-btn {
     padding: 14px 18px;
     font-size: 13px; font-weight: 500;
     color: var(--text-3);
@@ -306,8 +306,8 @@
     border-left: none; border-right: none; border-top: none;
     font-family: 'DM Sans', sans-serif;
   }
-  .tab-btn:hover { color: var(--text-2); }
-  .tab-btn.active { color: var(--brand); border-bottom-color: var(--brand); font-weight: 600; }
+  .tab-btn:hover, .conect-subtab-btn:hover { color: var(--text-2); }
+  .tab-btn.active, .conect-subtab-btn.active { color: var(--brand); border-bottom-color: var(--brand); font-weight: 600; }
 
   /* ─── BOTTOM NAV — só existe visualmente no breakpoint mobile (ver
        @media max-width:768px). Escondida por padrão pra nunca aparecer
@@ -2188,8 +2188,8 @@
   <!-- TAB CONECTIVIDADE — gerar proposta (PDF) + funil de oportunidades + EV -->
   <div class="tab-panel" id="tab-conectividade">
     <div style="display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:16px;">
-      <button class="tab-btn active" id="conect-subtab-btn-proposta" onclick="conectSwitchSubTab('proposta')" style="padding:10px 16px;">📄 Proposta Comercial</button>
-      <button class="tab-btn" id="conect-subtab-btn-ev" onclick="conectSwitchSubTab('ev')" style="padding:10px 16px;display:none;">🔎 EV - Viabilidade</button>
+      <button class="conect-subtab-btn active" id="conect-subtab-btn-proposta" onclick="conectSwitchSubTab('proposta')" style="padding:10px 16px;">📄 Proposta Comercial</button>
+      <button class="conect-subtab-btn" id="conect-subtab-btn-ev" onclick="conectSwitchSubTab('ev')" style="padding:10px 16px;display:none;">🔎 EV - Viabilidade</button>
     </div>
 
     <div id="conect-subtab-proposta">
