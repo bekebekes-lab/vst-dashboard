@@ -2330,7 +2330,7 @@
   <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:18px;margin-bottom:16px;box-shadow:var(--shadow-xs);">
     <div class="section-title" style="margin-bottom:4px;">🔎 EV - Estudo de Viabilidade</div>
     <div style="font-size:12px;font-weight:600;color:#eda100;background:#fff8e6;border:1px solid #f5d78a;border-radius:6px;padding:6px 10px;margin-bottom:10px;">⚠️ Em teste — visível só pra admin por enquanto, ainda validando o robô de consulta no Radar.</div>
-    <div style="font-size:12px;color:var(--text-2);margin-bottom:14px;">Consulta a viabilidade técnica no Radar (Claro/Embratel) — envia a consulta e o robô traz a resposta (viável/inviável, facilidade e custo) aqui na lista abaixo assim que sair. Disponível só pras ofertas Conecta Smart, Conecta com BLC e Combo Conecta 2P BLD por enquanto.</div>
+    <div style="font-size:12px;color:var(--text-2);margin-bottom:14px;">Consulta a viabilidade técnica no Radar (Claro/Embratel) — envia a consulta e o robô traz a resposta (viável/inviável, facilidade e custo) aqui na lista abaixo assim que sair. Disponível só pras ofertas Conecta Smart, Conecta com BLC e Combo Conecta 2P BLD por enquanto. Pra consultar vários clientes/endereços de uma vez, preencha um e clique em "+ Adicionar à lista" antes de repetir pro próximo.</div>
 
     <div class="filters-bar">
       <div class="filter-group">
@@ -2349,13 +2349,7 @@
         <label>Qtde. Circuitos</label>
         <input type="number" id="ev-quantidade-circuitos" value="1" min="1" style="width:100%;">
       </div>
-      <div class="filter-group" style="justify-content:flex-end;">
-        <label>&nbsp;</label>
-        <button class="btn-secondary" onclick="evAdicionarPlanoNaLista()">+ Adicionar plano</button>
-      </div>
     </div>
-
-    <div id="ev-carrinho-area" style="margin-top:10px;"></div>
 
     <div class="filters-bar" style="margin-top:10px;">
       <div class="filter-group" style="min-width:220px;flex:1">
@@ -2370,7 +2364,14 @@
         <label>CEP</label>
         <input type="text" id="ev-cep" placeholder="00000-000" autocomplete="off" inputmode="numeric" oninput="conectFormatarCep(this)">
       </div>
+      <div class="filter-group" style="justify-content:flex-end;">
+        <label>&nbsp;</label>
+        <button class="btn-secondary" onclick="evAdicionarPlanoNaLista()">+ Adicionar à lista</button>
+      </div>
     </div>
+
+    <div id="ev-carrinho-area" style="margin-top:10px;"></div>
+
     <div style="margin-top:16px;display:flex;align-items:center;gap:12px;">
       <button class="btn-primary" onclick="evConsultarViabilidade()" id="ev-btn-consultar">🔎 Consultar Viabilidade</button>
       <span id="ev-status-consulta" style="font-size:12px;color:var(--text-2);"></span>
@@ -2379,7 +2380,10 @@
 
   <div class="section-header">
     <span class="section-title">Estudos de Viabilidade</span>
-    <button class="btn-secondary" onclick="evCarregarLista()">↻ Atualizar</button>
+    <button class="btn-secondary" onclick="evAtualizarEDispararBot()" id="ev-btn-atualizar">↻ Atualizar</button>
+  </div>
+  <div class="filter-group" style="max-width:360px;margin-bottom:10px;">
+    <input type="text" id="ev-busca" placeholder="Buscar por Cliente Final, Item de Produto ou CEP..." autocomplete="off" oninput="evFiltrarLista()">
   </div>
   <div id="ev-lista-area"></div>
 </div>
@@ -9613,18 +9617,33 @@ function evAoTrocarTipoOferta() {
   sel.innerHTML = EV_VELOCIDADES_POR_TIPO[tipo].map(v => `<option value="${v}">${v}</option>`).join('');
 }
 
-// Lista de planos (tipo+velocidade) montada antes de enviar — permite
-// consultar viabilidade de vários planos/velocidades numa só consulta
-// (mesmo cliente/CEP). Cada item vira sua própria linha na fila do bot.
+// Lista de consultas (cliente+endereço+plano completos) montada antes de
+// enviar — permite consultar viabilidade de vários clientes/endereços
+// numa mesma leva, cada um virando sua própria linha na fila do bot.
 let EV_CARRINHO = [];
 
 function evAdicionarPlanoNaLista() {
   const tipoOferta = document.getElementById('ev-tipo-oferta').value;
   const velocidade = document.getElementById('ev-velocidade').value;
-  const jaTem = EV_CARRINHO.some(p => p.tipoOferta === tipoOferta && p.velocidade === velocidade);
-  if (jaTem) return;
-  EV_CARRINHO.push({ tipoOferta, velocidade });
+  const quantidadeCircuitos = document.getElementById('ev-quantidade-circuitos').value;
+  const clienteFinal = document.getElementById('ev-cliente-final').value.trim();
+  const cnpj = document.getElementById('ev-cnpj').value.trim();
+  const cep = document.getElementById('ev-cep').value.trim();
+
+  const statusEl = document.getElementById('ev-status-consulta');
+  if (!clienteFinal) { statusEl.textContent = 'Preencha o Cliente Final antes de adicionar.'; statusEl.style.color = 'var(--red-sem)'; return; }
+  if (cep.replace(/\D/g, '').length !== 8) { statusEl.textContent = 'CEP inválido.'; statusEl.style.color = 'var(--red-sem)'; return; }
+  statusEl.textContent = '';
+
+  EV_CARRINHO.push({ tipoOferta, velocidade, quantidadeCircuitos, clienteFinal, cnpj, cep });
   evRenderCarrinho();
+
+  // Limpa os campos pra facilitar digitar o próximo cliente/endereço —
+  // mantém tipo de oferta/velocidade selecionados (repetem com frequência).
+  document.getElementById('ev-cliente-final').value = '';
+  document.getElementById('ev-cnpj').value = '';
+  document.getElementById('ev-cep').value = '';
+  document.getElementById('ev-cliente-final').focus();
 }
 
 function evRemoverPlanoDaLista(indice) {
@@ -9635,45 +9654,58 @@ function evRemoverPlanoDaLista(indice) {
 function evRenderCarrinho() {
   const area = document.getElementById('ev-carrinho-area');
   if (EV_CARRINHO.length === 0) {
-    area.innerHTML = '<div style="font-size:11px;color:var(--text-2);">Nenhum plano adicionado ainda — clique em "+ Adicionar plano" pra consultar vários de uma vez, ou deixe em branco pra consultar só o selecionado acima.</div>';
+    area.innerHTML = '<div style="font-size:11px;color:var(--text-2);">Nenhuma consulta adicionada ainda — clique em "+ Adicionar à lista" pra consultar vários clientes/endereços de uma vez, ou deixe em branco e clique direto em "Consultar Viabilidade" pra consultar só o preenchido acima.</div>';
     return;
   }
-  area.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:6px;">
+  area.innerHTML = `<div style="display:flex;flex-direction:column;gap:6px;">
     ${EV_CARRINHO.map((p, i) => `
-      <span style="display:inline-flex;align-items:center;gap:6px;background:var(--surface-2);border:1px solid var(--border);border-radius:999px;padding:4px 6px 4px 10px;font-size:11px;">
-        ${escapeHtml(CONECT_NOMES_OFERTA[p.tipoOferta] || p.tipoOferta)} · ${escapeHtml(p.velocidade)}
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:6px 6px 6px 10px;font-size:11px;">
+        <span><strong>${escapeHtml(p.clienteFinal)}</strong> · CEP ${escapeHtml(p.cep)} · ${escapeHtml(CONECT_NOMES_OFERTA[p.tipoOferta] || p.tipoOferta)} · ${escapeHtml(p.velocidade)}</span>
         <button onclick="evRemoverPlanoDaLista(${i})" style="border:none;background:none;cursor:pointer;color:var(--text-2);font-size:13px;line-height:1;padding:2px;" title="Remover">×</button>
-      </span>`).join('')}
+      </div>`).join('')}
   </div>`;
 }
 
 async function evConsultarViabilidade() {
-  const tipoOferta = document.getElementById('ev-tipo-oferta').value;
-  const velocidade = document.getElementById('ev-velocidade').value;
-  const quantidadeCircuitos = document.getElementById('ev-quantidade-circuitos').value;
-  const clienteFinal = document.getElementById('ev-cliente-final').value.trim();
-  const razaoSocial = clienteFinal;
-  const cnpj = document.getElementById('ev-cnpj').value.trim();
-  const cep = document.getElementById('ev-cep').value.trim();
-
-  // Sem nada no carrinho, consulta só o plano selecionado no momento —
-  // não obriga clicar em "+ Adicionar" pra uma consulta simples.
-  const planos = EV_CARRINHO.length > 0 ? EV_CARRINHO : [{ tipoOferta, velocidade }];
-
   const statusEl = document.getElementById('ev-status-consulta');
-  if (!clienteFinal) { statusEl.textContent = 'Preencha o Cliente Final.'; statusEl.style.color = 'var(--red-sem)'; return; }
-  if (cep.replace(/\D/g, '').length !== 8) { statusEl.textContent = 'CEP inválido.'; statusEl.style.color = 'var(--red-sem)'; return; }
+
+  // Com itens na lista, consulta só eles (o formulário acima serve pra
+  // montar o próximo item, não é enviado junto) — sem nada na lista,
+  // consulta direto o que estiver preenchido no formulário, sem obrigar
+  // a clicar em "+ Adicionar" pra uma consulta simples.
+  let itens = EV_CARRINHO;
+  if (itens.length === 0) {
+    const tipoOferta = document.getElementById('ev-tipo-oferta').value;
+    const velocidade = document.getElementById('ev-velocidade').value;
+    const quantidadeCircuitos = document.getElementById('ev-quantidade-circuitos').value;
+    const clienteFinal = document.getElementById('ev-cliente-final').value.trim();
+    const cnpj = document.getElementById('ev-cnpj').value.trim();
+    const cep = document.getElementById('ev-cep').value.trim();
+    if (!clienteFinal) { statusEl.textContent = 'Preencha o Cliente Final.'; statusEl.style.color = 'var(--red-sem)'; return; }
+    if (cep.replace(/\D/g, '').length !== 8) { statusEl.textContent = 'CEP inválido.'; statusEl.style.color = 'var(--red-sem)'; return; }
+    itens = [{ tipoOferta, velocidade, quantidadeCircuitos, clienteFinal, cnpj, cep }];
+  }
 
   const btn = document.getElementById('ev-btn-consultar');
   btn.disabled = true;
   statusEl.style.color = 'var(--text-2)';
-  statusEl.textContent = planos.length > 1 ? `Enviando ${planos.length} consultas...` : 'Enviando consulta...';
+  statusEl.textContent = itens.length > 1 ? `Enviando ${itens.length} consultas...` : 'Enviando consulta...';
 
   try {
     const res = await fetch('/api/radar-consulta', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeaders() },
-      body: JSON.stringify({ clienteFinal, razaoSocial, cnpj, cep, quantidadeCircuitos, planos }),
+      body: JSON.stringify({
+        itens: itens.map(it => ({
+          clienteFinal: it.clienteFinal,
+          razaoSocial: it.clienteFinal,
+          cnpj: it.cnpj,
+          cep: it.cep,
+          quantidadeCircuitos: it.quantidadeCircuitos,
+          tipoOferta: it.tipoOferta,
+          velocidade: it.velocidade,
+        })),
+      }),
     });
     const json = await res.json();
     if (!res.ok) throw new Error(json.error || 'Falha ao enviar a consulta');
@@ -9702,8 +9734,28 @@ async function evCarregarLista() {
     area.innerHTML = `<div class="error-state"><strong>Erro ao carregar</strong>${escapeHtml(error.message)}</div>`;
     return;
   }
+  EV_DADOS_CACHE = data || [];
+  evRenderListaTabela(EV_DADOS_CACHE);
+}
+
+// Filtra a lista já carregada (EV_DADOS_CACHE) por Cliente Final, Item de
+// Produto ou CEP — busca só no que já está na tela (últimos 50), sem ida
+// nova ao banco a cada tecla digitada.
+function evFiltrarLista() {
+  const termo = document.getElementById('ev-busca').value.trim().toLowerCase();
+  if (!termo) { evRenderListaTabela(EV_DADOS_CACHE); return; }
+  const filtrado = EV_DADOS_CACHE.filter(item =>
+    (item.cliente_final || '').toLowerCase().includes(termo) ||
+    (item.item_produto || '').toLowerCase().includes(termo) ||
+    (item.cep || '').toLowerCase().includes(termo)
+  );
+  evRenderListaTabela(filtrado);
+}
+
+function evRenderListaTabela(data) {
+  const area = document.getElementById('ev-lista-area');
   if (!data || data.length === 0) {
-    area.innerHTML = '<div class="coming-soon"><p>Nenhum estudo de viabilidade consultado ainda.</p></div>';
+    area.innerHTML = '<div class="coming-soon"><p>Nenhum estudo de viabilidade encontrado.</p></div>';
     return;
   }
   area.innerHTML = `<div style="overflow-x:auto;"><table style="width:100%;font-size:12px;">
@@ -9732,6 +9784,34 @@ async function evCarregarLista() {
       }).join('')}
     </tbody>
   </table></div>`;
+}
+
+let EV_DADOS_CACHE = [];
+
+// "↻ Atualizar" chama o robô agora (via GitHub Actions), em vez de só
+// esperar o próximo agendamento (a cada 15min) — daí recarrega a lista
+// depois de alguns segundos pra pegar qualquer status que já tenha virado
+// nesse meio tempo (o robô em si ainda leva minutos pra rodar de verdade).
+async function evAtualizarEDispararBot() {
+  const btn = document.getElementById('ev-btn-atualizar');
+  const statusEl = document.getElementById('ev-status-consulta');
+  btn.disabled = true;
+  const textoOriginal = btn.textContent;
+  btn.textContent = '↻ Chamando o robô...';
+  try {
+    const res = await fetch('/api/radar-atualizar', { method: 'POST', headers: { ...authHeaders() } });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || 'Falha ao chamar o robô');
+    statusEl.style.color = 'var(--green)';
+    statusEl.textContent = 'Robô chamado — ele revisita as consultas em andamento em alguns minutos.';
+  } catch (e) {
+    statusEl.style.color = 'var(--red-sem)';
+    statusEl.textContent = e.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = textoOriginal;
+  }
+  evCarregarLista();
 }
 
 // Formata enquanto digita e trava em 9 dígitos (00000-000) — impede digitar
