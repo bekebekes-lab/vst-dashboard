@@ -1368,11 +1368,10 @@
 
 <!-- TABS -->
 <div class="tabs-nav">
-  <button class="tab-btn active" id="tab-btn-simulador" onclick="switchTab('simulador', this)">🎯 Simulador de Carteira</button>
   <button class="tab-btn" id="tab-btn-gerencial" onclick="switchTab('gerencial', this)">📊 Gerencial</button>
   <button class="tab-btn" id="tab-btn-producao" onclick="switchTab('producao', this)">🏭 Produção</button>
   <button class="tab-btn" id="tab-btn-discadora" onclick="switchTab('discadora', this)">📞 Discadora</button>
-  <button class="tab-btn" id="tab-btn-simulador2" onclick="switchTab('simulador2', this)">🧮 Simulador 2.0</button>
+  <button class="tab-btn active" id="tab-btn-simulador2" onclick="switchTab('simulador2', this)">🧮 Simulador 2.0</button>
   <button class="tab-btn" id="tab-btn-churn" onclick="switchTab('churn', this)">📉 Churn</button>
   <button class="tab-btn" id="tab-btn-carteira" onclick="switchTab('carteira', this)">💼 Carteira</button>
   <button class="tab-btn" id="tab-btn-conectividade" onclick="switchTab('conectividade', this)">🔌 Conectividade/SD</button>
@@ -1380,9 +1379,6 @@
 
 <!-- BOTTOM NAV (mobile only — casca visual nova, chama switchTab() já existente) -->
 <div class="mobile-bottom-nav" id="mobile-bottom-nav">
-  <button class="tab-btn bottom-nav-btn active" onclick="mobileSwitchTab('simulador', this)">
-    <span class="bottom-nav-icon">🎯</span><span class="bottom-nav-label">Simulador</span>
-  </button>
   <button class="tab-btn bottom-nav-btn" onclick="mobileSwitchTab('gerencial', this)">
     <span class="bottom-nav-icon">📊</span><span class="bottom-nav-label">Gerencial</span>
   </button>
@@ -1392,7 +1388,7 @@
   <button class="tab-btn bottom-nav-btn" onclick="mobileSwitchTab('discadora', this)">
     <span class="bottom-nav-icon">📞</span><span class="bottom-nav-label">Discadora</span>
   </button>
-  <button class="tab-btn bottom-nav-btn" onclick="mobileSwitchTab('simulador2', this)">
+  <button class="tab-btn bottom-nav-btn active" onclick="mobileSwitchTab('simulador2', this)">
     <span class="bottom-nav-icon">🧮</span><span class="bottom-nav-label">Simul. 2.0</span>
   </button>
   <button class="tab-btn bottom-nav-btn" onclick="mobileSwitchTab('conectividade', this)">
@@ -1609,86 +1605,14 @@
   </div>
 
   <!-- TAB SIMULADOR -->
-  <div class="tab-panel active" id="tab-simulador">
-
-    <!-- CONTROLES TOPO -->
-    <div class="sim-controls-bar">
-
-      <!-- Visões -->
-      <div class="sim-section">
-        <div class="sim-section-label">Escopo</div>
-        <div class="sim-visoes">
-          <button class="sim-visao-btn active" onclick="setVisao('ativo',this)">Ativo</button>
-          <button class="sim-visao-btn" onclick="setVisao('ativacao',this)">+ Ativação</button>
-          <button class="sim-visao-btn" onclick="setVisao('aprovados',this)">+ Aprovados</button>
-          <button class="sim-visao-btn" onclick="setVisao('geral',this)">Geral</button>
-        </div>
-      </div>
-
-      <!-- Multiplicadores -->
-      <div class="sim-section">
-        <div class="sim-section-label">Multiplicadores de Faturamento</div>
-        <div class="sim-mults">
-          <div class="sim-mult-item">
-            <label>NET PJ - VIRTUA</label>
-            <input type="number" id="mult-virtua" value="4" step="0.1" min="0" onchange="renderSimulador()">
-          </div>
-          <div class="sim-mult-item">
-            <label>VOZ - Novo</label>
-            <input type="number" id="mult-voz-novo" value="5.5" step="0.1" min="0" onchange="renderSimulador()">
-          </div>
-          <div class="sim-mult-item">
-            <label>VOZ - Portabilidade</label>
-            <input type="number" id="mult-voz-port" value="7.5" step="0.1" min="0" onchange="renderSimulador()">
-          </div>
-          <div class="sim-mult-item" style="border-left:2px solid var(--border);padding-left:10px;margin-left:4px">
-            <label>R$ por linha (carteira)</label>
-            <input type="number" id="mult-vlr-linha" value="2.60" step="0.10" min="0.01" onchange="renderSimulador()" style="background:#fffbe6">
-          </div>
-          <div class="sim-mult-item" style="border-left:2px solid var(--border);padding-left:10px;margin-left:4px">
-            <label>Divisor VOZ (incentivo)</label>
-            <input type="number" id="div-voz" value="12" step="1" min="1" onchange="renderSimulador()" style="background:#f0f9ff">
-          </div>
-          <div class="sim-mult-item">
-            <label>Divisor VIRTUA (incentivo)</label>
-            <input type="number" id="div-virtua" value="3" step="1" min="1" onchange="renderSimulador()" style="background:#f0f9ff">
-          </div>
-          <div class="sim-mult-item" style="border-left:2px solid var(--border);padding-left:10px;margin-left:4px">
-            <label>Divisor VOZ (incentivo 2)</label>
-            <input type="number" id="div-voz2" value="12" step="1" min="1" onchange="renderSimulador()" style="background:#f0fff4">
-          </div>
-          <div class="sim-mult-item">
-            <label>Divisor VIRTUA (incentivo 2)</label>
-            <input type="number" id="div-virtua2" value="3" step="1" min="1" onchange="renderSimulador()" style="background:#f0fff4">
-          </div>
-
-        </div>
-      </div>
-
-      <!-- Metas -->
-      <div class="sim-section sim-section-metas">
-        <div class="sim-section-label" style="display:flex;align-items:center;justify-content:space-between">
-          <span>Metas de Linhas por Unidade</span>
-          <div style="display:flex;gap:6px">
-            <button class="sim-btn-discrete" onclick="renderSimulador()">↻ Recalcular</button>
-            <button class="sim-btn-discrete sim-btn-save" onclick="salvarTudoSimulador()" id="btn-salvar-sim">Salvar</button>
-          </div>
-        </div>
-        <div class="sim-metas-grid" id="sim-metas-grid"></div>
-      </div>
-
+  <!-- TAB SIMULADOR 2.0 — Política Claro AACE PME (vigência jun/2026) + Simulador de Carteira (sub-aba) -->
+  <div class="tab-panel active" id="tab-simulador2">
+    <div style="display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:16px;">
+      <button class="tab-btn active" id="sim2-subtab-btn-novo" onclick="simulador2SwitchSubTab('novo')" style="padding:10px 16px;">🧮 Simulador 2.0</button>
+      <button class="tab-btn" id="sim2-subtab-btn-classico" onclick="simulador2SwitchSubTab('classico')" style="padding:10px 16px;">🎯 Simulador de Carteira</button>
     </div>
 
-    <!-- KPI SUMMARY -->
-    <div id="sim-kpi-area"></div>
-
-    <!-- TABELA RESULTADO -->
-    <div id="sim-table-area"></div>
-
-  </div>
-
-  <!-- TAB SIMULADOR 2.0 — Política Claro AACE PME (vigência jun/2026) -->
-  <div class="tab-panel" id="tab-simulador2">
+    <div id="sim2-subtab-novo">
     <button class="btn-config-mobile" onclick="handleUserBadgeClick()">⚙️ Configurações</button>
 
     <!-- PARÂMETROS GERAIS DO PERÍODO — usados em várias seções abaixo -->
@@ -1915,6 +1839,86 @@
           <option value="">📜 Ver histórico de competências…</option>
         </select>
       </div>
+    </div>
+
+    </div>
+
+    <div id="sim2-subtab-classico" style="display:none">
+
+      <!-- CONTROLES TOPO -->
+      <div class="sim-controls-bar">
+
+        <!-- Visões -->
+        <div class="sim-section">
+          <div class="sim-section-label">Escopo</div>
+          <div class="sim-visoes">
+            <button class="sim-visao-btn active" onclick="setVisao('ativo',this)">Ativo</button>
+            <button class="sim-visao-btn" onclick="setVisao('ativacao',this)">+ Ativação</button>
+            <button class="sim-visao-btn" onclick="setVisao('aprovados',this)">+ Aprovados</button>
+            <button class="sim-visao-btn" onclick="setVisao('geral',this)">Geral</button>
+          </div>
+        </div>
+
+        <!-- Multiplicadores -->
+        <div class="sim-section">
+          <div class="sim-section-label">Multiplicadores de Faturamento</div>
+          <div class="sim-mults">
+            <div class="sim-mult-item">
+              <label>NET PJ - VIRTUA</label>
+              <input type="number" id="mult-virtua" value="4" step="0.1" min="0" onchange="renderSimulador()">
+            </div>
+            <div class="sim-mult-item">
+              <label>VOZ - Novo</label>
+              <input type="number" id="mult-voz-novo" value="5.5" step="0.1" min="0" onchange="renderSimulador()">
+            </div>
+            <div class="sim-mult-item">
+              <label>VOZ - Portabilidade</label>
+              <input type="number" id="mult-voz-port" value="7.5" step="0.1" min="0" onchange="renderSimulador()">
+            </div>
+            <div class="sim-mult-item" style="border-left:2px solid var(--border);padding-left:10px;margin-left:4px">
+              <label>R$ por linha (carteira)</label>
+              <input type="number" id="mult-vlr-linha" value="2.60" step="0.10" min="0.01" onchange="renderSimulador()" style="background:#fffbe6">
+            </div>
+            <div class="sim-mult-item" style="border-left:2px solid var(--border);padding-left:10px;margin-left:4px">
+              <label>Divisor VOZ (incentivo)</label>
+              <input type="number" id="div-voz" value="12" step="1" min="1" onchange="renderSimulador()" style="background:#f0f9ff">
+            </div>
+            <div class="sim-mult-item">
+              <label>Divisor VIRTUA (incentivo)</label>
+              <input type="number" id="div-virtua" value="3" step="1" min="1" onchange="renderSimulador()" style="background:#f0f9ff">
+            </div>
+            <div class="sim-mult-item" style="border-left:2px solid var(--border);padding-left:10px;margin-left:4px">
+              <label>Divisor VOZ (incentivo 2)</label>
+              <input type="number" id="div-voz2" value="12" step="1" min="1" onchange="renderSimulador()" style="background:#f0fff4">
+            </div>
+            <div class="sim-mult-item">
+              <label>Divisor VIRTUA (incentivo 2)</label>
+              <input type="number" id="div-virtua2" value="3" step="1" min="1" onchange="renderSimulador()" style="background:#f0fff4">
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Metas -->
+        <div class="sim-section sim-section-metas">
+          <div class="sim-section-label" style="display:flex;align-items:center;justify-content:space-between">
+            <span>Metas de Linhas por Unidade</span>
+            <div style="display:flex;gap:6px">
+              <button class="sim-btn-discrete" onclick="renderSimulador()">↻ Recalcular</button>
+              <button class="sim-btn-discrete sim-btn-save" onclick="salvarTudoSimulador()" id="btn-salvar-sim">Salvar</button>
+            </div>
+          </div>
+          <div class="sim-metas-grid" id="sim-metas-grid"></div>
+        </div>
+
+      </div>
+
+      <!-- KPI SUMMARY -->
+      <div id="sim-kpi-area"></div>
+
+      <!-- TABELA RESULTADO -->
+      <div id="sim-table-area"></div>
+
     </div>
 
   </div>
@@ -5198,7 +5202,6 @@ function switchTab(name, el) {
   el.classList.add('active');
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   document.getElementById('tab-' + name).classList.add('active');
-  if (name === 'simulador') initSimulador();
   if (name === 'producao') initProducao();
   if (name === 'discadora') initDiscadora();
   if (name === 'simulador2') initSimulador2();
@@ -5235,7 +5238,7 @@ let USUARIO_ATUAL = null;
 // aplicarPermissoes() quanto pelo preenchimento da preferência "aba padrão
 // ao abrir" no drawer de conta e pelo redirecionamento pós-login.
 const ABAS_PERMITIDAS_POR_PERFIL = {
-  'admin':          ['simulador', 'gerencial', 'producao', 'discadora', 'simulador2', 'churn', 'carteira', 'conectividade'],
+  'admin':          ['gerencial', 'producao', 'discadora', 'simulador2', 'churn', 'carteira', 'conectividade'],
   'gestor_macro':   ['gerencial', 'discadora', 'conectividade'],
   'gestor_macro2':  ['gerencial', 'producao', 'discadora', 'conectividade'],
   'gestor_macro3':  ['gerencial', 'producao', 'conectividade'],
@@ -5256,7 +5259,6 @@ function getAbasPermitidas(usuario) {
   return extras.length ? [...new Set([...base, ...extras])] : base;
 }
 const TAB_LABELS = {
-  simulador: '🎯 Simulador de Carteira',
   gerencial: '📊 Gerencial',
   producao: '🏭 Produção',
   discadora: '📞 Discadora',
@@ -5867,6 +5869,17 @@ function s2AtualizarLabelCompetencia() {
   document.getElementById('s2-competencia-label').value = m
     ? `${S2_MESES_LABEL[parseInt(m[2], 10) - 1]}/${m[1]}`
     : '—';
+}
+
+// Sub-abas dentro de Simulador 2.0 — Simulador 2.0 (padrão) e Simulador de
+// Carteira (clássico), lado a lado no mesmo painel em vez de brigar por
+// espaço no menu principal (mesmo padrão já usado em Conectividade/SD).
+function simulador2SwitchSubTab(nome) {
+  document.getElementById('sim2-subtab-btn-novo').classList.toggle('active', nome === 'novo');
+  document.getElementById('sim2-subtab-btn-classico').classList.toggle('active', nome === 'classico');
+  document.getElementById('sim2-subtab-novo').style.display = nome === 'novo' ? '' : 'none';
+  document.getElementById('sim2-subtab-classico').style.display = nome === 'classico' ? '' : 'none';
+  if (nome === 'classico') initSimulador();
 }
 
 function initSimulador2() {
