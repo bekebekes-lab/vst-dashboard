@@ -9932,11 +9932,11 @@ function evRenderListaTabela(data) {
       <th>Status da Consulta</th><th>Status das SEVs</th><th>Habilitado Para Pricing</th><th>Facilidade</th><th>Data de criação</th><th>Data da última modificação</th>
     </tr></thead>
     <tbody>
-      ${data.map(item => {
+      ${data.map((item, idx) => {
         const estagio = EV_ESTAGIOS[item.status] || { label: item.status, cor: '#6b7280' };
         const resultado = item.status_sevs || '—';
         const corResultado = item.status_sevs === 'Viável' ? 'var(--green)' : (item.status_sevs && item.status_sevs.startsWith('Inviável') ? 'var(--red-sem)' : 'var(--text-2)');
-        return `<tr>
+        return `<tr style="cursor:pointer;" onclick="evAbrirDetalhe(${idx})" title="Ver detalhes">
           <td>${escapeHtml(item.cliente_final)}${item.ev_numero ? ` <span style="color:var(--text-2);">(${escapeHtml(item.ev_numero)})</span>` : ''}</td>
           <td>${escapeHtml(item.consultor_nome || '—')}</td>
           <td>${escapeHtml(item.item_produto || '—')}</td>
@@ -9952,6 +9952,78 @@ function evRenderListaTabela(data) {
       }).join('')}
     </tbody>
   </table></div>`;
+  window._evDrillRows = data;
+}
+
+// Modal de detalhe do EV — reaproveita o mesmo visual/CSS do drill-down de
+// cliente da Gerencial (.det-grid/.det-item/.raiox-pane), só que num modal
+// próprio (um EV não tem "abas" — é um registro só, sem precisar de tabs).
+function evAbrirDetalhe(idx) {
+  const item = (window._evDrillRows || [])[idx];
+  if (!item) return;
+
+  const estagio = EV_ESTAGIOS[item.status] || { label: item.status, cor: '#6b7280' };
+  const dt = (v) => v ? new Date(v).toLocaleString('pt-BR') : '';
+
+  const campos = [
+    { label: 'Cliente Final', val: item.cliente_final },
+    { label: 'Usuário', val: item.consultor_nome },
+    { label: 'Razão Social', val: item.razao_social },
+    { label: 'CNPJ', val: item.cnpj },
+    { label: 'Produto', val: item.produto },
+    { label: 'Item de Produto', val: item.item_produto },
+    { label: 'CEP', val: item.cep },
+    { label: 'Coordenadas', val: item.coordenadas },
+    { label: 'Número', val: item.numero },
+    { label: 'Quantidade de Circuitos', val: item.quantidade_circuitos },
+    { label: 'Status', val: estagio.label },
+    { label: 'Status da Consulta', val: item.status_consulta },
+    { label: 'Status das SEVs', val: item.status_sevs },
+    { label: 'Habilitado Para Pricing', val: item.habilitado_pricing },
+    { label: 'Facilidade', val: item.facilidade },
+    { label: 'Nº do Estudo (Radar)', val: item.ev_numero },
+    { label: 'Data de criação', val: dt(item.criado_em) },
+    { label: 'Data da última modificação', val: dt(item.atualizado_em) },
+    { label: 'Mensagem de erro', val: item.status === 'erro' ? item.erro_mensagem : null },
+  ].filter(c => c.val !== null && c.val !== undefined && c.val !== '');
+
+  const grid = campos.map(c => `
+    <div class="det-item">
+      <div class="det-label">${escapeHtml(c.label)}</div>
+      <div class="det-value">${escapeHtml(String(c.val))}</div>
+    </div>`).join('');
+
+  let modal = document.getElementById('ev-detalhe-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'ev-detalhe-modal';
+    modal.style.cssText = 'position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.5);display:flex;align-items:flex-start;justify-content:center;padding:40px 20px;overflow-y:auto;';
+    modal.onclick = function(e) { if (e.target === modal) evFecharDetalhe(); };
+    document.body.appendChild(modal);
+  }
+
+  modal.innerHTML = `
+    <div style="background:var(--surface);border-radius:var(--radius-xl);width:100%;max-width:960px;box-shadow:0 24px 60px rgba(0,0,0,.3);overflow:hidden;">
+      <div style="background:var(--brand);">
+        <div style="padding:16px 20px;display:flex;align-items:center;justify-content:space-between;">
+          <div>
+            <div style="font-size:10px;color:rgba(255,255,255,.65);text-transform:uppercase;letter-spacing:.07em;margin-bottom:2px;">Detalhes do Estudo de Viabilidade</div>
+            <div style="font-size:18px;font-weight:700;color:#fff;">${escapeHtml(item.cliente_final)}</div>
+          </div>
+          <button onclick="evFecharDetalhe()" style="background:rgba(255,255,255,.15);border:none;color:#fff;width:32px;height:32px;border-radius:50%;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;">×</button>
+        </div>
+      </div>
+      <div class="raiox-pane active"><div class="det-grid">${grid}</div></div>
+    </div>`;
+
+  modal.style.display = 'flex';
+  document.body.style.overflow = 'hidden';
+}
+
+function evFecharDetalhe() {
+  const modal = document.getElementById('ev-detalhe-modal');
+  if (modal) modal.style.display = 'none';
+  document.body.style.overflow = '';
 }
 
 let EV_DADOS_CACHE = [];
