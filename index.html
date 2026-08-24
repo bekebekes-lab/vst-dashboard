@@ -1457,6 +1457,12 @@
         <label>Buscar (CNPJ, razão social, vinculado ou nº)</label>
         <input type="text" id="f-busca" placeholder="Digite para buscar..." oninput="onFilterChange('busca')" autocomplete="off">
       </div>
+      <div class="filter-group" style="justify-content:flex-end;">
+        <label>&nbsp;</label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:500;cursor:pointer;padding-top:8px;white-space:nowrap;">
+          <input type="checkbox" id="ger-exibir-receita" onchange="toggleGerReceita()"> Exibir Receita
+        </label>
+      </div>
     </div>
 
     <div id="error-area"></div>
@@ -2997,6 +3003,25 @@ function linhaBateBusca(r, buscaLower, buscaDigits) {
   return false;
 }
 
+// ─── Exibir Receita (Gerencial) — troca as quantidades pela receita em vez
+// de mostrar as duas juntas. Mesma regra de cálculo já usada na Produção:
+// NET PJ - VIRTUA multiplica Quantidade x Valor Unit; nos demais grupos,
+// Valor Unit já é o valor total da linha (não multiplica de novo).
+let gerExibirReceita = false;
+function toggleGerReceita() {
+  gerExibirReceita = document.getElementById('ger-exibir-receita').checked;
+  if (lastDrillArgs) drillFila(...lastDrillArgs);
+  else render();
+}
+function gerFmtMoeda(v) {
+  return 'R$ ' + (v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function gerReceitaLinha(r) {
+  const qtd = parseInt(r['QUANTIDADE']) || 1;
+  const valor = parseFloat((r['VALOR UNIT'] || '0').toString().replace(',', '.')) || 0;
+  return (r['GRUPO'] || '') === 'NET PJ - VIRTUA' ? qtd * valor : valor;
+}
+
 // ─── main render ────────────────────────────────────────────────────────────
 function render() {
   if (!ALL_DATA.length) return;
@@ -3026,7 +3051,7 @@ function render() {
 
   const cats = ["GERAL", "GROSS", "RENOVAÇÃO", "BL", "TITULARIDADE", "SERV. DIGITAIS"];
   let metrics = {};
-  cats.forEach(c => metrics[c] = { total: 0, filas: {} });
+  cats.forEach(c => metrics[c] = { total: 0, filas: {}, totalRec: 0, filasRec: {} });
   let consMap = {};
   let nConsSet = new Set();
   let totalRows = 0;
@@ -3042,6 +3067,7 @@ function render() {
     const qtd  = parseInt(r['QUANTIDADE']) || 1;
     const fila = r['FILA'] || 'Sem Status';
     const grupo = r['GRUPO'] || '';
+    const rec  = gerReceitaLinha(r);
 
     if (!linhaDentroDoEscopo(r, escopo, eq)) return;
     if (estado    !== 'Todos' && est  !== estado)         return;
@@ -3059,18 +3085,27 @@ function render() {
 
     metrics[key].total += qtd;
     metrics[key].filas[fila] = (metrics[key].filas[fila] || 0) + qtd;
+    metrics[key].totalRec += rec;
+    metrics[key].filasRec[fila] = (metrics[key].filasRec[fila] || 0) + rec;
     // SERV. DIGITAIS não soma no GERAL
     if (key !== "SERV. DIGITAIS") {
       metrics["GERAL"].total += qtd;
       metrics["GERAL"].filas[fila] = (metrics["GERAL"].filas[fila] || 0) + qtd;
+      metrics["GERAL"].totalRec += rec;
+      metrics["GERAL"].filasRec[fila] = (metrics["GERAL"].filasRec[fila] || 0) + rec;
     }
 
-    if (!consMap[cons]) consMap[cons] = { equipe: eq, tag: rtag, GROSS: 0, "RENOVAÇÃO": 0, BL: 0, TITULARIDADE: 0, "SERV. DIGITAIS": 0, GERAL: 0, ATIVO: 0 };
+    if (!consMap[cons]) consMap[cons] = {
+      equipe: eq, tag: rtag,
+      GROSS: 0, "RENOVAÇÃO": 0, BL: 0, TITULARIDADE: 0, "SERV. DIGITAIS": 0, GERAL: 0, ATIVO: 0,
+      GROSS_REC: 0, "RENOVAÇÃO_REC": 0, BL_REC: 0, TITULARIDADE_REC: 0, "SERV. DIGITAIS_REC": 0, GERAL_REC: 0, ATIVO_REC: 0,
+    };
     consMap[cons][key] += qtd;
+    consMap[cons][key + '_REC'] += rec;
     // SERV. DIGITAIS não soma no GERAL
-    if (key !== "SERV. DIGITAIS") consMap[cons].GERAL += qtd;
+    if (key !== "SERV. DIGITAIS") { consMap[cons].GERAL += qtd; consMap[cons].GERAL_REC += rec; }
     // ATIVO/INSTALADO soma apenas categorias diferentes de SERV. DIGITAIS com fila Ativo/Instalado
-    if (key !== "SERV. DIGITAIS" && fila === "Ativo/Instalado") consMap[cons].ATIVO += qtd;
+    if (key !== "SERV. DIGITAIS" && fila === "Ativo/Instalado") { consMap[cons].ATIVO += qtd; consMap[cons].ATIVO_REC += rec; }
   });
 
   const nc = nConsSet.size || 1;
@@ -3080,21 +3115,21 @@ function render() {
     <div class="stat-chip"><strong>${ALL_DATA.length}</strong> registros na base</div>
     <div class="stat-chip"><strong>${totalRows}</strong> registros filtrados</div>
     <div class="stat-chip"><strong>${nc}</strong> consultores</div>
-    <div class="stat-chip"><strong>${nConsSet.size > 0 ? (metrics['GERAL'].total / nc).toFixed(1) : 0}</strong> média geral/consultor</div>
+    <div class="stat-chip"><strong>${nConsSet.size > 0 ? (gerExibirReceita ? gerFmtMoeda(metrics['GERAL'].totalRec / nc) : (metrics['GERAL'].total / nc).toFixed(1)) : 0}</strong> média geral/consultor</div>
   </div>`;
 
   // Metrics cards
   document.getElementById('metrics-area').innerHTML = `<div class="metrics-grid">${cats.map((c, i) => {
-    const med = (metrics[c].total / nc).toFixed(1);
-    const filas = Object.entries(metrics[c].filas).sort((a, b) => b[1] - a[1]);
+    const med = gerExibirReceita ? gerFmtMoeda(metrics[c].totalRec / nc) : (metrics[c].total / nc).toFixed(1);
+    const filas = Object.entries(gerExibirReceita ? metrics[c].filasRec : metrics[c].filas).sort((a, b) => b[1] - a[1]);
     return `<div class="metric-card ${i === 0 ? 'highlight' : ''}">
       <div class="metric-label">${c}</div>
-      <div class="metric-value">${metrics[c].total}</div>
+      <div class="metric-value">${gerExibirReceita ? gerFmtMoeda(metrics[c].totalRec) : metrics[c].total}</div>
       <div class="metric-avg">Média/consultor: ${med}</div>
       <div class="filas-list">${filas.map(([fn, fv]) => `
         <div class="fila-item" onclick="drillFila('${c}','${fn.replace(/'/g,"\\'")}')">
           <span class="fila-name">${fn}</span>
-          <span class="fila-count">${fv}</span>
+          <span class="fila-count">${gerExibirReceita ? gerFmtMoeda(fv) : fv}</span>
         </div>`).join('')}
       </div>
     </div>`;
@@ -3116,7 +3151,7 @@ function render() {
       </div>
       ${isMobileBusca ? `
       <div class="row-cards">${linhasBusca.map((r, idx) => {
-        const qtd   = parseInt(r['QUANTIDADE']) || 1;
+        const qtd   = gerExibirReceita ? gerFmtMoeda(gerReceitaLinha(r)) : (parseInt(r['QUANTIDADE']) || 1);
         const prop  = r['PROPRIETÁRIO DO PEDIDO'] || '—';
         const nome  = r['NOME CLIENTE'] || '—';
         const vinc  = r['VINCULADO'] || '—';
@@ -3143,10 +3178,10 @@ function render() {
             <th style="width:14%">Proprietário</th>
             <th style="width:14%">Equipe</th>
             <th style="width:12%">Status</th>
-            <th class="center" style="width:8%">Qtd</th>
+            <th class="center" style="width:8%">${gerExibirReceita ? 'Receita' : 'Qtd'}</th>
           </tr></thead>
           <tbody>${linhasBusca.map((r, idx) => {
-            const qtd   = parseInt(r['QUANTIDADE']) || 1;
+            const qtd   = gerExibirReceita ? gerFmtMoeda(gerReceitaLinha(r)) : (parseInt(r['QUANTIDADE']) || 1);
             const prop  = r['PROPRIETÁRIO DO PEDIDO'] || '—';
             const nome  = r['NOME CLIENTE'] || '—';
             const vinc  = r['VINCULADO'] || '—';
@@ -3175,9 +3210,10 @@ function render() {
   }
 
   // Consultant table
+  const sortColEfetivo = gerExibirReceita ? sortCol + '_REC' : sortCol;
   const rows = Object.entries(consMap).sort((a, b) => {
-    const va = a[1][sortCol] || 0;
-    const vb = b[1][sortCol] || 0;
+    const va = a[1][sortColEfetivo] || 0;
+    const vb = b[1][sortColEfetivo] || 0;
     return sortAsc ? va - vb : vb - va;
   });
 
@@ -3207,12 +3243,12 @@ function render() {
         <div class="row-card-title"><span>${escapeHtml(cn)}</span><span class="tag-pill">${d.tag || '—'}</span></div>
         <div class="row-card-fields">
           <div class="row-card-field" style="grid-column:1/-1"><span class="rcf-label">Equipe</span><span class="rcf-value">${escapeHtml(d.equipe || '—')}</span></div>
-          <div class="row-card-field"><span class="rcf-label">Total</span><span class="rcf-value">${d.GERAL}</span></div>
-          <div class="row-card-field"><span class="rcf-label">Gross</span><span class="rcf-value">${d.GROSS}</span></div>
-          <div class="row-card-field"><span class="rcf-label">Renov.</span><span class="rcf-value">${d["RENOVAÇÃO"] || 0}</span></div>
-          <div class="row-card-field"><span class="rcf-label">BL</span><span class="rcf-value">${d.BL || 0}</span></div>
-          <div class="row-card-field"><span class="rcf-label">Titular.</span><span class="rcf-value">${d.TITULARIDADE || 0}</span></div>
-          <div class="row-card-field" style="grid-column:1/-1"><span class="rcf-label">Ativo/Instalado</span><span class="rcf-value">${d.ATIVO || 0}</span></div>
+          <div class="row-card-field"><span class="rcf-label">Total</span><span class="rcf-value">${gerExibirReceita ? gerFmtMoeda(d.GERAL_REC) : d.GERAL}</span></div>
+          <div class="row-card-field"><span class="rcf-label">Gross</span><span class="rcf-value">${gerExibirReceita ? gerFmtMoeda(d.GROSS_REC) : d.GROSS}</span></div>
+          <div class="row-card-field"><span class="rcf-label">Renov.</span><span class="rcf-value">${gerExibirReceita ? gerFmtMoeda(d["RENOVAÇÃO_REC"]) : (d["RENOVAÇÃO"] || 0)}</span></div>
+          <div class="row-card-field"><span class="rcf-label">BL</span><span class="rcf-value">${gerExibirReceita ? gerFmtMoeda(d.BL_REC) : (d.BL || 0)}</span></div>
+          <div class="row-card-field"><span class="rcf-label">Titular.</span><span class="rcf-value">${gerExibirReceita ? gerFmtMoeda(d.TITULARIDADE_REC) : (d.TITULARIDADE || 0)}</span></div>
+          <div class="row-card-field" style="grid-column:1/-1"><span class="rcf-label">Ativo/Instalado</span><span class="rcf-value">${gerExibirReceita ? gerFmtMoeda(d.ATIVO_REC) : (d.ATIVO || 0)}</span></div>
         </div>
       </div>`).join('')}</div>` : `
     <div class="table-wrap"><div class="table-scroll">
@@ -3232,12 +3268,12 @@ function render() {
               </div>
             </td>
             <td>${linkEquipe(d.equipe)}</td>
-            <td class="center"><span class="badge ${d.GROSS > 0 ? 'badge-red' : 'badge-gray'}">${d.GROSS}</span></td>
-            <td class="center">${d["RENOVAÇÃO"] || 0}</td>
-            <td class="center">${d.BL || 0}</td>
-            <td class="center">${d.TITULARIDADE || 0}</td>
-            <td class="center">${d.ATIVO || 0}</td>
-            <td class="center" style="font-weight:600">${d.GERAL}</td>
+            <td class="center"><span class="badge ${d.GROSS > 0 ? 'badge-red' : 'badge-gray'}">${gerExibirReceita ? gerFmtMoeda(d.GROSS_REC) : d.GROSS}</span></td>
+            <td class="center">${gerExibirReceita ? gerFmtMoeda(d["RENOVAÇÃO_REC"]) : (d["RENOVAÇÃO"] || 0)}</td>
+            <td class="center">${gerExibirReceita ? gerFmtMoeda(d.BL_REC) : (d.BL || 0)}</td>
+            <td class="center">${gerExibirReceita ? gerFmtMoeda(d.TITULARIDADE_REC) : (d.TITULARIDADE || 0)}</td>
+            <td class="center">${gerExibirReceita ? gerFmtMoeda(d.ATIVO_REC) : (d.ATIVO || 0)}</td>
+            <td class="center" style="font-weight:600">${gerExibirReceita ? gerFmtMoeda(d.GERAL_REC) : d.GERAL}</td>
             <td class="center"><span class="tag-pill">${d.tag || '—'}</span></td>
           </tr>`).join('')}
         </tbody>
@@ -3326,8 +3362,8 @@ function drillFila(categoria, fila) {
   // Sort
   const sortedRows = [...filtered].sort((a, b) => {
     if (drillSortCol === 'QTD') {
-      const va = parseInt(a['QUANTIDADE']) || 1;
-      const vb = parseInt(b['QUANTIDADE']) || 1;
+      const va = gerExibirReceita ? gerReceitaLinha(a) : (parseInt(a['QUANTIDADE']) || 1);
+      const vb = gerExibirReceita ? gerReceitaLinha(b) : (parseInt(b['QUANTIDADE']) || 1);
       return drillSortAsc ? va - vb : vb - va;
     }
     if (drillSortCol === 'ATUALIZACAO') {
@@ -3340,7 +3376,9 @@ function drillFila(categoria, fila) {
     return drillSortAsc ? ca.localeCompare(cb) : cb.localeCompare(ca);
   });
 
-  const total = filtered.reduce((s, r) => s + (parseInt(r['QUANTIDADE']) || 1), 0);
+  const total = gerExibirReceita
+    ? gerFmtMoeda(filtered.reduce((s, r) => s + gerReceitaLinha(r), 0))
+    : filtered.reduce((s, r) => s + (parseInt(r['QUANTIDADE']) || 1), 0) + ' pedidos';
 
   const ctxParts = [];
   if (estado    !== 'Todos') ctxParts.push(estado);
@@ -3359,7 +3397,7 @@ function drillFila(categoria, fila) {
         <span class="breadcrumb-fila">${escapeHtml(fila)}</span>
         ${ctxLabel ? `<span class="breadcrumb-sep">·</span><span style="font-size:11px;color:var(--text3)">${ctxLabel}</span>` : ''}
       </div>
-      <span class="count-badge">${total} pedidos · ${sortedRows.length} registros</span>
+      <span class="count-badge">${total} · ${sortedRows.length} registros</span>
     </div>`;
 
   if (sortedRows.length === 0) {
@@ -3439,12 +3477,12 @@ function drillFila(categoria, fila) {
           <th style="width:14%">Proprietário</th>
           <th style="width:14%">Equipe</th>
           ${thAtualizacao}
-          ${thD('QTD','Qtd','width:8%')}
+          ${thD('QTD', gerExibirReceita ? 'Receita' : 'Qtd', 'width:8%')}
         </tr></thead>
         <tbody>${sortedRows.length === 0
           ? `<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--text3)">Nenhum registro no período selecionado.</td></tr>`
           : (window._drillRows = sortedRows, sortedRows.map((r, idx) => {
-          const qtd   = parseInt(r['QUANTIDADE']) || 1;
+          const qtd   = gerExibirReceita ? gerFmtMoeda(gerReceitaLinha(r)) : (parseInt(r['QUANTIDADE']) || 1);
           const prop  = r['PROPRIETÁRIO DO PEDIDO'] || '—';
           const nome  = r['NOME CLIENTE'] || '—';
           const vinc  = r['VINCULADO'] || '—';
