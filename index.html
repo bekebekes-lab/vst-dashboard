@@ -3016,8 +3016,16 @@ function linhaBateBusca(r, buscaLower, buscaDigits) {
 let gerExibirReceita = false;
 function toggleGerReceita() {
   gerExibirReceita = document.getElementById('ger-exibir-receita').checked;
-  if (lastDrillArgs) drillFila(...lastDrillArgs);
-  else render();
+  // lastDrillArgs fica "sujo" depois de qualquer drill (só é limpo no
+  // "← Voltar" — mudar um filtro, por exemplo, já volta pra tabela
+  // principal sem zerá-lo). Checa o que está DE FATO na tela agora (o
+  // breadcrumb só existe numa view de drill) em vez de confiar cegamente
+  // nessa variável, e sempre atualiza render() primeiro — os cards de
+  // status (metrics-area/stats-row-area) ficam visíveis por trás do
+  // drill e também precisam refletir a troca, não só a tabela de baixo.
+  const emDrill = !!document.querySelector('#table-area .detail-breadcrumb');
+  render();
+  if (emDrill && lastDrillArgs) drillFila(...lastDrillArgs);
 }
 function gerFmtMoeda(v) {
   return 'R$ ' + (v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
