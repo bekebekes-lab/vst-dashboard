@@ -20,12 +20,10 @@ export default async function handler(req, res) {
   const authUser = await requireAuth(req, res);
   if (!authUser) return;
 
-  // EV - Estudo de Viabilidade ainda em teste — restrito a admin por
-  // enquanto, mesma trava aplicada no front (initConectividade()).
+  // EV - Estudo de Viabilidade disponível pra todo mundo — quem vê o quê
+  // na lista é decidido pela RLS (ev_select: dono do registro ou admin),
+  // não aqui.
   const perfilRowAcesso = await getUsuarioDashboard(req, authUser.id);
-  if (perfilRowAcesso?.perfil !== 'admin') {
-    return res.status(403).json({ error: 'Consulta de viabilidade (EV) ainda em teste — disponível só pra admin.' });
-  }
 
   // Cada item já vem com seu PRÓPRIO cliente/CNPJ/CEP/plano — permite
   // consultar vários clientes/endereços diferentes numa mesma leva, não só

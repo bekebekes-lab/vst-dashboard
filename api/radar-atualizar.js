@@ -1,7 +1,7 @@
 // Chama o radar_bot.py agora (via GitHub Actions) pra revisitar as
 // consultas de EV já em andamento, sem esperar o próximo agendamento
 // (a cada 15min) — não grava nem altera nada, só antecipa o disparo.
-import { requireAuth, getUsuarioDashboard } from './_lib/auth.js';
+import { requireAuth } from './_lib/auth.js';
 import { dispatchRadarBot } from './_lib/radar-dispatch.js';
 
 export default async function handler(req, res) {
@@ -14,13 +14,6 @@ export default async function handler(req, res) {
 
   const authUser = await requireAuth(req, res);
   if (!authUser) return;
-
-  // EV - Estudo de Viabilidade ainda em teste — restrito a admin por
-  // enquanto, mesma trava aplicada no front e em radar-consulta.js.
-  const perfilRow = await getUsuarioDashboard(req, authUser.id);
-  if (perfilRow?.perfil !== 'admin') {
-    return res.status(403).json({ error: 'Consulta de viabilidade (EV) ainda em teste — disponível só pra admin.' });
-  }
 
   const githubToken = process.env.GITHUB_ACTIONS_TOKEN;
   if (!githubToken) {

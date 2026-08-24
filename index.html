@@ -2199,7 +2199,7 @@
   <div class="tab-panel" id="tab-conectividade">
     <div style="display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:16px;">
       <button class="subtab-btn active" id="conect-subtab-btn-proposta" onclick="conectSwitchSubTab('proposta')" style="padding:10px 16px;">📄 Proposta Comercial</button>
-      <button class="subtab-btn" id="conect-subtab-btn-ev" onclick="conectSwitchSubTab('ev')" style="padding:10px 16px;display:none;">🔎 EV - Viabilidade</button>
+      <button class="subtab-btn" id="conect-subtab-btn-ev" onclick="conectSwitchSubTab('ev')" style="padding:10px 16px;">🔎 EV - Viabilidade</button>
     </div>
 
     <div id="conect-subtab-proposta">
@@ -2339,7 +2339,7 @@
     <div id="conect-subtab-ev" style="display:none;">
   <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:18px;margin-bottom:16px;box-shadow:var(--shadow-xs);">
     <div class="section-title" style="margin-bottom:4px;">🔎 EV - Estudo de Viabilidade</div>
-    <div style="font-size:12px;font-weight:600;color:#eda100;background:#fff8e6;border:1px solid #f5d78a;border-radius:6px;padding:6px 10px;margin-bottom:10px;">⚠️ Em teste — visível só pra admin por enquanto, ainda validando o robô de consulta no Radar.</div>
+    <div style="font-size:12px;font-weight:600;color:#eda100;background:#fff8e6;border:1px solid #f5d78a;border-radius:6px;padding:6px 10px;margin-bottom:10px;">⚠️ Em teste — ainda validando o robô de consulta no Radar.</div>
     <div style="font-size:12px;color:var(--text-2);margin-bottom:14px;">Consulta a viabilidade técnica no Radar (Claro/Embratel) — envia a consulta e o robô traz a resposta (viável/inviável, facilidade e custo) aqui na lista abaixo assim que sair. Disponível só pras ofertas Conecta Smart, Conecta com BLC e Combo Conecta 2P BLD por enquanto. Pra consultar vários planos/velocidades do mesmo cliente, clique em "+ Adicionar plano" antes de "+ Adicionar à lista"; pra vários clientes/endereços diferentes, repita "+ Adicionar à lista" pra cada um.</div>
 
     <div class="filters-bar">
@@ -2410,7 +2410,7 @@
     <button class="btn-secondary" onclick="evAtualizarEDispararBot()" id="ev-btn-atualizar">↻ Atualizar</button>
   </div>
   <div class="filter-group" style="max-width:360px;margin-bottom:10px;">
-    <input type="text" id="ev-busca" placeholder="Buscar por Cliente Final, Item de Produto ou CEP..." autocomplete="off" oninput="evFiltrarLista()">
+    <input type="text" id="ev-busca" placeholder="Buscar por Cliente Final, Usuário, Item de Produto ou CEP..." autocomplete="off" oninput="evFiltrarLista()">
   </div>
   <div id="ev-lista-area"></div>
 </div>
@@ -9638,9 +9638,6 @@ function initConectividade() {
     document.getElementById('conect-consultor-telefone').value = USUARIO_ATUAL?.telefone || '';
     document.getElementById('conect-consultor-email').value = USUARIO_ATUAL?.email || '';
     document.addEventListener('click', () => document.querySelectorAll('[id^="conect-menu-"]').forEach(m => m.style.display = 'none'));
-    if (USUARIO_ATUAL?.perfil === 'admin') {
-      document.getElementById('conect-subtab-btn-ev').style.display = '';
-    }
     CONECT_INICIALIZADA = true;
   }
   conectCarregarFunil();
@@ -9916,6 +9913,7 @@ function evFiltrarLista() {
   if (!termo) { evRenderListaTabela(EV_DADOS_CACHE); return; }
   const filtrado = EV_DADOS_CACHE.filter(item =>
     (item.cliente_final || '').toLowerCase().includes(termo) ||
+    (item.consultor_nome || '').toLowerCase().includes(termo) ||
     (item.item_produto || '').toLowerCase().includes(termo) ||
     (item.cep || '').toLowerCase().includes(termo)
   );
@@ -9930,7 +9928,7 @@ function evRenderListaTabela(data) {
   }
   area.innerHTML = `<div style="overflow-x:auto;"><table style="width:100%;font-size:12px;">
     <thead><tr>
-      <th>Cliente Final</th><th>Item de Produto</th><th>CEP</th><th>Status</th>
+      <th>Cliente Final</th><th>Usuário</th><th>Item de Produto</th><th>CEP</th><th>Status</th>
       <th>Status da Consulta</th><th>Status das SEVs</th><th>Habilitado Para Pricing</th><th>Facilidade</th><th>Data de criação</th><th>Data da última modificação</th>
     </tr></thead>
     <tbody>
@@ -9940,6 +9938,7 @@ function evRenderListaTabela(data) {
         const corResultado = item.status_sevs === 'Viável' ? 'var(--green)' : (item.status_sevs && item.status_sevs.startsWith('Inviável') ? 'var(--red-sem)' : 'var(--text-2)');
         return `<tr>
           <td>${escapeHtml(item.cliente_final)}${item.ev_numero ? ` <span style="color:var(--text-2);">(${escapeHtml(item.ev_numero)})</span>` : ''}</td>
+          <td>${escapeHtml(item.consultor_nome || '—')}</td>
           <td>${escapeHtml(item.item_produto || '—')}</td>
           <td>${escapeHtml(item.cep)}</td>
           <td><span style="color:${estagio.cor};font-weight:600;">${estagio.label}</span></td>
