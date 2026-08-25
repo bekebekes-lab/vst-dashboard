@@ -2166,6 +2166,12 @@
   <!-- TAB CARTEIRA — planilha separada, só admin -->
   <div class="tab-panel" id="tab-carteira">
     <div class="filters-bar">
+      <div class="filter-group" style="min-width:170px;">
+        <label>Base (mês)</label>
+        <select id="carteira-filtro-base" onchange="carteiraTrocarBase()">
+          <option value="">Carregando...</option>
+        </select>
+      </div>
       <div class="filter-group" style="min-width:260px;flex:1">
         <label>Buscar (CNPJ ou razão social)</label>
         <input type="text" id="carteira-busca" placeholder="Digite para buscar..." oninput="renderCarteiraBusca()" autocomplete="off">
@@ -2187,6 +2193,12 @@
         <select id="carteira-filtro-associada" onchange="renderCarteiraOverview()">
           <option value="">Todas</option>
         </select>
+      </div>
+      <div class="filter-group" style="justify-content:flex-end;">
+        <label>&nbsp;</label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:500;cursor:pointer;padding-top:8px;white-space:nowrap;" title="Piloto: considera apto a renovar a partir de 12 meses de contrato, pra todas as classificações, no lugar do limiar normal">
+          <input type="checkbox" id="carteira-visao-12m" onchange="toggleCarteiraVisao12Meses()"> Visão piloto (12 meses)
+        </label>
       </div>
     </div>
     <div id="carteira-status-area"></div>
@@ -8684,14 +8696,16 @@ async function initChurn() {
 // Mapa CNPJ (só dígitos) -> linha da Carteira, pra achar rápido de quem é
 // o cliente de um alerta de Churn sem varrer os ~40k registros a cada render.
 function carteiraMapaPorCnpj() {
-  if (window._carteiraPorCnpj && window._carteiraPorCnpjSize === CARTEIRA_DADOS.length) return window._carteiraPorCnpj;
+  // Chave por BASE (não por tamanho) — com o seletor de mês/versão, duas
+  // bases diferentes podem coincidentemente ter o mesmo número de linhas.
+  if (window._carteiraPorCnpj && window._carteiraPorCnpjBase === CARTEIRA_BASE_ATUAL) return window._carteiraPorCnpj;
   const mapa = new Map();
   CARTEIRA_DADOS.forEach(r => {
     const digitos = (r['CNPJ'] || '').replace(/\D/g, '');
     if (digitos) mapa.set(digitos, r);
   });
   window._carteiraPorCnpj = mapa;
-  window._carteiraPorCnpjSize = CARTEIRA_DADOS.length;
+  window._carteiraPorCnpjBase = CARTEIRA_BASE_ATUAL;
   return mapa;
 }
 
@@ -8951,12 +8965,97 @@ async function churnSalvarFeedback(id) {
 }
 
 // ─── ABA CARTEIRA (planilha separada, só admin) ────────────────────────────
-const CARTEIRA_ABA = '082026';
 const CARTEIRA_LIMIAR_TM = { CG: 16, CB: 16, CF: 16, CD: 16, CC: 18, CE: 18, MI: 18, CA: 24 };
 const CARTEIRA_CAMPOS_IGNORADOS = new Set(['YAB', 'ERECHIM', 'BRS', 'EMERSONPR', 'GLOBECOM', 'JANETE', 'TELECT', 'PELOTAS', 'JULIANO BASTOS', 'LAURA LIS SANTOS', 'MARIA']);
 
 let CARTEIRA_DADOS = [];
 let CARTEIRA_CARREGADA = false;
+
+// A planilha ganha uma aba nova a cada mês (e às vezes mais de uma versão
+// no mesmo mês, ex. reprocessamento) — em vez de um nome de aba fixo no
+// código, lista as abas de verdade via Sheets API e deixa o usuário trocar.
+// Cache por aba (chave = nome exato da aba) pra não rebaixar a mesma base
+// mais de uma vez na mesma sessão.
+let CARTEIRA_BASE_ATUAL = null;
+let CARTEIRA_BASES_CACHE = null;
+const CARTEIRA_DADOS_CACHE = {};
+
+// Piloto: renovação passa a valer a partir de 12 meses de contrato, pra
+// qualquer classificação — mantém as regras normais (CARTEIRA_LIMIAR_TM)
+// como padrão, só troca quando o flag de visão está ligado.
+let carteiraVisao12Meses = false;
+function toggleCarteiraVisao12Meses() {
+  carteiraVisao12Meses = document.getElementById('carteira-visao-12m').checked;
+  renderCarteiraOverview();
+}
+
+// Extrai mês/ano/versão do nome da aba (6 dígitos MMAAAA em qualquer
+// posição do título, com ou sem prefixo "CARTEIRA -"; um número solto
+// depois disso é a versão, ex. "CARTEIRA 082026 2" = ago/2026 v2). Abas
+// que não batem com esse padrão (ex. uma aba auxiliar) são ignoradas.
+function carteiraParseNomeBase(titulo) {
+  const m = titulo.match(/(\d{2})(\d{4})(?:\D+(\d+))?\s*$/);
+  if (!m) return null;
+  const mes = parseInt(m[1], 10);
+  const ano = parseInt(m[2], 10);
+  if (mes < 1 || mes > 12) return null;
+  return { titulo, mes, ano, versao: m[3] ? parseInt(m[3], 10) : 1 };
+}
+
+async function carteiraListarBases() {
+  if (CARTEIRA_BASES_CACHE) return CARTEIRA_BASES_CACHE;
+  const res = await fetch('/api/sheets?action=list&planilha=carteira', { headers: authHeaders() });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.error || 'Falha ao listar bases da carteira');
+  const titulos = (json.sheets || []).map(s => s.properties?.title).filter(Boolean);
+  const bases = titulos.map(carteiraParseNomeBase).filter(Boolean)
+    .sort((a, b) => b.ano - a.ano || b.mes - a.mes || b.versao - a.versao);
+  CARTEIRA_BASES_CACHE = bases;
+  return bases;
+}
+
+// Base padrão ao abrir: última versão do mês/ano atual (calendário real,
+// não fixo no código); se ainda não existir aba desse mês, cai pra base
+// mais recente disponível (bases já vem ordenada da mais nova pra mais
+// velha).
+function carteiraEscolherBasePadrao(bases) {
+  const agora = new Date();
+  const mesAtual = agora.getMonth() + 1;
+  const anoAtual = agora.getFullYear();
+  return bases.find(b => b.mes === mesAtual && b.ano === anoAtual) || bases[0] || null;
+}
+
+const CARTEIRA_MESES_NOME = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+// "v2" só aparece no rótulo quando de fato há mais de uma versão pro mesmo
+// mês na lista — pro mês comum (1 aba só) o rótulo fica limpo ("Ago/2026").
+function carteiraRotuloBase(base, bases) {
+  const nomeMes = CARTEIRA_MESES_NOME[base.mes - 1] || base.mes;
+  const temOutraVersao = bases.some(b => b !== base && b.mes === base.mes && b.ano === base.ano);
+  return `${nomeMes}/${base.ano}${temOutraVersao ? ` (v${base.versao})` : ''}`;
+}
+
+function popularFiltroBaseCarteira(bases) {
+  document.getElementById('carteira-filtro-base').innerHTML =
+    bases.map(b => `<option value="${escapeHtml(b.titulo)}">${escapeHtml(carteiraRotuloBase(b, bases))}</option>`).join('');
+}
+
+// Troca de base pelo seletor — recarrega (ou reusa do cache) e re-renderiza
+// tudo que depende de CARTEIRA_DADOS.
+async function carteiraTrocarBase() {
+  const novaBase = document.getElementById('carteira-filtro-base').value;
+  if (!novaBase || novaBase === CARTEIRA_BASE_ATUAL) return;
+  document.getElementById('carteira-status-area').innerHTML = '<div class="loading-state"><div class="loading-spinner"></div><p>Carregando base selecionada...</p></div>';
+  try {
+    await carregarCarteiraDados(novaBase);
+    document.getElementById('carteira-status-area').innerHTML = '';
+    popularFiltroTagUnidadeCarteira();
+    popularFiltroUFCarteira();
+    popularFiltroAssociadaCarteira();
+    renderCarteiraOverview();
+  } catch (e) {
+    document.getElementById('carteira-status-area').innerHTML = `<div class="error-state"><strong>Erro ao trocar de base</strong>${escapeHtml(e.message)}</div>`;
+  }
+}
 
 // Mesma lógica do Churn: extrai o código do fim do Território e mapeia
 // pra cidade via MAPEAMENTO_TAGS (já usado em Produção).
@@ -9005,6 +9104,7 @@ function carteiraTemAtividade(r) {
 // Classificação. Calculado aqui, não confia na coluna do mês (que muda de
 // nome por aba, ex. "AGOSTO").
 function carteiraAptoBase(tm, classe) {
+  if (carteiraVisao12Meses) return tm >= 12;
   const limiar = CARTEIRA_LIMIAR_TM[(classe || '').trim().toUpperCase()];
   if (limiar === undefined) return false;
   return tm >= limiar;
@@ -9016,9 +9116,23 @@ function carteiraAptoBL(r) { return carteiraAptoBase(carteiraTM_BL(r), r['Classi
 // usado pela própria aba Carteira e também pelo Churn (pra cruzar CNPJ e
 // mostrar de quem é o cliente). Não mexe em nenhum elemento de tela, só
 // nos dados, pra poder ser chamado a partir de qualquer aba.
-async function carregarCarteiraDados() {
-  if (CARTEIRA_CARREGADA) return;
-  const url = '/api/sheets?action=values&sheet=' + encodeURIComponent(CARTEIRA_ABA) + '&planilha=carteira';
+async function carregarCarteiraDados(tituloForcado) {
+  let chave = tituloForcado || CARTEIRA_BASE_ATUAL;
+  if (!chave) {
+    const bases = await carteiraListarBases();
+    const padrao = carteiraEscolherBasePadrao(bases);
+    if (!padrao) throw new Error('Nenhuma base de carteira encontrada na planilha.');
+    chave = padrao.titulo;
+  }
+
+  if (CARTEIRA_DADOS_CACHE[chave]) {
+    CARTEIRA_DADOS = CARTEIRA_DADOS_CACHE[chave];
+    CARTEIRA_BASE_ATUAL = chave;
+    CARTEIRA_CARREGADA = true;
+    return;
+  }
+
+  const url = '/api/sheets?action=values&sheet=' + encodeURIComponent(chave) + '&planilha=carteira';
   const res = await fetch(url, { headers: authHeaders() });
   const json = await res.json();
   if (!res.ok) throw new Error(json.error || 'Falha ao carregar carteira');
@@ -9026,13 +9140,16 @@ async function carregarCarteiraDados() {
   if (rows.length < 2) throw new Error('Planilha sem dados.');
 
   const headers = rows[0];
-  CARTEIRA_DADOS = rows.slice(1).map(r => {
+  const dados = rows.slice(1).map(r => {
     const obj = {};
     // Alguns cabeçalhos vêm duplicados na planilha (ex.: FLG_CEP_CABEADO
     // aparece 2x) — mantém só a primeira ocorrência.
     headers.forEach((h, i) => { if (obj[h] === undefined) obj[h] = (r[i] || '').toString().trim(); });
     return obj;
   });
+  CARTEIRA_DADOS_CACHE[chave] = dados;
+  CARTEIRA_DADOS = dados;
+  CARTEIRA_BASE_ATUAL = chave;
   CARTEIRA_CARREGADA = true;
 }
 
@@ -9066,7 +9183,15 @@ function popularFiltroAssociadaCarteira() {
 }
 
 async function initCarteira() {
+  try {
+    const bases = await carteiraListarBases();
+    popularFiltroBaseCarteira(bases);
+  } catch (e) {
+    console.error('Não consegui listar as bases da carteira:', e);
+  }
+
   if (CARTEIRA_CARREGADA) {
+    document.getElementById('carteira-filtro-base').value = CARTEIRA_BASE_ATUAL;
     popularFiltroTagUnidadeCarteira();
     popularFiltroUFCarteira();
     popularFiltroAssociadaCarteira();
@@ -9081,6 +9206,7 @@ async function initCarteira() {
 
   try {
     await carregarCarteiraDados();
+    document.getElementById('carteira-filtro-base').value = CARTEIRA_BASE_ATUAL;
     document.getElementById('carteira-status-area').innerHTML = '';
     popularFiltroTagUnidadeCarteira();
     popularFiltroUFCarteira();
