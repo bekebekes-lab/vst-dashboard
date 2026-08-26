@@ -5257,9 +5257,14 @@ function switchTab(name, el) {
   // direto pelo console. Trava aqui de novo, contra o perfil real.
   const permitidas = getAbasPermitidas(USUARIO_ATUAL);
   if (!permitidas.includes(name)) {
-    if (name === 'gerencial') return;
-    const btnGerencial = document.querySelector('.tab-btn[onclick*="gerencial"]');
-    if (btnGerencial) switchTab('gerencial', btnGerencial);
+    // Cai pra primeira aba que o perfil de fato tem (sempre "gerencial" pra
+    // todo perfil hoje, mas perfis sem Gerencial — ex.: suporte, só
+    // Conectividade — não podem ficar tentando cair num 'gerencial' que
+    // também não é permitido pra eles).
+    const primeiraPermitida = permitidas[0];
+    if (!primeiraPermitida || name === primeiraPermitida) return;
+    const btnPrimeira = document.querySelector(`.tab-btn[onclick*="'${primeiraPermitida}'"]`);
+    if (btnPrimeira) switchTab(primeiraPermitida, btnPrimeira);
     return;
   }
   document.querySelectorAll('.tab-btn').forEach(t => t.classList.remove('active'));
@@ -5310,7 +5315,8 @@ const ABAS_PERMITIDAS_POR_PERFIL = {
   'gestor_beta':    ['gerencial', 'conectividade'],
   'supervisao':     ['gerencial', 'discadora', 'conectividade'],
   'supervisao_beta':['gerencial', 'producao', 'conectividade'],
-  'consultor':      ['gerencial', 'conectividade']
+  'consultor':      ['gerencial', 'conectividade'],
+  'suporte':        ['conectividade']
 };
 // Concessão pontual por usuário (usuarios_dashboard.acesso_extra_abas), além
 // do que o perfil já dá — usada pra liberar Churn/Carteira só pra pessoas
@@ -6788,13 +6794,18 @@ function aplicarPermissoes() {
     if (tab) btn.style.display = permitidas.includes(tab) ? '' : 'none';
   });
 
-  // Se a aba ativa não for permitida, redireciona para Gerencial
+  // Se a aba ativa não for permitida, redireciona pra primeira aba que o
+  // perfil de fato tem — sempre "gerencial" pra todo perfil hoje (é a
+  // primeira da lista de cada um), mas perfis sem Gerencial (ex.: suporte,
+  // só Conectividade) não podem cair num hardcoded 'gerencial' que nem
+  // aparece pra eles.
   const tabAtiva = document.querySelector('.tab-panel.active');
   if (tabAtiva) {
     const idAtiva = tabAtiva.id.replace('tab-', '');
     if (!permitidas.includes(idAtiva)) {
-      const btnGerencial = document.querySelector('.tab-btn[onclick*="gerencial"]');
-      switchTab('gerencial', btnGerencial);
+      const proximaAba = permitidas[0] || 'gerencial';
+      const btnProximaAba = document.querySelector(`.tab-btn[onclick*="'${proximaAba}'"]`);
+      switchTab(proximaAba, btnProximaAba);
     }
   }
 

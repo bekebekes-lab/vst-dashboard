@@ -87,15 +87,29 @@ export default async function handler(req, res) {
   const sheetId = PLANILHAS[planilha] || PLANILHAS.basecrm;
   if (!sheetId) return res.status(500).json({ error: `Planilha "${planilha || 'basecrm'}" não configurada no servidor` });
 
+  // Perfil de quem está chamando — usado tanto pro bloqueio de "suporte"
+  // abaixo quanto pra trava da Carteira e (mais embaixo) pro filtro de
+  // escopo; busca uma vez só e reaproveita nas três checagens.
+  const perfilRow = await getUsuarioDashboard(req, authUser.id);
+  const perfilUsuario = perfilRow?.perfil || 'consultor';
+
+  // 'suporte' só existe pra dar acesso à Conectividade/EV (dados via RLS
+  // própria, nunca por aqui) — não tem NENHUM uso legítimo de dado de
+  // planilha. Bloqueia explícito em vez de confiar só na aba escondida na
+  // UI: sem isso, getEscopoTravado() devolveria "sem trava" (perfil não
+  // reconhecido) e a chamada direta na API vazaria a base inteira.
+  if (perfilUsuario === 'suporte') {
+    return res.status(403).json({ error: 'Perfil sem acesso a dados de planilha' });
+  }
+
   // Carteira é admin-only na UI (aba só aparece pra perfil='admin') — trava
   // aqui também, explícito, em vez de confiar no efeito colateral de escopo
   // nulo (que também vale pra perfil sem escopo configurado, não só admin).
   // Exceção: usuários com 'carteira' em acesso_extra_abas (concessão pontual
   // por usuário, sem mudar o perfil nem a trava de escopo dele).
   if (planilha === 'carteira') {
-    const perfilRowCarteira = await getUsuarioDashboard(req, authUser.id);
-    const temAcessoExtra = (perfilRowCarteira?.acesso_extra_abas || []).includes('carteira');
-    if ((perfilRowCarteira?.perfil || 'consultor') !== 'admin' && !temAcessoExtra) {
+    const temAcessoExtra = (perfilRow?.acesso_extra_abas || []).includes('carteira');
+    if (perfilUsuario !== 'admin' && !temAcessoExtra) {
       return res.status(403).json({ error: 'Acesso restrito a administradores' });
     }
   }
@@ -121,9 +135,7 @@ export default async function handler(req, res) {
     // (escopo null) continua recebendo exatamente o que sempre recebeu,
     // sem passar por nenhuma linha de código nova abaixo.
     if (action === 'values' && response.ok && Array.isArray(data.values) && data.values.length > 0) {
-      const perfilRow = await getUsuarioDashboard(req, authUser.id);
-      const perfil = perfilRow?.perfil || 'consultor';
-      const escopo = getEscopoTravado(perfil, perfilRow);
+      const escopo = getEscopoTravado(perfilUsuario, perfilRow);
 
       if (escopo) {
         const header = data.values[0];
