@@ -621,7 +621,16 @@ def processar_pendentes(page):
                 (DOWNLOAD_DIR / f"falha_consulta_{item['id']}.html").write_text(page.content(), encoding="utf-8")
             except Exception:
                 pass
-            supa_atualizar(item["id"], {"status": "erro", "erro_mensagem": str(e)[:500]})
+            # Se o Supabase estiver instável (foi o caso real: timeout de
+            # leitura logo depois de um "Consultar Viabilidade" enviado com
+            # sucesso), essa própria chamada de fallback pode falhar de
+            # novo — sem essa proteção, a exceção sobe, derruba o script e
+            # as demais consultas pendentes da rodada nem chegam a ser
+            # tentadas. Loga e segue pro próximo item em vez de travar tudo.
+            try:
+                supa_atualizar(item["id"], {"status": "erro", "erro_mensagem": str(e)[:500]})
+            except Exception as e2:
+                log.error(f"  Também falhei ao marcar a consulta {item['id']} como erro: {e2}")
 
 
 def revisar_em_andamento(page):
