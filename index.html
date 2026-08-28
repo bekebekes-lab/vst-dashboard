@@ -6134,13 +6134,14 @@ function renderSimulador2() {
   // esgotar a capacidade — maximiza a QUANTIDADE de HCs declarados. Estágio de 0% é grátis.
   // Em paralelo, soma o peso de TODOS os disponíveis (sem limitar), para calcular a
   // "meta máxima se declarar todo mundo" — mostrando o tamanho do gap com a produção atual.
-  let capRestante = capLimitante, totalDisponivel = 0, pesoTotalDisponivel = 0;
+  let capRestante = capLimitante, totalDisponivel = 0;
   const sugestaoPorEstagio = [];
+  const disponivelPorEstagio = [];
   const cardsRampa = [];
   RAMPA_PRODUTIVIDADE.forEach((r, i) => {
     const disp = s2num('s2-rampa-disp-' + i);
     totalDisponivel += disp;
-    pesoTotalDisponivel += disp * r.pct;
+    disponivelPorEstagio[i] = disp;
     let sugerido;
     if (r.pct === 0) {
       sugerido = disp; // não consome capacidade
@@ -6163,11 +6164,8 @@ function renderSimulador2() {
   });
   document.getElementById('s2-rampa-cards').innerHTML = cardsRampa.join('');
 
-  let totalVendedores = 0, metaHcPonderada = 0;
-  RAMPA_PRODUTIVIDADE.forEach((r, i) => {
-    totalVendedores += sugestaoPorEstagio[i];
-    metaHcPonderada += sugestaoPorEstagio[i] * r.pct; // "produção equivalente" de HCs completos, ponderada pela rampa
-  });
+  let totalVendedores = 0;
+  RAMPA_PRODUTIVIDADE.forEach((r, i) => { totalVendedores += sugestaoPorEstagio[i]; });
 
   document.getElementById('s2-rampa-total').innerHTML =
     `<td>Total</td><td></td><td>${totalDisponivel.toLocaleString('pt-BR')}</td><td style="font-weight:700">${totalVendedores.toLocaleString('pt-BR')}</td>`;
@@ -6178,17 +6176,29 @@ function renderSimulador2() {
   document.getElementById('s2-cap-bl-sub').textContent = limitanteLabel === 'BL' ? '⚠ é o gargalo' : 'tem folga';
   document.getElementById('s2-cap-heads').textContent = `${totalDisponivel.toLocaleString('pt-BR')} / ${totalVendedores.toLocaleString('pt-BR')}`;
 
-  // Item 2.7-ii-d, "Importante": arredondamento de meta é sempre pra cima
-  // (4,50 → 5), independente da fração — nunca pra baixo/mais próximo.
-  const metaVozPonderada = Math.ceil(metaHcPonderada * metaVozUnit);
-  const metaBlPonderada  = Math.ceil(metaHcPonderada * metaBlUnit);
-  const metaSdPonderada  = Math.ceil(metaHcPonderada * metaSdUnit);
+  // Item 2.7-ii-d, "Importante": a meta é atribuída INDIVIDUALMENTE por
+  // vendedor/consultor, e o arredondamento pra cima (4,50 → 5) vale pra
+  // essa meta individual — não pro total agregado do estágio. Ou seja,
+  // arredonda o fator×unidade de 1 pessoa daquele estágio primeiro, só
+  // depois multiplica pela quantidade de gente nele e soma os estágios.
+  // (Arredondar só no total agregado, como antes, sub-estimava a meta —
+  // confirmado comparando com o cálculo manual linha a linha do Anexo.)
+  function metaPonderadaPorEstagio(qtdPorEstagio, unidade) {
+    let total = 0;
+    RAMPA_PRODUTIVIDADE.forEach((r, i) => {
+      total += qtdPorEstagio[i] * Math.ceil(r.pct * unidade);
+    });
+    return total;
+  }
+  const metaVozPonderada = metaPonderadaPorEstagio(sugestaoPorEstagio, metaVozUnit);
+  const metaBlPonderada  = metaPonderadaPorEstagio(sugestaoPorEstagio, metaBlUnit);
+  const metaSdPonderada  = metaPonderadaPorEstagio(sugestaoPorEstagio, metaSdUnit);
 
   // Meta que seria exigida se TODOS os HCs disponíveis (sem limitar pela capacidade) fossem declarados —
   // referência de quão longe a produção atual está de sustentar a rampa inteira.
-  const metaVozMaxTodos = Math.ceil(pesoTotalDisponivel * metaVozUnit);
-  const metaBlMaxTodos  = Math.ceil(pesoTotalDisponivel * metaBlUnit);
-  const metaSdMaxTodos  = Math.ceil(pesoTotalDisponivel * metaSdUnit);
+  const metaVozMaxTodos = metaPonderadaPorEstagio(disponivelPorEstagio, metaVozUnit);
+  const metaBlMaxTodos  = metaPonderadaPorEstagio(disponivelPorEstagio, metaBlUnit);
+  const metaSdMaxTodos  = metaPonderadaPorEstagio(disponivelPorEstagio, metaSdUnit);
 
   const pctMovel = metaVozPonderada > 0 ? (realizadoVoz / metaVozPonderada) * 100 : 0;
   const pctFixa  = metaBlPonderada  > 0 ? (realizadoBl  / metaBlPonderada)  * 100 : 0;
