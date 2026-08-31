@@ -2691,8 +2691,15 @@ function ehProdutoSolucaoDigital(produto) {
 }
 
 function getGrupoKey(g, produto, solicitacao) {
-  if (ehProdutoSolucaoDigital(produto)) return "SERV. DIGITAIS";
   const gu = (g || '').trim().toUpperCase().replace(/[‐-―]/g, '-'); // normaliza travessão/en-dash para hífen
+  const produtoNorm = (produto || '').trim().toUpperCase();
+  // Claro Monitor vem duplicado na base: uma linha no grupo "SVA MÓVEL" e
+  // outra em "SD - Serviço Digital" pra mesma ativação — só a segunda deve
+  // contar como Solução Digital, senão dobra o número. A da SVA MÓVEL não
+  // cai em nenhum balde (nem SD, nem os grupos abaixo, que não batem com
+  // "SVA MÓVEL" mesmo).
+  const claroMonitorDuplicadoSvaMovel = produtoNorm === 'CLARO MONITOR' && (gu === 'SVA MOVEL' || gu === 'SVA MÓVEL');
+  if (!claroMonitorDuplicadoSvaMovel && ehProdutoSolucaoDigital(produto)) return "SERV. DIGITAIS";
   if (gu === "GROSS") return "GROSS";
   if (gu === "VOZ - RENOVAÇÃO") return "RENOVAÇÃO";
   if (gu === "NET PJ - VIRTUA") return "BL";
