@@ -1451,7 +1451,13 @@
           <div class="dropdown-content" id="dd-content-f-equipe"></div>
         </div>
       </div>
-      <div class="filter-group"><label>Consultor</label><select id="f-consultor" onchange="render()"><option>Todos</option></select></div>
+      <div class="filter-group" style="min-width:190px">
+        <label>Consultor</label>
+        <div class="custom-dropdown" id="dd-f-consultor">
+          <button class="dropdown-btn" onclick="toggleDropdown('dd-content-f-consultor')">Todos <span>&#9660;</span></button>
+          <div class="dropdown-content" id="dd-content-f-consultor"></div>
+        </div>
+      </div>
       <div class="filter-group"><label>Tag / Unidade</label><select id="f-tag" onchange="render()"><option>Todas</option></select></div>
       <div class="filter-group filter-group-full-mobile" style="min-width:220px">
         <label>Buscar (CNPJ, razão social, vinculado ou nº)</label>
@@ -2821,7 +2827,8 @@ function buildFilters() {
   _fEquipeItensEscopo = null; // recalculado por aplicarPermissoes() se o perfil tiver trava
   popularDropdownFGestor(_fGestorItens);
   popularDropdownFEquipe(_fEquipeItens);
-  fillSelect('f-consultor', ['Todos', ...[...consultores].sort()]);
+  _fConsultorItens = [...consultores].sort();
+  popularDropdownFConsultor(_fConsultorItens);
   fillSelect('f-tag', ['Todas', ...[...tags].sort()]);
 }
 
@@ -2863,7 +2870,8 @@ function atualizarCascataGerencial() {
       if (r['TAGS ATIVIDADE']) tagsSet.add(r['TAGS ATIVIDADE']);
     }
   });
-  fillSelect('f-consultor', ['Todos', ...[...consultoresSet].sort()]);
+  _fConsultorItens = [...consultoresSet].sort();
+  popularDropdownFConsultor(_fConsultorItens);
   fillSelect('f-tag', ['Todas', ...[...tagsSet].sort()]);
 }
 
@@ -2914,24 +2922,15 @@ function fillSelect(id, opts) {
   if (opts.includes(cur)) sel.value = cur;
 }
 
-// Trava o select de Consultor no nome do perfil 'consultor'. Faz match
-// ignorando maiúsc/minúsc contra as opções já populadas (dados reais do CRM);
-// se não achar nenhuma (ex.: consultor novo, ainda sem pedido nenhum na base),
-// cria a opção com o valor cru — nunca deixa o select "vazio" (select.value = X
-// falha em silêncio se não existir <option value="X">, e isso zerava os dados
-// de qualquer consultor cujo nome não batesse 100% com a base).
-function travarSelectConsultor(ref) {
-  const sel = document.getElementById('f-consultor');
-  if (!sel || !ref) return;
-  const opts = [...sel.options];
-  let match = opts.find(o => o.value === ref) || opts.find(o => o.value.toUpperCase() === ref.toUpperCase());
-  if (!match) {
-    match = document.createElement('option');
-    match.value = ref;
-    match.textContent = ref;
-    sel.appendChild(match);
-  }
-  sel.value = match.value;
+let _fConsultorItens = [];
+
+function popularDropdownFConsultor(itens) {
+  window._ddOnChange_dd_content_f_consultor = function(){
+    atualizarBotaoDropdown('dd-content-f-consultor','#dd-f-consultor .dropdown-btn');
+    render();
+  };
+  ddRegisterCallback('dd-content-f-consultor', window._ddOnChange_dd_content_f_consultor);
+  popularDropdownGenerico('dd-content-f-consultor', itens, window._ddOnChange_dd_content_f_consultor, '#dd-f-consultor .dropdown-btn');
 }
 
 function onFilterChange(level) {
@@ -3057,9 +3056,10 @@ function render() {
 
   // Proteção: garante que consultor nunca veja dados de outros
   if (USUARIO_ATUAL?.perfil === 'consultor' && USUARIO_ATUAL.consultor_ref) {
-    const selC = document.getElementById('f-consultor');
-    if (selC && selC.value.toUpperCase() !== USUARIO_ATUAL.consultor_ref.toUpperCase()) {
-      travarSelectConsultor(USUARIO_ATUAL.consultor_ref);
+    const consultorSelAtual = getCheckedValuesDd('dd-content-f-consultor');
+    const refUpper = USUARIO_ATUAL.consultor_ref.toUpperCase();
+    if (consultorSelAtual.length !== 1 || consultorSelAtual[0].toUpperCase() !== refUpper) {
+      travarDropdownMulti('dd-content-f-consultor', '#dd-f-consultor .dropdown-btn', [USUARIO_ATUAL.consultor_ref]);
     }
     ['f-estado','f-tag'].forEach(id => {
       const sel = document.getElementById(id);
@@ -3072,7 +3072,7 @@ function render() {
   const estado      = document.getElementById('f-estado').value;
   const gestorSel   = getCheckedValuesDd('dd-content-f-gestor'); // [] = Todos
   const equipeSel   = getCheckedValuesDd('dd-content-f-equipe'); // [] = Todas
-  const consultor   = document.getElementById('f-consultor').value;
+  const consultorSel = getCheckedValuesDd('dd-content-f-consultor'); // [] = Todos
   const tag         = document.getElementById('f-tag').value;
   const buscaRaw    = (document.getElementById('f-busca')?.value || '').trim();
   const buscaLower  = buscaRaw.toLowerCase();
@@ -3102,7 +3102,7 @@ function render() {
     if (estado    !== 'Todos' && est  !== estado)         return;
     if (gestorSel.length > 0  && !gestorSel.includes(ges)) return;
     if (equipeSel.length > 0  && !equipeSel.includes(eq))  return;
-    if (consultor !== 'Todos' && cons.toUpperCase() !== consultor.toUpperCase()) return;
+    if (consultorSel.length > 0 && !consultorSel.some(c => c.toUpperCase() === cons.toUpperCase())) return;
     if (tag       !== 'Todas' && rtag !== tag)            return;
     if (!linhaBateBusca(r, buscaLower, buscaDigits))      return;
 
@@ -3331,7 +3331,8 @@ function setDrillSort(col) {
 // ─── filtros por clique ─────────────────────────────────────────────────────
 function filterByConsultor(name) {
   // zeramos só o consultor — mantém estado/gestor/equipe/tag
-  document.getElementById('f-consultor').value = name;
+  _ddState['dd-content-f-consultor'] = new Set([name]);
+  popularDropdownFConsultor(_fConsultorItens.length ? _fConsultorItens : [name]);
   render();
 }
 
@@ -3340,7 +3341,8 @@ function filterByEquipe(equipe) {
   _ddState['dd-content-f-equipe'] = new Set([equipe]);
   const listaBase = (_fEquipeItensEscopo && _fEquipeItensEscopo.length > 0) ? _fEquipeItensEscopo : _fEquipeItens;
   popularDropdownFEquipe(listaBase.length ? listaBase : [equipe]);
-  document.getElementById('f-consultor').value = 'Todos';
+  _ddState['dd-content-f-consultor'] = null;
+  atualizarBotaoDropdown('dd-content-f-consultor', '#dd-f-consultor .dropdown-btn');
   render();
 }
 
@@ -3357,7 +3359,7 @@ function drillFila(categoria, fila) {
   const estado    = document.getElementById('f-estado').value;
   const gestorSel = getCheckedValuesDd('dd-content-f-gestor'); // [] = Todos
   const equipeSel = getCheckedValuesDd('dd-content-f-equipe'); // [] = Todas
-  const consultor = document.getElementById('f-consultor').value;
+  const consultorSel = getCheckedValuesDd('dd-content-f-consultor'); // [] = Todos
   const tag       = document.getElementById('f-tag').value;
   const buscaRaw    = (document.getElementById('f-busca')?.value || '').trim();
   const buscaLower  = buscaRaw.toLowerCase();
@@ -3378,7 +3380,7 @@ function drillFila(categoria, fila) {
     if (estado    !== 'Todos' && est  !== estado)         return false;
     if (gestorSel.length > 0  && !gestorSel.includes(ges)) return false;
     if (equipeSel.length > 0  && !equipeSel.includes(eq))  return false;
-    if (consultor !== 'Todos' && cons.toUpperCase() !== consultor.toUpperCase()) return false;
+    if (consultorSel.length > 0 && !consultorSel.some(c => c.toUpperCase() === cons.toUpperCase())) return false;
     if (tag       !== 'Todas' && rtag !== tag)            return false;
     if (!linhaBateBusca(r, buscaLower, buscaDigits))      return false;
     if (filaR !== fila) return false;
@@ -3413,7 +3415,7 @@ function drillFila(categoria, fila) {
   if (estado    !== 'Todos') ctxParts.push(estado);
   if (gestorSel.length > 0)  ctxParts.push(gestorSel.join(', '));
   if (equipeSel.length > 0)  ctxParts.push(equipeSel.join(', '));
-  if (consultor !== 'Todos') ctxParts.push(consultor);
+  if (consultorSel.length > 0) ctxParts.push(consultorSel.join(', '));
   const ctxLabel = escapeHtml(ctxParts.join(' › '));
 
   const breadcrumb = `
@@ -4471,14 +4473,19 @@ function popularDropdownGenerico(contId, itens, onChangeFn, labelBotaoId) {
 
   // Lê estado persistente — null = "Todos" (nenhum selecionado individualmente)
   if (!_ddState[contId]) _ddState[contId] = null; // null = Todos
+
+  // NÃO descarta seleção que não aparece na lista atual de itens (ex.: um
+  // gestor/equipe/consultor sem nenhum lançamento no período escolhido) —
+  // descartar automaticamente fazia cair em "Todos" (sem filtro nenhum) só
+  // porque a base daquele mês não tinha registro pra quem estava
+  // selecionado, quando o certo é continuar filtrando e mostrar zero.
+  // Só exibe esse(s) item(ns) extra(s) na lista pra continuar visível/
+  // desmarcável, mesmo sem aparecer nos dados desse período.
+  let itensExibidos = itens;
   if (_ddState[contId] !== null) {
-    // Remove seleções antigas que não existem mais na lista atual de itens
-    // (ex.: opção que deixou de ter dados com o filtro/status atual)
     const itensSet = new Set(itens);
-    for (const v of [...(_ddState[contId])]) {
-      if (!itensSet.has(v)) _ddState[contId].delete(v);
-    }
-    if (_ddState[contId].size === 0) _ddState[contId] = null;
+    const extras = [...(_ddState[contId])].filter(v => !itensSet.has(v));
+    if (extras.length) itensExibidos = [...itens, ...extras].sort();
   }
   const sel = _ddState[contId]; // Set ou null
   const todosChecked = sel === null;
@@ -4494,13 +4501,14 @@ function popularDropdownGenerico(contId, itens, onChangeFn, labelBotaoId) {
         onchange="toggleTodosDropdown('${contId}', this, '${labelBotaoId}', _ddOnChange_${contId.replace(/-/g,'_')})">
       Todos
     </label>` +
-    itens.map(item => {
+    itensExibidos.map(item => {
       const esc = item.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
       const checked = sel !== null && sel.has(item) ? 'checked' : '';
-      return `<label class="dropdown-item">
+      const semDadoNoPeriodo = !itens.includes(item);
+      return `<label class="dropdown-item"${semDadoNoPeriodo ? ' style="opacity:0.6"' : ''}>
         <input type="checkbox" value="${esc}" ${checked}
           onchange="onDdItemChange('${contId}', this, '${labelBotaoId}', _ddOnChange_${contId.replace(/-/g,'_')})">
-        ${item}
+        ${item}${semDadoNoPeriodo ? ' <span style="font-size:11px;">(sem dado neste período)</span>' : ''}
       </label>`;
     }).join('');
 
@@ -6849,7 +6857,8 @@ function aplicarPermissoes() {
     if (!equipesLock || equipesLock.length === 0) {
       popularDropdownFEquipe(equipesArr);
     }
-    fillSelect('f-consultor', ['Todos', ...[...consultores].sort()]);
+    _fConsultorItens = [...consultores].sort();
+    popularDropdownFConsultor(_fConsultorItens);
     fillSelect('f-tag', ['Todas', ...[...tags].sort()]);
   };
 
@@ -6861,12 +6870,8 @@ function aplicarPermissoes() {
       travarDropdownMulti('dd-content-f-gestor', '#dd-f-gestor .dropdown-btn', []);
       travarDropdownMulti('dd-content-f-equipe', '#dd-f-equipe .dropdown-btn', []);
       // Trava o filtro de consultor no próprio nome
-      const selC = document.getElementById('f-consultor');
-      if (selC && USUARIO_ATUAL.consultor_ref) {
-        travarSelectConsultor(USUARIO_ATUAL.consultor_ref);
-        selC.disabled = true;
-        selC.style.opacity = '0.5';
-        selC.style.pointerEvents = 'none';
+      if (USUARIO_ATUAL.consultor_ref) {
+        travarDropdownMulti('dd-content-f-consultor', '#dd-f-consultor .dropdown-btn', [USUARIO_ATUAL.consultor_ref]);
       }
       render();
     } else if ((p === 'gestor_macro' || p === 'gestor_macro3' || p === 'gestor' || p === 'gestor_beta') && ((USUARIO_ATUAL.gestores_ref || []).length > 0 || USUARIO_ATUAL.gestor_ref)) {
@@ -7199,7 +7204,7 @@ const DRAWER_CONFIG_POR_ABA = {
         { el: document.getElementById('f-estado')?.closest('.filter-group') },
         { el: document.getElementById('dd-f-gestor')?.closest('.filter-group') },
         { el: document.getElementById('dd-f-equipe')?.closest('.filter-group') },
-        { el: document.getElementById('f-consultor')?.closest('.filter-group') },
+        { el: document.getElementById('dd-f-consultor')?.closest('.filter-group') },
         { el: document.getElementById('f-tag')?.closest('.filter-group') },
       ].filter(x => x.el),
     }],
