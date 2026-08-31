@@ -5364,87 +5364,6 @@ supa.auth.onAuthStateChange((event, session) => {
   }
 });
 
-// ─── DETECÇÃO DE SCHEMA ──────────────────────────────────────────────────────
-// Verifica se a coluna "periodo" já existe na tabela metas_carteira
-// Resultado em cache para não repetir a verificação
-let _schemaPeriodoOk = null; // null = não verificado, true/false = resultado
-
-async function verificarSchemaPeriodo() {
-  if (_schemaPeriodoOk !== null) return _schemaPeriodoOk;
-  try {
-    // Testa especificamente se a coluna periodo existe
-    const { data, error } = await supa
-      .from('metas_carteira')
-      .select('periodo')
-      .limit(1);
-    // Se não der erro, a coluna existe
-    _schemaPeriodoOk = !error;
-    if (error) console.log('Coluna periodo não encontrada:', error.message);
-  } catch(e) {
-    _schemaPeriodoOk = false;
-  }
-  if (!_schemaPeriodoOk) mostrarAlertaMigracao();
-  return _schemaPeriodoOk;
-}
-
-function mostrarAlertaMigracao() {
-  // Só exibe uma vez por sessão
-  if (document.getElementById('migration-banner')) return;
-  const sql = `-- Banco já migrado ✅
--- Estrutura atual da tabela metas_carteira:
---   marcacao   → tag da unidade (ex: #1EWV)
---   nome_unidade → nome legível
---   qtd_linhas → meta de linhas
---   por        → id do usuário que atualizou
---   _em        → timestamp da atualização
---   periodo    → aba do Google Sheets (ex: BaseCRM 042026)
---
--- Constraint única: UNIQUE (marcacao, periodo)
--- Tudo certo! Nenhuma ação necessária.`;
-
-  const banner = document.createElement('div');
-  banner.id = 'migration-banner';
-  banner.style.cssText = `
-    position:fixed; bottom:16px; right:16px; z-index:9998;
-    background:#1e293b; color:#f8fafc; border-radius:12px;
-    padding:16px 18px; max-width:480px; box-shadow:0 8px 32px rgba(0,0,0,0.4);
-    font-family:'DM Sans',sans-serif; font-size:13px; line-height:1.5;
-  `;
-  banner.innerHTML = `
-    <div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:10px">
-      <span style="font-size:20px">⚠️</span>
-      <div>
-        <strong style="color:#fbbf24;display:block;margin-bottom:2px">Migração de banco necessária</strong>
-        A coluna <code style="background:#334155;padding:1px 5px;border-radius:4px">periodo</code> ainda não existe na tabela
-        <code style="background:#334155;padding:1px 5px;border-radius:4px">metas_carteira</code>.
-        As metas serão salvas sem separação por mês até a migração ser executada.
-      </div>
-    </div>
-    <pre id="migration-sql" style="background:#0f172a;padding:10px;border-radius:6px;font-size:11px;
-      overflow-x:auto;white-space:pre;margin-bottom:10px;color:#86efac;line-height:1.6">${sql}</pre>
-    <div style="display:flex;gap:8px;justify-content:flex-end">
-      <button onclick="copiarSQLMigracao()" style="background:#3b82f6;color:#fff;border:none;
-        border-radius:6px;padding:6px 14px;font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif">
-        📋 Copiar SQL
-      </button>
-      <button onclick="document.getElementById('migration-banner').remove()" style="background:#475569;
-        color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:12px;cursor:pointer;
-        font-family:'DM Sans',sans-serif">
-        Fechar
-      </button>
-    </div>`;
-  document.body.appendChild(banner);
-}
-
-function copiarSQLMigracao() {
-  const el = document.getElementById('migration-sql');
-  if (!el) return;
-  navigator.clipboard.writeText(el.textContent.trim()).then(() => {
-    const btn = el.nextElementSibling?.querySelector('button');
-    if (btn) { btn.textContent = '✅ Copiado!'; setTimeout(() => btn.textContent = '📋 Copiar SQL', 2000); }
-  });
-}
-
 // ─── UTILITÁRIO: período ativo ────────────────────────────────────────────────
 function getPeriodoAtivo() {
   const sel = document.getElementById('mes-selector');
@@ -5495,13 +5414,13 @@ window.addEventListener('beforeunload', () => {
         nome_unidade: MAPEAMENTO_TAGS[tag] || tag,
         qtd_linhas:   qtd
       };
-      if (_schemaPeriodoOk) row.periodo = periodo;
+      row.periodo = periodo;
       rows.push(row);
     }
   });
   if (!rows.length) return;
 
-  const conflict = _schemaPeriodoOk ? 'marcacao,periodo' : 'marcacao';
+  const conflict = 'marcacao,periodo';
   fetch(`${SUPA_URL}/rest/v1/metas_carteira?on_conflict=${encodeURIComponent(conflict)}`, {
     method: 'POST',
     keepalive: true,
@@ -5546,12 +5465,10 @@ async function carregarMetasDoBanco(periodo) {
   const grid = document.getElementById('sim-metas-grid');
   if (grid && grid.children.length === 0) buildMetasGrid();
 
-  const temPeriodo = await verificarSchemaPeriodo();
-
-  let query = supa.from('metas_carteira').select('marcacao,qtd_linhas');
-  if (temPeriodo) query = query.eq('periodo', periodo);
-
-  const { data, error } = await query;
+  const { data, error } = await supa
+    .from('metas_carteira')
+    .select('marcacao,qtd_linhas')
+    .eq('periodo', periodo);
 
   // Zera todos os campos antes de preencher
   document.querySelectorAll('#sim-metas-grid input').forEach(inp => { inp.value = 0; });
@@ -5606,30 +5523,27 @@ async function salvarMetasNoBanco() {
     return;
   }
 
-  const temPeriodo = await verificarSchemaPeriodo();
-  const periodo    = getPeriodoAtivo();
+  const periodo = getPeriodoAtivo();
   const rows = [];
 
   document.querySelectorAll('#sim-metas-grid input').forEach(inp => {
     const tag = inp.dataset.tag;
     const qtd = parseFloat(inp.value) || 0;
     if (!tag) return;
-    const row = {
+    rows.push({
       marcacao:      tag,
       nome_unidade:  MAPEAMENTO_TAGS[tag] || tag,
-      qtd_linhas:    qtd
+      qtd_linhas:    qtd,
+      periodo
       // Nota: colunas "por" e "_em" são omitidas intencionalmente.
       // O campo "_em" começa com underscore e o PostgREST do Supabase
       // não aceita esse padrão via REST API. O campo "por" é opcional.
-    };
-    if (temPeriodo) row.periodo = periodo;
-    rows.push(row);
+    });
   });
 
-  const conflito = temPeriodo ? 'marcacao,periodo' : 'marcacao';
   const { error } = await supa
     .from('metas_carteira')
-    .upsert(rows, { onConflict: conflito });
+    .upsert(rows, { onConflict: 'marcacao,periodo' });
   if (error) throw new Error(error.message);
 }
 
