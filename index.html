@@ -2688,8 +2688,16 @@ const PRODUTOS_SOLUCAO_DIGITAL = [
   'BLIP GO - BÁSICO', 'BLIP GO - INTERMEDIÁRIO', 'BLIP GO - AVANÇADO',
 ];
 const _produtosSDSet = new Set(PRODUTOS_SOLUCAO_DIGITAL.map(p => p.toUpperCase()));
+// Famílias de produto cujo nome exato na base varia (plano/pacote/versão
+// que o Anexo I não necessariamente lista igual) — casa por "contém" em vez
+// de precisar acertar o nome inteiro. Ex.: "Microsoft 365 Business Basic"
+// nunca ia bater contra os planos individuais do Anexo (Sharepoint, Teams,
+// Exchange...), mas contém "MICROSOFT" e é SD de qualquer forma.
+const PRODUTOS_SD_CONTEM = ['MICROSOFT', 'CONSTRUTOR DE SITES', 'STARBEM', 'GOOGLE WORKSPACE', 'HOSPEDAGEM DE SITES'];
 function ehProdutoSolucaoDigital(produto) {
-  return _produtosSDSet.has((produto || '').trim().toUpperCase());
+  const norm = (produto || '').trim().toUpperCase();
+  if (_produtosSDSet.has(norm)) return true;
+  return PRODUTOS_SD_CONTEM.some(termo => norm.includes(termo));
 }
 
 function getGrupoKey(g, produto, solicitacao) {
