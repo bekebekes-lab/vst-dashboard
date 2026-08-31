@@ -2658,15 +2658,50 @@ function normalizarNomeEquipe(s) {
     .replace(/\s+/g, ' ');
 }
 
-function getGrupoKey(g) {
-  const gu = (g || '').trim().toUpperCase().replace(/[\u2010-\u2015]/g, '-'); // normaliza travessão/en-dash para hífen
+const PRODUTOS_SOLUCAO_DIGITAL = [
+  'MOTOTALK BASICO', 'MOTOTALK BUSINESS', 'MOTOTALK ENTERPRISE',
+  'CLARO MONITOR', 'MCAFEE',
+  'POWER BI PRO', 'ONEDRIVE FOR BUSINESS', 'SHAREPOINT (PLAN 1)', 'SHAREPOINT PLAN 1',
+  'EXCHANGE ONLINE KIOSK', 'EXCHANGE ONLINE (PLAN 1)', 'EXCHANGE ONLINE PLAN 1',
+  'EXCHANGE ONLINE (PLAN 2)', 'EXCHANGE ONLINE PLAN 2',
+  'TEAMS ESSENCIAL', 'PROJECT ONLINE ESSENTIALS', 'PROJECT PLAN 1',
+  'MICROSOFT DEFENDER FOR OFFICE 365 (PLAN 1)', 'MICROSOFT DEFENDER FOR OFFICE 365 PLAN 1',
+  'MICROSOFT DEFENDER FOR ENDPOINT (PLAN 1)', 'MICROSOFT DEFENDER FOR ENDPOINT PLAN 1',
+  'MICROSOFT DEFENDER FOR IDENTITY (PLAN 1)', 'MICROSOFT DEFENDER FOR IDENTITY PLAN 1',
+  'CONSTRUTOR DE SITES PESSOAL', 'CONSTRUTOR DE SITES PROFISSIONAL',
+  'HOSPEDAGEM DE SITES - PLANO PESSOAL', 'HOSPEDAGEM DE SITES - PLANO PROFISSIONAL',
+  'HOSPEDAGEM DE SITES - PLANO EMPRESARIAL',
+  'GOOGLE WORKSPACE BUSINESS STARTER', 'GOOGLE WORKSPACE BUSINESS STANDARD',
+  'GOOGLE WORKSPACE BUSINESS PLUS', 'GOOGLE WORKSPACE ENTERPRISE PLUS',
+  'GOOGLE WORKSPACE ENTERPRISE STANDARD',
+  'STARBEM BASIC', 'STARBEM BRONZE', 'STARBEM BRONZE C/ DEPENDENTE',
+  'STARBEM SILVER', 'STARBEM SILVER C/ DEPENDENTE', 'STARBEM PREMIUM',
+  'STARBEM BASIC 5', 'STARBEM BASIC 10', 'STARBEM BASIC 15', 'STARBEM BASIC 20',
+  'STARBEM BRONZE 5', 'STARBEM BRONZE 10', 'STARBEM BRONZE 15', 'STARBEM BRONZE 20',
+  'STARBEM SILVER 5', 'STARBEM SILVER 10', 'STARBEM SILVER 15', 'STARBEM SILVER 20',
+  'ERP GESTAO DE NEGOCIOS',
+  'SITE PRONTO', 'OFFICE 365', 'DOMINIO', 'PROTECAO DIGITAL ANTIVIRUS',
+  'FIREWALL GERENCIADO SEM FIO', 'WIFI SEGURO', 'FIREWALL GERENCIADO COM FIO', 'WAF',
+  'CLOUD SERVER MAIS', 'EDR', 'SMART VIEW', 'ANTI-DDOS',
+  'BLIP GO',
+];
+const _produtosSDSet = new Set(PRODUTOS_SOLUCAO_DIGITAL.map(p => p.toUpperCase()));
+function ehProdutoSolucaoDigital(produto) {
+  return _produtosSDSet.has((produto || '').trim().toUpperCase());
+}
+
+function getGrupoKey(g, produto, solicitacao) {
+  if (ehProdutoSolucaoDigital(produto)) return "SERV. DIGITAIS";
+  const gu = (g || '').trim().toUpperCase().replace(/[‐-―]/g, '-'); // normaliza travessão/en-dash para hífen
   if (gu === "GROSS") return "GROSS";
   if (gu === "VOZ - RENOVAÇÃO") return "RENOVAÇÃO";
   if (gu === "NET PJ - VIRTUA") return "BL";
-  if (gu === "VOZ - TRANF. TITULARIDADE" || gu === "VOZ - TRANSF. TITULARIDADE") return "TITULARIDADE";
-  // A base trazia esse produto como "SVA FIXA"; agora vem como "SD - Serviço
-  // Digital" (ou variações de acentuação/hífen). Aceitamos ambas as formas.
-  if (gu === "SVA FIXA" || gu.startsWith("SD ") || gu.startsWith("SD-") || gu.includes("SERVIÇO DIGITAL") || gu.includes("SERVICO DIGITAL")) return "SERV. DIGITAIS";
+  if (gu === "VOZ - TRANF. TITULARIDADE" || gu === "VOZ - TRANSF. TITULARIDADE") {
+    // TRANSF. TITULAR PJ / PJ não conta no número — pedido explícito, exclui
+    // essa solicitação específica mesmo estando no grupo de Titularidade.
+    if ((solicitacao || '').trim().toUpperCase() === 'TRANSF. TITULAR PJ / PJ') return null;
+    return "TITULARIDADE";
+  }
   return null;
 }
 
@@ -3096,6 +3131,8 @@ function render() {
     const qtd  = parseInt(r['QUANTIDADE']) || 1;
     const fila = r['FILA'] || 'Sem Status';
     const grupo = r['GRUPO'] || '';
+    const produto = r['PRODUTO'] || '';
+    const solicitacao = r['SOLICITACAO'] || '';
     const rec  = gerReceitaLinha(r);
 
     if (!linhaDentroDoEscopo(r, escopo, eq)) return;
@@ -3109,7 +3146,7 @@ function render() {
     totalRows++;
     if (buscaLower) linhasBusca.push(r);
     nConsSet.add(cons);
-    const key = getGrupoKey(grupo);
+    const key = getGrupoKey(grupo, produto, solicitacao);
     if (!key) return;
 
     metrics[key].total += qtd;
@@ -3373,8 +3410,10 @@ function drillFila(categoria, fila) {
     const cons = r['PROPRIETÁRIO DO PEDIDO'] || 'Sem Consultor';
     const rtag = r['TAGS ATIVIDADE'] || '';
     const grupo = r['GRUPO'] || '';
+    const produto = r['PRODUTO'] || '';
+    const solicitacao = r['SOLICITACAO'] || '';
     const filaR = r['FILA'] || 'Sem Status';
-    const grupoKey = getGrupoKey(grupo);
+    const grupoKey = getGrupoKey(grupo, produto, solicitacao);
 
     if (!linhaDentroDoEscopo(r, escopo, eq)) return false;
     if (estado    !== 'Todos' && est  !== estado)         return false;
@@ -5646,6 +5685,7 @@ function s2PuxarDadosSheet() {
     const tagRaw = r['TAGS ATIVIDADE'] || '';
     const tag   = MAPEAMENTO_TAGS[tagRaw] ? tagRaw : 'Sem Tag';
     const grupo = r['GRUPO'] || '';
+    const produto = r['PRODUTO'] || '';
     const fila  = r['FILA'] || '';
     const qtd   = parseInt(r['QUANTIDADE']) || 1;
     const valor = parseFloat((r['VALOR UNIT'] || '0').toString().replace(',', '.')) || 0;
@@ -5657,7 +5697,7 @@ function s2PuxarDadosSheet() {
     // Produtividade — item 2.7-iii-a-3 — é apurada no total, não por unidade).
     // Diferente de VIRTUA: aqui é só o valor da venda, sem multiplicar por
     // quantidade (VALOR UNIT já é a receita vendida, não um valor por item).
-    if (getGrupoKey(grupo) === 'SERV. DIGITAIS') {
+    if (getGrupoKey(grupo, produto) === 'SERV. DIGITAIS') {
       recSDCents += recCents;
     }
 
