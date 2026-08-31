@@ -6485,29 +6485,16 @@ async function trocarMes() {
     _metasSujas = false;
   }
 
-  // Reseta filtros livres para evitar valores inválidos na nova base
-  const p = USUARIO_ATUAL?.perfil;
-  const filtrosLivres = [];
-  if (!['consultor'].includes(p)) filtrosLivres.push('f-consultor');
-  if (!['consultor','gestor','gestor_beta','supervisao','supervisao_beta'].includes(p)) filtrosLivres.push('f-tag');
-
-  filtrosLivres.forEach(id => {
-    const sel = document.getElementById(id);
-    if (sel && !sel.disabled) sel.selectedIndex = 0;
-  });
-
   // Busca livre é sempre por período — não faz sentido manter o termo ao trocar de mês
   const buscaEl = document.getElementById('f-busca');
   if (buscaEl) buscaEl.value = '';
 
-  // Reseta os dropdowns de checkbox (Gestor/Equipe) só para perfis sem trava fixa
-  if (!['gestor_macro','gestor_macro2','gestor_macro3','gestor','gestor_beta'].includes(p)) {
-    limparDropdownMulti('dd-content-f-gestor', '#dd-f-gestor .dropdown-btn');
-  }
-  if (p !== 'supervisao' && p !== 'supervisao_beta') {
-    limparDropdownMulti('dd-content-f-equipe', '#dd-f-equipe .dropdown-btn');
-  }
-
+  // Os demais filtros (Consultor/Tag/Gestor/Equipe) NÃO são mais resetados
+  // aqui — fillSelect()/popularDropdownGenerico() (chamados de dentro de
+  // loadData() pra repovoar as opções com os dados do novo período) já
+  // preservam a seleção atual quando ela ainda existe na base nova, e
+  // descartam sozinhos só o que não existe mais (evita o "valor inválido
+  // na nova base" sem precisar zerar tudo a cada troca de mês).
   loadData();
   // Aguarda dados carregarem, depois recarrega metas do novo período
   setTimeout(() => carregarMetasDoBanco(getPeriodoAtivo()), 900);
