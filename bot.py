@@ -113,7 +113,7 @@ def preencher_vaadin_date(page, seletor: str, valor: str, label: str = ""):
             el = page.locator(sel).first
             el.wait_for(state="visible", timeout=5_000)
             el.click()
-            el.triple_click()
+            el.click(click_count=3)
             el.type(valor, delay=80)
             page.keyboard.press("Escape")
             time.sleep(0.3)
@@ -149,7 +149,7 @@ def selecionar_vaadin_combo(page, seletor: str, valor: str):
         el.wait_for(state="visible", timeout=10_000)
         el.click()
         time.sleep(0.5)
-        el.triple_click()
+        el.click(click_count=3)
         page.keyboard.press('Control+a')
         page.keyboard.press('Delete')
         time.sleep(0.3)
@@ -306,11 +306,17 @@ def baixar_relatorio(data_inicio_dt: date, data_fim_dt: date) -> Path:
         # causa real do mês inteiro vir incompleto (o filtro nunca era
         # aplicado de fato, só preenchido visualmente nos campos).
         log.info("Clicando em 'Pesquisar' pra aplicar o filtro de datas...")
+        page.keyboard.press("Escape")
+        time.sleep(0.5)
         try:
             page.locator(SEL_PESQUISAR).first.click(timeout=10_000)
             log.info("  'Pesquisar' clicado.")
         except Exception as e:
-            log.warning(f"  Falha ao clicar 'Pesquisar': {e}")
+            # Crítico: sem isso, a exportação sai em cima do filtro antigo
+            # (foi exatamente a causa do mês incompleto) — falha alto em vez
+            # de seguir silenciosamente com dado errado.
+            page.screenshot(path=str(DOWNLOAD_DIR / "erro_pesquisar.png"))
+            raise RuntimeError(f"Falha ao clicar 'Pesquisar' — abortando pra não gerar exportação com filtro errado: {e}")
         time.sleep(2)
         page.screenshot(path=str(DOWNLOAD_DIR / "pos_pesquisar.png"))
 
