@@ -115,7 +115,14 @@ def preencher_vaadin_date(page, seletor: str, valor: str, label: str = ""):
             el.click()
             el.click(click_count=3)
             el.type(valor, delay=80)
-            page.keyboard.press("Escape")
+            # Tab confirma o valor digitado (e fecha o overlay via blur).
+            # Escape no vaadin-date-picker CANCELA a edição e reverte pro
+            # último valor confirmado — o campo continuava mostrando o texto
+            # digitado, mas o valor real internalizado pelo componente
+            # provavelmente voltava pro default, sem a gente perceber no
+            # screenshot. Bem provável a causa real da extração de mês vir
+            # sempre com bem menos linhas que o esperado.
+            page.keyboard.press("Tab")
             time.sleep(0.3)
             log.info(f"  Data '{valor}' via '{sel}'")
             return
