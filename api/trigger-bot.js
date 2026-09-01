@@ -10,13 +10,6 @@ export default async function handler(req, res) {
   }
   if (!(await requireAuth(req, res))) return;
 
-  // Bloqueio temporário e urgente (01/09/2026): a extração de mês inteiro
-  // (histórico) do NeoSales estava trazendo só ~40% das linhas reais — a
-  // espera por "Arquivo disponível" em bot.py não garante que é o arquivo
-  // novo. Bloqueia o disparo manual até corrigir; o agendamento automático
-  // (mês corrente, via cron em bot.yml) não passa por aqui e não é afetado.
-  return res.status(503).json({ error: 'Atualização manual temporariamente desativada — corrigindo um problema de extração incompleta em meses passados. O agendamento automático do mês corrente continua normal.' });
-
   const token = process.env.GITHUB_ACTIONS_TOKEN;
   if (!token) {
     return res.status(500).json({ error: 'Token não configurado' });

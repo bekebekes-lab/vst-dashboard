@@ -7058,18 +7058,7 @@ function aplicarTravaProducao() {
   }
 }
 
-// Bloqueio temporário e urgente (01/09/2026): a extração de mês inteiro
-// (histórico) do NeoSales estava trazendo só ~40% das linhas reais — a
-// espera por "Arquivo disponível" não garante que é o arquivo novo. Só
-// reativar depois de corrigido em bot.py. O agendamento automático (mês
-// corrente, sempre foi assim) não é afetado por esse bloqueio.
-const NEO_BOT_BLOQUEADO = true;
-
 async function triggerBotEAtualizar(btn) {
-  if (NEO_BOT_BLOQUEADO) {
-    alert('Atualização manual temporariamente desativada — a extração de meses passados está trazendo dados incompletos. Já estamos corrigindo. O agendamento automático do mês corrente continua rodando normalmente.');
-    return;
-  }
   const originalText = btn.innerHTML;
   btn.disabled = true;
   btn.innerHTML = '⏳ Aguarde...';
