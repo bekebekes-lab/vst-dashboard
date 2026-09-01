@@ -103,50 +103,37 @@ def verificar_e_aguardar_totp() -> str:
 
 
 # ─── HELPER: preencher vaadin-date-picker ─────────────────────────────────────
-def preencher_vaadin_date(page, seletor: str, valor: str, label: str = ""):
-    tentativas = [seletor]
-    if label:
-        tentativas.append(f"vaadin-date-picker[label='{label}'] input")
+def preencher_vaadin_date(page, indice: int, valor_iso: str, label: str = ""):
+    """
+    Seta a data direto na propriedade .value do componente
+    <vaadin-date-picker> (formato ISO "yyyy-mm-dd"), em vez de digitar no
+    input interno.
 
-    for sel in tentativas:
-        try:
-            el = page.locator(sel).first
-            el.wait_for(state="visible", timeout=5_000)
-            el.click()
-            el.click(click_count=3)
-            el.type(valor, delay=80)
-            # Tab confirma o valor digitado (e fecha o overlay via blur).
-            # Escape no vaadin-date-picker CANCELA a edição e reverte pro
-            # último valor confirmado — o campo continuava mostrando o texto
-            # digitado, mas o valor real internalizado pelo componente
-            # provavelmente voltava pro default, sem a gente perceber no
-            # screenshot. Bem provável a causa real da extração de mês vir
-            # sempre com bem menos linhas que o esperado.
-            page.keyboard.press("Tab")
-            time.sleep(0.3)
-            log.info(f"  Data '{valor}' via '{sel}'")
-            return
-        except Exception:
-            pass
-
-    log.warning(f"  Fallback JS para data '{valor}'")
-    page.evaluate(f"""
+    Confirmado por diagnóstico (lendo document.querySelectorAll('vaadin-
+    date-picker').map(e => e.value) antes de exportar) que digitar no
+    input — mesmo "funcionando" visualmente, com Tab ou Escape pra
+    confirmar/fechar, com ou sem fallback JS no input interno — NUNCA
+    atualizava essa propriedade de verdade: ela ficava sempre presa na
+    data de hoje. É essa propriedade .value do componente (não o texto do
+    input) que a aplicação lê de verdade na hora de buscar/exportar — foi
+    a causa raiz real do mês vir sempre incompleto (~8k de ~19,5k linhas
+    reais em agosto/2026).
+    """
+    ok = page.evaluate(f"""
         (function() {{
-            function deep(root, id) {{
-                if (root.id === id) return root;
-                for (const el of root.querySelectorAll('*')) {{
-                    if (el.id === id) return el;
-                    if (el.shadowRoot) {{ const r = deep(el.shadowRoot, id); if (r) return r; }}
-                }}
-            }}
-            const inp = deep(document, '{seletor.lstrip("#")}');
-            if (inp) {{
-                inp.value = '{valor}';
-                inp.dispatchEvent(new Event('input',  {{bubbles:true}}));
-                inp.dispatchEvent(new Event('change', {{bubbles:true}}));
-            }}
+            const el = document.querySelectorAll('vaadin-date-picker')[{indice}];
+            if (!el) return false;
+            el.value = '{valor_iso}';
+            el.dispatchEvent(new CustomEvent('value-changed', {{ bubbles: true, detail: {{ value: '{valor_iso}' }} }}));
+            el.dispatchEvent(new Event('change', {{ bubbles: true }}));
+            return el.value === '{valor_iso}';
         }})();
     """)
+    if ok:
+        log.info(f"  Data '{valor_iso}' setada via .value (índice {indice}, {label})")
+    else:
+        log.warning(f"  Falha ao setar .value do date-picker índice {indice} ({label})")
+    return ok
 
 
 # ─── HELPER: selecionar vaadin-combo-box ──────────────────────────────────────
@@ -291,31 +278,14 @@ def baixar_relatorio(data_inicio_dt: date, data_fim_dt: date) -> Path:
 
         # ── Preenche datas ─────────────────────────────────────────────────
         log.info(f"Datas: {data_inicio} → {data_fim}")
-        preencher_vaadin_date(page, sel_ini_ok, data_inicio, "Inicial")
-        preencher_vaadin_date(page, SEL_DATA_FIM, data_fim,    "Final")
+        preencher_vaadin_date(page, 0, data_inicio_dt.isoformat(), "Inicial")
+        preencher_vaadin_date(page, 1, data_fim_dt.isoformat(),    "Final")
 
         # DIAGNÓSTICO: lê a propriedade .value real dos componentes
         # vaadin-date-picker (valor internalizado pelo componente, não só o
         # texto visível no input) — pra confirmar se o que a gente digitou
         # realmente ficou registrado, antes de qualquer Escape mexer nisso.
-        try:
-            valores_antes = page.evaluate("Array.from(document.querySelectorAll('vaadin-date-picker')).map(e => e.value)")
-            log.info(f"  [DIAG] vaadin-date-picker .value ANTES do Escape: {valores_antes}")
-        except Exception as e:
-            log.warning(f"  [DIAG] Falha ao ler .value: {e}")
-
-        # ── Fecha calendário antes de interagir com combo ────────────────
-        page.keyboard.press("Escape")
-        time.sleep(0.5)
-        page.keyboard.press("Escape")
-        time.sleep(0.5)
         page.screenshot(path=str(DOWNLOAD_DIR / "pre_combo.png"))
-
-        try:
-            valores_depois = page.evaluate("Array.from(document.querySelectorAll('vaadin-date-picker')).map(e => e.value)")
-            log.info(f"  [DIAG] vaadin-date-picker .value DEPOIS do Escape: {valores_depois}")
-        except Exception as e:
-            log.warning(f"  [DIAG] Falha ao ler .value: {e}")
 
         # ── Seleciona painel ───────────────────────────────────────────────
         log.info(f"Selecionando painel: {PAINEL_VALOR}")
@@ -325,12 +295,10 @@ def baixar_relatorio(data_inicio_dt: date, data_fim_dt: date) -> Path:
 
         # ── Clica em "Pesquisar" pra aplicar o filtro de datas ─────────────
         # Sem isso, a aba Exportação gera o arquivo em cima da última busca
-        # já aplicada no servidor (não das datas recém-digitadas) — foi a
+        # já aplicada no servidor (não das datas recém-setadas) — foi a
         # causa real do mês inteiro vir incompleto (o filtro nunca era
-        # aplicado de fato, só preenchido visualmente nos campos).
+        # aplicado de fato).
         log.info("Clicando em 'Pesquisar' pra aplicar o filtro de datas...")
-        page.keyboard.press("Escape")
-        time.sleep(0.5)
         try:
             valores_pre_pesquisar = page.evaluate("Array.from(document.querySelectorAll('vaadin-date-picker')).map(e => e.value)")
             log.info(f"  [DIAG] vaadin-date-picker .value antes de clicar Pesquisar: {valores_pre_pesquisar}")
