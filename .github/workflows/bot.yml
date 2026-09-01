@@ -9,6 +9,10 @@ on:
         description: 'MMYYYY do mês alvo (ex.: 082026) — vazio = mês atual, aba "BaseCRM" live'
         required: false
         default: ''
+      modo_teste:
+        description: 'true = baixa e conta as linhas, mas NÃO grava no Sheets'
+        required: false
+        default: ''
 
 jobs:
   bot:
@@ -48,6 +52,7 @@ jobs:
           SHEET_ID:           ${{ secrets.SHEET_ID }}
           GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
           PERIODO_ALVO:       ${{ github.event.inputs.periodo }}
+          MODO_TESTE:         ${{ github.event.inputs.modo_teste }}
         run: python bot.py
 
       - name: Salvar artefatos em caso de erro

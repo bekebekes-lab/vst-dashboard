@@ -300,6 +300,20 @@ def baixar_relatorio(data_inicio_dt: date, data_fim_dt: date) -> Path:
         time.sleep(0.5)
         page.screenshot(path=str(DOWNLOAD_DIR / "pos_combo.png"))
 
+        # ── Clica em "Pesquisar" pra aplicar o filtro de datas ─────────────
+        # Sem isso, a aba Exportação gera o arquivo em cima da última busca
+        # já aplicada no servidor (não das datas recém-digitadas) — foi a
+        # causa real do mês inteiro vir incompleto (o filtro nunca era
+        # aplicado de fato, só preenchido visualmente nos campos).
+        log.info("Clicando em 'Pesquisar' pra aplicar o filtro de datas...")
+        try:
+            page.locator(SEL_PESQUISAR).first.click(timeout=10_000)
+            log.info("  'Pesquisar' clicado.")
+        except Exception as e:
+            log.warning(f"  Falha ao clicar 'Pesquisar': {e}")
+        time.sleep(2)
+        page.screenshot(path=str(DOWNLOAD_DIR / "pos_pesquisar.png"))
+
         # ── Clica na aba "Exportação" (novo fluxo) ────────────────────────
         log.info("Clicando na aba 'Exportação'...")
         arquivo = DOWNLOAD_DIR / f"producao_{agora.strftime('%Y%m%d_%H%M')}.xlsx"
@@ -440,12 +454,20 @@ def main():
     log.info(f"NeoSales Bot  —  {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     log.info("=" * 60)
 
+    # MODO_TESTE=1: baixa e lê o arquivo normalmente, mas NUNCA grava no
+    # Sheets — usado pra validar a extração (contagem de linhas) sem
+    # arriscar sobrescrever uma aba real com dado ainda não confirmado.
+    modo_teste = os.environ.get("MODO_TESTE", "").strip().lower() in ("1", "true", "sim")
+
     try:
         data_inicio_dt, data_fim_dt, aba_destino = resolver_periodo_alvo()
-        log.info(f"Alvo: {data_inicio_dt} → {data_fim_dt} → aba '{aba_destino}'")
+        log.info(f"Alvo: {data_inicio_dt} → {data_fim_dt} → aba '{aba_destino}'" + (" [MODO TESTE — não vai gravar]" if modo_teste else ""))
         arquivo = baixar_relatorio(data_inicio_dt, data_fim_dt)
         cabecalhos, dados = ler_xlsx(arquivo)
-        atualizar_sheets(cabecalhos, dados, aba_destino)
+        if modo_teste:
+            log.info(f"🧪 MODO TESTE: {len(dados)} linhas extraídas, {len(cabecalhos)} colunas — NÃO gravado em '{aba_destino}'.")
+        else:
+            atualizar_sheets(cabecalhos, dados, aba_destino)
         log.info("✅ Concluído com sucesso!")
     except Exception as e:
         log.error(f"❌ Falha: {e}", exc_info=True)
