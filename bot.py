@@ -6,6 +6,7 @@ Fluxo: login → 2FA TOTP → painel-producao → preenche datas → seleciona p
        → atualiza aba BaseCRM no Google Sheets.
 """
 
+import calendar
 import os
 import time
 import json
@@ -33,8 +34,34 @@ NEOSALES_USER = os.environ["NEOSALES_USER"]
 NEOSALES_PASS = os.environ["NEOSALES_PASS"]
 TOTP_SECRET   = os.environ.get("TOTP_SECRET", "")
 SHEET_ID      = os.environ["SHEET_ID"]
-ABA_DESTINO   = "BaseCRM"
 DOWNLOAD_DIR  = Path("/tmp/neosales")
+
+# ─── Período alvo ──────────────────────────────────────────────────────────────
+# PERIODO_ALVO vem do botão "Atualizar" do Dash (dispara o workflow_dispatch
+# com o mês que estava selecionado no seletor de Período) — vazio nas
+# execuções agendadas, que continuam sempre pegando o mês corrente ao vivo.
+# Formato esperado: "MMYYYY" (ex.: "082026"), igual ao padrão das abas
+# históricas "BaseCRM MMYYYY" já usadas pelo Dash.
+def resolver_periodo_alvo():
+    """
+    Devolve (data_inicio, data_fim, aba_destino) a partir de PERIODO_ALVO.
+    Sem PERIODO_ALVO (execução agendada normal): mês corrente, do dia 1 até
+    hoje, gravando na aba "BaseCRM" (live) — comportamento de sempre.
+    Com PERIODO_ALVO="MMYYYY" (mês passado, escolhido no Dash): o mês
+    inteiro (dia 1 ao último dia), gravando numa aba própria "BaseCRM
+    MMYYYY" — não mexe na aba live.
+    """
+    bruto = os.environ.get("PERIODO_ALVO", "").strip()
+    if not bruto or bruto.upper() == "BASECRM":
+        hoje = date.today()
+        return hoje.replace(day=1), hoje, "BaseCRM"
+
+    mm, yyyy = bruto[:2], bruto[2:]
+    mes, ano = int(mm), int(yyyy)
+    ultimo_dia = calendar.monthrange(ano, mes)[1]
+    data_inicio = date(ano, mes, 1)
+    data_fim    = date(ano, mes, ultimo_dia)
+    return data_inicio, data_fim, f"BaseCRM {mm}{yyyy}"
 
 # ─── Seletores confirmados por inspeção real (Vaadin) ─────────────────────────
 SEL_LOGIN_USER       = "#input-vaadin-text-field-16"
@@ -172,12 +199,12 @@ def lidar_com_2fa(page):
 
 
 # ─── 1. LOGIN + DOWNLOAD ──────────────────────────────────────────────────────
-def baixar_relatorio() -> Path:
+def baixar_relatorio(data_inicio_dt: date, data_fim_dt: date) -> Path:
     DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
-    hoje        = date.today()
-    data_inicio = hoje.replace(day=1).strftime("%d/%m/%Y")
-    data_fim    = hoje.strftime("%d/%m/%Y")
+    agora       = datetime.now()  # só pro nome do arquivo baixado, não é o período da consulta
+    data_inicio = data_inicio_dt.strftime("%d/%m/%Y")
+    data_fim    = data_fim_dt.strftime("%d/%m/%Y")
     log.info(f"Período: {data_inicio} → {data_fim}")
 
     with sync_playwright() as p:
@@ -275,7 +302,7 @@ def baixar_relatorio() -> Path:
 
         # ── Clica na aba "Exportação" (novo fluxo) ────────────────────────
         log.info("Clicando na aba 'Exportação'...")
-        arquivo = DOWNLOAD_DIR / f"producao_{hoje.strftime('%Y%m%d_%H%M')}.xlsx"
+        arquivo = DOWNLOAD_DIR / f"producao_{agora.strftime('%Y%m%d_%H%M')}.xlsx"
 
         # Tenta via seletor Vaadin tab; fallback via JS
         aba_exportacao_clicada = False
@@ -350,8 +377,8 @@ def ler_xlsx(arquivo: Path) -> tuple[list, list[list]]:
 
 
 # ─── 3. ATUALIZAR GOOGLE SHEETS ───────────────────────────────────────────────
-def atualizar_sheets(cabecalhos: list, dados: list[list]):
-    log.info(f"Atualizando Sheets → aba '{ABA_DESTINO}'...")
+def atualizar_sheets(cabecalhos: list, dados: list[list], aba_destino: str):
+    log.info(f"Atualizando Sheets → aba '{aba_destino}'...")
 
     raw_creds = os.environ.get("GOOGLE_CREDENTIALS", "").strip()
     if not raw_creds:
@@ -381,15 +408,15 @@ def atualizar_sheets(cabecalhos: list, dados: list[list]):
     sheet = gc.open_by_key(SHEET_ID)
 
     try:
-        aba = sheet.worksheet(ABA_DESTINO)
+        aba = sheet.worksheet(aba_destino)
     except gspread.WorksheetNotFound:
-        aba = sheet.add_worksheet(title=ABA_DESTINO, rows=1, cols=1)
-        log.info(f"  Aba '{ABA_DESTINO}' criada.")
+        aba = sheet.add_worksheet(title=aba_destino, rows=1, cols=1)
+        log.info(f"  Aba '{aba_destino}' criada.")
 
     aba.resize(rows=len(dados) + 1, cols=len(cabecalhos))
     aba.clear()
     aba.update([cabecalhos] + dados, value_input_option="RAW")
-    log.info(f"  ✅ {len(dados)} linhas gravadas em '{ABA_DESTINO}'.")
+    log.info(f"  ✅ {len(dados)} linhas gravadas em '{aba_destino}'.")
 
 
 # ─── MAIN ─────────────────────────────────────────────────────────────────────
@@ -399,9 +426,11 @@ def main():
     log.info("=" * 60)
 
     try:
-        arquivo = baixar_relatorio()
+        data_inicio_dt, data_fim_dt, aba_destino = resolver_periodo_alvo()
+        log.info(f"Alvo: {data_inicio_dt} → {data_fim_dt} → aba '{aba_destino}'")
+        arquivo = baixar_relatorio(data_inicio_dt, data_fim_dt)
         cabecalhos, dados = ler_xlsx(arquivo)
-        atualizar_sheets(cabecalhos, dados)
+        atualizar_sheets(cabecalhos, dados, aba_destino)
         log.info("✅ Concluído com sucesso!")
     except Exception as e:
         log.error(f"❌ Falha: {e}", exc_info=True)

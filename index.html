@@ -7064,14 +7064,20 @@ async function triggerBotEAtualizar(btn) {
   btn.innerHTML = '⏳ Aguarde...';
 
   try {
-    // 1. Dispara o bot via Vercel Function
-    const res = await fetch('/api/trigger-bot', { method: 'POST', headers: authHeaders() });
+    // 1. Dispara o bot via Vercel Function — manda o período selecionado no
+    // topo (Atual/Live ou um mês histórico) pra ele extrair o mês certo.
+    const periodo = getPeriodoAtivo();
+    const res = await fetch('/api/trigger-bot', {
+      method: 'POST',
+      headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ periodo }),
+    });
     const data = await res.json();
 
     if (!res.ok) throw new Error(data.error || 'Erro ao disparar bot');
 
     // 2. Feedback visual — bot está rodando (~2min)
-    btn.innerHTML = '🤖 Bot rodando...';
+    btn.innerHTML = periodo === 'BaseCRM' ? '🤖 Bot rodando...' : `🤖 Bot rodando (${periodo})...`;
 
     // 3. Aguarda ~2min e recarrega os dados
     let segundos = 120;
