@@ -294,12 +294,28 @@ def baixar_relatorio(data_inicio_dt: date, data_fim_dt: date) -> Path:
         preencher_vaadin_date(page, sel_ini_ok, data_inicio, "Inicial")
         preencher_vaadin_date(page, SEL_DATA_FIM, data_fim,    "Final")
 
+        # DIAGNÓSTICO: lê a propriedade .value real dos componentes
+        # vaadin-date-picker (valor internalizado pelo componente, não só o
+        # texto visível no input) — pra confirmar se o que a gente digitou
+        # realmente ficou registrado, antes de qualquer Escape mexer nisso.
+        try:
+            valores_antes = page.evaluate("Array.from(document.querySelectorAll('vaadin-date-picker')).map(e => e.value)")
+            log.info(f"  [DIAG] vaadin-date-picker .value ANTES do Escape: {valores_antes}")
+        except Exception as e:
+            log.warning(f"  [DIAG] Falha ao ler .value: {e}")
+
         # ── Fecha calendário antes de interagir com combo ────────────────
         page.keyboard.press("Escape")
         time.sleep(0.5)
         page.keyboard.press("Escape")
         time.sleep(0.5)
         page.screenshot(path=str(DOWNLOAD_DIR / "pre_combo.png"))
+
+        try:
+            valores_depois = page.evaluate("Array.from(document.querySelectorAll('vaadin-date-picker')).map(e => e.value)")
+            log.info(f"  [DIAG] vaadin-date-picker .value DEPOIS do Escape: {valores_depois}")
+        except Exception as e:
+            log.warning(f"  [DIAG] Falha ao ler .value: {e}")
 
         # ── Seleciona painel ───────────────────────────────────────────────
         log.info(f"Selecionando painel: {PAINEL_VALOR}")
@@ -315,6 +331,11 @@ def baixar_relatorio(data_inicio_dt: date, data_fim_dt: date) -> Path:
         log.info("Clicando em 'Pesquisar' pra aplicar o filtro de datas...")
         page.keyboard.press("Escape")
         time.sleep(0.5)
+        try:
+            valores_pre_pesquisar = page.evaluate("Array.from(document.querySelectorAll('vaadin-date-picker')).map(e => e.value)")
+            log.info(f"  [DIAG] vaadin-date-picker .value antes de clicar Pesquisar: {valores_pre_pesquisar}")
+        except Exception as e:
+            log.warning(f"  [DIAG] Falha ao ler .value: {e}")
         try:
             page.locator(SEL_PESQUISAR).first.click(timeout=10_000)
             log.info("  'Pesquisar' clicado.")
