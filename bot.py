@@ -326,6 +326,21 @@ def baixar_relatorio(data_inicio_dt: date, data_fim_dt: date) -> Path:
         time.sleep(2)
         page.screenshot(path=str(DOWNLOAD_DIR / "pos_aba_exportacao.png"))
 
+        # Pra períodos grandes (mês inteiro), o NeoSales mostra "Gerando
+        # exportação em segundo plano" antes do arquivo ficar pronto (~40s
+        # pra um mês inteiro, confirmado manualmente). Sem esperar esse
+        # estado terminar, "Arquivo disponível" podia já estar na tela (de
+        # uma exportação anterior ou como rótulo estático) e o bot baixava
+        # um arquivo errado/incompleto — foi isso que causou a extração de
+        # agosto vir com só ~40% das linhas reais.
+        try:
+            page.wait_for_selector("text=Gerando exportação em segundo plano", timeout=8_000)
+            log.info("  Geração em segundo plano detectada — aguardando concluir...")
+            page.wait_for_selector("text=Gerando exportação em segundo plano", state="hidden", timeout=180_000)
+            log.info("  Geração concluída.")
+        except Exception:
+            log.info("  Indicador de geração em segundo plano não apareceu — seguindo direto pro arquivo.")
+
         # Aguarda o modal "Arquivo disponível" (aparece automaticamente após clicar na aba)
         log.info("Aguardando modal 'Arquivo disponível'...")
         page.wait_for_selector("text=Arquivo disponível", timeout=120_000)
