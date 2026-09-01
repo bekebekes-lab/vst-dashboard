@@ -293,6 +293,16 @@ def baixar_relatorio(data_inicio_dt: date, data_fim_dt: date) -> Path:
         time.sleep(0.5)
         page.screenshot(path=str(DOWNLOAD_DIR / "pos_combo.png"))
 
+        # ── Fecha o dropdown do Painel antes de clicar em Pesquisar ────────
+        # selecionar_vaadin_combo() já confirma a escolha via Enter (o item
+        # fica marcado ✓), mas o dropdown às vezes continua aberto na tela e
+        # cobre o botão "Pesquisar", travando o clique (Timeout). Diferente
+        # do date-picker, aqui o valor já está confirmado antes do Escape,
+        # então fechar com Escape é seguro — só descarta a lista aberta, não
+        # a seleção já feita.
+        page.keyboard.press("Escape")
+        time.sleep(0.5)
+
         # ── Clica em "Pesquisar" pra aplicar o filtro de datas ─────────────
         # Sem isso, a aba Exportação gera o arquivo em cima da última busca
         # já aplicada no servidor (não das datas recém-setadas) — foi a
