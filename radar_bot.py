@@ -394,12 +394,23 @@ def criar_estudo(page, item: dict) -> tuple[str, str]:
     # de Agregação. Mas sim, em um estudo de ativação." — a própria
     # mensagem de erro do Salesforce aponta o tipo certo.
     tipo_registro = "Ativação" if item.get("produto") == "BUSINESS LINK DIRECT" else "Estudo Agregador"
-    # Seleciona pelo RÓTULO visível, não por posição — a ordem das opções
-    # não é garantida ser sempre a mesma (2 tipos possíveis agora, não 1
-    # fixo). force=True: o círculo visual customizado do SLDS fica por cima
-    # do <input type="radio">/label e intercepta o clique — confirmado em
-    # execução real (Playwright ficava tentando e desistia no timeout).
-    page.locator(f"label:has-text('{tipo_registro}')").first.click(force=True)
+    # Localiza pelo RÓTULO visível, não por posição — a ordem das opções não
+    # é garantida ser sempre a mesma (2 tipos possíveis agora, não 1 fixo).
+    # Clicar no <label> em si falhou em execução real ("Element is outside
+    # of the viewport" mesmo após rolar — o label do SLDS embute conteúdo
+    # que estoura a área visível do modal); em vez disso, lê o atributo
+    # `for` do label pra achar o <input type="radio"> de verdade associado
+    # e força o clique nele — o mesmo truque que já funcionava antes só que
+    # agora localizado por rótulo em vez de posição fixa. force=True: o
+    # círculo visual customizado do SLDS fica por cima do input e intercepta
+    # o clique — confirmado em execução real (Playwright ficava tentando e
+    # desistia no timeout sem isso).
+    rotulo = page.locator(f"label:has-text('{tipo_registro}')").first
+    rotulo.wait_for(state="visible", timeout=10_000)
+    id_input = rotulo.get_attribute("for")
+    # Seletor de atributo, não "#id" — os IDs do Salesforce começam com
+    # dígito (ex.: "0121M000..."), inválido como identificador CSS cru.
+    page.locator(f'[id="{id_input}"]').check(force=True)
     page.locator("button:has-text('Avançar')").click()
     page.wait_for_selector(f"text=Criar Estudo de Viabilidade: {tipo_registro}", timeout=20_000)
 
