@@ -376,7 +376,7 @@ def clicar_botao_com_texto(page, *textos, timeout=10_000) -> bool:
 
 # ─── 1. Criar Estudo de Viabilidade ────────────────────────────────────────
 def criar_estudo(page, item: dict) -> tuple[str, str]:
-    """Cria o EV (tipo Estudo Agregador) e retorna (record_id, numero_ev)."""
+    """Cria o EV e retorna (record_id, numero_ev)."""
     log.info(f"Criando Estudo de Viabilidade para '{item['cliente_final']}'...")
 
     page.goto(
@@ -386,13 +386,22 @@ def criar_estudo(page, item: dict) -> tuple[str, str]:
         wait_until="networkidle",
     )
 
-    # Modal 1: escolher tipo de registro — só usamos "Estudo Agregador".
-    # force=True: o círculo visual customizado do SLDS fica por cima do
-    # <input type="radio"> real e intercepta o clique — confirmado em
+    # Modal 1: escolher tipo de registro. O BLD Oferta PME (Produto pai
+    # "BUSINESS LINK DIRECT") exige o tipo "Ativação" — as demais ofertas
+    # (Conecta, sob "CONECTA+") usam "Estudo Agregador". Achado real
+    # (falha_consulta_65.png): tentar salvar um item BLD.PME sob "Estudo
+    # Agregador" é recusado com "O Item não pode ser associado a um Estudo
+    # de Agregação. Mas sim, em um estudo de ativação." — a própria
+    # mensagem de erro do Salesforce aponta o tipo certo.
+    tipo_registro = "Ativação" if item.get("produto") == "BUSINESS LINK DIRECT" else "Estudo Agregador"
+    # Seleciona pelo RÓTULO visível, não por posição — a ordem das opções
+    # não é garantida ser sempre a mesma (2 tipos possíveis agora, não 1
+    # fixo). force=True: o círculo visual customizado do SLDS fica por cima
+    # do <input type="radio">/label e intercepta o clique — confirmado em
     # execução real (Playwright ficava tentando e desistia no timeout).
-    page.locator("input[type='radio']").nth(1).check(force=True)  # 2ª opção = Estudo Agregador
+    page.locator(f"label:has-text('{tipo_registro}')").first.click(force=True)
     page.locator("button:has-text('Avançar')").click()
-    page.wait_for_selector("text=Criar Estudo de Viabilidade: Estudo Agregador", timeout=20_000)
+    page.wait_for_selector(f"text=Criar Estudo de Viabilidade: {tipo_registro}", timeout=20_000)
 
     # Modal 2: formulário — preenche só por atributo `name` (API name real).
     preencher_input_por_name(page, "Razao_Social__c", item.get("razao_social") or item["cliente_final"])
