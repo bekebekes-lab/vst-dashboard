@@ -405,7 +405,14 @@ def criar_estudo(page, item: dict) -> tuple[str, str]:
     # círculo visual customizado do SLDS fica por cima do input e intercepta
     # o clique — confirmado em execução real (Playwright ficava tentando e
     # desistia no timeout sem isso).
-    rotulo = page.locator(f"label:has-text('{tipo_registro}')").first
+    #
+    # ":visible" (extensão do Playwright, já usada em selecionar_lookup())
+    # é necessário aqui: sem ele, ".first" às vezes resolve pra uma cópia
+    # ESCONDIDA do mesmo texto que sobra no DOM durante a transição do
+    # modal — achado real (2ª execução: "locator resolved to hidden
+    # <label...>", timeout mesmo com o texto certo já selecionável na tela
+    # segundos depois, confirmado pelo screenshot de debug).
+    rotulo = page.locator(f"label:has-text('{tipo_registro}'):visible").first
     rotulo.wait_for(state="visible", timeout=10_000)
     id_input = rotulo.get_attribute("for")
     # Seletor de atributo, não "#id" — os IDs do Salesforce começam com
