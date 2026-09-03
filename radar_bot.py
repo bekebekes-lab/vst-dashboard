@@ -385,6 +385,14 @@ def criar_estudo(page, item: dict) -> tuple[str, str]:
         "?count=1&nooverride=1&useRecordTypeCheck=1&navigationLocation=LIST_VIEW",
         wait_until="networkidle",
     )
+    # "networkidle" nem sempre é suficiente aqui — o modal de tipo de
+    # registro segue montando componentes Lightning depois disso (achado
+    # real: os prints de debug de falhas anteriores mostravam o modal já
+    # inteiro na tela, com uma opção inclusive pré-selecionada, mas o
+    # timeout abaixo já tinha estourado antes desse ponto). Espera o
+    # cabeçalho aparecer primeiro, com folga bem maior que o texto do
+    # rótulo em si.
+    page.wait_for_selector("text=Selecione um tipo de registro", timeout=30_000)
 
     # Modal 1: escolher tipo de registro. O BLD Oferta PME (Produto pai
     # "BUSINESS LINK DIRECT") exige o tipo "Ativação" — as demais ofertas
@@ -413,7 +421,7 @@ def criar_estudo(page, item: dict) -> tuple[str, str]:
     # <label...>", timeout mesmo com o texto certo já selecionável na tela
     # segundos depois, confirmado pelo screenshot de debug).
     rotulo = page.locator(f"label:has-text('{tipo_registro}'):visible").first
-    rotulo.wait_for(state="visible", timeout=10_000)
+    rotulo.wait_for(state="visible", timeout=20_000)
     id_input = rotulo.get_attribute("for")
     # Seletor de atributo, não "#id" — os IDs do Salesforce começam com
     # dígito (ex.: "0121M000..."), inválido como identificador CSS cru.
