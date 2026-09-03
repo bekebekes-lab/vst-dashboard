@@ -239,12 +239,19 @@ def login(page):
     # Sem isso, a URL nunca sai de "/login" e o wait_for_url abaixo estoura
     # o timeout achando que o login falhou. Best-effort: se não aparecer em
     # poucos segundos, segue o fluxo normal.
-    try:
-        page.locator("button:has-text('Concluir')").first.click(timeout=8_000)
+    aviso_fechado = False
+    for sel in ["text=Concluir", "button:has-text('Concluir')", "a:has-text('Concluir')", "[role='button']:has-text('Concluir')"]:
+        try:
+            page.locator(sel).first.click(timeout=6_000)
+            aviso_fechado = True
+            break
+        except Exception:
+            continue
+    if aviso_fechado:
         log.info("  Aviso pós-login fechado ('Concluir').")
         time.sleep(1)
-    except Exception:
-        pass
+    else:
+        page.screenshot(path=str(DOWNLOAD_DIR / "05_sem_aviso_concluir.png"), full_page=True)
 
     page.wait_for_url(lambda url: "login" not in url, timeout=60_000)
     page.screenshot(path=str(DOWNLOAD_DIR / "04_pos_login.png"))
