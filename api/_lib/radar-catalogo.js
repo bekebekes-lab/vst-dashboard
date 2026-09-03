@@ -1,13 +1,12 @@
 // Mapeia nossa oferta (tipoOferta + velocidade) pro texto de busca do campo
-// "Item de Produto" no Radar (Salesforce da Embratel) — conferido 1:1 com
-// api/_lib/propostas-dados.js (mesmos preços). Usa o NOME COMPLETO e exato
-// do item de catálogo (copiado literal do Radar, espaçamento incluso) —
-// uma tentativa anterior com um trecho abreviado/reescrito não batia como
-// substring real e a busca do Salesforce não retornava nada (confirmado em
-// execução real). Só cobre as ofertas com correspondência confirmada no
-// catálogo do Radar — as demais (0800, MPLS, LAN EPL, e o BLD Oferta PME
-// com roteador de 10M-200M) não passam por consulta de viabilidade no
-// Radar ainda.
+// "Item de Produto" no Radar (Salesforce da Embratel) —
+// conferido 1:1 com api/_lib/propostas-dados.js (mesmos preços). Usa o NOME
+// COMPLETO e exato do item de catálogo (copiado literal do Radar,
+// espaçamento incluso) — uma tentativa anterior com um trecho
+// abreviado/reescrito não batia como substring real e a busca do Salesforce
+// não retornava nada (confirmado em execução real). Só cobre as ofertas com
+// correspondência confirmada no catálogo do Radar — as demais (0800, MPLS,
+// LAN EPL) não passam por consulta de viabilidade no Radar ainda.
 //
 // O campo pai "Produto" do lookup varia por família — confirmado gravando
 // o fluxo manual: Conecta (Smart/BLC/2P BLD) fica sob "CONECTA+", mas o BLD
@@ -39,15 +38,27 @@ export const ITEM_DE_PRODUTO_RADAR = {
     '200 Mega': 'OFERTA CONECTA 2P BLD 50.000 MIN. VOZ- 200MB (R$1.906,22 COM IMPOSTOS)',
     '500 Mega': 'OFERTA CONECTA 2P BLD 50.000 MIN. VOZ - 500MB (R$3.236,22 COM IMPOSTOS)',
   },
-  // "Link single" — BLD Oferta PME sem roteador (Porta+Acesso). Só a
-  // consulta de viabilidade está disponível por enquanto (a Proposta
-  // Comercial/PDF continua sem esses valores — falta a tabela de preço).
+  // BLD Oferta PME — duas famílias de item, ambas sob o mesmo Produto pai
+  // (BUSINESS LINK DIRECT):
+  // 1) "Link single" (Porta+Acesso, sem roteador, 500M-1G).
+  // 2) "Clássico" (10M-200M, roteador embutido no item). O catálogo real
+  //    tem 3 modelos de CPE por velocidade (HP 954/Huawei AR651/Meraki
+  //    MX67, mesmas opções da Proposta Comercial), mas aqui, pro EV, usa
+  //    sempre o item com Huawei AR651 (pedido explícito: "é apenas para o
+  //    estudo" — a viabilidade não muda por marca de roteador, então não
+  //    vale a pena expor essa escolha só pra consulta).
   bld_oferta_pme: {
     '500M': 'BLD.p-500M_Porta+Acesso',
     '600M': 'BLD.p-600M_Porta+Acesso',
     '700M': 'BLD.p-700M_Porta+Acesso',
     '800M': 'BLD.p-800M_Porta+Acesso',
     '1G': 'BLD.q -1G_Porta+Acesso',
+    '10M': 'BLD.PME.10MB + HUAWEI 651',
+    '20M': 'BLD.PME.20MB + HUAWEI 651',
+    '30M': 'BLD.PME.30MB + HUAWEI 651',
+    '50M': 'BLD.PME.50MB + HUAWEI 651',
+    '100M': 'BLD.PME.100MB + HUAWEI 651',
+    '200M': 'BLD.PME.200MB + HUAWEI 651',
   },
 };
 
