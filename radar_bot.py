@@ -402,29 +402,25 @@ def criar_estudo(page, item: dict) -> tuple[str, str]:
     # de Agregação. Mas sim, em um estudo de ativação." — a própria
     # mensagem de erro do Salesforce aponta o tipo certo.
     tipo_registro = "Ativação" if item.get("produto") == "BUSINESS LINK DIRECT" else "Estudo Agregador"
-    # Localiza pelo RÓTULO visível, não por posição — a ordem das opções não
-    # é garantida ser sempre a mesma (2 tipos possíveis agora, não 1 fixo).
-    # Clicar no <label> em si falhou em execução real ("Element is outside
-    # of the viewport" mesmo após rolar — o label do SLDS embute conteúdo
-    # que estoura a área visível do modal); em vez disso, lê o atributo
-    # `for` do label pra achar o <input type="radio"> de verdade associado
-    # e força o clique nele — o mesmo truque que já funcionava antes só que
-    # agora localizado por rótulo em vez de posição fixa. force=True: o
-    # círculo visual customizado do SLDS fica por cima do input e intercepta
-    # o clique — confirmado em execução real (Playwright ficava tentando e
-    # desistia no timeout sem isso).
-    #
-    # ":visible" (extensão do Playwright, já usada em selecionar_lookup())
-    # é necessário aqui: sem ele, ".first" às vezes resolve pra uma cópia
-    # ESCONDIDA do mesmo texto que sobra no DOM durante a transição do
-    # modal — achado real (2ª execução: "locator resolved to hidden
-    # <label...>", timeout mesmo com o texto certo já selecionável na tela
-    # segundos depois, confirmado pelo screenshot de debug).
-    rotulo = page.locator(f"label:has-text('{tipo_registro}'):visible").first
-    rotulo.wait_for(state="visible", timeout=20_000)
-    id_input = rotulo.get_attribute("for")
+    # Localiza pelo RÓTULO, não por posição — a ordem das opções não é
+    # garantida ser sempre a mesma (2 tipos possíveis agora, não 1 fixo).
+    # NÃO exige o label estar "visible" pro Playwright — achado real (3
+    # execuções de teste seguidas): esse label do SLDS nunca passa na
+    # checagem estrita de visibilidade (timeout mesmo com o texto certo já
+    # aparecendo normalmente pra um humano no screenshot de debug, com a
+    # opção inclusive pré-selecionada), provavelmente porque a caixa
+    # delimitadora do próprio <label> fica zerada mesmo com o conteúdo
+    # sendo desenhado por elementos filhos/CSS. `get_attribute` só espera o
+    # elemento ficar ANEXADO ao DOM — que já é suficiente aqui, já que o
+    # clique de verdade é forçado (force=True) no <input> associado.
+    id_input = page.locator(f"label:has-text('{tipo_registro}')").first.get_attribute("for", timeout=30_000)
+    if not id_input:
+        raise RuntimeError(f"Tipo de registro '{tipo_registro}' não encontrado no modal de criação do EV")
     # Seletor de atributo, não "#id" — os IDs do Salesforce começam com
     # dígito (ex.: "0121M000..."), inválido como identificador CSS cru.
+    # force=True: o círculo visual customizado do SLDS fica por cima do
+    # input e intercepta o clique — confirmado em execução real (Playwright
+    # ficava tentando e desistia no timeout sem isso).
     page.locator(f'[id="{id_input}"]').check(force=True)
     page.locator("button:has-text('Avançar')").click()
     page.wait_for_selector(f"text=Criar Estudo de Viabilidade: {tipo_registro}", timeout=20_000)
