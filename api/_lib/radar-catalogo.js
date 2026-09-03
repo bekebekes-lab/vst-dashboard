@@ -5,9 +5,20 @@
 // uma tentativa anterior com um trecho abreviado/reescrito não batia como
 // substring real e a busca do Salesforce não retornava nada (confirmado em
 // execução real). Só cobre as ofertas com correspondência confirmada no
-// catálogo do Radar — as demais (BLD Oferta PME, 0800, MPLS, LAN EPL) não
-// passam por consulta de viabilidade no Radar ainda.
-export const PRODUTO_PAI_RADAR = 'CONECTA+';
+// catálogo do Radar — as demais (0800, MPLS, LAN EPL, e o BLD Oferta PME
+// com roteador de 10M-200M) não passam por consulta de viabilidade no
+// Radar ainda.
+//
+// O campo pai "Produto" do lookup varia por família — confirmado gravando
+// o fluxo manual: Conecta (Smart/BLC/2P BLD) fica sob "CONECTA+", mas o BLD
+// link single (Porta+Acesso, sem roteador) fica sob "BUSINESS LINK DIRECT",
+// um Produto pai diferente.
+export const PRODUTO_PAI_POR_TIPO = {
+  conecta_smart: 'CONECTA+',
+  conecta_blc: 'CONECTA+',
+  combo_2p_bld: 'CONECTA+',
+  bld_oferta_pme: 'BUSINESS LINK DIRECT',
+};
 
 export const ITEM_DE_PRODUTO_RADAR = {
   conecta_smart: {
@@ -28,12 +39,23 @@ export const ITEM_DE_PRODUTO_RADAR = {
     '200 Mega': 'OFERTA CONECTA 2P BLD 50.000 MIN. VOZ- 200MB (R$1.906,22 COM IMPOSTOS)',
     '500 Mega': 'OFERTA CONECTA 2P BLD 50.000 MIN. VOZ - 500MB (R$3.236,22 COM IMPOSTOS)',
   },
+  // "Link single" — BLD Oferta PME sem roteador (Porta+Acesso). Só a
+  // consulta de viabilidade está disponível por enquanto (a Proposta
+  // Comercial/PDF continua sem esses valores — falta a tabela de preço).
+  bld_oferta_pme: {
+    '500M': 'BLD.p-500M_Porta+Acesso',
+    '600M': 'BLD.p-600M_Porta+Acesso',
+    '700M': 'BLD.p-700M_Porta+Acesso',
+    '800M': 'BLD.p-800M_Porta+Acesso',
+    '1G': 'BLD.q -1G_Porta+Acesso',
+  },
 };
 
 // Retorna null se a combinação tipoOferta+velocidade não tiver
 // correspondência conhecida no catálogo do Radar.
 export function resolverItemDeProdutoRadar(tipoOferta, velocidade) {
   const busca = ITEM_DE_PRODUTO_RADAR[tipoOferta]?.[velocidade];
-  if (!busca) return null;
-  return { produto: PRODUTO_PAI_RADAR, itemProduto: busca };
+  const produtoPai = PRODUTO_PAI_POR_TIPO[tipoOferta];
+  if (!busca || !produtoPai) return null;
+  return { produto: produtoPai, itemProduto: busca };
 }

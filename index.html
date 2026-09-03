@@ -2384,13 +2384,14 @@
     <div id="conect-subtab-ev">
   <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:18px;margin-bottom:16px;box-shadow:var(--shadow-xs);">
     <div class="section-title" style="margin-bottom:4px;">🔎 EV - Estudo de Viabilidade</div>
-    <div style="font-size:12px;color:var(--text-2);margin-bottom:14px;">Consulta a viabilidade técnica no Radar (Claro/Embratel) — envia a consulta e o robô traz a resposta (viável/inviável, facilidade e custo) aqui na lista abaixo assim que sair. Disponível só pras ofertas Conecta Smart, Conecta com BLC e Conecta +, Combo 2P BLD por enquanto. Pra consultar vários planos/velocidades do mesmo cliente, clique em "+ Adicionar plano" antes de "+ Adicionar à lista"; pra vários clientes/endereços diferentes, repita "+ Adicionar à lista" pra cada um.</div>
+    <div style="font-size:12px;color:var(--text-2);margin-bottom:14px;">Consulta a viabilidade técnica no Radar (Claro/Embratel) — envia a consulta e o robô traz a resposta (viável/inviável, facilidade e custo) aqui na lista abaixo assim que sair. Disponível só pras ofertas Conecta Smart, Conecta com BLC, Conecta +, Combo 2P BLD e BLD Oferta PME (link single, 500M-1G) por enquanto. Pra consultar vários planos/velocidades do mesmo cliente, clique em "+ Adicionar plano" antes de "+ Adicionar à lista"; pra vários clientes/endereços diferentes, repita "+ Adicionar à lista" pra cada um.</div>
 
     <div class="filters-bar">
       <div class="filter-group">
         <label>Tipo de oferta</label>
         <select id="ev-tipo-oferta" onchange="evAoTrocarTipoOferta()">
           <option value="conecta_smart">Conecta Smart</option>
+          <option value="bld_oferta_pme">BLD Oferta PME (link single)</option>
           <option value="conecta_blc">Conecta com BLC</option>
           <option value="combo_2p_bld">Conecta +, Combo 2P BLD</option>
         </select>
@@ -9823,6 +9824,10 @@ function initEv() {
 // enfileirar a consulta).
 const EV_VELOCIDADES_POR_TIPO = {
   conecta_smart: ['10 Mega', '20 Mega', '50 Mega', '100 Mega'],
+  // Só o link single (Porta+Acesso, sem roteador) — o BLD Oferta PME
+  // "clássico" (10M-200M, com roteador) ainda não tem correspondência no
+  // catálogo do Radar.
+  bld_oferta_pme: ['500M', '600M', '700M', '800M', '1G'],
   conecta_blc: ['150 Mega', '300 Mega'],
   combo_2p_bld: ['10 Mega', '20 Mega', '50 Mega', '100 Mega', '200 Mega', '500 Mega'],
 };
