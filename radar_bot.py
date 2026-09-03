@@ -233,6 +233,19 @@ def login(page):
             raise RuntimeError("Salesforce rejeitou o código 2FA 3 vezes seguidas.")
         log.info("2FA preenchido.")
 
+    # Aviso informativo pós-login (ex.: "Janela Técnica para Implantação do
+    # Fulfillment") — não indica indisponibilidade agora, só um comunicado
+    # que precisa ser fechado clicando "Concluir" antes de seguir pro Radar.
+    # Sem isso, a URL nunca sai de "/login" e o wait_for_url abaixo estoura
+    # o timeout achando que o login falhou. Best-effort: se não aparecer em
+    # poucos segundos, segue o fluxo normal.
+    try:
+        page.locator("button:has-text('Concluir')").first.click(timeout=8_000)
+        log.info("  Aviso pós-login fechado ('Concluir').")
+        time.sleep(1)
+    except Exception:
+        pass
+
     page.wait_for_url(lambda url: "login" not in url, timeout=60_000)
     page.screenshot(path=str(DOWNLOAD_DIR / "04_pos_login.png"))
     log.info("Login OK.")
