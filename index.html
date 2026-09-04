@@ -9216,66 +9216,81 @@ async function renderCarteiraComparativo() {
   const bases = await carteiraListarBases();
   const mapaAtual = carteiraMapaCnpjAtivos(carteiraFiltrarComRecorteAtivo(CARTEIRA_DADOS));
 
-  // Mais recente primeiro, pra ler de cima pra baixo como uma linha do tempo.
+  // Mais antiga primeiro — na consolidação abaixo, quando o mesmo CNPJ
+  // aparece em mais de uma base selecionada, fica valendo a ocorrência da
+  // base MAIS RECENTE entre as escolhidas (sobrescrita por ordem).
   const basesOrdenadas = [...carteiraBasesComparar].sort((a, b) => {
     const ba = bases.find(x => x.titulo === a), bb = bases.find(x => x.titulo === b);
     if (!ba || !bb) return 0;
-    return (bb.ano - ba.ano) || (bb.mes - ba.mes) || (bb.versao - ba.versao);
+    return (ba.ano - bb.ano) || (ba.mes - bb.mes) || (ba.versao - bb.versao);
+  });
+  const labelsBases = basesOrdenadas.map(titulo => {
+    const baseInfo = bases.find(b => b.titulo === titulo);
+    return baseInfo ? carteiraRotuloBase(baseInfo, bases) : titulo;
   });
 
-  const resultados = [];
+  // Consolida (união, sem duplicar CNPJ) tudo que existiu em QUALQUER uma
+  // das bases marcadas — pedido explícito: um único relatório olhando pra
+  // tudo que já foi cliente em algum desses meses, não um relatório por mês.
+  const mapaConsolidado = new Map();
+  const erros = [];
   for (const titulo of basesOrdenadas) {
     try {
       const dadosBase = await carteiraBaixarBase(titulo);
-      const mapaBase = carteiraMapaCnpjAtivos(carteiraFiltrarComRecorteAtivo(dadosBase));
-      const saiu = [];
-      mapaBase.forEach((linha, cnpj) => { if (!mapaAtual.has(cnpj)) saiu.push(linha); });
-      const baseInfo = bases.find(b => b.titulo === titulo);
-      resultados.push({ label: baseInfo ? carteiraRotuloBase(baseInfo, bases) : titulo, total: mapaBase.size, saiu });
+      carteiraMapaCnpjAtivos(carteiraFiltrarComRecorteAtivo(dadosBase))
+        .forEach((linha, cnpj) => mapaConsolidado.set(cnpj, linha));
     } catch (e) {
-      resultados.push({ label: titulo, erro: e.message });
+      const baseInfo = bases.find(b => b.titulo === titulo);
+      erros.push({ label: baseInfo ? carteiraRotuloBase(baseInfo, bases) : titulo, erro: e.message });
     }
   }
   if (idRequisicao !== carteiraComparativoReqId) return; // uma seleção mais nova já substituiu esta
 
-  area.innerHTML = resultados.map(r => {
-    if (r.erro) {
-      return `<div class="error-state" style="margin-top:12px;"><strong>${escapeHtml(r.label)}</strong> — ${escapeHtml(r.erro)}</div>`;
-    }
-    const pct = r.total ? Math.round(r.saiu.length / r.total * 100) : 0;
-    if (r.saiu.length === 0) {
-      return `<div class="prod-status-section" style="margin-top:0;">
-        <div style="font-size:13px;font-weight:700;margin-bottom:6px;">${escapeHtml(r.label)} → base atual</div>
-        <div class="stat-chip" style="color:var(--green);">Nenhum cliente saiu — os ${r.total.toLocaleString('pt-BR')} clientes dessa base continuam na carteira atual.</div>
-      </div>`;
-    }
-    const linhasVozPerdidas = r.saiu.reduce((s, l) => s + carteiraLinhas(l), 0);
-    const linhasBLPerdidas = r.saiu.reduce((s, l) => s + carteiraLinhasBL(l), 0);
-    return `<div class="prod-status-section" style="margin-top:0;">
-      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
-        <div style="font-size:13px;font-weight:700;">${escapeHtml(r.label)} → base atual</div>
-        <div style="display:flex;flex-wrap:wrap;gap:8px;">
-          <div class="stat-chip" style="color:var(--red-sem);"><strong>${r.saiu.length.toLocaleString('pt-BR')}</strong> de ${r.total.toLocaleString('pt-BR')} clientes saíram (${pct}%)</div>
-          <div class="stat-chip" style="color:var(--red-sem);"><strong>${linhasVozPerdidas.toLocaleString('pt-BR')}</strong> linhas de voz perdidas</div>
-          <div class="stat-chip" style="color:var(--red-sem);"><strong>${linhasBLPerdidas.toLocaleString('pt-BR')}</strong> linhas de banda larga perdidas</div>
-        </div>
+  const saiu = [];
+  mapaConsolidado.forEach((linha, cnpj) => { if (!mapaAtual.has(cnpj)) saiu.push(linha); });
+
+  const htmlErros = erros.map(e => `<div class="error-state" style="margin-bottom:12px;"><strong>${escapeHtml(e.label)}</strong> — ${escapeHtml(e.erro)}</div>`).join('');
+  const tituloBases = `${escapeHtml(labelsBases.join(' + '))} → base atual`;
+  const cabecalho = `<div style="font-size:13px;font-weight:700;margin-bottom:10px;">${tituloBases}</div>`;
+
+  if (mapaConsolidado.size === 0) {
+    area.innerHTML = htmlErros + `<div class="prod-status-section" style="margin-top:0;">${cabecalho}<div class="stat-chip" style="color:var(--red-sem);">Nenhum cliente encontrado nas bases selecionadas.</div></div>`;
+    return;
+  }
+
+  if (saiu.length === 0) {
+    area.innerHTML = htmlErros + `<div class="prod-status-section" style="margin-top:0;">${cabecalho}<div class="stat-chip" style="color:var(--green);">Nenhum cliente saiu — os ${mapaConsolidado.size.toLocaleString('pt-BR')} clientes dessas bases continuam na carteira atual.</div></div>`;
+    return;
+  }
+
+  const pct = Math.round(saiu.length / mapaConsolidado.size * 100);
+  const linhasVozPerdidas = saiu.reduce((s, l) => s + carteiraLinhas(l), 0);
+  const linhasBLPerdidas = saiu.reduce((s, l) => s + carteiraLinhasBL(l), 0);
+
+  area.innerHTML = htmlErros + `<div class="prod-status-section" style="margin-top:0;">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
+      <div style="font-size:13px;font-weight:700;">${tituloBases}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;">
+        <div class="stat-chip" style="color:var(--red-sem);"><strong>${saiu.length.toLocaleString('pt-BR')}</strong> de ${mapaConsolidado.size.toLocaleString('pt-BR')} clientes saíram (${pct}%)</div>
+        <div class="stat-chip" style="color:var(--red-sem);"><strong>${linhasVozPerdidas.toLocaleString('pt-BR')}</strong> linhas de voz perdidas</div>
+        <div class="stat-chip" style="color:var(--red-sem);"><strong>${linhasBLPerdidas.toLocaleString('pt-BR')}</strong> linhas de banda larga perdidas</div>
       </div>
-      <div class="table-wrap"><div class="table-scroll" style="max-height:320px;">
-        <table>
-          <thead><tr><th>CNPJ</th><th style="width:22%">Razão Social</th><th>Unidade</th><th>Cidade/UF</th><th class="center">Linhas Voz</th><th class="center">Linhas BL</th><th class="center">Classe</th></tr></thead>
-          <tbody>${r.saiu.map(linha => `<tr>
-            <td style="font-family:monospace;font-size:12px">${escapeHtml(linha['CNPJ'] || '—')}</td>
-            <td style="font-weight:500">${escapeHtml(linha['Razão Social'] || '—')}</td>
-            <td style="font-size:12px">${escapeHtml(carteiraUnidade(linha))}</td>
-            <td style="font-size:12px">${escapeHtml(linha['DSC_MUNICIPIO'] || '—')}/${escapeHtml(linha['UF'] || '—')}</td>
-            <td class="center">${carteiraLinhas(linha)}</td>
-            <td class="center">${carteiraLinhasBL(linha)}</td>
-            <td class="center">${escapeHtml(linha['Classificação'] || '—')}</td>
-          </tr>`).join('')}</tbody>
-        </table>
-      </div></div>
-    </div>`;
-  }).join('');
+    </div>
+    <div class="table-wrap"><div class="table-scroll" style="max-height:400px;">
+      <table>
+        <thead><tr><th>CNPJ</th><th style="width:22%">Razão Social</th><th>Unidade</th><th>Cidade/UF</th><th class="center">Linhas Voz</th><th class="center">Linhas BL</th><th class="center">Classe</th></tr></thead>
+        <tbody>${saiu.map(linha => `<tr>
+          <td style="font-family:monospace;font-size:12px">${escapeHtml(linha['CNPJ'] || '—')}</td>
+          <td style="font-weight:500">${escapeHtml(linha['Razão Social'] || '—')}</td>
+          <td style="font-size:12px">${escapeHtml(carteiraUnidade(linha))}</td>
+          <td style="font-size:12px">${escapeHtml(linha['DSC_MUNICIPIO'] || '—')}/${escapeHtml(linha['UF'] || '—')}</td>
+          <td class="center">${carteiraLinhas(linha)}</td>
+          <td class="center">${carteiraLinhasBL(linha)}</td>
+          <td class="center">${escapeHtml(linha['Classificação'] || '—')}</td>
+        </tr>`).join('')}</tbody>
+      </table>
+    </div></div>
+  </div>`;
 }
 
 // Mesma lógica do Churn: extrai o código do fim do Território e mapeia
