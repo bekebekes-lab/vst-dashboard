@@ -9108,6 +9108,7 @@ async function carteiraTrocarBase() {
 let carteiraComparativoAtivo = false;
 let carteiraBasesComparar = new Set(); // títulos de aba (bases) marcados nos chips
 let carteiraComparativoReqId = 0;
+let CARTEIRA_COMPARATIVO_ULTIMO = null; // { titulo, saiu } do último relatório renderizado, pro botão de download
 
 function toggleCarteiraComparativo() {
   carteiraComparativoAtivo = document.getElementById('carteira-comparativo-ativo').checked;
@@ -9306,9 +9307,18 @@ async function renderCarteiraComparativo() {
   });
   const linhasSaiu = somaLinhas(saiuDaCarteira);
   const linhasCancelou = somaLinhas(semLinhaAtiva);
+  const linhasTotalVoz = linhasSaiu.voz + linhasCancelou.voz;
+  const linhasTotalBL = linhasSaiu.bl + linhasCancelou.bl;
+
+  // Guarda o resultado calculado agora pro botão de download (evita
+  // recalcular tudo de novo só pra gerar o CSV).
+  CARTEIRA_COMPARATIVO_ULTIMO = { titulo: tituloBases, saiu };
 
   area.innerHTML = htmlErros + `<div class="prod-status-section" style="margin-top:0;">
-    <div style="font-size:13px;font-weight:700;margin-bottom:12px;">${tituloBases}</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+      <div style="font-size:13px;font-weight:700;">${tituloBases}</div>
+      <button class="btn-secondary" style="padding:5px 12px;font-size:11px;" onclick="carteiraExportarComparativoCsv()">⬇ Baixar relatório (CSV)</button>
+    </div>
     <div style="font-size:10px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">CNPJ</div>
     <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
       <div class="stat-chip" style="color:var(--red-sem);"><strong>${saiu.length.toLocaleString('pt-BR')}</strong> de ${mapaConsolidado.size.toLocaleString('pt-BR')} clientes saíram (${pct}%)</div>
@@ -9317,6 +9327,7 @@ async function renderCarteiraComparativo() {
     </div>
     <div style="font-size:10px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Linhas</div>
     <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
+      <div class="stat-chip" style="color:var(--red-sem);"><strong>${linhasTotalVoz.toLocaleString('pt-BR')}</strong> voz / <strong>${linhasTotalBL.toLocaleString('pt-BR')}</strong> BL perdidas no total</div>
       <div class="stat-chip" style="color:var(--red-sem);"><strong>${linhasSaiu.voz.toLocaleString('pt-BR')}</strong> voz / <strong>${linhasSaiu.bl.toLocaleString('pt-BR')}</strong> BL perdidas (saiu da carteira)</div>
       <div class="stat-chip" style="color:var(--orange, #eda100);"><strong>${linhasCancelou.voz.toLocaleString('pt-BR')}</strong> voz / <strong>${linhasCancelou.bl.toLocaleString('pt-BR')}</strong> BL perdidas (cancelou)</div>
     </div>
@@ -9337,6 +9348,31 @@ async function renderCarteiraComparativo() {
       </table>
     </div></div>
   </div>`;
+}
+
+// Baixa em CSV a mesma lista de clientes que saíram já calculada pro
+// relatório em tela (CARTEIRA_COMPARATIVO_ULTIMO) — não recalcula nada,
+// só formata o que já está renderizado.
+function carteiraExportarComparativoCsv() {
+  if (!CARTEIRA_COMPARATIVO_ULTIMO || CARTEIRA_COMPARATIVO_ULTIMO.saiu.length === 0) return;
+  const ROTULO_TIPO = { saiu_da_carteira: 'Saiu da carteira', sem_linha_ativa: 'Cancelou (sem linha ativa)' };
+  const header = ['CNPJ', 'Razão Social', 'Unidade', 'Cidade', 'UF', 'Linhas Voz', 'Linhas BL', 'Classificação', 'Situação', 'Última carteira ativa'];
+  const linhasCsv = CARTEIRA_COMPARATIVO_ULTIMO.saiu.map(({ linha, tipo, baseLabel }) => [
+    linha['CNPJ'] || '', linha['Razão Social'] || '', carteiraUnidade(linha),
+    linha['DSC_MUNICIPIO'] || '', linha['UF'] || '', carteiraLinhas(linha), carteiraLinhasBL(linha),
+    linha['Classificação'] || '', ROTULO_TIPO[tipo], baseLabel,
+  ].map(v => '"' + String(v).replace(/"/g, '""') + '"').join(','));
+
+  const csv = '\uFEFF' + header.map(h => '"' + h + '"').join(',') + '\n' + linhasCsv.join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'comparativo_carteira_' + CARTEIRA_BASE_ATUAL.replace(/[^\w-]+/g, '_') + '.csv';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 // Mesma lógica do Churn: extrai o código do fim do Território e mapeia
