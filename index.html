@@ -9204,6 +9204,18 @@ function carteiraMapaCnpjAtivos(dados) {
   return mapa;
 }
 
+// Mapa CNPJ -> linha de TODOS os registros, ativos ou não — usado só pra
+// distinguir, no comparativo de churn, se o CNPJ ainda existe na planilha
+// atual (mesmo sem linha ativa) ou se ele de fato sumiu da carteira.
+function carteiraMapaCnpjTodos(dados) {
+  const mapa = new Map();
+  dados.forEach(r => {
+    const digitos = (r['CNPJ'] || '').replace(/\D/g, '');
+    if (digitos && !mapa.has(digitos)) mapa.set(digitos, r);
+  });
+  return mapa;
+}
+
 async function renderCarteiraComparativo() {
   const area = document.getElementById('carteira-comparativo-area');
   if (!carteiraComparativoAtivo || carteiraBasesComparar.size === 0) {
@@ -9214,7 +9226,12 @@ async function renderCarteiraComparativo() {
   area.innerHTML = '<div class="loading-state"><div class="loading-spinner"></div><p>Calculando comparativo...</p></div>';
 
   const bases = await carteiraListarBases();
-  const mapaAtual = carteiraMapaCnpjAtivos(carteiraFiltrarComRecorteAtivo(CARTEIRA_DADOS));
+  const dadosAtuaisFiltrados = carteiraFiltrarComRecorteAtivo(CARTEIRA_DADOS);
+  const mapaAtualAtivos = carteiraMapaCnpjAtivos(dadosAtuaisFiltrados);
+  // "Todos" (ativo ou não) na base atual — só pra saber se o CNPJ ainda
+  // existe na planilha, mesmo sem nenhuma linha ativa (distingue "cancelou
+  // mas continua na carteira" de "sumiu da carteira de vez").
+  const mapaAtualTodos = carteiraMapaCnpjTodos(dadosAtuaisFiltrados);
 
   // Mais antiga primeiro — na consolidação abaixo, quando o mesmo CNPJ
   // aparece em mais de uma base selecionada, fica valendo a ocorrência da
@@ -9246,8 +9263,20 @@ async function renderCarteiraComparativo() {
   }
   if (idRequisicao !== carteiraComparativoReqId) return; // uma seleção mais nova já substituiu esta
 
+  // Dois tipos de churn, pedido explícito (o usuário notou que os dois
+  // vinham somados como se fossem a mesma coisa):
+  // - "saiu_da_carteira": o CNPJ nem aparece mais na planilha atual.
+  // - "sem_linha_ativa": o CNPJ continua na planilha, só que zerado (Voz e
+  //   BL ambos sem linha) — cancelou tudo, mas o registro ainda existe.
   const saiu = [];
-  mapaConsolidado.forEach((linha, cnpj) => { if (!mapaAtual.has(cnpj)) saiu.push(linha); });
+  mapaConsolidado.forEach((linha, cnpj) => {
+    if (mapaAtualAtivos.has(cnpj)) return; // ainda ativo — não é churn
+    const tipo = mapaAtualTodos.has(cnpj) ? 'sem_linha_ativa' : 'saiu_da_carteira';
+    saiu.push({ linha, tipo });
+  });
+  const saiuDaCarteira = saiu.filter(x => x.tipo === 'saiu_da_carteira');
+  const semLinhaAtiva = saiu.filter(x => x.tipo === 'sem_linha_ativa');
+  const ROTULO_TIPO = { saiu_da_carteira: 'Saiu da carteira', sem_linha_ativa: 'Cancelou (sem linha ativa)' };
 
   const htmlErros = erros.map(e => `<div class="error-state" style="margin-bottom:12px;"><strong>${escapeHtml(e.label)}</strong> — ${escapeHtml(e.erro)}</div>`).join('');
   const tituloBases = `${escapeHtml(labelsBases.join(' + '))} → base atual`;
@@ -9259,27 +9288,32 @@ async function renderCarteiraComparativo() {
   }
 
   if (saiu.length === 0) {
-    area.innerHTML = htmlErros + `<div class="prod-status-section" style="margin-top:0;">${cabecalho}<div class="stat-chip" style="color:var(--green);">Nenhum cliente saiu — os ${mapaConsolidado.size.toLocaleString('pt-BR')} clientes dessas bases continuam na carteira atual.</div></div>`;
+    area.innerHTML = htmlErros + `<div class="prod-status-section" style="margin-top:0;">${cabecalho}<div class="stat-chip" style="color:var(--green);">Nenhum cliente saiu — os ${mapaConsolidado.size.toLocaleString('pt-BR')} clientes dessas bases continuam ativos na carteira atual.</div></div>`;
     return;
   }
 
   const pct = Math.round(saiu.length / mapaConsolidado.size * 100);
-  const linhasVozPerdidas = saiu.reduce((s, l) => s + carteiraLinhas(l), 0);
-  const linhasBLPerdidas = saiu.reduce((s, l) => s + carteiraLinhasBL(l), 0);
+  const somaLinhas = lista => ({
+    voz: lista.reduce((s, x) => s + carteiraLinhas(x.linha), 0),
+    bl: lista.reduce((s, x) => s + carteiraLinhasBL(x.linha), 0),
+  });
+  const totalLinhas = somaLinhas(saiu);
 
   area.innerHTML = htmlErros + `<div class="prod-status-section" style="margin-top:0;">
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
       <div style="font-size:13px;font-weight:700;">${tituloBases}</div>
       <div style="display:flex;flex-wrap:wrap;gap:8px;">
         <div class="stat-chip" style="color:var(--red-sem);"><strong>${saiu.length.toLocaleString('pt-BR')}</strong> de ${mapaConsolidado.size.toLocaleString('pt-BR')} clientes saíram (${pct}%)</div>
-        <div class="stat-chip" style="color:var(--red-sem);"><strong>${linhasVozPerdidas.toLocaleString('pt-BR')}</strong> linhas de voz perdidas</div>
-        <div class="stat-chip" style="color:var(--red-sem);"><strong>${linhasBLPerdidas.toLocaleString('pt-BR')}</strong> linhas de banda larga perdidas</div>
+        <div class="stat-chip" style="color:var(--red-sem);"><strong>${saiuDaCarteira.length.toLocaleString('pt-BR')}</strong> saíram da carteira</div>
+        <div class="stat-chip" style="color:var(--red-sem);"><strong>${semLinhaAtiva.length.toLocaleString('pt-BR')}</strong> cancelaram (sem linha ativa)</div>
+        <div class="stat-chip" style="color:var(--red-sem);"><strong>${totalLinhas.voz.toLocaleString('pt-BR')}</strong> linhas de voz perdidas</div>
+        <div class="stat-chip" style="color:var(--red-sem);"><strong>${totalLinhas.bl.toLocaleString('pt-BR')}</strong> linhas de banda larga perdidas</div>
       </div>
     </div>
     <div class="table-wrap"><div class="table-scroll" style="max-height:400px;">
       <table>
-        <thead><tr><th>CNPJ</th><th style="width:22%">Razão Social</th><th>Unidade</th><th>Cidade/UF</th><th class="center">Linhas Voz</th><th class="center">Linhas BL</th><th class="center">Classe</th></tr></thead>
-        <tbody>${saiu.map(linha => `<tr>
+        <thead><tr><th>CNPJ</th><th style="width:20%">Razão Social</th><th>Unidade</th><th>Cidade/UF</th><th class="center">Linhas Voz</th><th class="center">Linhas BL</th><th class="center">Classe</th><th>Situação</th></tr></thead>
+        <tbody>${saiu.map(({ linha, tipo }) => `<tr>
           <td style="font-family:monospace;font-size:12px">${escapeHtml(linha['CNPJ'] || '—')}</td>
           <td style="font-weight:500">${escapeHtml(linha['Razão Social'] || '—')}</td>
           <td style="font-size:12px">${escapeHtml(carteiraUnidade(linha))}</td>
@@ -9287,6 +9321,7 @@ async function renderCarteiraComparativo() {
           <td class="center">${carteiraLinhas(linha)}</td>
           <td class="center">${carteiraLinhasBL(linha)}</td>
           <td class="center">${escapeHtml(linha['Classificação'] || '—')}</td>
+          <td style="font-size:12px;white-space:nowrap;color:${tipo === 'saiu_da_carteira' ? 'var(--red-sem)' : 'var(--orange, #eda100)'}">${ROTULO_TIPO[tipo]}</td>
         </tr>`).join('')}</tbody>
       </table>
     </div></div>
