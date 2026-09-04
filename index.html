@@ -9249,13 +9249,20 @@ async function renderCarteiraComparativo() {
   // Consolida (união, sem duplicar CNPJ) tudo que existiu em QUALQUER uma
   // das bases marcadas — pedido explícito: um único relatório olhando pra
   // tudo que já foi cliente em algum desses meses, não um relatório por mês.
+  // Guarda, junto com a linha, o rótulo da base de onde ela veio — como o
+  // merge abaixo só sobrescreve com uma ocorrência que TEM atividade (o
+  // mapa de cada base já vem filtrado por carteiraMapaCnpjAtivos), o que
+  // sobra no fim é exatamente a ÚLTIMA base marcada em que aquele CNPJ
+  // ainda tinha linha ativa — pedido explícito: mostrar isso por linha.
   const mapaConsolidado = new Map();
   const erros = [];
   for (const titulo of basesOrdenadas) {
     try {
       const dadosBase = await carteiraBaixarBase(titulo);
+      const baseInfo = bases.find(b => b.titulo === titulo);
+      const baseLabel = baseInfo ? carteiraRotuloBase(baseInfo, bases) : titulo;
       carteiraMapaCnpjAtivos(carteiraFiltrarComRecorteAtivo(dadosBase))
-        .forEach((linha, cnpj) => mapaConsolidado.set(cnpj, linha));
+        .forEach((linha, cnpj) => mapaConsolidado.set(cnpj, { linha, baseLabel }));
     } catch (e) {
       const baseInfo = bases.find(b => b.titulo === titulo);
       erros.push({ label: baseInfo ? carteiraRotuloBase(baseInfo, bases) : titulo, erro: e.message });
@@ -9269,10 +9276,10 @@ async function renderCarteiraComparativo() {
   // - "sem_linha_ativa": o CNPJ continua na planilha, só que zerado (Voz e
   //   BL ambos sem linha) — cancelou tudo, mas o registro ainda existe.
   const saiu = [];
-  mapaConsolidado.forEach((linha, cnpj) => {
+  mapaConsolidado.forEach(({ linha, baseLabel }, cnpj) => {
     if (mapaAtualAtivos.has(cnpj)) return; // ainda ativo — não é churn
     const tipo = mapaAtualTodos.has(cnpj) ? 'sem_linha_ativa' : 'saiu_da_carteira';
-    saiu.push({ linha, tipo });
+    saiu.push({ linha, tipo, baseLabel });
   });
   const saiuDaCarteira = saiu.filter(x => x.tipo === 'saiu_da_carteira');
   const semLinhaAtiva = saiu.filter(x => x.tipo === 'sem_linha_ativa');
@@ -9312,8 +9319,8 @@ async function renderCarteiraComparativo() {
     </div>
     <div class="table-wrap"><div class="table-scroll" style="max-height:400px;">
       <table>
-        <thead><tr><th>CNPJ</th><th style="width:20%">Razão Social</th><th>Unidade</th><th>Cidade/UF</th><th class="center">Linhas Voz</th><th class="center">Linhas BL</th><th class="center">Classe</th><th>Situação</th></tr></thead>
-        <tbody>${saiu.map(({ linha, tipo }) => `<tr>
+        <thead><tr><th>CNPJ</th><th style="width:18%">Razão Social</th><th>Unidade</th><th>Cidade/UF</th><th class="center">Linhas Voz</th><th class="center">Linhas BL</th><th class="center">Classe</th><th>Situação</th><th>Última carteira ativa</th></tr></thead>
+        <tbody>${saiu.map(({ linha, tipo, baseLabel }) => `<tr>
           <td style="font-family:monospace;font-size:12px">${escapeHtml(linha['CNPJ'] || '—')}</td>
           <td style="font-weight:500">${escapeHtml(linha['Razão Social'] || '—')}</td>
           <td style="font-size:12px">${escapeHtml(carteiraUnidade(linha))}</td>
@@ -9322,6 +9329,7 @@ async function renderCarteiraComparativo() {
           <td class="center">${carteiraLinhasBL(linha)}</td>
           <td class="center">${escapeHtml(linha['Classificação'] || '—')}</td>
           <td style="font-size:12px;white-space:nowrap;color:${tipo === 'saiu_da_carteira' ? 'var(--red-sem)' : 'var(--orange, #eda100)'}">${ROTULO_TIPO[tipo]}</td>
+          <td style="font-size:12px;white-space:nowrap;">${escapeHtml(baseLabel)}</td>
         </tr>`).join('')}</tbody>
       </table>
     </div></div>
