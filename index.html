@@ -9133,7 +9133,7 @@ const CARTEIRA_COMPARATIVO_COLUNAS = {
   blAgora: { label: 'BL Agora', numero: true, valor: x => x.blAgora },
   classe: { label: 'Classe', numero: false, valor: x => x.linha['Classificação'] || '' },
   situacao: { label: 'Situação', numero: false, valor: x => CARTEIRA_ROTULO_TIPO_CHURN[x.tipo] || '' },
-  ultimabase: { label: 'Última carteira ativa', numero: true, valor: x => x.baseOrdem },
+  ultimabase: { label: 'Pico de linhas em', numero: true, valor: x => x.baseOrdem },
 };
 
 function carteiraOrdenarComparativo(campo) {
@@ -9197,25 +9197,16 @@ function carteiraBaseEhAnterior(b, atual) {
 // a seleção anterior pras bases que continuam disponíveis.
 async function popularBasesCompararCarteira() {
   const chipsEl = document.getElementById('carteira-comparar-chips');
-  const bases = await carteiraListarBases(); // já vem ordenada: ano/mês/versão desc
+  const bases = await carteiraListarBases();
   const atualInfo = bases.find(b => b.titulo === CARTEIRA_BASE_ATUAL);
-  // Só a versão mais recente de cada mês — achado real (usuário testando):
-  // marcar as 2 versões do mesmo mês juntas (ex.: Ago v1 + v2, sendo v2 uma
-  // correção da mesma base) faz a consolidação ficar só com o dado da mais
-  // recente (v2) pra cada CNPJ repetido, escondendo uma queda de linha que
-  // já tinha acontecido DENTRO da correção v1→v2 — o relatório mostrava
-  // menos perda ao marcar mais bases, o oposto do esperado. Como `bases` já
-  // vem ordenada com a versão mais alta primeiro em caso de empate de
-  // ano/mês, a 1ª ocorrência de cada (ano,mês) é sempre a versão certa.
-  const mesesVistos = new Set();
-  const outras = atualInfo
-    ? bases.filter(b => carteiraBaseEhAnterior(b, atualInfo)).filter(b => {
-        const chave = `${b.ano}-${b.mes}`;
-        if (mesesVistos.has(chave)) return false;
-        mesesVistos.add(chave);
-        return true;
-      })
-    : [];
+  // As duas versões do mesmo mês PODEM ambas ser marcadas — pedido
+  // explícito: um cliente pode ter entrado (ou cancelado parte das linhas)
+  // entre uma versão e outra do mesmo mês, então v1 e v2 carregam
+  // informação real e diferente, não é só "a mesma base 2x". A
+  // consolidação (mais abaixo, em renderCarteiraComparativo) já lida com
+  // isso pegando o MAIOR valor de linhas visto entre as bases marcadas
+  // pra cada CNPJ, então marcar as duas nunca esconde uma queda.
+  const outras = atualInfo ? bases.filter(b => carteiraBaseEhAnterior(b, atualInfo)) : [];
   const selecionadasAntes = new Set(carteiraBasesComparar);
   carteiraBasesComparar.clear();
   if (outras.length === 0) {
@@ -9313,9 +9304,9 @@ async function renderCarteiraComparativo() {
   // mas continua na carteira" de "sumiu da carteira de vez").
   const mapaAtualTodos = carteiraMapaCnpjTodos(dadosAtuaisFiltrados);
 
-  // Mais antiga primeiro — na consolidação abaixo, quando o mesmo CNPJ
-  // aparece em mais de uma base selecionada, fica valendo a ocorrência da
-  // base MAIS RECENTE entre as escolhidas (sobrescrita por ordem).
+  // Só pra exibição no título, mais antiga primeiro — a ordem aqui não
+  // afeta mais a consolidação abaixo (que já usa o maior valor visto,
+  // não "a última processada").
   const basesOrdenadas = [...carteiraBasesComparar].sort((a, b) => {
     const ba = bases.find(x => x.titulo === a), bb = bases.find(x => x.titulo === b);
     if (!ba || !bb) return 0;
@@ -9329,11 +9320,13 @@ async function renderCarteiraComparativo() {
   // Consolida (união, sem duplicar CNPJ) tudo que existiu em QUALQUER uma
   // das bases marcadas — pedido explícito: um único relatório olhando pra
   // tudo que já foi cliente em algum desses meses, não um relatório por mês.
-  // Guarda, junto com a linha, o rótulo da base de onde ela veio — como o
-  // merge abaixo só sobrescreve com uma ocorrência que TEM atividade (o
-  // mapa de cada base já vem filtrado por carteiraMapaCnpjAtivos), o que
-  // sobra no fim é exatamente a ÚLTIMA base marcada em que aquele CNPJ
-  // ainda tinha linha ativa — pedido explícito: mostrar isso por linha.
+  // Quando o mesmo CNPJ aparece em mais de uma base marcada (comum entre 2
+  // versões do MESMO mês — pedido explícito: elas podem diferir de verdade,
+  // um cliente pode ter entrado ou cancelado parte das linhas entre uma
+  // versão e outra), fica valendo o maior total de linhas (Voz+BL) visto
+  // entre elas, não "a última selecionada" — assim uma queda que já tinha
+  // acontecido DENTRO da correção v1→v2 nunca fica escondida só por v2 ter
+  // sido processada por último.
   const mapaConsolidado = new Map();
   const erros = [];
   for (const titulo of basesOrdenadas) {
@@ -9344,8 +9337,12 @@ async function renderCarteiraComparativo() {
       // Chave numérica pra ordenar essa coluna cronologicamente na tabela
       // (o rótulo, tipo "Ago/2026 (v2)", não ordena certo como texto).
       const baseOrdem = baseInfo ? (baseInfo.ano * 10000 + baseInfo.mes * 100 + baseInfo.versao) : 0;
-      carteiraMapaCnpjAtivos(carteiraFiltrarComRecorteAtivo(dadosBase))
-        .forEach((linha, cnpj) => mapaConsolidado.set(cnpj, { linha, baseLabel, baseOrdem }));
+      carteiraMapaCnpjAtivos(carteiraFiltrarComRecorteAtivo(dadosBase)).forEach((linha, cnpj) => {
+        const somaNova = carteiraLinhas(linha) + carteiraLinhasBL(linha);
+        const existente = mapaConsolidado.get(cnpj);
+        const somaExistente = existente ? (carteiraLinhas(existente.linha) + carteiraLinhasBL(existente.linha)) : -1;
+        if (somaNova > somaExistente) mapaConsolidado.set(cnpj, { linha, baseLabel, baseOrdem });
+      });
     } catch (e) {
       const baseInfo = bases.find(b => b.titulo === titulo);
       erros.push({ label: baseInfo ? carteiraRotuloBase(baseInfo, bases) : titulo, erro: e.message });
@@ -9490,7 +9487,7 @@ function carteiraRenderComparativoHtml() {
 // só formata o que já está renderizado.
 function carteiraExportarComparativoCsv() {
   if (!CARTEIRA_COMPARATIVO_ULTIMO || CARTEIRA_COMPARATIVO_ULTIMO.saiu.length === 0) return;
-  const header = ['CNPJ', 'Razão Social', 'Unidade', 'Cidade', 'UF', 'Voz Antes', 'Voz Agora', 'BL Antes', 'BL Agora', 'Classificação', 'Situação', 'Última carteira ativa'];
+  const header = ['CNPJ', 'Razão Social', 'Unidade', 'Cidade', 'UF', 'Voz Antes', 'Voz Agora', 'BL Antes', 'BL Agora', 'Classificação', 'Situação', 'Pico de linhas em'];
   // Exporta na mesma ordem que está na tela agora (clique no cabeçalho já
   // reordenou CARTEIRA_COMPARATIVO_ORDEM antes de baixar, se o usuário fez isso).
   const linhasCsv = carteiraOrdenarLista(CARTEIRA_COMPARATIVO_ULTIMO.saiu).map(({ linha, tipo, baseLabel, vozAntes, vozAgora, blAntes, blAgora }) => [
