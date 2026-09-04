@@ -9197,9 +9197,25 @@ function carteiraBaseEhAnterior(b, atual) {
 // a seleção anterior pras bases que continuam disponíveis.
 async function popularBasesCompararCarteira() {
   const chipsEl = document.getElementById('carteira-comparar-chips');
-  const bases = await carteiraListarBases();
+  const bases = await carteiraListarBases(); // já vem ordenada: ano/mês/versão desc
   const atualInfo = bases.find(b => b.titulo === CARTEIRA_BASE_ATUAL);
-  const outras = atualInfo ? bases.filter(b => carteiraBaseEhAnterior(b, atualInfo)) : [];
+  // Só a versão mais recente de cada mês — achado real (usuário testando):
+  // marcar as 2 versões do mesmo mês juntas (ex.: Ago v1 + v2, sendo v2 uma
+  // correção da mesma base) faz a consolidação ficar só com o dado da mais
+  // recente (v2) pra cada CNPJ repetido, escondendo uma queda de linha que
+  // já tinha acontecido DENTRO da correção v1→v2 — o relatório mostrava
+  // menos perda ao marcar mais bases, o oposto do esperado. Como `bases` já
+  // vem ordenada com a versão mais alta primeiro em caso de empate de
+  // ano/mês, a 1ª ocorrência de cada (ano,mês) é sempre a versão certa.
+  const mesesVistos = new Set();
+  const outras = atualInfo
+    ? bases.filter(b => carteiraBaseEhAnterior(b, atualInfo)).filter(b => {
+        const chave = `${b.ano}-${b.mes}`;
+        if (mesesVistos.has(chave)) return false;
+        mesesVistos.add(chave);
+        return true;
+      })
+    : [];
   const selecionadasAntes = new Set(carteiraBasesComparar);
   carteiraBasesComparar.clear();
   if (outras.length === 0) {
