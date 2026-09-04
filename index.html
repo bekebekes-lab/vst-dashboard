@@ -9108,7 +9108,58 @@ async function carteiraTrocarBase() {
 let carteiraComparativoAtivo = false;
 let carteiraBasesComparar = new Set(); // títulos de aba (bases) marcados nos chips
 let carteiraComparativoReqId = 0;
-let CARTEIRA_COMPARATIVO_ULTIMO = null; // { titulo, saiu } do último relatório renderizado, pro botão de download
+let CARTEIRA_COMPARATIVO_ULTIMO = null; // { tituloBases, htmlErros, mapaConsolidado, saiu, saiuDaCarteira, semLinhaAtiva, pct, linhasSaiu, linhasCancelou, linhasTotalVoz, linhasTotalBL } do último relatório calculado
+let CARTEIRA_COMPARATIVO_ORDEM = { campo: null, direcao: 'asc' }; // ordenação da tabela (clique no cabeçalho)
+const CARTEIRA_ROTULO_TIPO_CHURN = { saiu_da_carteira: 'Saiu da carteira', sem_linha_ativa: 'Cancelou (sem linha ativa)' };
+// Colunas ordenáveis da tabela do comparativo — "numero: true" ordena
+// numericamente e começa do maior pro menor; texto começa A-Z.
+const CARTEIRA_COMPARATIVO_COLUNAS = {
+  cnpj: { label: 'CNPJ', numero: false, valor: x => x.linha['CNPJ'] || '' },
+  razao: { label: 'Razão Social', numero: false, valor: x => x.linha['Razão Social'] || '' },
+  unidade: { label: 'Unidade', numero: false, valor: x => carteiraUnidade(x.linha) },
+  cidadeuf: { label: 'Cidade/UF', numero: false, valor: x => `${x.linha['DSC_MUNICIPIO'] || ''}/${x.linha['UF'] || ''}` },
+  voz: { label: 'Linhas Voz', numero: true, valor: x => carteiraLinhas(x.linha) },
+  bl: { label: 'Linhas BL', numero: true, valor: x => carteiraLinhasBL(x.linha) },
+  classe: { label: 'Classe', numero: false, valor: x => x.linha['Classificação'] || '' },
+  situacao: { label: 'Situação', numero: false, valor: x => CARTEIRA_ROTULO_TIPO_CHURN[x.tipo] || '' },
+  ultimabase: { label: 'Última carteira ativa', numero: true, valor: x => x.baseOrdem },
+};
+
+function carteiraOrdenarComparativo(campo) {
+  const ordem = CARTEIRA_COMPARATIVO_ORDEM;
+  if (ordem.campo === campo) {
+    ordem.direcao = ordem.direcao === 'asc' ? 'desc' : 'asc';
+  } else {
+    ordem.campo = campo;
+    ordem.direcao = CARTEIRA_COMPARATIVO_COLUNAS[campo].numero ? 'desc' : 'asc';
+  }
+  carteiraRenderComparativoHtml();
+}
+
+function carteiraOrdenarLista(lista) {
+  const { campo, direcao } = CARTEIRA_COMPARATIVO_ORDEM;
+  if (!campo) return lista;
+  const col = CARTEIRA_COMPARATIVO_COLUNAS[campo];
+  const copia = [...lista];
+  copia.sort((a, b) => {
+    const va = col.valor(a), vb = col.valor(b);
+    const cmp = col.numero ? (va - vb) : String(va).localeCompare(String(vb), 'pt-BR');
+    return direcao === 'asc' ? cmp : -cmp;
+  });
+  return copia;
+}
+
+function carteiraThOrdenavel(campo, styleExtra = '', classe = '') {
+  const col = CARTEIRA_COMPARATIVO_COLUNAS[campo];
+  const ativo = CARTEIRA_COMPARATIVO_ORDEM.campo === campo;
+  const seta = ativo ? (CARTEIRA_COMPARATIVO_ORDEM.direcao === 'asc' ? ' ▲' : ' ▼') : '';
+  const classeAttr = classe ? ` class="${classe}"` : '';
+  // Cabeçalho congelado (sticky) dentro do .table-scroll — precisa do
+  // próprio background aqui, não só no <tr> pai (que não acompanha o
+  // elemento sticky), senão o texto das linhas rolando por baixo aparece
+  // por trás do cabeçalho.
+  return `<th${classeAttr} style="cursor:pointer;user-select:none;position:sticky;top:0;background:var(--brand);z-index:1;${styleExtra}" onclick="carteiraOrdenarComparativo('${campo}')" title="Clique pra ordenar">${escapeHtml(col.label)}${seta}</th>`;
+}
 
 function toggleCarteiraComparativo() {
   carteiraComparativoAtivo = document.getElementById('carteira-comparativo-ativo').checked;
@@ -9221,6 +9272,7 @@ async function renderCarteiraComparativo() {
   const area = document.getElementById('carteira-comparativo-area');
   if (!carteiraComparativoAtivo || carteiraBasesComparar.size === 0) {
     area.innerHTML = '';
+    CARTEIRA_COMPARATIVO_ULTIMO = null;
     return;
   }
   const idRequisicao = ++carteiraComparativoReqId;
@@ -9262,8 +9314,11 @@ async function renderCarteiraComparativo() {
       const dadosBase = await carteiraBaixarBase(titulo);
       const baseInfo = bases.find(b => b.titulo === titulo);
       const baseLabel = baseInfo ? carteiraRotuloBase(baseInfo, bases) : titulo;
+      // Chave numérica pra ordenar essa coluna cronologicamente na tabela
+      // (o rótulo, tipo "Ago/2026 (v2)", não ordena certo como texto).
+      const baseOrdem = baseInfo ? (baseInfo.ano * 10000 + baseInfo.mes * 100 + baseInfo.versao) : 0;
       carteiraMapaCnpjAtivos(carteiraFiltrarComRecorteAtivo(dadosBase))
-        .forEach((linha, cnpj) => mapaConsolidado.set(cnpj, { linha, baseLabel }));
+        .forEach((linha, cnpj) => mapaConsolidado.set(cnpj, { linha, baseLabel, baseOrdem }));
     } catch (e) {
       const baseInfo = bases.find(b => b.titulo === titulo);
       erros.push({ label: baseInfo ? carteiraRotuloBase(baseInfo, bases) : titulo, erro: e.message });
@@ -9277,14 +9332,13 @@ async function renderCarteiraComparativo() {
   // - "sem_linha_ativa": o CNPJ continua na planilha, só que zerado (Voz e
   //   BL ambos sem linha) — cancelou tudo, mas o registro ainda existe.
   const saiu = [];
-  mapaConsolidado.forEach(({ linha, baseLabel }, cnpj) => {
+  mapaConsolidado.forEach(({ linha, baseLabel, baseOrdem }, cnpj) => {
     if (mapaAtualAtivos.has(cnpj)) return; // ainda ativo — não é churn
     const tipo = mapaAtualTodos.has(cnpj) ? 'sem_linha_ativa' : 'saiu_da_carteira';
-    saiu.push({ linha, tipo, baseLabel });
+    saiu.push({ linha, tipo, baseLabel, baseOrdem });
   });
   const saiuDaCarteira = saiu.filter(x => x.tipo === 'saiu_da_carteira');
   const semLinhaAtiva = saiu.filter(x => x.tipo === 'sem_linha_ativa');
-  const ROTULO_TIPO = { saiu_da_carteira: 'Saiu da carteira', sem_linha_ativa: 'Cancelou (sem linha ativa)' };
 
   const htmlErros = erros.map(e => `<div class="error-state" style="margin-bottom:12px;"><strong>${escapeHtml(e.label)}</strong> — ${escapeHtml(e.erro)}</div>`).join('');
   const tituloBases = `${escapeHtml(labelsBases.join(' + '))} → base atual`;
@@ -9292,11 +9346,13 @@ async function renderCarteiraComparativo() {
 
   if (mapaConsolidado.size === 0) {
     area.innerHTML = htmlErros + `<div class="prod-status-section" style="margin-top:0;">${cabecalho}<div class="stat-chip" style="color:var(--red-sem);">Nenhum cliente encontrado nas bases selecionadas.</div></div>`;
+    CARTEIRA_COMPARATIVO_ULTIMO = null;
     return;
   }
 
   if (saiu.length === 0) {
     area.innerHTML = htmlErros + `<div class="prod-status-section" style="margin-top:0;">${cabecalho}<div class="stat-chip" style="color:var(--green);">Nenhum cliente saiu — os ${mapaConsolidado.size.toLocaleString('pt-BR')} clientes dessas bases continuam ativos na carteira atual.</div></div>`;
+    CARTEIRA_COMPARATIVO_ULTIMO = null;
     return;
   }
 
@@ -9310,9 +9366,27 @@ async function renderCarteiraComparativo() {
   const linhasTotalVoz = linhasSaiu.voz + linhasCancelou.voz;
   const linhasTotalBL = linhasSaiu.bl + linhasCancelou.bl;
 
-  // Guarda o resultado calculado agora pro botão de download (evita
-  // recalcular tudo de novo só pra gerar o CSV).
-  CARTEIRA_COMPARATIVO_ULTIMO = { titulo: tituloBases, saiu };
+  // Guarda tudo já calculado — o botão de download e a reordenação por
+  // clique no cabeçalho reaproveitam isso sem recalcular nem baixar as
+  // bases de novo (só reordenam a lista e remontam o HTML da tabela).
+  CARTEIRA_COMPARATIVO_ULTIMO = {
+    tituloBases, htmlErros, mapaConsolidado, saiu, saiuDaCarteira, semLinhaAtiva,
+    pct, linhasSaiu, linhasCancelou, linhasTotalVoz, linhasTotalBL,
+  };
+  CARTEIRA_COMPARATIVO_ORDEM = { campo: null, direcao: 'asc' }; // reseta a ordenação a cada novo cálculo
+  carteiraRenderComparativoHtml();
+}
+
+// Só remonta o HTML a partir do que já está em CARTEIRA_COMPARATIVO_ULTIMO
+// — usado tanto pela primeira renderização quanto por um clique de
+// ordenação no cabeçalho da tabela (nenhum dos dois precisa buscar dado
+// de novo).
+function carteiraRenderComparativoHtml() {
+  const area = document.getElementById('carteira-comparativo-area');
+  const r = CARTEIRA_COMPARATIVO_ULTIMO;
+  if (!r) return;
+  const { tituloBases, htmlErros, mapaConsolidado, saiu, saiuDaCarteira, semLinhaAtiva, pct, linhasSaiu, linhasCancelou, linhasTotalVoz, linhasTotalBL } = r;
+  const saiuOrdenado = carteiraOrdenarLista(saiu);
 
   area.innerHTML = htmlErros + `<div class="prod-status-section" style="margin-top:0;">
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
@@ -9331,10 +9405,21 @@ async function renderCarteiraComparativo() {
       <div class="stat-chip" style="color:var(--red-sem);"><strong>${linhasSaiu.voz.toLocaleString('pt-BR')}</strong> voz / <strong>${linhasSaiu.bl.toLocaleString('pt-BR')}</strong> BL perdidas (saiu da carteira)</div>
       <div class="stat-chip" style="color:var(--orange, #eda100);"><strong>${linhasCancelou.voz.toLocaleString('pt-BR')}</strong> voz / <strong>${linhasCancelou.bl.toLocaleString('pt-BR')}</strong> BL perdidas (cancelou)</div>
     </div>
+    <div style="font-size:11px;color:var(--text-3);margin-bottom:4px;">Clique num cabeçalho da tabela pra ordenar (clique de novo pra inverter).</div>
     <div class="table-wrap"><div class="table-scroll" style="max-height:400px;">
       <table>
-        <thead><tr><th>CNPJ</th><th style="width:18%">Razão Social</th><th>Unidade</th><th>Cidade/UF</th><th class="center">Linhas Voz</th><th class="center">Linhas BL</th><th class="center">Classe</th><th>Situação</th><th>Última carteira ativa</th></tr></thead>
-        <tbody>${saiu.map(({ linha, tipo, baseLabel }) => `<tr>
+        <thead><tr>
+          ${carteiraThOrdenavel('cnpj')}
+          ${carteiraThOrdenavel('razao', 'width:18%;')}
+          ${carteiraThOrdenavel('unidade')}
+          ${carteiraThOrdenavel('cidadeuf')}
+          ${carteiraThOrdenavel('voz', '', 'center')}
+          ${carteiraThOrdenavel('bl', '', 'center')}
+          ${carteiraThOrdenavel('classe', '', 'center')}
+          ${carteiraThOrdenavel('situacao')}
+          ${carteiraThOrdenavel('ultimabase')}
+        </tr></thead>
+        <tbody>${saiuOrdenado.map(({ linha, tipo, baseLabel }) => `<tr>
           <td style="font-family:monospace;font-size:12px">${escapeHtml(linha['CNPJ'] || '—')}</td>
           <td style="font-weight:500">${escapeHtml(linha['Razão Social'] || '—')}</td>
           <td style="font-size:12px">${escapeHtml(carteiraUnidade(linha))}</td>
@@ -9342,7 +9427,7 @@ async function renderCarteiraComparativo() {
           <td class="center">${carteiraLinhas(linha)}</td>
           <td class="center">${carteiraLinhasBL(linha)}</td>
           <td class="center">${escapeHtml(linha['Classificação'] || '—')}</td>
-          <td style="font-size:12px;white-space:nowrap;color:${tipo === 'saiu_da_carteira' ? 'var(--red-sem)' : 'var(--orange, #eda100)'}">${ROTULO_TIPO[tipo]}</td>
+          <td style="font-size:12px;white-space:nowrap;color:${tipo === 'saiu_da_carteira' ? 'var(--red-sem)' : 'var(--orange, #eda100)'}">${CARTEIRA_ROTULO_TIPO_CHURN[tipo]}</td>
           <td style="font-size:12px;white-space:nowrap;">${escapeHtml(baseLabel)}</td>
         </tr>`).join('')}</tbody>
       </table>
@@ -9355,12 +9440,13 @@ async function renderCarteiraComparativo() {
 // só formata o que já está renderizado.
 function carteiraExportarComparativoCsv() {
   if (!CARTEIRA_COMPARATIVO_ULTIMO || CARTEIRA_COMPARATIVO_ULTIMO.saiu.length === 0) return;
-  const ROTULO_TIPO = { saiu_da_carteira: 'Saiu da carteira', sem_linha_ativa: 'Cancelou (sem linha ativa)' };
   const header = ['CNPJ', 'Razão Social', 'Unidade', 'Cidade', 'UF', 'Linhas Voz', 'Linhas BL', 'Classificação', 'Situação', 'Última carteira ativa'];
-  const linhasCsv = CARTEIRA_COMPARATIVO_ULTIMO.saiu.map(({ linha, tipo, baseLabel }) => [
+  // Exporta na mesma ordem que está na tela agora (clique no cabeçalho já
+  // reordenou CARTEIRA_COMPARATIVO_ORDEM antes de baixar, se o usuário fez isso).
+  const linhasCsv = carteiraOrdenarLista(CARTEIRA_COMPARATIVO_ULTIMO.saiu).map(({ linha, tipo, baseLabel }) => [
     linha['CNPJ'] || '', linha['Razão Social'] || '', carteiraUnidade(linha),
     linha['DSC_MUNICIPIO'] || '', linha['UF'] || '', carteiraLinhas(linha), carteiraLinhasBL(linha),
-    linha['Classificação'] || '', ROTULO_TIPO[tipo], baseLabel,
+    linha['Classificação'] || '', CARTEIRA_ROTULO_TIPO_CHURN[tipo], baseLabel,
   ].map(v => '"' + String(v).replace(/"/g, '""') + '"').join(','));
 
   const csv = '\uFEFF' + header.map(h => '"' + h + '"').join(',') + '\n' + linhasCsv.join('\n');
