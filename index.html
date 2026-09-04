@@ -9308,15 +9308,17 @@ async function renderCarteiraComparativo() {
   const linhasCancelou = somaLinhas(semLinhaAtiva);
 
   area.innerHTML = htmlErros + `<div class="prod-status-section" style="margin-top:0;">
-    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
-      <div style="font-size:13px;font-weight:700;">${tituloBases}</div>
-      <div style="display:flex;flex-wrap:wrap;gap:8px;">
-        <div class="stat-chip" style="color:var(--red-sem);"><strong>${saiu.length.toLocaleString('pt-BR')}</strong> de ${mapaConsolidado.size.toLocaleString('pt-BR')} clientes saíram (${pct}%)</div>
-        <div class="stat-chip" style="color:var(--red-sem);"><strong>${saiuDaCarteira.length.toLocaleString('pt-BR')}</strong> saíram da carteira</div>
-        <div class="stat-chip" style="color:var(--red-sem);"><strong>${linhasSaiu.voz.toLocaleString('pt-BR')}</strong> voz / <strong>${linhasSaiu.bl.toLocaleString('pt-BR')}</strong> BL perdidas (saiu da carteira)</div>
-        <div class="stat-chip" style="color:var(--orange, #eda100);"><strong>${semLinhaAtiva.length.toLocaleString('pt-BR')}</strong> cancelaram (sem linha ativa)</div>
-        <div class="stat-chip" style="color:var(--orange, #eda100);"><strong>${linhasCancelou.voz.toLocaleString('pt-BR')}</strong> voz / <strong>${linhasCancelou.bl.toLocaleString('pt-BR')}</strong> BL perdidas (cancelou)</div>
-      </div>
+    <div style="font-size:13px;font-weight:700;margin-bottom:12px;">${tituloBases}</div>
+    <div style="font-size:10px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">CNPJ</div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+      <div class="stat-chip" style="color:var(--red-sem);"><strong>${saiu.length.toLocaleString('pt-BR')}</strong> de ${mapaConsolidado.size.toLocaleString('pt-BR')} clientes saíram (${pct}%)</div>
+      <div class="stat-chip" style="color:var(--red-sem);"><strong>${saiuDaCarteira.length.toLocaleString('pt-BR')}</strong> saíram da carteira</div>
+      <div class="stat-chip" style="color:var(--orange, #eda100);"><strong>${semLinhaAtiva.length.toLocaleString('pt-BR')}</strong> cancelaram (sem linha ativa)</div>
+    </div>
+    <div style="font-size:10px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Linhas</div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
+      <div class="stat-chip" style="color:var(--red-sem);"><strong>${linhasSaiu.voz.toLocaleString('pt-BR')}</strong> voz / <strong>${linhasSaiu.bl.toLocaleString('pt-BR')}</strong> BL perdidas (saiu da carteira)</div>
+      <div class="stat-chip" style="color:var(--orange, #eda100);"><strong>${linhasCancelou.voz.toLocaleString('pt-BR')}</strong> voz / <strong>${linhasCancelou.bl.toLocaleString('pt-BR')}</strong> BL perdidas (cancelou)</div>
     </div>
     <div class="table-wrap"><div class="table-scroll" style="max-height:400px;">
       <table>
