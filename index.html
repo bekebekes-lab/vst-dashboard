@@ -596,6 +596,12 @@
   .fila-item:hover { background: var(--brand-light); }
   .fila-item:hover .fila-name { color: var(--brand); }
   .fila-item:hover .fila-count { color: var(--brand); }
+  .fila-subgrupo-label {
+    font-size: 9px; font-weight: 700; color: var(--text-3);
+    text-transform: uppercase; letter-spacing: .06em;
+    margin: 10px 0 2px; padding: 0 4px;
+  }
+  .fila-subgrupo-label:first-child { margin-top: 0; }
 
   /* ─── DRILL DOWN ─────────────────────────────────────────── */
   .detail-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
@@ -3155,6 +3161,45 @@ function gerReceitaLinha(r) {
   return (r['GRUPO'] || '') === 'NET PJ - VIRTUA' ? qtd * valor : valor;
 }
 
+// Subagrupamento dos status de fila dentro de cada card do Gerencial (Geral/
+// Gross/Renovação/BL/Titularidade/Serv. Digitais) — decidido status a status
+// com o usuário. Fila sem mapeamento aqui (ex.: um status novo criado depois)
+// cai em "Outros" em vez de sumir da lista.
+const SUBGRUPOS_FILA = {
+  'Ativo/Instalado': 'Ativo',
+  'Aguardando Instalação': 'Esteira de ativação',
+  'Aguardando NF': 'Esteira de ativação',
+  'Aguardando Portabilidade': 'Esteira de ativação',
+  'Portabilidade Agendada': 'Esteira de ativação',
+  'Desconexão por Opção': 'Esteira de ativação (correção)',
+  'Falha portabilidade': 'Esteira de ativação (correção)',
+  'Portabilidade Agendada - SMS Nao': 'Esteira de ativação (correção)',
+  'Quebra': 'Esteira de ativação (correção)',
+  'Análise de Crédito': 'Esteira operadora',
+  'Análise EC': 'Esteira operadora',
+  'Validação Pendente': 'Esteira operadora',
+  'Aguardando Assinatura': 'Esteira escritório',
+  'Aguardando Consultor': 'Esteira escritório',
+  'Aguardando GC': 'Esteira escritório',
+  'Para Input': 'Esteira escritório',
+  'Pendente de Biometria': 'Esteira escritório',
+  'Rejeitada Crédito': 'Esteira escritório',
+  'Tratativa Operadora': 'Esteira escritório',
+};
+const ORDEM_SUBGRUPOS_FILA = ['Ativo', 'Esteira de ativação', 'Esteira de ativação (correção)', 'Esteira operadora', 'Esteira escritório', 'Outros'];
+
+// Agrupa a lista [fila, valor] (já ordenada por valor desc) nos subgrupos
+// acima, preservando a ordem interna de cada subgrupo — só entram na saída
+// os subgrupos que de fato tiverem algum status presente nesse card.
+function agruparFilasPorSubgrupo(filas) {
+  const porGrupo = {};
+  filas.forEach(([fn, fv]) => {
+    const grupo = SUBGRUPOS_FILA[fn] || 'Outros';
+    (porGrupo[grupo] || (porGrupo[grupo] = [])).push([fn, fv]);
+  });
+  return ORDEM_SUBGRUPOS_FILA.filter(g => porGrupo[g]).map(g => ({ grupo: g, itens: porGrupo[g] }));
+}
+
 // ─── main render ────────────────────────────────────────────────────────────
 function render() {
   if (!ALL_DATA.length) return;
@@ -3258,15 +3303,18 @@ function render() {
   document.getElementById('metrics-area').innerHTML = `<div class="metrics-grid">${cats.map((c, i) => {
     const med = gerExibirReceita ? gerFmtMoeda(metrics[c].totalRec / nc) : (metrics[c].total / nc).toFixed(1);
     const filas = Object.entries(gerExibirReceita ? metrics[c].filasRec : metrics[c].filas).sort((a, b) => b[1] - a[1]);
+    const subgrupos = agruparFilasPorSubgrupo(filas);
     return `<div class="metric-card ${i === 0 ? 'highlight' : ''}">
       <div class="metric-label">${c}</div>
       <div class="metric-value">${gerExibirReceita ? gerFmtMoeda(metrics[c].totalRec) : metrics[c].total}</div>
       <div class="metric-avg">Média/consultor: ${med}</div>
-      <div class="filas-list">${filas.map(([fn, fv]) => `
+      <div class="filas-list">${subgrupos.map(({ grupo, itens }) => `
+        <div class="fila-subgrupo-label">${grupo}</div>
+        ${itens.map(([fn, fv]) => `
         <div class="fila-item" onclick="drillFila('${c}','${fn.replace(/'/g,"\\'")}')">
           <span class="fila-name">${fn}</span>
           <span class="fila-count">${gerExibirReceita ? gerFmtMoeda(fv) : fv}</span>
-        </div>`).join('')}
+        </div>`).join('')}`).join('')}
       </div>
     </div>`;
   }).join('')}</div>`;
