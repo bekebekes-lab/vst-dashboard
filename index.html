@@ -1596,6 +1596,13 @@
           <span>Por Gestor</span>
         </div>
       </div>
+      <div class="prod-toggle-group">
+        <label class="top-label">&nbsp;</label>
+        <div class="prod-toggle" id="prod-toggle-equipe-visao" onclick="toggleVisaoEquipe()">
+          <div class="prod-toggle-dot"></div>
+          <span>Por Equipe</span>
+        </div>
+      </div>
       <div class="prod-mom-tri-wrap" id="prod-mom-tri-wrap">
         <div class="prod-toggle-group">
           <label class="top-label">Comparativo</label>
@@ -4170,6 +4177,7 @@ const EQUIPES_PR_LIST = [
 let prodExibirReceita = false;
 let prodConvergencia = false;
 let prodVisaoGestor = false;
+let prodVisaoEquipe = false;
 let prodStatusSelecionados = new Set();
 let prodExibirMOM = false;
 let prodExibirTRI = false;
@@ -4260,13 +4268,15 @@ async function fetchAbaDados(sheetName) {
 //     mesmo quando Ativo/Instalado também está marcado — nesse caso o Ativo
 //     deixa de olhar DATA REF e passa a entrar nessa mesma contagem por CADASTRO.
 //     A contagem é única (não soma duplicado entre os dois status).
-// modoAgregacao: 'tag' (padrão, por unidade) ou 'gestor' (visão Por Gestor).
-// A chave de agregação usada no mapa de saída acompanha a visão ativa na tela,
-// para que o lookup no comparativo (por r.tag, que na visão Por Gestor guarda
-// o nome do gestor) sempre encontre o valor correspondente.
+// modoAgregacao: 'tag' (padrão, por unidade), 'gestor' (visão Por Gestor) ou
+// 'equipe' (visão Por Equipe). A chave de agregação usada no mapa de saída
+// acompanha a visão ativa na tela, para que o lookup no comparativo (por
+// r.tag, que nas visões Por Gestor/Por Equipe guarda o nome do gestor ou da
+// equipe) sempre encontre o valor correspondente.
 function contarStatusPorTag(rows, filtros, statusSelecionados, cutoffDate, modoAgregacao) {
   const tagsMap = MAPEAMENTO_TAGS;
   const porGestor = modoAgregacao === 'gestor';
+  const porEquipe = modoAgregacao === 'equipe';
   const usarAguardando = statusSelecionados.has('Aguardando Instalação');
   const out = {};
   rows.forEach(r => {
@@ -4294,7 +4304,7 @@ function contarStatusPorTag(rows, filtros, statusSelecionados, cutoffDate, modoA
     // Grupo: 100% dos lançamentos da coluna GRUPO da base entram em "Geral" (sem exclusão)
     if (filtros.grupo !== 'Geral' && grupo !== filtros.grupo) return;
 
-    const chave = porGestor ? ges : tag;
+    const chave = porGestor ? ges : porEquipe ? equipe : tag;
 
     if (usarAguardando) {
       // Aguardando Instalação sozinho OU combinado com Ativo/Instalado:
@@ -4424,8 +4434,23 @@ function toggleConvergencia() {
 
 function toggleVisaoGestor() {
   prodVisaoGestor = !prodVisaoGestor;
-  const el = document.getElementById('prod-toggle-gestor-visao');
-  el.classList.toggle('active', prodVisaoGestor);
+  document.getElementById('prod-toggle-gestor-visao').classList.toggle('active', prodVisaoGestor);
+  // Visões por Gestor e por Equipe são mutuamente exclusivas (a tabela só
+  // agrega por uma chave de cada vez) — ligar uma desliga a outra.
+  if (prodVisaoGestor && prodVisaoEquipe) {
+    prodVisaoEquipe = false;
+    document.getElementById('prod-toggle-equipe-visao').classList.remove('active');
+  }
+  renderProducao();
+}
+
+function toggleVisaoEquipe() {
+  prodVisaoEquipe = !prodVisaoEquipe;
+  document.getElementById('prod-toggle-equipe-visao').classList.toggle('active', prodVisaoEquipe);
+  if (prodVisaoEquipe && prodVisaoGestor) {
+    prodVisaoGestor = false;
+    document.getElementById('prod-toggle-gestor-visao').classList.remove('active');
+  }
   renderProducao();
 }
 
@@ -5033,8 +5058,10 @@ async function renderProducao() {
     ? Object.fromEntries(Object.entries(tagsMapBase).filter(([tag]) => tagsFiltro.includes(tag)))
     : { ...tagsMapBase };
 
-  // Na visão por gestor, a chave é o nome do gestor; por unidade, é a tag
+  // Na visão por gestor/equipe, a chave é o nome do gestor/equipe; por
+  // unidade (padrão), é a tag.
   const aggGestores = {}; // gestor → status → { qtd, rec }
+  const aggEquipes = {}; // equipe → status → { qtd, rec }
 
   // Convergência: mapeia quais CNPJs têm NET PJ - VIRTUA e quais têm algum
   // produto elegível a convergência (GROSS/VOZ Novo/VOZ Portabilidade/VOZ
@@ -5053,7 +5080,7 @@ async function renderProducao() {
     });
   }
 
-  if (!prodVisaoGestor) {
+  if (!prodVisaoGestor && !prodVisaoEquipe) {
     Object.keys(tagsMap).forEach(tag => {
       agg[tag] = {};
       statusArr.forEach(s => agg[tag][s] = { qtd: 0, rec: 0 });
@@ -5120,6 +5147,13 @@ async function renderProducao() {
       if (!aggGestores[ges][fila]) aggGestores[ges][fila] = { qtd: 0, rec: 0 };
       aggGestores[ges][fila].qtd += qtd;
       aggGestores[ges][fila].rec += recCents;
+    } else if (prodVisaoEquipe) {
+      // Agrega por equipe (sem filtro de tag)
+      const chaveEquipe = equipe || 'Sem Equipe';
+      if (!aggEquipes[chaveEquipe]) { aggEquipes[chaveEquipe] = {}; statusArr.forEach(s => aggEquipes[chaveEquipe][s] = { qtd: 0, rec: 0 }); }
+      if (!aggEquipes[chaveEquipe][fila]) aggEquipes[chaveEquipe][fila] = { qtd: 0, rec: 0 };
+      aggEquipes[chaveEquipe][fila].qtd += qtd;
+      aggEquipes[chaveEquipe][fila].rec += recCents;
     } else {
       // Agrega por tag/unidade
       if (!tagsMap[tag]) return;
@@ -5131,19 +5165,25 @@ async function renderProducao() {
   });
 
   // Monta colunas de status que têm dado
-  const aggAtivo = prodVisaoGestor ? aggGestores : agg;
+  const aggAtivo = prodVisaoGestor ? aggGestores : prodVisaoEquipe ? aggEquipes : agg;
   const colsComDado = statusArr.filter(s =>
     Object.values(aggAtivo).some(d => (d[s]?.qtd || 0) > 0)
   );
   const colsFinal = colsComDado.length > 0 ? colsComDado : statusArr;
 
-  // Linhas: por unidade ou por gestor
+  // Linhas: por unidade, por gestor ou por equipe
   let linhas;
   if (prodVisaoGestor) {
     linhas = Object.keys(aggGestores).sort((a, b) => a.localeCompare(b)).map(ges => {
       const totalQtd = colsFinal.reduce((s, st) => s + (aggGestores[ges]?.[st]?.qtd || 0), 0);
       const totalRec = colsFinal.reduce((s, st) => s + (aggGestores[ges]?.[st]?.rec || 0), 0);
       return { tag: ges, nome: ges, cells: colsFinal.map(s => aggGestores[ges]?.[s] || { qtd: 0, rec: 0 }), totalQtd, totalRec };
+    });
+  } else if (prodVisaoEquipe) {
+    linhas = Object.keys(aggEquipes).sort((a, b) => a.localeCompare(b)).map(eq => {
+      const totalQtd = colsFinal.reduce((s, st) => s + (aggEquipes[eq]?.[st]?.qtd || 0), 0);
+      const totalRec = colsFinal.reduce((s, st) => s + (aggEquipes[eq]?.[st]?.rec || 0), 0);
+      return { tag: eq, nome: eq, cells: colsFinal.map(s => aggEquipes[eq]?.[s] || { qtd: 0, rec: 0 }), totalQtd, totalRec };
     });
   } else {
     linhas = Object.entries(tagsMap).sort((a,b) => a[1].localeCompare(b[1])).map(([tag, nome]) => {
@@ -5164,7 +5204,7 @@ async function renderProducao() {
   const fmtRec = v => 'R$ ' + (v/100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   // ─── Comparativo MOM/TRI/Meses (só quando a seleção de status é Ativo/Instalado e/ou Aguardando Instalação) ─
-  const modoAgregacao = prodVisaoGestor ? 'gestor' : 'tag';
+  const modoAgregacao = prodVisaoGestor ? 'gestor' : prodVisaoEquipe ? 'equipe' : 'tag';
   const mostrarComparativo = apenasAtivoSelecionado() && (prodExibirMOM || prodExibirTRI);
   const mostrarMeses = apenasAtivoSelecionado() && prodMesesComparar.size > 0;
   let comparativo = { mom: null, tri: null, momErro: null, triErro: null, triMeses: 0 };
@@ -5313,8 +5353,8 @@ async function renderProducao() {
   if (mostrarMeses) partesBadge.push(`${mesesOrdenados.length} mês(es) selecionado(s)`);
   const badgeComparativo = partesBadge.length ? ` · comparando contra ${partesBadge.join(' e ')}` : '';
 
-  const tituloVisao = prodVisaoGestor ? 'Produção por Gestor' : 'Produção por Unidade';
-  const colunaVisao = prodVisaoGestor ? 'Gestor' : 'Unidade';
+  const tituloVisao = prodVisaoGestor ? 'Produção por Gestor' : prodVisaoEquipe ? 'Produção por Equipe' : 'Produção por Unidade';
+  const colunaVisao = prodVisaoGestor ? 'Gestor' : prodVisaoEquipe ? 'Equipe' : 'Unidade';
 
   resultArea.innerHTML = `
     ${avisoHtml}
