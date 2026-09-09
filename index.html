@@ -5421,6 +5421,7 @@ let USUARIO_ATUAL = null;
 // ao abrir" no drawer de conta e pelo redirecionamento pós-login.
 const ABAS_PERMITIDAS_POR_PERFIL = {
   'admin':          ['gerencial', 'producao', 'discadora', 'simulador2', 'churn', 'carteira', 'conectividade'],
+  'admin_beta':     ['gerencial', 'producao', 'carteira', 'conectividade'],
   'gestor_macro':   ['gerencial', 'discadora', 'conectividade'],
   'gestor_macro2':  ['gerencial', 'producao', 'discadora', 'conectividade'],
   'gestor_macro3':  ['gerencial', 'producao', 'conectividade'],
@@ -6800,6 +6801,9 @@ async function carregarPerfil(user) {
 
 // ─── ESQUEMA DE PERFIS (reorganizado) ────────────────────────────────────────
 //  admin          — acesso 100% a tudo
+//  admin_beta     — sem trava de escopo (vê tudo, igual admin), mas só nas
+//                   abas Gerencial/Produção/Carteira/Conectividade (sem
+//                   Discadora/Simulador 2.0/Churn)
 //  gestor_macro   — Gerencial travado no seu gestor_ref (1 nome) + Discadora total
 //  gestor_macro2  — Gerencial e Produção travados em gestores_ref (1+ nomes) + Discadora total
 //  gestor_macro3  — Gerencial e Produção travados no seu gestor_ref (1 nome), sem Discadora
