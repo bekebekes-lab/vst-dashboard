@@ -539,7 +539,12 @@ def definir_endereco_sev(page, ev_record_id: str, cep: str, numero: str = None, 
         # .click() sem force já espera o botão ficar habilitado).
         log.info("  Toast 'CONFIRMADO E PADRONIZADO' não apareceu a tempo — seguindo pro clique em 'Inserir' mesmo assim.")
 
-    if not clicar_botao_com_texto(page, "Inserir", timeout=20_000):
+    # 20s -> 60s: achado real (10/09, 2 execuções seguidas com screenshot
+    # idêntico — "Validar" clicado, "Inserir" ainda cinza) — a validação
+    # assíncrona do endereço no servidor do Salesforce está demorando mais
+    # que os 20s de antes pra habilitar "Inserir"; sem erro nenhum aparecendo
+    # na tela, então não parece rejeição, só lentidão do lado deles.
+    if not clicar_botao_com_texto(page, "Inserir", timeout=60_000):
         log.warning("  Botão 'Inserir' não encontrado/habilitado depois de Validar — screenshot salvo.")
         page.screenshot(path=str(DOWNLOAD_DIR / f"erro_endereco_{ev_record_id}.png"))
         return
