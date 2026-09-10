@@ -364,10 +364,10 @@ def selecionar_lookup(page, aria_label: str, texto_completo: str, timeout=30_000
         return False
 
 
-def clicar_botao_com_texto(page, *textos, timeout=10_000) -> bool:
+def clicar_botao_com_texto(page, *textos, timeout=10_000, force=False) -> bool:
     for texto in textos:
         try:
-            page.locator(f"button:has-text('{texto}')").first.click(timeout=timeout)
+            page.locator(f"button:has-text('{texto}')").first.click(timeout=timeout, force=force)
             return True
         except Exception:
             continue
@@ -523,7 +523,14 @@ def definir_endereco_sev(page, ev_record_id: str, cep: str, numero: str = None, 
     # habilitado depois do Validar) de fato salva o endereço no SEV. Sem
     # esse 2º clique, a consulta de viabilidade recusava com "Endereços não
     # normalizados" — o formulário nunca tinha sido realmente submetido.
-    if not clicar_botao_com_texto(page, "Validar", timeout=15_000):
+    #
+    # force=True: achado real (10/09, 3 execuções seguidas com o mesmo
+    # resultado, mesmo esperando até 60s por "Inserir" habilitar) — o clique
+    # sem force dava foco visual no botão (aparecia com contorno azul no
+    # print) mas não disparava a validação assíncrona de verdade, então
+    # "Inserir" nunca saía do cinza. Mesmo padrão de outros botões deste
+    # arquivo onde um elemento visual por cima intercepta o clique normal.
+    if not clicar_botao_com_texto(page, "Validar", timeout=15_000, force=True):
         log.warning("  Botão 'Validar' não encontrado após buscar CEP — screenshot salvo.")
         page.screenshot(path=str(DOWNLOAD_DIR / f"erro_endereco_{ev_record_id}.png"))
         return
