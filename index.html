@@ -450,34 +450,20 @@
   .filter-group select:focus { border-color: var(--brand); box-shadow: 0 0 0 2px rgba(185,28,28,.08); }
 
   /* ─── METRICS GRID ───────────────────────────────────────── */
-  /* Uma coluna por categoria (Geral/Gross/Renovação/...), lado a lado —
-     dentro de cada coluna, um card por subtópico, empilhados. */
+  /* Um card por categoria (Geral/Gross/Renovação/...), lado a lado — dentro
+     de cada card, os status agrupados por subtópico, com o total de cada
+     subtópico ao lado do rótulo (fila-subgrupo-total). */
   .metrics-grid {
     display: grid;
     grid-template-columns: repeat(6, 1fr);
     gap: 12px; margin-bottom: 16px;
     align-items: start;
   }
-  .metrics-cat-header {
-    display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px;
-  }
-  .metrics-cat-header .cat-name {
-    font-size: 13px; font-weight: 700; color: var(--text-2);
-    text-transform: uppercase; letter-spacing: .06em;
-  }
-  .metrics-cat-header .cat-total {
-    font-size: 13px; font-weight: 700; color: var(--brand);
-    font-family: 'DM Mono', monospace;
-  }
-  .metrics-cat-cards {
-    display: flex; flex-direction: column;
-    gap: 6px;
-  }
   .metric-card {
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
-    padding: 10px 12px;
+    padding: 16px;
     box-shadow: var(--shadow-xs);
     transition: box-shadow .15s;
   }
@@ -489,17 +475,29 @@
   .metric-label {
     font-size: 10px; color: var(--text-3);
     text-transform: uppercase; letter-spacing: .07em;
-    font-weight: 600; margin-bottom: 4px;
+    font-weight: 600; margin-bottom: 8px;
   }
   .metric-value {
-    font-size: 22px; font-weight: 700;
+    font-size: 26px; font-weight: 700;
     color: var(--brand); line-height: 1;
-    margin-bottom: 2px; font-family: 'DM Mono', monospace;
+    margin-bottom: 4px; font-family: 'DM Mono', monospace;
   }
-  .metric-avg { font-size: 11px; color: var(--text-3); margin-bottom: 6px; }
+  .metric-avg { font-size: 11px; color: var(--text-3); margin-bottom: 10px; }
   .filas-list {
     border-top: 1px solid var(--border);
-    padding-top: 5px;
+    padding-top: 8px;
+  }
+  .fila-subgrupo-label {
+    display: flex; justify-content: space-between; align-items: baseline;
+    font-size: 9px; font-weight: 700; color: var(--text-3);
+    text-transform: uppercase; letter-spacing: .06em;
+    margin: 10px 0 2px; padding: 0 4px;
+  }
+  .fila-subgrupo-label:first-child { margin-top: 0; }
+  .fila-subgrupo-total {
+    font-size: 11px; font-weight: 700; color: var(--text);
+    text-transform: none; letter-spacing: normal;
+    font-family: 'DM Mono', monospace;
   }
   .fila-name {
     color: var(--text-2); flex: 1; min-width: 0;
@@ -2770,14 +2768,26 @@ function ehProdutoSolucaoDigital(produto) {
   return PRODUTOS_SD_CONTEM.some(termo => norm.includes(termo));
 }
 
+// Claro Monitor às vezes vem duplicado na base (uma linha no grupo "SVA
+// MÓVEL" e outra em outro grupo, tipo "SD - Serviço Digital", pra mesma
+// venda) — outras vezes (formato mais novo) só aparece em "SVA MÓVEL", sem
+// duplicar. Qual dos dois formatos está em uso muda de período pra período
+// (a exportação da base mudou ao longo do tempo), então não dá pra travar
+// numa regra fixa: precisaria ignorar a linha de SVA MÓVEL só quando ela
+// REALMENTE duplica, senão o Monitor some inteiro dos períodos que já vêm
+// no formato novo. Recalculado 1x por carga de dados em loadData() —
+// getGrupoKey() só lê, nunca calcula.
+let MONITOR_SD_DUPLICADO = false;
+
 function getGrupoKey(g, produto, solicitacao) {
   const gu = (g || '').trim().toUpperCase().replace(/[‐-―]/g, '-'); // normaliza travessão/en-dash para hífen
-  // Claro Monitor chegou a vir duplicado na base (uma linha em "SVA MÓVEL" e
-  // outra em "SD - Serviço Digital" pra mesma ativação), daí a exclusão que
-  // existia aqui pra não dobrar o número. Pedido explícito: a base não
-  // duplica mais — hoje o Monitor só aparece em "SVA MÓVEL" — então conta
-  // normal como Solução Digital, igual qualquer outro produto SD.
-  if (ehProdutoSolucaoDigital(produto)) return "SERV. DIGITAIS";
+  const produtoNorm = (produto || '').trim().toUpperCase();
+  // Só ignora a linha de SVA MÓVEL quando ESTE período está no formato
+  // antigo (duplicado) — a cópia de verdade cai sozinha em SERV. DIGITAIS
+  // pelo ehProdutoSolucaoDigital abaixo, vinda do outro grupo. Formato novo
+  // (MONITOR_SD_DUPLICADO=false): conta a linha de SVA MÓVEL normal.
+  const claroMonitorDuplicadoSvaMovel = MONITOR_SD_DUPLICADO && produtoNorm === 'CLARO MONITOR' && (gu === 'SVA MOVEL' || gu === 'SVA MÓVEL');
+  if (!claroMonitorDuplicadoSvaMovel && ehProdutoSolucaoDigital(produto)) return "SERV. DIGITAIS";
   if (gu === "GROSS") return "GROSS";
   if (gu === "VOZ - RENOVAÇÃO") return "RENOVAÇÃO";
   if (gu === "NET PJ - VIRTUA") return "BL";
@@ -2835,6 +2845,16 @@ async function loadData() {
       let obj = {};
       headers.forEach((h, i) => obj[h] = h === 'EQUIPE' ? normalizarNomeEquipe(r[i]) : (r[i] || '').toString().trim());
       return obj;
+    });
+
+    // Detecta se ESTE período carregado ainda duplica o Claro Monitor (linha
+    // em SVA MÓVEL + linha em outro grupo pra mesma venda) — ver comentário
+    // completo em MONITOR_SD_DUPLICADO. Presença de QUALQUER linha de Claro
+    // Monitor fora de SVA MÓVEL já indica o formato antigo/duplicado.
+    MONITOR_SD_DUPLICADO = ALL_DATA.some(r => {
+      if ((r['PRODUTO'] || '').trim().toUpperCase() !== 'CLARO MONITOR') return false;
+      const gu = (r['GRUPO'] || '').trim().toUpperCase();
+      return gu !== 'SVA MOVEL' && gu !== 'SVA MÓVEL';
     });
 
     const now = new Date();
@@ -3310,30 +3330,28 @@ function render() {
 
   // Metrics cards — um card POR SUBTÓPICO (não mais um card só por
   // categoria), agrupados visualmente sob o nome/total da categoria.
-  document.getElementById('metrics-area').innerHTML = `<div class="metrics-grid">${cats.map(c => {
+  document.getElementById('metrics-area').innerHTML = `<div class="metrics-grid">${cats.map((c, i) => {
+    const med = gerExibirReceita ? gerFmtMoeda(metrics[c].totalRec / nc) : (metrics[c].total / nc).toFixed(1);
     const filas = Object.entries(gerExibirReceita ? metrics[c].filasRec : metrics[c].filas).sort((a, b) => b[1] - a[1]);
     const subgrupos = agruparFilasPorSubgrupo(filas);
-    const totalCategoria = gerExibirReceita ? metrics[c].totalRec : metrics[c].total;
-    return `<div class="metrics-cat-group">
-      <div class="metrics-cat-header">
-        <span class="cat-name">${c}</span>
-        <span class="cat-total">${gerExibirReceita ? gerFmtMoeda(totalCategoria) : totalCategoria.toLocaleString('pt-BR')}</span>
-      </div>
-      <div class="metrics-cat-cards">${subgrupos.map(({ grupo, itens }) => {
+    return `<div class="metric-card ${i === 0 ? 'highlight' : ''}">
+      <div class="metric-label">${c}</div>
+      <div class="metric-value">${gerExibirReceita ? gerFmtMoeda(metrics[c].totalRec) : metrics[c].total}</div>
+      <div class="metric-avg">Média/consultor: ${med}</div>
+      <div class="filas-list">${subgrupos.map(({ grupo, itens }) => {
         const subtotal = itens.reduce((s, [, fv]) => s + fv, 0);
-        const med = gerExibirReceita ? gerFmtMoeda(subtotal / nc) : (subtotal / nc).toFixed(1);
-        return `<div class="metric-card ${c === 'GERAL' ? 'highlight' : ''}">
-          <div class="metric-label">${grupo}</div>
-          <div class="metric-value">${gerExibirReceita ? gerFmtMoeda(subtotal) : subtotal.toLocaleString('pt-BR')}</div>
-          <div class="metric-avg">Média/consultor: ${med}</div>
-          <div class="filas-list">${itens.map(([fn, fv]) => `
-            <div class="fila-item" onclick="drillFila('${c}','${fn.replace(/'/g,"\\'")}')">
-              <span class="fila-name">${fn}</span>
-              <span class="fila-count">${gerExibirReceita ? gerFmtMoeda(fv) : fv}</span>
-            </div>`).join('')}
-          </div>
-        </div>`;
-      }).join('')}</div>
+        return `
+        <div class="fila-subgrupo-label">
+          <span>${grupo}</span>
+          <span class="fila-subgrupo-total">${gerExibirReceita ? gerFmtMoeda(subtotal) : subtotal.toLocaleString('pt-BR')}</span>
+        </div>
+        ${itens.map(([fn, fv]) => `
+        <div class="fila-item" onclick="drillFila('${c}','${fn.replace(/'/g,"\\'")}')">
+          <span class="fila-name">${fn}</span>
+          <span class="fila-count">${gerExibirReceita ? gerFmtMoeda(fv) : fv}</span>
+        </div>`).join('')}`;
+      }).join('')}
+      </div>
     </div>`;
   }).join('')}</div>`;
 
