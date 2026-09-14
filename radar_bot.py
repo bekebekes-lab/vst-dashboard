@@ -154,6 +154,28 @@ def geocodificar_endereco(cep: str, numero: str):
         return None, None
 
 
+def numero_fallback_para_cep(cep: str) -> str:
+    """Sem número real do imóvel informado pelo consultor, é preciso
+    preencher algo no campo "Número" do Radar — mas um "1" fixo falha
+    silenciosamente pra CEPs de "logradouro longo" (numeração começando
+    depois de um certo ponto, ex.: complemento "de 595/596 ao fim" ou "de
+    621/622 a 1439/1440" no ViaCEP). Achado real (NICOLAU/TRIPOESTE, 14/09):
+    mesmo CEP com número real sempre concluiu a consulta; com "1" fixo,
+    sempre travou pra sempre em "Consultar Viabilidade" (sem erro nenhum
+    aparecer — o Salesforce nunca confirma o endereço). Usa o primeiro
+    número da faixa válida do próprio ViaCEP quando existir; CEP sem faixa
+    (complemento vazio) mantém "1", que já funciona nesse caso."""
+    try:
+        via_cep = requests.get(f"https://viacep.com.br/ws/{cep}/json/", timeout=10).json()
+        complemento = via_cep.get("complemento", "") or ""
+        numeros = re.findall(r"\d+", complemento)
+        if numeros:
+            return numeros[0]
+    except Exception as e:
+        log.warning(f"  Falha ao consultar ViaCEP p/ fallback de número (CEP {cep}): {e}")
+    return "1"
+
+
 # O mapeamento "nossa oferta (tipo+velocidade) -> texto de busca no Item de
 # Produto do Radar" mora no backend JS (api/_lib/radar-catalogo.js) — é lá
 # que o consultor escolhe a oferta na tela; a linha já chega aqui em
@@ -508,7 +530,7 @@ def definir_endereco_sev(page, ev_record_id: str, cep: str, numero: str = None, 
     # clicar Validar (confirmado em execução real, print mostrando o campo
     # "Número" vazio).
     try:
-        page.locator("lightning-input.numeroField input").first.fill(numero or "1")
+        page.locator("lightning-input.numeroField input").first.fill(numero or numero_fallback_para_cep(cep))
     except Exception:
         log.warning("  Campo 'Número' não encontrado no modal de endereço.")
 
