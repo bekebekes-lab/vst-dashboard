@@ -495,8 +495,18 @@ def definir_endereco_sev(page, ev_record_id: str, cep: str, numero: str = None, 
     page.locator("button.alterarEnderecoBtn").first.click(timeout=15_000)
 
     page.locator("lightning-input.cepField input").first.fill(cep)
-    page.locator("button.buscarCepButton").click()
-    time.sleep(3)
+    # force=True: achado real (NICOLAU, 14/09, SEV reaproveitado de uma
+    # tentativa anterior) — o clique sem force não disparava a busca de
+    # verdade (mesmo padrão de "Validar"/"Inserir" já documentado acima):
+    # print pós-clique idêntico ao pré-clique, sem nenhum campo do
+    # endereço (Número, Logradouro etc.) aparecer no HTML depois de 3s de
+    # espera fixa.
+    page.locator("button.buscarCepButton").click(force=True)
+    try:
+        page.locator("lightning-input.numeroField input").first.wait_for(state="visible", timeout=15_000)
+    except Exception:
+        log.warning("  Campos do endereço não apareceram após 'Buscar CEP' — seguindo mesmo assim.")
+    time.sleep(1)
 
     # "Buscar CEP" já preenche Latitude/Longitude sozinho (geocode
     # aproximado, só pelo CEP) — mas isso não é preciso o bastante pro
