@@ -4387,6 +4387,8 @@ function contarStatusPorTag(rows, filtros, statusSelecionados, cutoffDate, modoA
     if (filtros.ddd && filtros.ddd.length > 0 && !filtros.ddd.includes(ddd)) return;
     // Grupo: 100% dos lançamentos da coluna GRUPO da base entram em "Geral" (sem exclusão)
     if (filtros.grupo !== 'Geral' && grupo !== filtros.grupo) return;
+    // Tag de Unidade: mesma regra do render principal, vale nas 3 visões.
+    if (filtros.tags && filtros.tags.length > 0 && !filtros.tags.includes(tag)) return;
 
     const chave = porGestor ? ges : porEquipe ? equipe : tag;
 
@@ -5225,14 +5227,21 @@ async function renderProducao() {
       ? (grupo === 'NET PJ - VIRTUA' ? qtd * Math.round(valor * 100) : Math.round(valor * 100))
       : 0;
 
+    // Filtro "Tag de Unidade": vale nas 3 visões (Unidade/Gestor/Equipe) —
+    // achado real (14/09): nas visões Por Gestor/Por Equipe esse filtro era
+    // ignorado de propósito ("sem filtro de tag"), então filtrar por uma
+    // unidade específica não reduzia nada nessas duas visões, mostrando
+    // sempre o total geral.
+    if (!tagsMap[tag]) return;
+
     if (prodVisaoGestor) {
-      // Agrega por gestor (sem filtro de tag)
+      // Agrega por gestor
       if (!aggGestores[ges]) { aggGestores[ges] = {}; statusArr.forEach(s => aggGestores[ges][s] = { qtd: 0, rec: 0 }); }
       if (!aggGestores[ges][fila]) aggGestores[ges][fila] = { qtd: 0, rec: 0 };
       aggGestores[ges][fila].qtd += qtd;
       aggGestores[ges][fila].rec += recCents;
     } else if (prodVisaoEquipe) {
-      // Agrega por equipe (sem filtro de tag)
+      // Agrega por equipe
       const chaveEquipe = equipe || 'Sem Equipe';
       if (!aggEquipes[chaveEquipe]) { aggEquipes[chaveEquipe] = {}; statusArr.forEach(s => aggEquipes[chaveEquipe][s] = { qtd: 0, rec: 0 }); }
       if (!aggEquipes[chaveEquipe][fila]) aggEquipes[chaveEquipe][fila] = { qtd: 0, rec: 0 };
@@ -5240,7 +5249,6 @@ async function renderProducao() {
       aggEquipes[chaveEquipe][fila].rec += recCents;
     } else {
       // Agrega por tag/unidade
-      if (!tagsMap[tag]) return;
       if (!agg[tag]) agg[tag] = {};
       if (!agg[tag][fila]) agg[tag][fila] = { qtd: 0, rec: 0 };
       agg[tag][fila].qtd += qtd;
@@ -5301,7 +5309,7 @@ async function renderProducao() {
 
   if (mostrarComparativo || mostrarMeses) {
     resultArea.innerHTML = '<div class="prod-empty">Calculando comparativo...</div>';
-    const filtros = { estado: filtroEstado, gestores: gestoresChecked, equipes: equipesChecked, consultores: consultoresChecked, uf: filtroUFBL, ufCliente: filtroUFCliente, ddd: filtroDDD, grupo: filtroGrupo };
+    const filtros = { estado: filtroEstado, gestores: gestoresChecked, equipes: equipesChecked, consultores: consultoresChecked, uf: filtroUFBL, ufCliente: filtroUFCliente, ddd: filtroDDD, grupo: filtroGrupo, tags: tagsFiltro };
     const idRequisicao = ++prodComparativoReqId;
     if (mostrarComparativo) comparativo = await calcularComparativos(filtros, modoAgregacao);
     if (idRequisicao !== prodComparativoReqId) return; // uma nova chamada substituiu esta
