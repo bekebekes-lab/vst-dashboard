@@ -3786,30 +3786,28 @@ function abrirDetalheCliente(idx) {
   // GROSS é um agregado que já é coberto pelas abas de VOZ (Transf. Titularidade
   // e Portabilidade) — omitimos do drilldown para não duplicar a informação.
   // Só mantemos GROSS se for o único registro do cliente (senão o modal ficaria vazio).
-  const relacionadosCompletos = relacionados;
   const semGross = relacionados.filter(r => (r['GRUPO'] || '').trim().toUpperCase() !== 'GROSS');
   if (semGross.length) relacionados = semGross;
 
   // A aba que abre ativa é a do registro em que o usuário clicou, não sempre
   // a primeira. Quando o registro clicado é GROSS, ele mesmo some da lista
-  // (filtro acima) — achado real (14/09, 2 linhas GROSS do mesmo pedido
-  // clicáveis separadamente, sempre abrindo na aba 1): nesse caso, casa pelo
-  // Número do Pedido (chave por linha, ao contrário de Vinculado que é por
-  // pedido inteiro e é igual nas duas); sem Número do Pedido em nenhum dos
-  // dois lados, cai pra posição relativa entre os registros do mesmo GRUPO
-  // do clicado (2ª linha GROSS -> 2ª aba, e assim por diante).
+  // (filtro acima) — achado real (14/09, confirmado no console: 2 pares
+  // VOZ+GROSS do mesmo pedido têm Número do Pedido/Vinculado/Proprietário/
+  // Data Ref IDÊNTICOS entre si — nenhum campo distingue qual GROSS é
+  // duplicata de qual VOZ). O que distingue é a ORDEM: GROSS sempre aparece
+  // logo ao lado do seu par real na mesma lista que o usuário está vendo
+  // (VOZ, GROSS, VOZ, GROSS, intercalados). Acha o vizinho não-GROSS mais
+  // próximo do clicado nessa lista (antes ou depois) e usa a aba dele.
   let idxAtivo = relacionados.indexOf(row);
   if (idxAtivo === -1) {
-    const numPedido = (row['NUMERO PEDIDO'] || '').toString().trim();
-    if (numPedido) {
-      idxAtivo = relacionados.findIndex(r => (r['NUMERO PEDIDO'] || '').toString().trim() === numPedido);
+    for (let d = 1; d < rows.length && idxAtivo === -1; d++) {
+      const antes = rows[idx - d];
+      if (antes) idxAtivo = relacionados.indexOf(antes);
+      if (idxAtivo === -1) {
+        const depois = rows[idx + d];
+        if (depois) idxAtivo = relacionados.indexOf(depois);
+      }
     }
-  }
-  if (idxAtivo === -1) {
-    const grupoClicado = (row['GRUPO'] || '').trim().toUpperCase();
-    const mesmoGrupo = relacionadosCompletos.filter(r => (r['GRUPO'] || '').trim().toUpperCase() === grupoClicado);
-    const posEntreIguais = mesmoGrupo.indexOf(row);
-    if (posEntreIguais !== -1 && posEntreIguais < relacionados.length) idxAtivo = posEntreIguais;
   }
   idxAtivo = Math.max(0, idxAtivo);
 
