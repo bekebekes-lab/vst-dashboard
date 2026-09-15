@@ -3786,28 +3786,26 @@ function abrirDetalheCliente(idx) {
   // GROSS é um agregado que já é coberto pelas abas de VOZ (Transf. Titularidade
   // e Portabilidade) — omitimos do drilldown para não duplicar a informação.
   // Só mantemos GROSS se for o único registro do cliente (senão o modal ficaria vazio).
+  const relacionadosCompletos = relacionados;
   const semGross = relacionados.filter(r => (r['GRUPO'] || '').trim().toUpperCase() !== 'GROSS');
   if (semGross.length) relacionados = semGross;
 
   // A aba que abre ativa é a do registro em que o usuário clicou, não sempre
   // a primeira. Quando o registro clicado é GROSS, ele mesmo some da lista
-  // (filtro acima) — achado real (14/09, confirmado no console: 2 pares
-  // VOZ+GROSS do mesmo pedido têm Número do Pedido/Vinculado/Proprietário/
-  // Data Ref IDÊNTICOS entre si — nenhum campo distingue qual GROSS é
-  // duplicata de qual VOZ). O que distingue é a ORDEM: GROSS sempre aparece
-  // logo ao lado do seu par real na mesma lista que o usuário está vendo
-  // (VOZ, GROSS, VOZ, GROSS, intercalados). Acha o vizinho não-GROSS mais
-  // próximo do clicado nessa lista (antes ou depois) e usa a aba dele.
+  // (filtro acima) — achado real (14/09, confirmado no console): os pares
+  // GROSS/registro real do mesmo pedido têm Número do Pedido/Vinculado/
+  // Proprietário/Data Ref IDÊNTICOS entre si, então nenhum campo distingue
+  // qual GROSS é duplicata de qual registro — e quando o drill já está
+  // filtrado só na categoria GROSS (ex.: GROSS › Pendente de Biometria), a
+  // lista visível nem tem o par real ao lado pra usar de vizinho. O que
+  // sobra é a ORDEM relativa: cada GROSS é gerado ao lado do seu par real,
+  // então a N-ésima linha GROSS de todos os registros do cliente (ordem
+  // natural da base, sem filtro de fila) corresponde à N-ésima aba real.
   let idxAtivo = relacionados.indexOf(row);
   if (idxAtivo === -1) {
-    for (let d = 1; d < rows.length && idxAtivo === -1; d++) {
-      const antes = rows[idx - d];
-      if (antes) idxAtivo = relacionados.indexOf(antes);
-      if (idxAtivo === -1) {
-        const depois = rows[idx + d];
-        if (depois) idxAtivo = relacionados.indexOf(depois);
-      }
-    }
+    const todosGross = relacionadosCompletos.filter(r => (r['GRUPO'] || '').trim().toUpperCase() === 'GROSS');
+    const posEntreGross = todosGross.indexOf(row);
+    if (posEntreGross !== -1 && posEntreGross < relacionados.length) idxAtivo = posEntreGross;
   }
   idxAtivo = Math.max(0, idxAtivo);
 
