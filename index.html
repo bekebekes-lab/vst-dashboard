@@ -3801,11 +3801,15 @@ function abrirDetalheCliente(idx) {
   // sobra é a ORDEM relativa: cada GROSS é gerado ao lado do seu par real,
   // então a N-ésima linha GROSS de todos os registros do cliente (ordem
   // natural da base, sem filtro de fila) corresponde à N-ésima aba real.
+  // Usa o próprio GRUPO do registro clicado (não fixo em "GROSS") — o
+  // mesmo raciocínio vale pra qualquer grupo que acabe de fora da lista de
+  // abas (VIRTUA, TT ou qualquer outro produto), não só GROSS.
   let idxAtivo = relacionados.indexOf(row);
   if (idxAtivo === -1) {
-    const todosGross = relacionadosCompletos.filter(r => (r['GRUPO'] || '').trim().toUpperCase() === 'GROSS');
-    const posEntreGross = todosGross.indexOf(row);
-    if (posEntreGross !== -1 && posEntreGross < relacionados.length) idxAtivo = posEntreGross;
+    const grupoClicado = (row['GRUPO'] || '').trim().toUpperCase();
+    const mesmoGrupoDoClicado = relacionadosCompletos.filter(r => (r['GRUPO'] || '').trim().toUpperCase() === grupoClicado);
+    const posEntreIguais = mesmoGrupoDoClicado.indexOf(row);
+    if (posEntreIguais !== -1 && posEntreIguais < relacionados.length) idxAtivo = posEntreIguais;
   }
   idxAtivo = Math.max(0, idxAtivo);
 
