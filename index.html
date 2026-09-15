@@ -3786,13 +3786,32 @@ function abrirDetalheCliente(idx) {
   // GROSS é um agregado que já é coberto pelas abas de VOZ (Transf. Titularidade
   // e Portabilidade) — omitimos do drilldown para não duplicar a informação.
   // Só mantemos GROSS se for o único registro do cliente (senão o modal ficaria vazio).
+  const relacionadosCompletos = relacionados;
   const semGross = relacionados.filter(r => (r['GRUPO'] || '').trim().toUpperCase() !== 'GROSS');
   if (semGross.length) relacionados = semGross;
 
-  // A aba que abre ativa é a do registro em que o usuário clicou, não
-  // sempre a primeira — acha o mesmo objeto (referência de ALL_DATA) dentro
-  // da lista final já filtrada/reordenada.
-  const idxAtivo = Math.max(0, relacionados.indexOf(row));
+  // A aba que abre ativa é a do registro em que o usuário clicou, não sempre
+  // a primeira. Quando o registro clicado é GROSS, ele mesmo some da lista
+  // (filtro acima) — achado real (14/09, 2 linhas GROSS do mesmo pedido
+  // clicáveis separadamente, sempre abrindo na aba 1): nesse caso, casa pelo
+  // Número do Pedido (chave por linha, ao contrário de Vinculado que é por
+  // pedido inteiro e é igual nas duas); sem Número do Pedido em nenhum dos
+  // dois lados, cai pra posição relativa entre os registros do mesmo GRUPO
+  // do clicado (2ª linha GROSS -> 2ª aba, e assim por diante).
+  let idxAtivo = relacionados.indexOf(row);
+  if (idxAtivo === -1) {
+    const numPedido = (row['NUMERO PEDIDO'] || '').toString().trim();
+    if (numPedido) {
+      idxAtivo = relacionados.findIndex(r => (r['NUMERO PEDIDO'] || '').toString().trim() === numPedido);
+    }
+  }
+  if (idxAtivo === -1) {
+    const grupoClicado = (row['GRUPO'] || '').trim().toUpperCase();
+    const mesmoGrupo = relacionadosCompletos.filter(r => (r['GRUPO'] || '').trim().toUpperCase() === grupoClicado);
+    const posEntreIguais = mesmoGrupo.indexOf(row);
+    if (posEntreIguais !== -1 && posEntreIguais < relacionados.length) idxAtivo = posEntreIguais;
+  }
+  idxAtivo = Math.max(0, idxAtivo);
 
   renderModalDetalheCliente(nomeCliente, relacionados, idxAtivo);
 }
