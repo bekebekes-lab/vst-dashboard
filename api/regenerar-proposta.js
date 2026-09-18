@@ -3,7 +3,7 @@
 // Proposta Novamente" no drill-down. Preço é SEMPRE recalculado nas tabelas
 // atuais (nunca reaproveita valor_mensal já salvo), igual à geração original.
 import { requireAuth } from './_lib/auth.js';
-import { calcularConectaSmart, calcularBLDOfertaPME } from './_lib/propostas-dados.js';
+import { calcularOferta } from './_lib/propostas-dados.js';
 import { gerarPdfProposta } from './_lib/gerar-pdf-proposta.js';
 
 const SUPA_URL = 'https://kzlchetrpsfefwybaaoy.supabase.co';
@@ -35,29 +35,47 @@ export default async function handler(req, res) {
   const item = rows[0];
   if (!item) return res.status(404).json({ error: 'Oportunidade não encontrada (ou sem permissão de acesso).' });
 
-  let calculo;
-  if (item.tipo_oferta === 'conecta_smart') {
-    calculo = calcularConectaSmart(item.velocidade);
-  } else {
-    calculo = calcularBLDOfertaPME(item.velocidade, item.roteador, item.cliente_uf);
+  // Antes só cobria conecta_smart e (fallback errado) BLD Oferta PME pra
+  // qualquer outro tipo — achado real (18/09): regenerar uma proposta de
+  // Conecta BLC, Combo 2P BLD, 0800, MPLS ou LAN EPL calculava com a fórmula
+  // errada. calcularOferta() é a mesma função usada na geração original,
+  // cobre os 7 tipos.
+  const resultado = calcularOferta({
+    tipoOferta: item.tipo_oferta, velocidade: item.velocidade, roteador: item.roteador,
+    pacote: item.pacote, tipo: item.tipo, trajeto: item.trajeto,
+    clienteUf: item.cliente_uf, clienteCidade: item.cliente_cidade,
+  });
+  if (!resultado.ok) {
+    return res.status(400).json({ error: `Não foi possível recalcular o preço com os dados salvos: ${resultado.erro}` });
   }
-  if (!calculo) {
-    return res.status(400).json({ error: 'Não foi possível recalcular o preço com os dados salvos — velocidade/roteador/UF podem ter saído das tabelas atuais.' });
+  const calculo = resultado.calculo;
+
+  let calculo0800 = null;
+  if (item.combo_oitocentos_pacote) {
+    const resultado0800 = calcularOferta({ tipoOferta: 'oitocentos', pacote: item.combo_oitocentos_pacote, clienteUf: item.cliente_uf });
+    if (!resultado0800.ok) {
+      return res.status(400).json({ error: `Não foi possível recalcular o preço do 0800 combinado: ${resultado0800.erro}` });
+    }
+    calculo0800 = resultado0800.calculo;
   }
 
   let pdfBytes;
   try {
     pdfBytes = await gerarPdfProposta({
       tipoOferta: item.tipo_oferta, velocidade: item.velocidade, roteador: item.roteador,
+      pacote: item.pacote, tipo: item.tipo, trajeto: item.trajeto,
       clienteNome: item.cliente_nome, clienteCnpj: item.cliente_cnpj, clienteEndereco: item.cliente_endereco,
       clienteCidade: item.cliente_cidade, clienteUf: item.cliente_uf, clienteContato: item.cliente_contato,
       consultorNome: item.consultor_nome, consultorEmail: item.consultor_email,
       consultorTelefone: item.consultor_telefone, consultorCargo: item.consultor_cargo,
       valorMensal: calculo.valorMensal, valorDe: calculo.valorDe, valorDesconto: calculo.valorDesconto,
+      combo0800: calculo0800 ? { pacote: item.combo_oitocentos_pacote, valorMensal: calculo0800.valorMensal } : null,
     });
   } catch (e) {
     return res.status(500).json({ error: `Falha ao montar o PDF: ${e.message}` });
   }
+
+  const valorMensalTotal = calculo.valorMensal + (calculo0800 ? calculo0800.valorMensal : 0);
 
   // Atualiza a data da última geração — com o token do próprio usuário, a
   // RLS de UPDATE (dono ou admin) já cobre esse caso, sem precisar de
@@ -66,9 +84,13 @@ export default async function handler(req, res) {
   await fetch(`${SUPA_URL}/rest/v1/conectividade_propostas?id=eq.${propostaId}`, {
     method: 'PATCH',
     headers: { ...headersUsuario, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
-    body: JSON.stringify({ ultima_geracao_em: agora, atualizado_em: agora, valor_mensal: calculo.valorMensal }),
+    body: JSON.stringify({
+      ultima_geracao_em: agora, atualizado_em: agora,
+      valor_mensal: calculo.valorMensal,
+      combo_oitocentos_valor_mensal: calculo0800 ? calculo0800.valorMensal : null,
+    }),
   }).catch(() => {});
 
   const pdfBase64 = Buffer.from(pdfBytes).toString('base64');
-  res.status(200).json({ pdfBase64, valorMensal: calculo.valorMensal, ultimaGeracaoEm: agora });
+  res.status(200).json({ pdfBase64, valorMensal: valorMensalTotal, ultimaGeracaoEm: agora });
 }

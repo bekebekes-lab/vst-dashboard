@@ -2,11 +2,7 @@
 // cliente/oferta em conectividade_propostas (funil de oportunidades) — o
 // PDF em si NÃO é armazenado, só devolvido pro navegador baixar.
 import { requireAuth, getUsuarioDashboard } from './_lib/auth.js';
-import {
-  calcularConectaSmart, calcularBLDOfertaPME, roteadoresDisponiveisPara,
-  calcularConectaBLC, calcularCombo2PBLD, ROTEADORES_COMBO_2P_BLD,
-  calcularOitocentos, calcularMPLS, calcularLANEPL,
-} from './_lib/propostas-dados.js';
+import { calcularOferta, TIPOS_OFERTA_COMBINAVEIS_COM_0800 } from './_lib/propostas-dados.js';
 
 const TIPOS_OFERTA_VALIDOS = ['conecta_smart', 'bld_oferta_pme', 'conecta_blc', 'combo_2p_bld', 'oitocentos', 'mpls', 'lan_epl'];
 import { gerarPdfProposta } from './_lib/gerar-pdf-proposta.js';
@@ -29,6 +25,10 @@ export default async function handler(req, res) {
     clienteNome, clienteCnpj, clienteEndereco, clienteCidade, clienteUf, clienteContato, clienteTelefone,
     consultorNome: consultorNomeInput, consultorTelefone: consultorTelefoneInput, consultorEmail: consultorEmailInput,
     consultorCargo: consultorCargoInput,
+    // Combo 0800: opcional, só válido junto de conecta_smart/conecta_blc/
+    // combo_2p_bld (as únicas ofertas que já incluem voz — pedido explícito
+    // do usuário: "apenas o que começar com Conecta").
+    combo0800Pacote,
   } = req.body || {};
 
   if (!clienteNome || !clienteNome.trim()) {
@@ -39,63 +39,18 @@ export default async function handler(req, res) {
   }
 
   // Cálculo do preço SEMPRE aqui — nunca confia em valor vindo do cliente.
-  let calculo;
-  if (tipoOferta === 'conecta_smart') {
-    calculo = calcularConectaSmart(velocidade);
-    if (!calculo) return res.status(400).json({ error: `Velocidade "${velocidade}" inválida para Conecta Smart` });
-  } else if (tipoOferta === 'conecta_blc') {
-    calculo = calcularConectaBLC(velocidade);
-    if (!calculo) return res.status(400).json({ error: `Velocidade "${velocidade}" inválida para Conecta com BLC` });
-  } else if (tipoOferta === 'combo_2p_bld') {
-    if (!ROTEADORES_COMBO_2P_BLD.includes(roteador)) {
-      return res.status(400).json({ error: `Roteador "${roteador}" inválido para Combo Conecta 2P BLD` });
+  const resultado = calcularOferta({ tipoOferta, velocidade, roteador, pacote, tipo, trajeto, clienteUf, clienteCidade });
+  if (!resultado.ok) return res.status(400).json({ error: resultado.erro });
+  const calculo = resultado.calculo;
+
+  let calculo0800 = null;
+  if (combo0800Pacote) {
+    if (!TIPOS_OFERTA_COMBINAVEIS_COM_0800.includes(tipoOferta)) {
+      return res.status(400).json({ error: `Combo com 0800 não é permitido para o tipo de oferta "${tipoOferta}"` });
     }
-    calculo = calcularCombo2PBLD(velocidade, roteador);
-    if (!calculo) return res.status(400).json({ error: `Velocidade "${velocidade}" inválida para Combo Conecta 2P BLD` });
-  } else if (tipoOferta === 'bld_oferta_pme') {
-    if (!clienteUf) {
-      return res.status(400).json({ error: 'UF do cliente é obrigatória para calcular o BLD Oferta PME' });
-    }
-    const disponiveis = roteadoresDisponiveisPara(velocidade).map(r => r.nome);
-    if (!disponiveis.includes(roteador)) {
-      return res.status(400).json({ error: `Roteador "${roteador}" não disponível para a velocidade "${velocidade}"` });
-    }
-    calculo = calcularBLDOfertaPME(velocidade, roteador, clienteUf);
-    if (!calculo) {
-      // Regra de segurança do prompt: UF fora da tabela de Alíquotas
-      // bloqueia a geração — nunca gerar com preço errado.
-      return res.status(400).json({ error: `UF "${clienteUf}" não reconhecida na tabela de Alíquotas — confirme a UF do cliente antes de gerar a proposta.` });
-    }
-  } else if (tipoOferta === 'oitocentos') {
-    if (!clienteUf) {
-      return res.status(400).json({ error: 'UF do cliente é obrigatória para calcular o 0800' });
-    }
-    calculo = calcularOitocentos(pacote, clienteUf);
-    if (!calculo) {
-      return res.status(400).json({ error: `Pacote "${pacote}" ou UF "${clienteUf}" inválidos para o 0800` });
-    }
-  } else if (tipoOferta === 'mpls') {
-    if (!clienteUf) {
-      return res.status(400).json({ error: 'UF do cliente é obrigatória para calcular o MPLS' });
-    }
-    if (!clienteCidade || !clienteCidade.trim()) {
-      return res.status(400).json({ error: 'Cidade do cliente é obrigatória para calcular o MPLS (define a região de preço)' });
-    }
-    calculo = calcularMPLS(velocidade, roteador || null, clienteUf, clienteCidade);
-    if (!calculo) {
-      return res.status(400).json({ error: `Velocidade "${velocidade}", roteador "${roteador}" ou UF "${clienteUf}" inválidos para o MPLS` });
-    }
-  } else {
-    if (!clienteUf) {
-      return res.status(400).json({ error: 'UF do cliente é obrigatória para calcular o LAN EPL' });
-    }
-    if (!tipo || !trajeto) {
-      return res.status(400).json({ error: 'Tipo e trajeto são obrigatórios para calcular o LAN EPL' });
-    }
-    calculo = calcularLANEPL(velocidade, tipo, trajeto, roteador || null, clienteUf);
-    if (!calculo) {
-      return res.status(400).json({ error: `Velocidade "${velocidade}", tipo "${tipo}", trajeto "${trajeto}" ou roteador "${roteador}" inválidos para o LAN EPL` });
-    }
+    const resultado0800 = calcularOferta({ tipoOferta: 'oitocentos', pacote: combo0800Pacote, clienteUf });
+    if (!resultado0800.ok) return res.status(400).json({ error: resultado0800.erro });
+    calculo0800 = resultado0800.calculo;
   }
 
   // Os campos do consultor vêm editáveis do formulário (o usuário pode
@@ -119,6 +74,7 @@ export default async function handler(req, res) {
       valorMensal: calculo.valorMensal,
       valorDe: calculo.valorDe,
       valorDesconto: calculo.valorDesconto,
+      combo0800: calculo0800 ? { pacote: combo0800Pacote, valorMensal: calculo0800.valorMensal } : null,
     });
   } catch (e) {
     return res.status(500).json({ error: `Falha ao montar o PDF: ${e.message}` });
@@ -167,6 +123,8 @@ export default async function handler(req, res) {
           valor_mensal: calculo.valorMensal,
           valor_de: calculo.valorDe ?? null,
           valor_desconto: calculo.valorDesconto ?? null,
+          combo_oitocentos_pacote: calculo0800 ? combo0800Pacote : null,
+          combo_oitocentos_valor_mensal: calculo0800 ? calculo0800.valorMensal : null,
         }),
       });
       if (!respFunil.ok) {
@@ -179,6 +137,7 @@ export default async function handler(req, res) {
     }
   }
 
+  const valorMensalTotal = calculo.valorMensal + (calculo0800 ? calculo0800.valorMensal : 0);
   const pdfBase64 = Buffer.from(pdfBytes).toString('base64');
-  res.status(200).json({ pdfBase64, valorMensal: calculo.valorMensal, funilErro });
+  res.status(200).json({ pdfBase64, valorMensal: valorMensalTotal, funilErro });
 }

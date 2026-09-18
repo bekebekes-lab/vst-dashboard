@@ -166,6 +166,9 @@ export async function gerarPdfProposta(dados) {
     clienteNome, clienteCnpj, clienteEndereco, clienteCidade, clienteUf, clienteContato,
     consultorNome, consultorEmail, consultorTelefone, consultorCargo,
     valorMensal, valorDe, valorDesconto,
+    // Combo 0800 — só permitido junto de conecta_smart/conecta_blc/combo_2p_bld
+    // (validado no chamador). { pacote, valorMensal } ou null/undefined.
+    combo0800,
   } = dados;
 
   const pdfDoc = await PDFDocument.create();
@@ -233,6 +236,16 @@ export async function gerarPdfProposta(dados) {
     y -= (TAM_SECAO + 17);
   }
 
+  // Subtítulo de bloco dentro de uma seção numerada (ex.: "2.1 Conecta
+  // Smart" / "2.2 0800-Flex") — usado quando a proposta combina 2 ofertas.
+  // Mais discreto que titulo(): sem barra colorida, fonte um pouco menor.
+  function subtitulo(texto) {
+    garantirEspaco(TAM_CORPO + 1 + 14);
+    y -= 4;
+    page.drawText(texto, { x: MARGEM, y, size: TAM_CORPO + 1, font: fonteNegrito, color: COR_MAROON });
+    y -= (TAM_CORPO + 1 + 10);
+  }
+
   function paragrafo(texto, opts = {}) {
     const size = opts.size ?? TAM_CORPO;
     const cor = opts.cor ?? COR_TEXTO;
@@ -275,11 +288,13 @@ export async function gerarPdfProposta(dados) {
   page.drawText(dataTexto, { x: PAGE_W - MARGEM - fonte.widthOfTextAtSize(dataTexto, TAM_CORPO), y, size: TAM_CORPO, font: fonte, color: COR_TEXTO_2 });
   y -= 32;
 
-  const tituloProposta = tipoOferta === 'oitocentos'
-    ? 'Proposta Comercial - Telefonia 0800'
-    : OFERTAS_COM_VOZ.has(tipoOferta)
-      ? 'Proposta Comercial - Conectividade e Voz'
-      : 'Proposta Comercial - Conectividade';
+  const tituloProposta = combo0800
+    ? 'Proposta Comercial - Conectividade, Voz e Telefonia 0800'
+    : tipoOferta === 'oitocentos'
+      ? 'Proposta Comercial - Telefonia 0800'
+      : OFERTAS_COM_VOZ.has(tipoOferta)
+        ? 'Proposta Comercial - Conectividade e Voz'
+        : 'Proposta Comercial - Conectividade';
   page.drawText(tituloProposta, { x: MARGEM, y, size: TAM_TITULO, font: fonteNegrito, color: COR_TEXTO });
   y -= 10;
   page.drawRectangle({ x: MARGEM, y: y - 2, width: LARGURA_UTIL, height: 2, color: COR_MAROON });
@@ -324,22 +339,37 @@ export async function gerarPdfProposta(dados) {
   paragrafo('Temos o prazer de apresentar esta proposta de serviços de conectividade e tecnologia da informação, contemplando o descritivo técnico, valores e demais condições comerciais para o fornecimento das soluções da Claro Empresas.');
   paragrafo('Esta proposta é baseada em soluções de altíssima qualidade, disponibilidade e desempenho, projetadas para contribuir com o aumento de produtividade e agilidade nos seus negócios, proporcionando uma sólida vantagem competitiva frente ao mercado.');
 
-  titulo('1. Sobre a Solução');
+  titulo(combo0800 ? '1. Sobre as Soluções' : '1. Sobre a Solução');
   const nomeOferta = NOMES_OFERTA[tipoOferta] || tipoOferta;
-  const TEXTOS_SOLUCAO = {
-    conecta_smart: `A solução ${nomeOferta} oferece múltiplos serviços de alta performance, unindo link dedicado, comunicação de voz e IP Fixo. Com esta estrutura, sua empresa acessa a internet com qualidade, segurança e alta confiabilidade o tempo todo.`,
-    conecta_blc: `A solução ${nomeOferta} une internet corporativa (Banda Larga Corporativa) com atendimento dedicado, comunicação de voz e as ferramentas do Microsoft 365, em um único contrato — ideal para empresas que buscam equilíbrio entre custo-benefício e atendimento corporativo.`,
-    combo_2p_bld: `A solução ${nomeOferta} une link dedicado de alta performance, firewall gerenciado, gerência de rede e comunicação de voz em um único contrato. Com esta estrutura, sua empresa acessa a internet com qualidade, segurança e alta confiabilidade o tempo todo.`,
-    bld_oferta_pme: `A solução ${nomeOferta} oferece um link de internet dedicado de alta performance com IP Fixo, unindo qualidade, segurança e alta confiabilidade — ideal para quem precisa de conectividade robusta e estável, sem os serviços de voz agregados.`,
-    oitocentos: `A solução ${nomeOferta} oferece um canal de comunicação gratuito para os clientes da sua empresa entrarem em contato de qualquer lugar do Brasil, fortalecendo o relacionamento e abrindo novas oportunidades de negócio.`,
-    mpls: `A solução ${nomeOferta} conecta as unidades da sua empresa através de uma rede privada, com tráfego isolado da internet pública, garantindo segurança, estabilidade e alta performance para as aplicações críticas do negócio.`,
-    lan_epl: `A solução ${nomeOferta} interliga as unidades da sua empresa em um circuito privado ponto a ponto, com máxima estabilidade, segurança e desempenho para a comunicação contínua entre elas.`,
-  };
-  paragrafo(TEXTOS_SOLUCAO[tipoOferta] || TEXTOS_SOLUCAO.bld_oferta_pme);
+  function textoSolucao(tipo, nome) {
+    const TEXTOS_SOLUCAO = {
+      conecta_smart: `A solução ${nome} oferece múltiplos serviços de alta performance, unindo link dedicado, comunicação de voz e IP Fixo. Com esta estrutura, sua empresa acessa a internet com qualidade, segurança e alta confiabilidade o tempo todo.`,
+      conecta_blc: `A solução ${nome} une internet corporativa (Banda Larga Corporativa) com atendimento dedicado, comunicação de voz e as ferramentas do Microsoft 365, em um único contrato — ideal para empresas que buscam equilíbrio entre custo-benefício e atendimento corporativo.`,
+      combo_2p_bld: `A solução ${nome} une link dedicado de alta performance, firewall gerenciado, gerência de rede e comunicação de voz em um único contrato. Com esta estrutura, sua empresa acessa a internet com qualidade, segurança e alta confiabilidade o tempo todo.`,
+      bld_oferta_pme: `A solução ${nome} oferece um link de internet dedicado de alta performance com IP Fixo, unindo qualidade, segurança e alta confiabilidade — ideal para quem precisa de conectividade robusta e estável, sem os serviços de voz agregados.`,
+      oitocentos: `A solução ${nome} oferece um canal de comunicação gratuito para os clientes da sua empresa entrarem em contato de qualquer lugar do Brasil, fortalecendo o relacionamento e abrindo novas oportunidades de negócio.`,
+      mpls: `A solução ${nome} conecta as unidades da sua empresa através de uma rede privada, com tráfego isolado da internet pública, garantindo segurança, estabilidade e alta performance para as aplicações críticas do negócio.`,
+      lan_epl: `A solução ${nome} interliga as unidades da sua empresa em um circuito privado ponto a ponto, com máxima estabilidade, segurança e desempenho para a comunicação contínua entre elas.`,
+    };
+    return TEXTOS_SOLUCAO[tipo] || TEXTOS_SOLUCAO.bld_oferta_pme;
+  }
+  paragrafo(textoSolucao(tipoOferta, nomeOferta));
+  if (combo0800) paragrafo(textoSolucao('oitocentos', NOMES_OFERTA.oitocentos));
 
   titulo('2. Escopo Técnico do Serviço');
-  for (const [label, texto] of montarEscopoTecnico(tipoOferta, { velocidade, roteador, pacote, tipo, trajeto })) {
-    bullet(label, texto);
+  if (combo0800) {
+    subtitulo(`2.1 ${nomeOferta}`);
+    for (const [label, texto] of montarEscopoTecnico(tipoOferta, { velocidade, roteador, pacote, tipo, trajeto })) {
+      bullet(label, texto);
+    }
+    subtitulo(`2.2 ${NOMES_OFERTA.oitocentos}`);
+    for (const [label, texto] of montarEscopoTecnico('oitocentos', { pacote: combo0800.pacote })) {
+      bullet(label, texto);
+    }
+  } else {
+    for (const [label, texto] of montarEscopoTecnico(tipoOferta, { velocidade, roteador, pacote, tipo, trajeto })) {
+      bullet(label, texto);
+    }
   }
 
   titulo('3. Acordo de Nível de Serviço (SLA)');
@@ -352,13 +382,18 @@ export async function gerarPdfProposta(dados) {
     oitocentos: 'Abaixo, detalhamos o investimento necessário para a disponibilização do número 0800 e sua franquia de minutos.',
     mpls: 'Abaixo, detalhamos o investimento necessário para a implementação da rede privada MPLS na(s) unidade(s) contratada(s).',
   };
-  paragrafo(INTRO_INVESTIMENTO[tipoOferta] || 'Abaixo, detalhamos o investimento necessário para a implementação da solução no seu endereço matriz.');
+  paragrafo(combo0800
+    ? 'Abaixo, detalhamos o investimento necessário para a implementação das soluções combinadas no seu endereço matriz.'
+    : (INTRO_INVESTIMENTO[tipoOferta] || 'Abaixo, detalhamos o investimento necessário para a implementação da solução no seu endereço matriz.'));
 
   const alturaHeaderTabela = 24;
   const paddingCel = 8;
   const alturaLinhaTexto = 13;
   garantirEspaco(alturaHeaderTabela + 26 + 10);
-  const colunas = OFERTAS_COM_ROTEADOR_NA_TABELA.has(tipoOferta)
+  // Coluna 3 (Roteador/Prazo) é decidida pelo tipo da oferta PRINCIPAL — as
+  // duas linhas da tabela (combo) compartilham o mesmo cabeçalho.
+  const usaColunaRoteador = OFERTAS_COM_ROTEADOR_NA_TABELA.has(tipoOferta);
+  const colunas = usaColunaRoteador
     ? ['Serviço', 'Banda', 'Roteador', 'Valor Mensal']
     : ['Serviço', 'Banda', 'Prazo Contratual', 'Valor Mensal'];
   const larguras = [LARGURA_UTIL * 0.4, LARGURA_UTIL * 0.18, LARGURA_UTIL * 0.22, LARGURA_UTIL * 0.2];
@@ -379,32 +414,52 @@ export async function gerarPdfProposta(dados) {
     mpls: 'Rede Privada',
     lan_epl: `${tipo} - ${trajeto}`,
   };
-  const nomeServico = `${nomeOferta} (${DESCRICOES_SERVICO[tipoOferta] || 'Internet Dedicada'})`;
-  // 0800 não tem "Banda" (é um pacote de minutos) — mostra o pacote na
-  // mesma coluna, pra não precisar de uma tabela com layout diferente.
-  const bandaExibida = tipoOferta === 'oitocentos' ? pacote : velocidade;
-  const colValores = OFERTAS_COM_ROTEADOR_NA_TABELA.has(tipoOferta)
-    ? [nomeServico, bandaExibida, roteador || '—', fmtReais(valorMensal)]
-    : [nomeServico, bandaExibida, '36 Meses', fmtReais(valorMensal)];
+
+  // Desenha 1 linha da tabela de investimento — usado tanto pra oferta
+  // principal quanto (em combo) pra linha do 0800 e pra linha de Total.
   // Cada célula quebra dentro da própria largura de coluna — sem isso, um
   // nome de serviço longo (ex.: "Conecta Smart (Internet Dedicada + Voz +
   // GRC)") ultrapassa a coluna "Serviço" e sobrepõe o texto da coluna
   // seguinte ("Banda"), virando um emaranhado de glifos ilegível.
-  const linhasPorColuna = colValores.map((v, i) => {
-    const fonteCel = i === 3 ? fonteNegrito : fonte;
-    return quebrarLinhas(String(v), fonteCel, TAM_CORPO, larguras[i] - paddingCel * 2);
-  });
-  const maxLinhas = Math.max(...linhasPorColuna.map(l => l.length));
-  const alturaLinhaInvest = Math.max(26, maxLinhas * alturaLinhaTexto + 12);
-  page.drawRectangle({ x: MARGEM, y: y - alturaLinhaInvest, width: LARGURA_UTIL, height: alturaLinhaInvest, color: COR_BRANCO, borderColor: COR_LINHA, borderWidth: 1 });
-  x = MARGEM;
-  linhasPorColuna.forEach((linhas, i) => {
-    linhas.forEach((linha, li) => {
-      page.drawText(linha, { x: x + paddingCel, y: y - 9 - li * alturaLinhaTexto, size: TAM_CORPO, font: i === 3 ? fonteNegrito : fonte, color: COR_TEXTO });
+  function desenharLinhaInvestimento(colValores, opts = {}) {
+    const corFundo = opts.destaque ? COR_MAROON_CLARO : COR_BRANCO;
+    const linhasPorColuna = colValores.map((v, i) => {
+      const fonteCel = (i === 3 || opts.destaque) ? fonteNegrito : fonte;
+      return quebrarLinhas(String(v), fonteCel, TAM_CORPO, larguras[i] - paddingCel * 2);
     });
-    x += larguras[i];
-  });
-  y -= (alturaLinhaInvest + 20);
+    const maxLinhas = Math.max(...linhasPorColuna.map(l => l.length));
+    const altura = Math.max(26, maxLinhas * alturaLinhaTexto + 12);
+    garantirEspaco(altura);
+    page.drawRectangle({ x: MARGEM, y: y - altura, width: LARGURA_UTIL, height: altura, color: corFundo, borderColor: COR_LINHA, borderWidth: 1 });
+    let xCel = MARGEM;
+    linhasPorColuna.forEach((linhas, i) => {
+      linhas.forEach((linha, li) => {
+        page.drawText(linha, { x: xCel + paddingCel, y: y - 9 - li * alturaLinhaTexto, size: TAM_CORPO, font: (i === 3 || opts.destaque) ? fonteNegrito : fonte, color: COR_TEXTO });
+      });
+      xCel += larguras[i];
+    });
+    y -= (altura + (opts.ultima ? 20 : 0));
+  }
+
+  const nomeServico = `${nomeOferta} (${DESCRICOES_SERVICO[tipoOferta] || 'Internet Dedicada'})`;
+  // 0800 não tem "Banda" (é um pacote de minutos) — mostra o pacote na
+  // mesma coluna, pra não precisar de uma tabela com layout diferente.
+  const bandaExibida = tipoOferta === 'oitocentos' ? pacote : velocidade;
+  const colValoresPrincipal = usaColunaRoteador
+    ? [nomeServico, bandaExibida, roteador || '—', fmtReais(valorMensal)]
+    : [nomeServico, bandaExibida, '36 Meses', fmtReais(valorMensal)];
+  desenharLinhaInvestimento(colValoresPrincipal, { ultima: !combo0800 });
+
+  if (combo0800) {
+    const nomeServico0800 = `${NOMES_OFERTA.oitocentos} (${DESCRICOES_SERVICO.oitocentos})`;
+    const colValores0800 = usaColunaRoteador
+      ? [nomeServico0800, combo0800.pacote, '—', fmtReais(combo0800.valorMensal)]
+      : [nomeServico0800, combo0800.pacote, '36 Meses', fmtReais(combo0800.valorMensal)];
+    desenharLinhaInvestimento(colValores0800);
+
+    const valorTotal = valorMensal + combo0800.valorMensal;
+    desenharLinhaInvestimento(['Total Mensal', '', '', fmtReais(valorTotal)], { destaque: true, ultima: true });
+  }
 
   if (valorDesconto) {
     bullet('Desconto Aplicado:', `O valor mensal apresentado já contempla um desconto de ${fmtReais(valorDesconto)} (reduzido do valor original de ${fmtReais(valorDe)}).`);

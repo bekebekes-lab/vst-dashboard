@@ -2328,6 +2328,21 @@
           <select id="conect-roteador" onchange="conectAtualizarValorEstimado()"></select>
         </div>
       </div>
+      <div class="filters-bar" id="conect-grupo-combo-0800" style="display:none;margin-top:10px;">
+        <div class="filter-group" style="flex-direction:row;align-items:center;gap:8px;">
+          <input type="checkbox" id="conect-combo-0800" onchange="conectToggleCombo0800()" style="width:16px;height:16px;">
+          <label for="conect-combo-0800" style="margin:0;cursor:pointer;">+ Adicionar 0800</label>
+        </div>
+        <div class="filter-group" id="conect-grupo-combo-0800-pacote" style="display:none;">
+          <label>Pacote de minutos (0800)</label>
+          <select id="conect-combo-0800-pacote" onchange="conectAtualizarValorEstimado()">
+            <option value="1.000 minutos">1.000 minutos</option>
+            <option value="5.000 minutos">5.000 minutos</option>
+            <option value="10.000 minutos">10.000 minutos</option>
+            <option value="20.000 minutos">20.000 minutos</option>
+          </select>
+        </div>
+      </div>
       <div id="conect-valor-estimado" style="font-size:13px;font-weight:600;margin:8px 0 0;"></div>
 
       <div class="filters-bar" style="margin-top:10px;">
@@ -10228,13 +10243,31 @@ const CONECT_ESTAGIOS = [
 
 let CONECT_INICIALIZADA = false;
 
+// Só as ofertas Conecta que já incluem voz podem vir com 0800 na mesma
+// proposta (pedido explícito: "apenas o que começar com Conecta" — fora
+// BLD Oferta PME, que é link avulso sem voz). Espelha
+// TIPOS_OFERTA_COMBINAVEIS_COM_0800 de api/_lib/propostas-dados.js.
+const CONECT_TIPOS_COMBINAVEIS_0800 = ['conecta_smart', 'conecta_blc', 'combo_2p_bld'];
+
 function conectAoTrocarTipoOferta() {
   const tipo = document.getElementById('conect-tipo-oferta').value;
   document.getElementById('conect-label-velocidade').textContent = tipo === 'oitocentos' ? 'Pacote de minutos' : 'Velocidade';
   document.getElementById('conect-grupo-tipo-lanepl').style.display = tipo === 'lan_epl' ? '' : 'none';
   document.getElementById('conect-grupo-trajeto-lanepl').style.display = tipo === 'lan_epl' ? '' : 'none';
   document.getElementById('conect-grupo-roteador').style.display = CONECT_TIPOS_COM_ROTEADOR.includes(tipo) ? '' : 'none';
+  const podeCombo = CONECT_TIPOS_COMBINAVEIS_0800.includes(tipo);
+  document.getElementById('conect-grupo-combo-0800').style.display = podeCombo ? '' : 'none';
+  if (!podeCombo) {
+    document.getElementById('conect-combo-0800').checked = false;
+    document.getElementById('conect-grupo-combo-0800-pacote').style.display = 'none';
+  }
   conectAtualizarVelocidadesDisponiveis();
+}
+
+function conectToggleCombo0800() {
+  const marcado = document.getElementById('conect-combo-0800').checked;
+  document.getElementById('conect-grupo-combo-0800-pacote').style.display = marcado ? '' : 'none';
+  conectAtualizarValorEstimado();
 }
 
 // Recalcula as opções de velocidade/pacote — separado de
@@ -10369,9 +10402,30 @@ function conectAtualizarValorEstimado() {
     }
   }
 
+  // Combo 0800: soma ao valor da oferta principal quando marcado (só
+  // aparece pras ofertas combináveis — checkbox fica escondido nas demais).
+  const comboMarcado = CONECT_TIPOS_COMBINAVEIS_0800.includes(tipo) && document.getElementById('conect-combo-0800').checked;
+  let valor0800 = null;
+  if (!aviso && comboMarcado) {
+    if (!uf) {
+      aviso = 'Informe o CEP do cliente pra calcular o valor do 0800 combinado — depende do imposto por UF.';
+    } else {
+      const fator = CONECT_ALICOTAS_UF[uf];
+      const pacote0800 = document.getElementById('conect-combo-0800-pacote').value;
+      const base0800 = CONECT_PRECOS_OITOCENTOS[pacote0800];
+      if (!fator) aviso = `UF "${uf}" não está na tabela de alíquotas.`;
+      else if (base0800 != null) valor0800 = Math.round((base0800 / fator) * 100) / 100;
+    }
+  }
+
   if (aviso) {
     el.style.color = 'var(--red-sem)';
     el.textContent = aviso;
+  } else if (valor != null && valor0800 != null) {
+    const total = valor + valor0800;
+    el.style.color = 'var(--brand)';
+    el.textContent = `Valor estimado: ${total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}/mês `
+      + `(${valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} + ${valor0800.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} do 0800)`;
   } else if (valor != null) {
     el.style.color = 'var(--brand)';
     el.textContent = `Valor estimado: ${valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}/mês`;
@@ -10905,6 +10959,9 @@ async function conectGerarProposta() {
   const trajeto = tipoOferta === 'lan_epl' ? document.getElementById('conect-trajeto-lanepl').value : null;
   const roteadorSelecionado = CONECT_TIPOS_COM_ROTEADOR.includes(tipoOferta) ? document.getElementById('conect-roteador').value : null;
   const roteador = (roteadorSelecionado && roteadorSelecionado !== 'Nenhum') ? roteadorSelecionado : null;
+  const combo0800Pacote = (CONECT_TIPOS_COMBINAVEIS_0800.includes(tipoOferta) && document.getElementById('conect-combo-0800').checked)
+    ? document.getElementById('conect-combo-0800-pacote').value
+    : null;
   const clienteNome = document.getElementById('conect-cliente-nome').value.trim();
   const clienteCnpj = document.getElementById('conect-cliente-cnpj').value.trim();
   const clienteContato = document.getElementById('conect-cliente-contato').value.trim();
@@ -10922,6 +10979,7 @@ async function conectGerarProposta() {
   const TIPOS_QUE_EXIGEM_UF = ['bld_oferta_pme', 'oitocentos', 'mpls', 'lan_epl'];
   if (TIPOS_QUE_EXIGEM_UF.includes(tipoOferta) && !clienteUf) { statusEl.textContent = `UF do cliente é obrigatória pro ${CONECT_NOMES_OFERTA[tipoOferta]}.`; statusEl.style.color = 'var(--red-sem)'; return; }
   if (tipoOferta === 'mpls' && !clienteCidade) { statusEl.textContent = 'Cidade do cliente é obrigatória pro MPLS (define a região de preço).'; statusEl.style.color = 'var(--red-sem)'; return; }
+  if (combo0800Pacote && !clienteUf) { statusEl.textContent = 'UF do cliente é obrigatória pro 0800 combinado.'; statusEl.style.color = 'var(--red-sem)'; return; }
 
   const btn = document.getElementById('conect-btn-gerar');
   btn.disabled = true;
@@ -10936,6 +10994,7 @@ async function conectGerarProposta() {
         tipoOferta, velocidade, roteador, pacote, tipo, trajeto,
         clienteNome, clienteCnpj, clienteEndereco, clienteCidade, clienteUf, clienteContato, clienteTelefone,
         consultorNome, consultorCargo, consultorTelefone, consultorEmail,
+        combo0800Pacote,
       }),
     });
     const json = await res.json();
@@ -10999,7 +11058,7 @@ function conectRenderFunil() {
       // Soma sempre sobre `dados` — que já vem filtrado pela RLS (só as
       // próprias propostas pro usuário comum, todas pro admin), então essa
       // receita fica automaticamente "só minha" ou "de todos" sem lógica extra.
-      const receitaEstagio = itens.reduce((soma, i) => soma + (Number(i.valor_mensal) || 0), 0);
+      const receitaEstagio = itens.reduce((soma, i) => soma + (Number(i.valor_mensal) || 0) + (Number(i.combo_oitocentos_valor_mensal) || 0), 0);
       return `
       <div style="background:var(--surface-2);border-radius:var(--radius-lg);padding:12px;min-height:80px;">
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;">
@@ -11021,8 +11080,8 @@ function conectRenderFunil() {
                   </div>
                 </div>` : ''}
               </div>
-              <div style="font-size:11px;color:var(--text-2);margin-bottom:2px;">${CONECT_NOMES_OFERTA[item.tipo_oferta] || item.tipo_oferta} · ${escapeHtml(conectDescricaoBanda(item))}</div>
-              <div style="font-size:12px;font-weight:600;color:var(--brand);margin-bottom:4px;">${Number(item.valor_mensal).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}/mês</div>
+              <div style="font-size:11px;color:var(--text-2);margin-bottom:2px;">${CONECT_NOMES_OFERTA[item.tipo_oferta] || item.tipo_oferta} · ${escapeHtml(conectDescricaoBanda(item))}${item.combo_oitocentos_pacote ? ` + 0800 (${escapeHtml(item.combo_oitocentos_pacote)})` : ''}</div>
+              <div style="font-size:12px;font-weight:600;color:var(--brand);margin-bottom:4px;">${(Number(item.valor_mensal) + (Number(item.combo_oitocentos_valor_mensal) || 0)).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}/mês</div>
               <div style="font-size:10px;color:var(--text-2);margin-bottom:8px;">Gerado por: ${escapeHtml(item.gerado_por_nome || item.consultor_nome || '—')}</div>
               <select style="width:100%;font-size:11px;padding:4px 6px;" onchange="conectMudarEstagio(${item.id}, this.value)">
                 ${CONECT_ESTAGIOS.map(e2 => `<option value="${e2.key}" ${e2.key === item.estagio_funil ? 'selected' : ''}>${e2.label}</option>`).join('')}
@@ -11085,9 +11144,12 @@ function conectAbrirDetalhe(id) {
     ['Endereço', item.cliente_endereco], ['Cidade', item.cliente_cidade], ['UF', item.cliente_uf],
     ['Tipo de oferta', CONECT_NOMES_OFERTA[item.tipo_oferta] || item.tipo_oferta],
     [item.tipo_oferta === 'oitocentos' ? 'Pacote' : 'Velocidade', conectDescricaoBanda(item)], ['Roteador', item.roteador],
-    ['Valor mensal', item.valor_mensal != null ? Number(item.valor_mensal).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : null],
+    ['Valor mensal' + (item.combo_oitocentos_pacote ? ' (oferta principal)' : ''), item.valor_mensal != null ? Number(item.valor_mensal).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : null],
     ['Valor de (antes do desconto)', item.valor_de != null ? Number(item.valor_de).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : null],
     ['Desconto aplicado', item.valor_desconto != null ? Number(item.valor_desconto).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : null],
+    ['0800 combinado (pacote)', item.combo_oitocentos_pacote],
+    ['Valor mensal do 0800', item.combo_oitocentos_valor_mensal != null ? Number(item.combo_oitocentos_valor_mensal).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : null],
+    ['Valor mensal total', item.combo_oitocentos_pacote ? (Number(item.valor_mensal) + Number(item.combo_oitocentos_valor_mensal || 0)).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : null],
     ['Estágio no funil', estagioLabel],
     ['Gerado por', item.gerado_por_nome], ['Consultor (assinatura da proposta)', item.consultor_nome],
     ['Criado em', item.criado_em ? new Date(item.criado_em).toLocaleString('pt-BR') : null],

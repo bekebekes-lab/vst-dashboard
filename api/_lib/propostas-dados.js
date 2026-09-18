@@ -236,3 +236,71 @@ export function calcularBLDOfertaPME(velocidade, roteador, uf) {
   const valorMensal = Math.round(((bldSemImposto + rot.preco) / fatorUF) * 100) / 100;
   return { valorMensal };
 }
+
+// Tipos de oferta que já incluem voz — únicos que podem vir combinados com
+// 0800 na mesma proposta (pedido explícito: só "o que começar com Conecta",
+// ou seja, sem BLD Oferta PME, que é link avulso sem voz).
+export const TIPOS_OFERTA_COMBINAVEIS_COM_0800 = ['conecta_smart', 'conecta_blc', 'combo_2p_bld'];
+
+// Ponto único de cálculo de preço por tipo de oferta — usado tanto na
+// geração original quanto na regeneração (evita o que já aconteceu antes:
+// as duas rotas com a mesma lógica duplicada, uma delas ficando pra trás e
+// só cobrindo 2 dos 7 tipos). Retorna { ok:true, calculo } ou
+// { ok:false, erro } — nunca lança, o chamador decide o status HTTP.
+export function calcularOferta({ tipoOferta, velocidade, roteador, pacote, tipo, trajeto, clienteUf, clienteCidade }) {
+  if (tipoOferta === 'conecta_smart') {
+    const calculo = calcularConectaSmart(velocidade);
+    if (!calculo) return { ok: false, erro: `Velocidade "${velocidade}" inválida para Conecta Smart` };
+    return { ok: true, calculo };
+  }
+  if (tipoOferta === 'conecta_blc') {
+    const calculo = calcularConectaBLC(velocidade);
+    if (!calculo) return { ok: false, erro: `Velocidade "${velocidade}" inválida para Conecta com BLC` };
+    return { ok: true, calculo };
+  }
+  if (tipoOferta === 'combo_2p_bld') {
+    if (!ROTEADORES_COMBO_2P_BLD.includes(roteador)) {
+      return { ok: false, erro: `Roteador "${roteador}" inválido para Combo Conecta 2P BLD` };
+    }
+    const calculo = calcularCombo2PBLD(velocidade, roteador);
+    if (!calculo) return { ok: false, erro: `Velocidade "${velocidade}" inválida para Combo Conecta 2P BLD` };
+    return { ok: true, calculo };
+  }
+  if (tipoOferta === 'bld_oferta_pme') {
+    if (!clienteUf) return { ok: false, erro: 'UF do cliente é obrigatória para calcular o BLD Oferta PME' };
+    const disponiveis = roteadoresDisponiveisPara(velocidade).map(r => r.nome);
+    if (!disponiveis.includes(roteador)) {
+      return { ok: false, erro: `Roteador "${roteador}" não disponível para a velocidade "${velocidade}"` };
+    }
+    const calculo = calcularBLDOfertaPME(velocidade, roteador, clienteUf);
+    if (!calculo) {
+      return { ok: false, erro: `UF "${clienteUf}" não reconhecida na tabela de Alíquotas — confirme a UF do cliente antes de gerar a proposta.` };
+    }
+    return { ok: true, calculo };
+  }
+  if (tipoOferta === 'oitocentos') {
+    if (!clienteUf) return { ok: false, erro: 'UF do cliente é obrigatória para calcular o 0800' };
+    const calculo = calcularOitocentos(pacote, clienteUf);
+    if (!calculo) return { ok: false, erro: `Pacote "${pacote}" ou UF "${clienteUf}" inválidos para o 0800` };
+    return { ok: true, calculo };
+  }
+  if (tipoOferta === 'mpls') {
+    if (!clienteUf) return { ok: false, erro: 'UF do cliente é obrigatória para calcular o MPLS' };
+    if (!clienteCidade || !clienteCidade.trim()) {
+      return { ok: false, erro: 'Cidade do cliente é obrigatória para calcular o MPLS (define a região de preço)' };
+    }
+    const calculo = calcularMPLS(velocidade, roteador || null, clienteUf, clienteCidade);
+    if (!calculo) return { ok: false, erro: `Velocidade "${velocidade}", roteador "${roteador}" ou UF "${clienteUf}" inválidos para o MPLS` };
+    return { ok: true, calculo };
+  }
+  if (tipoOferta === 'lan_epl') {
+    if (!clienteUf) return { ok: false, erro: 'UF do cliente é obrigatória para calcular o LAN EPL' };
+    if (!tipo || !trajeto) return { ok: false, erro: 'Tipo e trajeto são obrigatórios para calcular o LAN EPL' };
+    const calculo = calcularLANEPL(velocidade, tipo, trajeto, roteador || null, clienteUf);
+    if (!calculo) {
+      return { ok: false, erro: `Velocidade "${velocidade}", tipo "${tipo}", trajeto "${trajeto}" ou roteador "${roteador}" inválidos para o LAN EPL` };
+    }
+    return { ok: true, calculo };
+  }
+  return { ok: false, erro: 'Tipo de oferta inválido' };
+}
