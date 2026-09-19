@@ -3662,7 +3662,7 @@ function drillFila(categoria, fila) {
   const buscaDigits = buscaRaw.replace(/\D/g, '');
 
   const escopo = getEscopoTravado();
-  const filtered = ALL_DATA.filter(r => {
+  let filtered = ALL_DATA.filter(r => {
     const eq  = r['EQUIPE'];
     const est = EQUIPES_ESTADOS[eq] || '';
     const ges = EQUIPES_GESTORES[eq] || '';
@@ -3687,9 +3687,46 @@ function drillFila(categoria, fila) {
     if (categoria !== 'GERAL' && grupoKey !== categoria) return false;
     return true;
   });
+  // Guardado ANTES dos 5 filtros de coluna abaixo — decide se não há dado
+  // NENHUM pra essa fila (esconde a tabela inteira) ou se só os filtros de
+  // coluna zeraram o recorte (nesse caso a tabela+dropdowns continuam
+  // visíveis, só a lista de linhas fica vazia — ver mais abaixo).
+  const filtradoBaseLength = filtered.length;
+
+  // Filtro por coluna (Grupo/Vinculado/Nome do Cliente/Proprietário/Equipe)
+  // — mesmo padrão da Discadora (dropdown de checkbox embaixo do cabeçalho
+  // ordenável), pedido explícito do usuário pra "todos os itens". Opções
+  // vêm do recorte já filtrado pelos filtros de cima (Estado/Gestor/Equipe/
+  // Consultor/Tag/Busca/fila) mas ANTES desses 5 novos filtros entre si —
+  // pra lista de opções não encolher sozinha conforme o usuário filtra.
+  const _drillCampos = [
+    { campo: 'GRUPO', base: 'ger-drill-grupo' },
+    { campo: 'VINCULADO', base: 'ger-drill-vinculado' },
+    { campo: 'NOME CLIENTE', base: 'ger-drill-nome' },
+    { campo: 'PROPRIETÁRIO DO PEDIDO', base: 'ger-drill-proprietario' },
+    { campo: 'EQUIPE', base: 'ger-drill-equipe' },
+  ];
+  const _drillOpcoes = {};
+  _drillCampos.forEach(({ campo, base }) => {
+    const contId = `dd-content-${base}`;
+    _drillOpcoes[campo] = [...new Set(filtered.map(r => r[campo]).filter(Boolean))].sort();
+    // onchange dos checkboxes referencia essa global por nome direto — tem
+    // que existir antes do clique, senão quebra com ReferenceError. Chama
+    // drillFila(categoria, fila) de novo, NUNCA render() sozinho — render()
+    // redesenha table-area com a tabela resumo "Detalhamento por consultor"
+    // (mesmo padrão de toggleGerReceita(), que precisa desse mesmo cuidado
+    // pra não perder o drill-down ao trocar um filtro/toggle no meio dele).
+    window[`_ddOnChange_${contId.replace(/-/g, '_')}`] = () => { atualizarBotaoDropdown(contId, `#dd-${base} .dropdown-btn`); drillFila(categoria, fila); };
+    ddRegisterCallback(contId, window[`_ddOnChange_${contId.replace(/-/g, '_')}`]);
+  });
+  _drillCampos.forEach(({ campo, base }) => {
+    const contId = `dd-content-${base}`;
+    const selecionados = getCheckedValuesDd(contId);
+    if (selecionados.length) filtered = filtered.filter(r => selecionados.includes(r[campo]));
+  });
 
   // Sort
-  const sortedRows = [...filtered].sort((a, b) => {
+  let sortedRows = [...filtered].sort((a, b) => {
     if (drillSortCol === 'QTD') {
       const va = gerExibirReceita ? gerReceitaLinha(a) : (parseInt(a['QUANTIDADE']) || 1);
       const vb = gerExibirReceita ? gerReceitaLinha(b) : (parseInt(b['QUANTIDADE']) || 1);
@@ -3729,7 +3766,7 @@ function drillFila(categoria, fila) {
       <span class="count-badge">${total} · ${sortedRows.length} registros</span>
     </div>`;
 
-  if (sortedRows.length === 0) {
+  if (filtradoBaseLength === 0) {
     document.getElementById('table-area').innerHTML = breadcrumb +
       '<div class="coming-soon"><p>Nenhum pedido encontrado para este status.</p></div>';
     return;
@@ -3770,6 +3807,21 @@ function drillFila(categoria, fila) {
   function thD(col, label, style='') {
     return thDrill(col, label, drillSortCol, drillSortAsc, 'setDrillSort') .replace('style="cursor:pointer"', `style="cursor:pointer;${style}"`);
   }
+  // Cabeçalho ordenável + dropdown de filtro embaixo — mesmo padrão da
+  // tabela "por Consultor" da Discadora e da tabela de Detalhamento acima.
+  function thDFiltro(col, label, base, style = '') {
+    const active = drillSortCol === col;
+    const arrow = active ? (drillSortAsc ? '↑' : '↓') : '↕';
+    return `<th class="${active ? 'th-sort-active' : ''}" style="text-align:left;vertical-align:top;${style}">
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        <span class="th-sort" onclick="setDrillSort('${col}')" style="cursor:pointer;white-space:nowrap;">${label} <span class="sort-arrow">${arrow}</span></span>
+        <div class="custom-dropdown" id="dd-${base}">
+          <button class="dropdown-btn" onclick="toggleDropdown('dd-content-${base}')">Todos <span>&#9660;</span></button>
+          <div class="dropdown-content" id="dd-content-${base}"></div>
+        </div>
+      </div>
+    </th>`;
+  }
 
   // Cabeçalho Atualização com filtro De/Até
   const thAtualizacao = `
@@ -3800,11 +3852,11 @@ function drillFila(categoria, fila) {
     <div class="table-wrap"><div class="table-scroll">
       <table>
         <thead><tr>
-          ${thD('GRUPO', 'Grupo', 'width:13%')}
-          ${thD('VINCULADO', 'Vinculado', 'width:13%')}
-          ${thD('NOME CLIENTE', 'Nome do Cliente', 'width:22%')}
-          ${thD('PROPRIETÁRIO DO PEDIDO', 'Proprietário', 'width:14%')}
-          ${thD('EQUIPE', 'Equipe', 'width:14%')}
+          ${thDFiltro('GRUPO', 'Grupo', 'ger-drill-grupo', 'width:13%')}
+          ${thDFiltro('VINCULADO', 'Vinculado', 'ger-drill-vinculado', 'width:13%')}
+          ${thDFiltro('NOME CLIENTE', 'Nome do Cliente', 'ger-drill-nome', 'width:22%')}
+          ${thDFiltro('PROPRIETÁRIO DO PEDIDO', 'Proprietário', 'ger-drill-proprietario', 'width:14%')}
+          ${thDFiltro('EQUIPE', 'Equipe', 'ger-drill-equipe', 'width:14%')}
           ${thAtualizacao}
           ${thD('QTD', gerExibirReceita ? 'Receita' : 'Qtd', 'width:8%')}
         </tr></thead>
@@ -3836,6 +3888,11 @@ function drillFila(categoria, fila) {
         </tbody>
       </table>
     </div></div>`;
+
+  _drillCampos.forEach(({ campo, base }) => {
+    const contId = `dd-content-${base}`;
+    popularDropdownGenerico(contId, _drillOpcoes[campo] || [], _ddCallbacks[contId], `#dd-${base} .dropdown-btn`);
+  });
 }
 
 // ─── DRILLDOWN DE DETALHES DO CLIENTE (aba Gerencial) ──────────────────────
