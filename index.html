@@ -3454,9 +3454,19 @@ function render() {
     return;
   }
 
-  // Consultant table
+  // Consultant table — Consultor/Equipe/Tag ordenam por string; os demais
+  // (Gross/Renov/BL/Titular/Ativo/Total) por número, como já era.
   const sortColEfetivo = gerExibirReceita ? sortCol + '_REC' : sortCol;
   const rows = Object.entries(consMap).sort((a, b) => {
+    if (sortCol === 'CONSULTOR') {
+      return sortAsc ? a[0].localeCompare(b[0]) : b[0].localeCompare(a[0]);
+    }
+    if (sortCol === 'EQUIPE' || sortCol === 'TAG') {
+      const campo = sortCol === 'EQUIPE' ? 'equipe' : 'tag';
+      const va = a[1][campo] || '';
+      const vb = b[1][campo] || '';
+      return sortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+    }
     const va = a[1][sortColEfetivo] || 0;
     const vb = b[1][sortColEfetivo] || 0;
     return sortAsc ? va - vb : vb - va;
@@ -3475,6 +3485,9 @@ function render() {
     { key: 'ATIVO', label: 'Ativo/Instalado' },
     { key: 'GERAL', label: 'Total' }
   ];
+  function thCons(col, label, style = '') {
+    return thDrill(col, label, sortCol, sortAsc, 'setSort').replace('style="cursor:pointer"', `style="cursor:pointer;${style}"`);
+  }
 
   const isMobileCons = window.matchMedia('(max-width: 768px)').matches;
   document.getElementById('table-area').innerHTML = `
@@ -3499,10 +3512,10 @@ function render() {
     <div class="table-wrap"><div class="table-scroll">
       <table>
         <thead><tr>
-          <th style="width:24%">Consultor</th>
-          <th style="width:20%">Equipe</th>
+          ${thCons('CONSULTOR', 'Consultor', 'width:24%')}
+          ${thCons('EQUIPE', 'Equipe', 'width:20%')}
           ${sortCols.map(c => thDrill(c.key, c.label, sortCol, sortAsc, 'setSort')).join('')}
-          <th class="center" style="width:7%">Tag</th>
+          ${thCons('TAG', 'Tag', 'width:7%')}
         </tr></thead>
         <tbody>${rows.map(([cn, d]) => `
           <tr>
@@ -3720,11 +3733,11 @@ function drillFila(categoria, fila) {
     <div class="table-wrap"><div class="table-scroll">
       <table>
         <thead><tr>
-          <th style="width:13%">Grupo</th>
-          <th style="width:13%">Vinculado</th>
-          <th style="width:22%">Nome do Cliente</th>
-          <th style="width:14%">Proprietário</th>
-          <th style="width:14%">Equipe</th>
+          ${thD('GRUPO', 'Grupo', 'width:13%')}
+          ${thD('VINCULADO', 'Vinculado', 'width:13%')}
+          ${thD('NOME CLIENTE', 'Nome do Cliente', 'width:22%')}
+          ${thD('PROPRIETÁRIO DO PEDIDO', 'Proprietário', 'width:14%')}
+          ${thD('EQUIPE', 'Equipe', 'width:14%')}
           ${thAtualizacao}
           ${thD('QTD', gerExibirReceita ? 'Receita' : 'Qtd', 'width:8%')}
         </tr></thead>
