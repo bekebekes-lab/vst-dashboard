@@ -504,6 +504,22 @@
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-right: 6px;
   }
   .fila-count { font-weight: 600; color: var(--text); font-family: 'DM Mono', monospace; flex-shrink: 0; }
+  /* "Aprovado" — soma Ativo + Esteira de ativação, destacada num box
+     separado dos demais subgrupos do card. */
+  .fila-aprovado-titulo {
+    display: flex; justify-content: space-between; align-items: baseline;
+    font-size: 11px; font-weight: 700; color: var(--text);
+    text-transform: uppercase; letter-spacing: .05em;
+    margin: 10px 0 4px; padding: 0 4px;
+  }
+  .fila-aprovado-titulo:first-child { margin-top: 0; }
+  .fila-aprovado-box {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm, 6px);
+    padding: 4px 0 2px;
+    margin-bottom: 4px;
+  }
+  .fila-aprovado-box .fila-subgrupo-label:first-child { margin-top: 0; }
 
   /* ─── SECTION HEADER ─────────────────────────────────────── */
   .section-header {
@@ -3355,27 +3371,43 @@ function render() {
 
   // Metrics cards — um card POR SUBTÓPICO (não mais um card só por
   // categoria), agrupados visualmente sob o nome/total da categoria.
+  // "Aprovado" = soma de Ativo + Esteira de ativação, pedido explícito do
+  // usuário — os dois subgrupos ficam dentro de um box com esse rótulo em
+  // cima, em vez de aparecerem soltos como os demais subgrupos do card.
+  const SUBGRUPOS_APROVADO = ['Ativo', 'Esteira de ativação'];
+  const fmtSub = v => gerExibirReceita ? gerFmtMoeda(v) : v.toLocaleString('pt-BR');
+  function renderSubgrupo(c, { grupo, itens }) {
+    const subtotal = itens.reduce((s, [, fv]) => s + fv, 0);
+    return `
+    <div class="fila-subgrupo-label">
+      <span>${grupo}</span>
+      <span class="fila-subgrupo-total">${fmtSub(subtotal)}</span>
+    </div>
+    ${itens.map(([fn, fv]) => `
+    <div class="fila-item" onclick="drillFila('${c}','${fn.replace(/'/g,"\\'")}')">
+      <span class="fila-name">${fn}</span>
+      <span class="fila-count">${gerExibirReceita ? gerFmtMoeda(fv) : fv}</span>
+    </div>`).join('')}`;
+  }
+
   document.getElementById('metrics-area').innerHTML = `<div class="metrics-grid">${cats.map((c, i) => {
     const med = gerExibirReceita ? gerFmtMoeda(metrics[c].totalRec / nc) : (metrics[c].total / nc).toFixed(1);
     const filas = Object.entries(gerExibirReceita ? metrics[c].filasRec : metrics[c].filas).sort((a, b) => b[1] - a[1]);
     const subgrupos = agruparFilasPorSubgrupo(filas);
+    const gruposAprovado = subgrupos.filter(s => SUBGRUPOS_APROVADO.includes(s.grupo));
+    const outrosGrupos = subgrupos.filter(s => !SUBGRUPOS_APROVADO.includes(s.grupo));
+    const totalAprovado = gruposAprovado.reduce((s, { itens }) => s + itens.reduce((s2, [, fv]) => s2 + fv, 0), 0);
     return `<div class="metric-card ${i === 0 ? 'highlight' : ''}">
       <div class="metric-label">${c}</div>
       <div class="metric-value">${gerExibirReceita ? gerFmtMoeda(metrics[c].totalRec) : metrics[c].total}</div>
       <div class="metric-avg">Média/consultor: ${med}</div>
-      <div class="filas-list">${subgrupos.map(({ grupo, itens }) => {
-        const subtotal = itens.reduce((s, [, fv]) => s + fv, 0);
-        return `
-        <div class="fila-subgrupo-label">
-          <span>${grupo}</span>
-          <span class="fila-subgrupo-total">${gerExibirReceita ? gerFmtMoeda(subtotal) : subtotal.toLocaleString('pt-BR')}</span>
+      <div class="filas-list">${gruposAprovado.length ? `
+        <div class="fila-aprovado-titulo">
+          <span>Aprovado</span>
+          <span>${fmtSub(totalAprovado)}</span>
         </div>
-        ${itens.map(([fn, fv]) => `
-        <div class="fila-item" onclick="drillFila('${c}','${fn.replace(/'/g,"\\'")}')">
-          <span class="fila-name">${fn}</span>
-          <span class="fila-count">${gerExibirReceita ? gerFmtMoeda(fv) : fv}</span>
-        </div>`).join('')}`;
-      }).join('')}
+        <div class="fila-aprovado-box">${gruposAprovado.map(g => renderSubgrupo(c, g)).join('')}</div>
+      ` : ''}${outrosGrupos.map(g => renderSubgrupo(c, g)).join('')}
       </div>
     </div>`;
   }).join('')}</div>`;
