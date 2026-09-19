@@ -3454,10 +3454,54 @@ function render() {
     return;
   }
 
-  // Consultant table — Consultor/Equipe/Tag ordenam por string; os demais
-  // (Gross/Renov/BL/Titular/Ativo/Total) por número, como já era.
+  // Consultant table
+  if (Object.keys(consMap).length === 0) {
+    document.getElementById('table-area').innerHTML = '<div class="coming-soon"><p>Nenhum dado para os filtros selecionados.</p></div>';
+    return;
+  }
+
+  // Filtro por coluna (Consultor/Equipe/Tag) — igual ao padrão já usado na
+  // Discadora (dropdown de checkbox embaixo do cabeçalho ordenável, pedido
+  // explícito do usuário "igual na aba da discadora"). As opções vêm do
+  // consMap INTEIRO (sem aplicar esses 3 filtros entre si), pra lista de
+  // opções não encolher conforme o próprio usuário vai filtrando.
+  const _gerConsTodos = Object.entries(consMap);
+  const _gerConsConsultores = [...new Set(_gerConsTodos.map(([cn]) => cn))].sort();
+  const _gerConsEquipes = [...new Set(_gerConsTodos.map(([, d]) => d.equipe).filter(Boolean))].sort();
+  const _gerConsTags = [...new Set(_gerConsTodos.map(([, d]) => d.tag).filter(Boolean))].sort();
+
+  // Cada filtro tem um "base" (ex.: "ger-cons-consultor") que gera 2 ids:
+  // o wrapper (dd-<base>, usado pelo botão) e o conteúdo (dd-content-<base>,
+  // onde os checkboxes entram) — mesmo esquema da Discadora (dd-consultor /
+  // dd-content-consultor).
+  const _ddGerConsConsultor = 'dd-content-ger-cons-consultor';
+  const _ddGerConsEquipe = 'dd-content-ger-cons-equipe';
+  const _ddGerConsTag = 'dd-content-ger-cons-tag';
+  // popularDropdownGenerico() gera cada checkbox com
+  // onchange="...  _ddOnChange_<contId com _ em vez de ->" — essa global
+  // PRECISA existir (é referência direta de identificador no HTML, não
+  // lookup em objeto), senão o clique quebra com ReferenceError. Mesmo
+  // padrão já usado nos outros dropdowns do arquivo.
+  const _onChangeGerCons = (contId, labelBotaoId) => () => { atualizarBotaoDropdown(contId, labelBotaoId); render(); };
+  window._ddOnChange_dd_content_ger_cons_consultor = _onChangeGerCons(_ddGerConsConsultor, '#dd-ger-cons-consultor .dropdown-btn');
+  window._ddOnChange_dd_content_ger_cons_equipe = _onChangeGerCons(_ddGerConsEquipe, '#dd-ger-cons-equipe .dropdown-btn');
+  window._ddOnChange_dd_content_ger_cons_tag = _onChangeGerCons(_ddGerConsTag, '#dd-ger-cons-tag .dropdown-btn');
+  ddRegisterCallback(_ddGerConsConsultor, window._ddOnChange_dd_content_ger_cons_consultor);
+  ddRegisterCallback(_ddGerConsEquipe, window._ddOnChange_dd_content_ger_cons_equipe);
+  ddRegisterCallback(_ddGerConsTag, window._ddOnChange_dd_content_ger_cons_tag);
+
+  const filtroConsultorHeader = getCheckedValuesDd(_ddGerConsConsultor);
+  const filtroEquipeHeader = getCheckedValuesDd(_ddGerConsEquipe);
+  const filtroTagHeader = getCheckedValuesDd(_ddGerConsTag);
+  let rowsFiltradas = _gerConsTodos;
+  if (filtroConsultorHeader.length) rowsFiltradas = rowsFiltradas.filter(([cn]) => filtroConsultorHeader.includes(cn));
+  if (filtroEquipeHeader.length) rowsFiltradas = rowsFiltradas.filter(([, d]) => filtroEquipeHeader.includes(d.equipe));
+  if (filtroTagHeader.length) rowsFiltradas = rowsFiltradas.filter(([, d]) => filtroTagHeader.includes(d.tag));
+
+  // Consultor/Equipe/Tag ordenam por string; os demais (Gross/Renov/BL/
+  // Titular/Ativo/Total) por número, como já era.
   const sortColEfetivo = gerExibirReceita ? sortCol + '_REC' : sortCol;
-  const rows = Object.entries(consMap).sort((a, b) => {
+  const rows = rowsFiltradas.sort((a, b) => {
     if (sortCol === 'CONSULTOR') {
       return sortAsc ? a[0].localeCompare(b[0]) : b[0].localeCompare(a[0]);
     }
@@ -3472,11 +3516,6 @@ function render() {
     return sortAsc ? va - vb : vb - va;
   });
 
-  if (rows.length === 0) {
-    document.getElementById('table-area').innerHTML = '<div class="coming-soon"><p>Nenhum dado para os filtros selecionados.</p></div>';
-    return;
-  }
-
   const sortCols = [
     { key: 'GROSS', label: 'Gross' },
     { key: 'RENOVAÇÃO', label: 'Renov.' },
@@ -3487,6 +3526,23 @@ function render() {
   ];
   function thCons(col, label, style = '') {
     return thDrill(col, label, sortCol, sortAsc, 'setSort').replace('style="cursor:pointer"', `style="cursor:pointer;${style}"`);
+  }
+  // Cabeçalho ordenável + dropdown de filtro embaixo — mesmo padrão visual
+  // da tabela "por Consultor" da Discadora. `base` gera os 2 ids (wrapper
+  // dd-<base>, conteúdo dd-content-<base>), igual dd-consultor/
+  // dd-content-consultor lá.
+  function thConsFiltro(col, label, base, style = '') {
+    const active = sortCol === col;
+    const arrow = active ? (sortAsc ? '↑' : '↓') : '↕';
+    return `<th class="${active ? 'th-sort-active' : ''}" style="text-align:left;vertical-align:top;${style}">
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        <span class="th-sort" onclick="setSort('${col}')" style="cursor:pointer;white-space:nowrap;">${label} <span class="sort-arrow">${arrow}</span></span>
+        <div class="custom-dropdown" id="dd-${base}">
+          <button class="dropdown-btn" onclick="toggleDropdown('dd-content-${base}')">Todos <span>&#9660;</span></button>
+          <div class="dropdown-content" id="dd-content-${base}"></div>
+        </div>
+      </div>
+    </th>`;
   }
 
   const isMobileCons = window.matchMedia('(max-width: 768px)').matches;
@@ -3512,12 +3568,14 @@ function render() {
     <div class="table-wrap"><div class="table-scroll">
       <table>
         <thead><tr>
-          ${thCons('CONSULTOR', 'Consultor', 'width:24%')}
-          ${thCons('EQUIPE', 'Equipe', 'width:20%')}
+          ${thConsFiltro('CONSULTOR', 'Consultor', 'ger-cons-consultor', 'width:24%')}
+          ${thConsFiltro('EQUIPE', 'Equipe', 'ger-cons-equipe', 'width:20%')}
           ${sortCols.map(c => thDrill(c.key, c.label, sortCol, sortAsc, 'setSort')).join('')}
-          ${thCons('TAG', 'Tag', 'width:7%')}
+          ${thConsFiltro('TAG', 'Tag', 'ger-cons-tag', 'width:7%')}
         </tr></thead>
-        <tbody>${rows.map(([cn, d]) => `
+        <tbody>${rows.length === 0
+          ? `<tr><td colspan="9" style="text-align:center;padding:20px;color:var(--text3)">Nenhum consultor bate com esse filtro.</td></tr>`
+          : rows.map(([cn, d]) => `
           <tr>
             <td>
               <div class="consultant-name consultant-clickable" onclick="filterByConsultor('${escapeJsAttr(cn)}')">
@@ -3537,6 +3595,15 @@ function render() {
         </tbody>
       </table>
     </div></div>`}`;
+
+  if (!isMobileCons) {
+    popularDropdownGenerico(_ddGerConsConsultor, _gerConsConsultores, _ddCallbacks[_ddGerConsConsultor], '#dd-ger-cons-consultor .dropdown-btn');
+    popularDropdownGenerico(_ddGerConsEquipe, _gerConsEquipes, _ddCallbacks[_ddGerConsEquipe], '#dd-ger-cons-equipe .dropdown-btn');
+    popularDropdownGenerico(_ddGerConsTag, _gerConsTags, _ddCallbacks[_ddGerConsTag], '#dd-ger-cons-tag .dropdown-btn');
+    atualizarBotaoDropdown(_ddGerConsConsultor, '#dd-ger-cons-consultor .dropdown-btn');
+    atualizarBotaoDropdown(_ddGerConsEquipe, '#dd-ger-cons-equipe .dropdown-btn');
+    atualizarBotaoDropdown(_ddGerConsTag, '#dd-ger-cons-tag .dropdown-btn');
+  }
 }
 
 // ─── sort (tabela de consultores) ───────────────────────────────────────────
