@@ -9894,10 +9894,31 @@ function carteiraNum(v) {
   return isNaN(n) ? 0 : n;
 }
 
-function carteiraLinhas(r) { return carteiraNum(r['Quantidade de linhas (Voz)']); }
-function carteiraTM(r) { return carteiraNum(r['Tempo de contrato (Voz)']); }
-function carteiraLinhasBL(r) { return carteiraNum(r['Quantidade de linhas (Banda Larga)']); }
-function carteiraTM_BL(r) { return carteiraNum(r['Tempo de contrato (Banda Larga)']); }
+// Achado real (aba "CARTEIRA 092026 V2", 21/09): essa aba veio com o
+// cabeçalho "Quantidade de Linhas (Voz)"/"Tempo de Contrato (Voz)" (L e C
+// maiúsculos), diferente do "linhas"/"contrato" minúsculo usado nas abas
+// anteriores — acesso a objeto é case-sensitive em JS, então TODA linha
+// lia undefined nesses 4 campos e a carteira inteira virava zero, sem
+// nenhum erro aparecer (o fetch/parse da planilha funcionava normal).
+// carteiraCampo() tenta o nome exato primeiro (caminho rápido, sem custo
+// pras abas que já vêm certas) e só monta o índice case-insensitive (uma
+// vez por base, não por linha) se não achar de cara.
+let _carteiraCampoIdx = null; // { base, mapa: {nomeLower: nomeReal} }
+function carteiraCampo(r, nome) {
+  if (r[nome] !== undefined) return r[nome];
+  if (!_carteiraCampoIdx || _carteiraCampoIdx.base !== CARTEIRA_BASE_ATUAL) {
+    const mapa = {};
+    Object.keys(r).forEach(k => { mapa[k.toLowerCase()] = k; });
+    _carteiraCampoIdx = { base: CARTEIRA_BASE_ATUAL, mapa };
+  }
+  const chaveReal = _carteiraCampoIdx.mapa[nome.toLowerCase()];
+  return chaveReal !== undefined ? r[chaveReal] : undefined;
+}
+
+function carteiraLinhas(r) { return carteiraNum(carteiraCampo(r, 'Quantidade de linhas (Voz)')); }
+function carteiraTM(r) { return carteiraNum(carteiraCampo(r, 'Tempo de contrato (Voz)')); }
+function carteiraLinhasBL(r) { return carteiraNum(carteiraCampo(r, 'Quantidade de linhas (Banda Larga)')); }
+function carteiraTM_BL(r) { return carteiraNum(carteiraCampo(r, 'Tempo de contrato (Banda Larga)')); }
 
 // Um cliente só entra nas contagens se tiver linha de Voz OU de Banda
 // Larga — os dois zerados/"-" ao mesmo tempo indicam registro morto/sem
