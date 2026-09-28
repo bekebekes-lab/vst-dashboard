@@ -1517,6 +1517,14 @@
         </div>
       </div>
       <div class="filter-group"><label>Tag / Unidade</label><select id="f-tag" onchange="render()"><option>Todas</option></select></div>
+      <div class="filter-group">
+        <label>Cadastro de</label>
+        <input type="date" id="f-cadastro-de" onchange="onFilterChangeCadastro()">
+      </div>
+      <div class="filter-group">
+        <label>Cadastro até</label>
+        <input type="date" id="f-cadastro-ate" onchange="onFilterChangeCadastro()">
+      </div>
       <div class="filter-group filter-group-full-mobile" style="min-width:220px">
         <label>Buscar (CNPJ, razão social, vinculado ou nº)</label>
         <input type="text" id="f-busca" placeholder="Digite para buscar..." oninput="onFilterChange('busca')" autocomplete="off">
@@ -3116,6 +3124,35 @@ function onFilterChange(level) {
   render();
 }
 
+// Filtro "Cadastro" (De/Até) — pedido explícito: ver o que foi vendido
+// (cadastrado) num período específico, não só o status atual das filas.
+// Lê os 2 <input type="date"> uma vez por render; "até" inclui o dia
+// inteiro (23:59:59), senão o próprio dia final ficava de fora.
+function getFiltroCadastro() {
+  const deRaw = document.getElementById('f-cadastro-de')?.value || '';
+  const ateRaw = document.getElementById('f-cadastro-ate')?.value || '';
+  const de = deRaw ? new Date(deRaw) : null;
+  const ate = ateRaw ? new Date(ateRaw) : null;
+  if (ate) ate.setHours(23, 59, 59, 999);
+  return { de, ate };
+}
+function linhaDentroDoPeriodoCadastro(r, de, ate) {
+  if (!de && !ate) return true;
+  const d = parseDataRefBR(r['CADASTRO']);
+  if (!d) return false; // sem data de cadastro não entra quando o filtro está ativo
+  if (de  && d < de)  return false;
+  if (ate && d > ate) return false;
+  return true;
+}
+// Mesmo cuidado de toggleGerReceita(): render() sozinho redesenha
+// table-area com a tabela resumo, perdendo o drill-down se o usuário
+// trocar a data de Cadastro no meio de uma tela de status.
+function onFilterChangeCadastro() {
+  const emDrill = !!document.querySelector('#table-area .detail-breadcrumb');
+  render();
+  if (emDrill && lastDrillArgs) drillFila(...lastDrillArgs);
+}
+
 // ─── helpers ────────────────────────────────────────────────────────────────
 function fmtDate(val) {
   if (!val) return '—';
@@ -3297,6 +3334,7 @@ function render() {
   const buscaRaw    = (document.getElementById('f-busca')?.value || '').trim();
   const buscaLower  = buscaRaw.toLowerCase();
   const buscaDigits = buscaRaw.replace(/\D/g, '');
+  const { de: cadastroDe, ate: cadastroAte } = getFiltroCadastro();
 
   const cats = ["GERAL", "GROSS", "RENOVAÇÃO", "BL", "TITULARIDADE", "SERV. DIGITAIS"];
   let metrics = {};
@@ -3327,6 +3365,7 @@ function render() {
     if (consultorSel.length > 0 && !consultorSel.some(c => c.toUpperCase() === cons.toUpperCase())) return;
     if (tag       !== 'Todas' && rtag !== tag)            return;
     if (!linhaBateBusca(r, buscaLower, buscaDigits))      return;
+    if (!linhaDentroDoPeriodoCadastro(r, cadastroDe, cadastroAte)) return;
 
     totalRows++;
     if (buscaLower) linhasBusca.push(r);
@@ -3692,6 +3731,7 @@ function drillFila(categoria, fila) {
   const buscaRaw    = (document.getElementById('f-busca')?.value || '').trim();
   const buscaLower  = buscaRaw.toLowerCase();
   const buscaDigits = buscaRaw.replace(/\D/g, '');
+  const { de: cadastroDe, ate: cadastroAte } = getFiltroCadastro();
 
   const escopo = getEscopoTravado();
   let filtered = ALL_DATA.filter(r => {
@@ -3713,6 +3753,7 @@ function drillFila(categoria, fila) {
     if (consultorSel.length > 0 && !consultorSel.some(c => c.toUpperCase() === cons.toUpperCase())) return false;
     if (tag       !== 'Todas' && rtag !== tag)            return false;
     if (!linhaBateBusca(r, buscaLower, buscaDigits))      return false;
+    if (!linhaDentroDoPeriodoCadastro(r, cadastroDe, cadastroAte)) return false;
     if (filaR !== fila) return false;
     // sempre restringir aos 4 grupos mapeados
     if (!grupoKey) return false;
@@ -3783,6 +3824,10 @@ function drillFila(categoria, fila) {
   if (gestorSel.length > 0)  ctxParts.push(gestorSel.join(', '));
   if (equipeSel.length > 0)  ctxParts.push(equipeSel.join(', '));
   if (consultorSel.length > 0) ctxParts.push(consultorSel.join(', '));
+  if (cadastroDe || cadastroAte) {
+    const fmtCad = d => d.toLocaleDateString('pt-BR');
+    ctxParts.push(`Cadastro: ${cadastroDe ? fmtCad(cadastroDe) : '…'} – ${cadastroAte ? fmtCad(cadastroAte) : '…'}`);
+  }
   const ctxLabel = escapeHtml(ctxParts.join(' › '));
 
   const breadcrumb = `
