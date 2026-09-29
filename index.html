@@ -1667,6 +1667,7 @@
         <div style="display:flex;gap:6px">
           <button class="prod-chip-action" onclick="selectAllStatus()">Selecionar todos</button>
           <button class="prod-chip-action" onclick="clearAllStatus()">Limpar</button>
+          <button class="prod-chip-action" id="prod-btn-exportar-csv" onclick="prodExportarCsv()" style="display:none">⬇ Exportar CSV</button>
         </div>
       </div>
       <div class="prod-status-chips" id="prod-status-chips"></div>
@@ -5418,6 +5419,7 @@ async function renderProducao() {
   // unidade (padrão), é a tag.
   const aggGestores = {}; // gestor → status → { qtd, rec }
   const aggEquipes = {}; // equipe → status → { qtd, rec }
+  const prodLinhasFiltradas = []; // registros crus que passaram por todos os filtros — usado só na exportação CSV (admin)
 
   // Convergência: mapeia quais CNPJs têm NET PJ - VIRTUA e quais têm algum
   // produto elegível a convergência (GROSS/VOZ Novo/VOZ Portabilidade/VOZ
@@ -5504,6 +5506,13 @@ async function renderProducao() {
     // sempre o total geral.
     if (!tagsMap[tag]) return;
 
+    // Guarda o registro cru (não só a contagem agregada) pra exportação em
+    // CSV (só admin) — pedido explícito: "extrair um CSV conforme o status
+    // e filtros selecionados". Nesse ponto do loop já passou por TODOS os
+    // filtros ativos (estado/gestor/equipe/consultor/UF BL/UF cliente/DDD/
+    // grupo/status/convergência/tag de unidade).
+    prodLinhasFiltradas.push(r);
+
     if (prodVisaoGestor) {
       // Agrega por gestor
       if (!aggGestores[ges]) { aggGestores[ges] = {}; statusArr.forEach(s => aggGestores[ges][s] = { qtd: 0, rec: 0 }); }
@@ -5525,6 +5534,8 @@ async function renderProducao() {
       agg[tag][fila].rec += recCents;
     }
   });
+
+  window._prodLinhasFiltradas = prodLinhasFiltradas;
 
   // Monta colunas de status que têm dado
   const aggAtivo = prodVisaoGestor ? aggGestores : prodVisaoEquipe ? aggEquipes : agg;
@@ -5764,6 +5775,46 @@ async function renderProducao() {
         </tfoot>
       </table>
     </div></div>`;
+}
+
+// Exportação CSV da Produção — só admin (botão só aparece pra esse perfil,
+// ver aplicarPermissoes()). Exporta os registros CRUS (um por linha, não a
+// contagem agregada) que passaram por TODOS os filtros ativos na tela
+// (Estado/Gestor/Equipe/Consultor/UF BL/UF Cliente/DDD/Grupo/Tag de Unidade/
+// Convergência/Status de Fila) — window._prodLinhasFiltradas é preenchido
+// dentro do mesmo loop de filtro de renderProducao(), então reflete
+// exatamente o que está na tela no momento do clique.
+function prodExportarCsv() {
+  const linhas = window._prodLinhasFiltradas || [];
+  if (!linhas.length) { alert('Nenhum registro pro filtro/status selecionado.'); return; }
+
+  const header = [
+    'CNPJ', 'Nome Cliente', 'Vinculado', 'Grupo', 'Status', 'Proprietário', 'Equipe',
+    'UF', 'Estado Cliente', 'Tag/Unidade', 'Quantidade', 'Valor Unit', 'Cadastro', 'Atualização',
+  ];
+  const linhasCsv = linhas.map(r => {
+    const tagRaw = r['TAGS ATIVIDADE'] || '';
+    const tag = MAPEAMENTO_TAGS[tagRaw] || 'Sem Tag';
+    return [
+      r['CPF/CNPJ'] || '', r['NOME CLIENTE'] || '', r['VINCULADO'] || '', r['GRUPO'] || '',
+      r['FILA'] || '', r['PROPRIETÁRIO DO PEDIDO'] || '', r['EQUIPE'] || '',
+      r['UF'] || '', (r['Estado'] || r['ESTADO'] || ''), tag,
+      parseInt(r['QUANTIDADE']) || 1, r['VALOR UNIT'] || '', r['CADASTRO'] || '', r['ATUALIZACAO'] || '',
+    ].map(v => '"' + String(v).replace(/"/g, '""') + '"').join(',');
+  });
+
+  const csv = '﻿' + header.map(h => '"' + h + '"').join(',') + '\n' + linhasCsv.join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  const agora = new Date();
+  const carimbo = agora.toISOString().slice(0, 16).replace(/[-T:]/g, '').replace(/(\d{8})(\d{4})/, '$1_$2');
+  a.download = `producao_${carimbo}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 function switchTab(name, el) {
@@ -7217,6 +7268,10 @@ async function carregarPerfil(user) {
 function aplicarPermissoes() {
   const p = USUARIO_ATUAL.perfil;
   const permitidas = getAbasPermitidas(USUARIO_ATUAL);
+
+  // Exportar CSV da Produção — só admin (pedido explícito).
+  const btnExportarProdCsv = document.getElementById('prod-btn-exportar-csv');
+  if (btnExportarProdCsv) btnExportarProdCsv.style.display = p === 'admin' ? '' : 'none';
 
   // Esconde abas não permitidas
   document.querySelectorAll('.tab-btn').forEach(btn => {
