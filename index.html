@@ -5789,14 +5789,15 @@ function prodExportarCsv() {
   if (!linhas.length) { alert('Nenhum registro pro filtro/status selecionado.'); return; }
 
   const header = [
-    'CNPJ', 'Nome Cliente', 'Vinculado', 'Grupo', 'Status', 'Proprietário', 'Equipe',
+    'CNPJ', 'Nome Cliente', 'Vinculado', 'Número', 'Grupo', 'Status', 'Proprietário', 'Equipe',
     'UF', 'Estado Cliente', 'Tag/Unidade', 'Quantidade', 'Valor Unit', 'Cadastro', 'Atualização',
   ];
   const linhasCsv = linhas.map(r => {
     const tagRaw = r['TAGS ATIVIDADE'] || '';
     const tag = MAPEAMENTO_TAGS[tagRaw] || 'Sem Tag';
+    const numero = r['NUMERO'] || r['Numero'] || r['NÚMERO'] || '';
     return [
-      r['CPF/CNPJ'] || '', r['NOME CLIENTE'] || '', r['VINCULADO'] || '', r['GRUPO'] || '',
+      r['CPF/CNPJ'] || '', r['NOME CLIENTE'] || '', r['VINCULADO'] || '', numero, r['GRUPO'] || '',
       r['FILA'] || '', r['PROPRIETÁRIO DO PEDIDO'] || '', r['EQUIPE'] || '',
       r['UF'] || '', (r['Estado'] || r['ESTADO'] || ''), tag,
       parseInt(r['QUANTIDADE']) || 1, r['VALOR UNIT'] || '', r['CADASTRO'] || '', r['ATUALIZACAO'] || '',
