@@ -5790,7 +5790,7 @@ function prodExportarCsv() {
 
   const header = [
     'CNPJ', 'Nome Cliente', 'Vinculado', 'Número', 'Grupo', 'Status', 'Proprietário', 'Equipe',
-    'UF', 'Estado Cliente', 'Tag/Unidade', 'Quantidade', 'Valor Unit', 'Cadastro', 'Atualização',
+    'UF', 'Estado Cliente', 'Tag/Unidade', 'Quantidade', 'Valor Unit', 'Cadastro', 'Data Instalação', 'Atualização',
   ];
   const linhasCsv = linhas.map(r => {
     const tagRaw = r['TAGS ATIVIDADE'] || '';
@@ -5800,7 +5800,7 @@ function prodExportarCsv() {
       r['CPF/CNPJ'] || '', r['NOME CLIENTE'] || '', r['VINCULADO'] || '', numero, r['GRUPO'] || '',
       r['FILA'] || '', r['PROPRIETÁRIO DO PEDIDO'] || '', r['EQUIPE'] || '',
       r['UF'] || '', (r['Estado'] || r['ESTADO'] || ''), tag,
-      parseInt(r['QUANTIDADE']) || 1, r['VALOR UNIT'] || '', r['CADASTRO'] || '', r['ATUALIZACAO'] || '',
+      parseInt(r['QUANTIDADE']) || 1, r['VALOR UNIT'] || '', r['CADASTRO'] || '', r['DATA INSTALAÇÃO'] || '', r['ATUALIZACAO'] || '',
     ].map(v => '"' + String(v).replace(/"/g, '""') + '"').join(',');
   });
 
