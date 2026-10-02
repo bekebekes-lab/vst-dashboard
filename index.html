@@ -4052,17 +4052,13 @@ function drillFila(categoria, fila) {
 
 // ─── GERENCIAL FINANCEIRO (piloto, só admin) ────────────────────────────────
 // Mesmo desenho do Gerencial (cards por categoria → status → pedidos), mas com
-// o GROSS separado em VOZ NOVO + PORTABILIDADE (1 card a mais). Código
+// VOZ NOVO + PORTABILIDADE no lugar do GROSS (1 card a mais). Código
 // próprio, com ids de filtro prefixados "gf-", de propósito: o Gerencial
 // atual não é tocado enquanto o piloto é validado; a integração das duas
 // abas vem num segundo momento. Reaproveita os helpers de lá (getGrupoKey,
 // linhaDentroDoEscopo, linhaBateBusca, linhaDentroDoPeriodoCadastro,
 // agruparFilasPorSubgrupo, gerReceitaLinha, abrirDetalheCliente...).
 const GF_CATS = ['GERAL', 'VOZ NOVO', 'PORTABILIDADE', 'RENOVAÇÃO', 'BL', 'TITULARIDADE', 'SERV. DIGITAIS'];
-// GROSS cuja Solicitação não é nem novo nem portabilidade — não some em
-// silêncio nem é empurrado pra Voz Novo: vira um card próprio, só aparece se
-// existir (assim Voz Novo + Portabilidade + Outros = GROSS do Gerencial).
-const GF_CAT_OUTROS = 'GROSS - OUTROS';
 const GF_SUBGRUPOS_APROVADO = ['Ativo', 'Esteira de ativação'];
 
 let GF_FILTROS_CONSTRUIDOS = false;
@@ -4075,14 +4071,17 @@ function gfNorm(s) {
 }
 
 // Categoria financeira de uma linha: igual ao getGrupoKey() do Gerencial,
-// exceto que o GROSS é aberto pela Solicitação do pedido.
+// só que o grupo GROSS sai (é um espelho 1:1 dos pedidos reais de VOZ — contar
+// os dois dobraria o volume) e entram os grupos reais "VOZ - Novo" e
+// "VOZ - Portabilidade" da base, os mesmos que o Simulador já usa.
 function gfKey(r) {
   const key = getGrupoKey(r['GRUPO'] || '', r['PRODUTO'] || '', r['SOLICITACAO'] || '');
-  if (key !== 'GROSS') return key;
-  const sol = gfNorm(r['SOLICITACAO']);
-  if (sol.includes('PORTAB')) return 'PORTABILIDADE';
-  if (/\bNOV[OA]\b/.test(sol)) return 'VOZ NOVO';
-  return GF_CAT_OUTROS;
+  if (key === 'GROSS') return null;
+  if (key) return key;
+  const g = gfNorm(r['GRUPO']).replace(/[‐-―]/g, '-').replace(/\s*-\s*/g, ' - ');
+  if (g === 'VOZ - NOVO') return 'VOZ NOVO';
+  if (g === 'VOZ - PORTABILIDADE') return 'PORTABILIDADE';
+  return null;
 }
 
 function gfLerFiltros() {
@@ -4218,10 +4217,9 @@ function renderGerFin() {
     <div class="stat-chip"><strong>${nConsSet.size}</strong> consultores</div>
     <div class="stat-chip"><strong>${nConsSet.size > 0 ? (receita ? gerFmtMoeda(geral.totalRec / nc) : (geral.total / nc).toFixed(1)) : 0}</strong> média geral/consultor</div>
   </div>
-  <div style="font-size:11px;color:var(--text-3);margin:-4px 0 10px;">Piloto · o GROSS do Gerencial está aberto em Voz Novo + Portabilidade (pela Solicitação do pedido).</div>`;
+  <div style="font-size:11px;color:var(--text-3);margin:-4px 0 10px;">Piloto · no lugar do GROSS entram Voz Novo e Portabilidade (grupos "VOZ - Novo" e "VOZ - Portabilidade" da base).</div>`;
 
   const cats = [...GF_CATS];
-  if (metrics[GF_CAT_OUTROS] && metrics[GF_CAT_OUTROS].total > 0) cats.splice(cats.indexOf('PORTABILIDADE') + 1, 0, GF_CAT_OUTROS);
 
   document.getElementById('gf-metrics-area').innerHTML = `<div class="metrics-grid gf-grid">${cats.map((c, i) => {
     const m = metrics[c];
@@ -4232,9 +4230,8 @@ function renderGerFin() {
     const outrosGrupos = subgrupos.filter(s => !GF_SUBGRUPOS_APROVADO.includes(s.grupo));
     const totalAprovado = gruposAprovado.reduce((s, { itens }) => s + itens.reduce((s2, [, fv]) => s2 + fv, 0), 0);
     const fmt = v => receita ? gerFmtMoeda(v) : v.toLocaleString('pt-BR');
-    const dica = c === GF_CAT_OUTROS ? ' title="GROSS cuja Solicitação não é nem Novo nem Portabilidade"' : '';
     return `<div class="metric-card ${i === 0 ? 'highlight' : ''}">
-      <div class="metric-label"${dica}>${c}</div>
+      <div class="metric-label">${c}</div>
       <div class="metric-value">${receita ? gerFmtMoeda(m.totalRec) : m.total.toLocaleString('pt-BR')}</div>
       <div class="metric-avg">Média/consultor: ${med}</div>
       <div class="filas-list">${gruposAprovado.length ? `
