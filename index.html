@@ -459,11 +459,11 @@
     gap: 12px; margin-bottom: 16px;
     align-items: start;
   }
-  /* Gerencial Financeiro: 1 card a mais (GROSS vira Voz Novo + Portabilidade) */
+  /* Gerencial Financeiro: 8 cards (Voz Novo e Portabilidade além do Gross) */
   /* minmax(0,1fr): sem o 0 a coluna cresce até o conteúdo e o 7º card estoura a tela */
-  .metrics-grid.gf-grid { grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 10px; }
-  .gf-grid .metric-card { padding: 12px 10px; min-width: 0; }
-  .gf-grid .metric-value { font-size: 18px; white-space: nowrap; }
+  .metrics-grid.gf-grid { grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 8px; }
+  .gf-grid .metric-card { padding: 12px 8px; min-width: 0; }
+  .gf-grid .metric-value { font-size: 15px; white-space: nowrap; }
   .gf-grid .fila-item { font-size: 10.5px; padding: 4px 2px; }
   .gf-grid .fila-subgrupo-label, .gf-grid .fila-aprovado-titulo { padding: 0 2px; gap: 6px; }
   .gf-grid .fila-subgrupo-label > span:first-child { min-width: 0; }
@@ -4065,7 +4065,10 @@ function drillFila(categoria, fila) {
 // abas vem num segundo momento. Reaproveita os helpers de lá (getGrupoKey,
 // linhaDentroDoEscopo, linhaBateBusca, linhaDentroDoPeriodoCadastro,
 // agruparFilasPorSubgrupo, gerReceitaLinha, abrirDetalheCliente...).
-const GF_CATS = ['GERAL', 'VOZ NOVO', 'PORTABILIDADE', 'RENOVAÇÃO', 'BL', 'TITULARIDADE', 'SERV. DIGITAIS'];
+const GF_CATS = ['GERAL', 'GROSS', 'VOZ NOVO', 'PORTABILIDADE', 'RENOVAÇÃO', 'BL', 'TITULARIDADE', 'SERV. DIGITAIS'];
+// GROSS é só referência: espelha Voz Novo + Portabilidade, então não entra na
+// soma do GERAL (nem no drill dele) — senão o volume seria contado em dobro.
+const GF_FORA_DO_GERAL = ['SERV. DIGITAIS', 'GROSS'];
 const GF_SUBGRUPOS_APROVADO = ['Ativo', 'Esteira de ativação'];
 
 let GF_FILTROS_CONSTRUIDOS = false;
@@ -4078,12 +4081,11 @@ function gfNorm(s) {
 }
 
 // Categoria financeira de uma linha: igual ao getGrupoKey() do Gerencial,
-// só que o grupo GROSS sai (é um espelho 1:1 dos pedidos reais de VOZ — contar
-// os dois dobraria o volume) e entram os grupos reais "VOZ - Novo" e
-// "VOZ - Portabilidade" da base, os mesmos que o Simulador já usa.
+// mais os grupos reais "VOZ - Novo" e "VOZ - Portabilidade" da base (os mesmos
+// que o Simulador já usa). O GROSS é um espelho 1:1 desses pedidos: aparece
+// no próprio card, mas fica fora do GERAL (ver GF_FORA_DO_GERAL).
 function gfKey(r) {
   const key = getGrupoKey(r['GRUPO'] || '', r['PRODUTO'] || '', r['SOLICITACAO'] || '');
-  if (key === 'GROSS') return null;
   if (key) return key;
   const g = gfNorm(r['GRUPO']).replace(/[‐-―]/g, '-').replace(/\s*-\s*/g, ' - ');
   if (g === 'VOZ - NOVO') return 'VOZ NOVO';
@@ -4220,8 +4222,8 @@ function renderGerFin() {
       m.totalRec += rec; m.filasRec[fila] = (m.filasRec[fila] || 0) + rec;
     };
     acumular(metrics[key]);
-    // SERV. DIGITAIS não soma no GERAL (mesma regra do Gerencial)
-    if (key !== 'SERV. DIGITAIS') acumular(metrics['GERAL']);
+    // SERV. DIGITAIS não soma no GERAL (mesma regra do Gerencial); GROSS também não
+    if (!GF_FORA_DO_GERAL.includes(key)) acumular(metrics['GERAL']);
   });
 
   const nc = nConsSet.size || 1;
@@ -4233,7 +4235,7 @@ function renderGerFin() {
     <div class="stat-chip"><strong>${nConsSet.size}</strong> consultores</div>
     <div class="stat-chip"><strong>${nConsSet.size > 0 ? (receita ? gerFmtMoeda(geral.totalRec / nc) : (geral.total / nc).toFixed(1)) : 0}</strong> média geral/consultor</div>
   </div>
-  <div style="font-size:11px;color:var(--text-3);margin:-4px 0 10px;">Piloto · no lugar do GROSS entram Voz Novo e Portabilidade (grupos "VOZ - Novo" e "VOZ - Portabilidade" da base).</div>`;
+  <div style="font-size:11px;color:var(--text-3);margin:-4px 0 10px;">Piloto · Voz Novo e Portabilidade vêm dos grupos "VOZ - Novo" e "VOZ - Portabilidade" da base. O Gross é só referência e não entra na soma do Geral.</div>`;
 
   const cats = [...GF_CATS];
 
@@ -4292,8 +4294,8 @@ function gfDrill(categoria, fila) {
     if ((r['FILA'] || 'Sem Status') !== fila) return false;
     const key = gfKey(r);
     if (!key) return false;
-    // O card GERAL não soma SERV. DIGITAIS — o drill também não.
-    return categoria === 'GERAL' ? key !== 'SERV. DIGITAIS' : key === categoria;
+    // O card GERAL não soma SERV. DIGITAIS nem GROSS — o drill também não.
+    return categoria === 'GERAL' ? !GF_FORA_DO_GERAL.includes(key) : key === categoria;
   });
 
   const valorLinha = r => receita ? gerReceitaLinha(r) : (parseInt(r['QUANTIDADE']) || 1);
