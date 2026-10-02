@@ -1602,7 +1602,7 @@
         <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:500;cursor:pointer;padding-top:8px;white-space:nowrap;">
           <input type="checkbox" id="gf-exibir-receita" onchange="gfToggleReceita()" checked> Exibir Receita
         </label>
-        <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:500;cursor:pointer;padding-top:6px;white-space:nowrap;" title="Multiplica a receita pelos fatores de comissionamento do Simulador 2.0 (fator fixo do cluster + adicional por atingimento de meta + plugin de portabilidade) — vale para BL, Voz Novo, Portabilidade e Renovação (Tabela 1, faixa de Delta escolhida à mão)">
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:500;cursor:pointer;padding-top:6px;white-space:nowrap;" title="Multiplica a receita pelos fatores de comissionamento do Simulador 2.0 (fator fixo do cluster + adicional por atingimento de meta + plugin de portabilidade) e pelo % DESCONTO de cada linha — vale para BL, Voz Novo, Portabilidade e Renovação (Tabela 1, faixa de Delta de cada linha)">
           <input type="checkbox" id="gf-aplicar-fatores" onchange="gfToggleFatores()"> Aplicar fatores de comissão
         </label>
       </div>
@@ -4208,7 +4208,7 @@ function gfFmtCard(v, receita, comCifrao) {
 // FAIXA do BaseCRM (calculada pela Claro a partir do % VARIACAO); se vier
 // vazia, deriva do % VARIACAO pelos mesmos cortes da política. A receita
 // renovada é VALOR UNIT + VALOR AGREGADO (o Delta é medido sobre essa soma).
-// Em linhas customizadas, o % DESCONTO é a parcela do fator que a Claro paga.
+// Em linhas customizadas (qualquer categoria), o % DESCONTO é a parcela do fator que a Claro paga.
 // Titularidade e Serv. Digitais não têm fator no Simulador, então ficam fora
 // da comissão (e do Geral) enquanto o checkbox estiver ligado.
 const GF_FATOR_POR_CAT = { 'BL': 'virtua', 'VOZ NOVO': 'vozNovo', 'PORTABILIDADE': 'vozPort', 'RENOVAÇÃO': 'renov' };
@@ -4258,23 +4258,24 @@ function gfFaixaDeltaIdx(r) {
 // VALOR UNIT + VALOR AGREGADO e fator da faixa da própria linha (sem faixa → 0,
 // e a barra de fatores avisa quantas linhas ficaram assim).
 function gfComissaoLinha(r, key, fat) {
+  // % DESCONTO = customização: a Claro paga só essa parte do fator (60 → ×0,6),
+  // em qualquer categoria comissionada. Vazio/0 = sem customização = 100%.
+  const colD = gfColuna('% DESCONTO');
+  const pctDesc = colD ? gfNumero(r[colD]) : null;
+  const pagoPct = pctDesc === null || pctDesc <= 0 ? 1 : Math.min(pctDesc, 100) / 100;
   if (key === 'RENOVAÇÃO') {
     const colA = gfColuna('VALOR AGREGADO');
     const agregado = colA ? (gfNumero(r[colA]) || 0) : 0;
     const base = gerReceitaLinha(r) + agregado;
     const idx = gfFaixaDeltaIdx(r);
     const fatorTabela = idx >= 0 ? GF_RENOVACAO_TABELA1[idx][fat.cluster] : 0;
-    // % DESCONTO = customização: a Claro paga só essa parte do fator da faixa
-    // (60 → ×0,6). Vazio = sem customização = 100%. O fator por linha tem 2
-    // casas decimais (política 2.4 vi-b).
-    const colD = gfColuna('% DESCONTO');
-    const pctDesc = colD ? gfNumero(r[colD]) : null;
-    const pagoPct = pctDesc === null || pctDesc <= 0 ? 1 : Math.min(pctDesc, 100) / 100;
+    // o fator por linha da Renovação tem 2 casas decimais (política 2.4 vi-b)
     const fator = Math.round(fatorTabela * pagoPct * 100) / 100;
     return { base, fator, fatorTabela, pagoPct, valor: base * fator, semFaixa: idx < 0 };
   }
-  const base = gerReceitaLinha(r), fator = fat.porCat[key] || 0;
-  return { base, fator, fatorTabela: fator, pagoPct: 1, valor: base * fator, semFaixa: false };
+  const base = gerReceitaLinha(r), fatorTabela = fat.porCat[key] || 0;
+  const fator = fatorTabela * pagoPct;
+  return { base, fator, fatorTabela, pagoPct, valor: base * fator, semFaixa: false };
 }
 
 let GF_CFG_FATORES = null; // { periodo, cluster, metaMovelVoz, metaFixaBl, salva }
@@ -4354,8 +4355,8 @@ function gfBarraFatores(fat, ren) {
     <strong>Fatores de comissão</strong> · Simulador 2.0 · competência ${cfg.periodo} · Cluster ${cluster} ·
     Móvel Voz ${fat.realMovelVoz.toLocaleString('pt-BR')}/${cfg.metaMovelVoz.toLocaleString('pt-BR')} (${br(fat.pctMovelVoz, 1)}% · ${faixa(fat.idxMV)}) ·
     Fixa BL ${fat.realFixaBl.toLocaleString('pt-BR')}/${cfg.metaFixaBl.toLocaleString('pt-BR')} (${br(fat.pctFixaBl, 1)}% · ${faixa(fat.idxBL)})
-    <br>BL <strong>×${br(fator.virtua)}</strong> · Voz Novo <strong>×${br(fator.vozNovo)}</strong> · Portabilidade <strong>×${br(fator.vozPort)}</strong> (inclui plugin +${br(PLUGIN_PORTABILIDADE_VOZ)}) ·
-    Renovação <strong>por linha</strong> (Tabela 1 · Cluster ${cluster} · coluna FAIXA do Delta Ticket × % DESCONTO${ren && ren.base > 0 ? ` · fator médio <strong>×${br(ren.valor / ren.base)}</strong>` : ''}) ·
+    <br>BL <strong>×${br(fator.virtua)}</strong> · Voz Novo <strong>×${br(fator.vozNovo)}</strong> · Portabilidade <strong>×${br(fator.vozPort)}</strong> (inclui plugin +${br(PLUGIN_PORTABILIDADE_VOZ)}) — fatores de tabela, antes do <strong>% DESCONTO</strong> de cada linha (customização: a Claro paga só esse % do fator) ·
+    Renovação <strong>por linha</strong> (Tabela 1 · Cluster ${cluster} · coluna FAIXA do Delta Ticket${ren && ren.base > 0 ? ` · fator médio <strong>×${br(ren.valor / ren.base)}</strong>` : ''}) ·
     Titularidade e Serv. Digitais não têm fator no Simulador e ficam fora do Geral.${avisoFaixa}${aviso}
   </div>`;
 }
