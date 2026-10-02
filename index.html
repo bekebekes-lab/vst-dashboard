@@ -459,6 +459,11 @@
     gap: 12px; margin-bottom: 16px;
     align-items: start;
   }
+  /* Gerencial Financeiro: 1 card a mais (GROSS vira Voz Novo + Portabilidade) */
+  .metrics-grid.gf-grid { grid-template-columns: repeat(7, 1fr); }
+  @media (max-width: 1280px) { .metrics-grid.gf-grid { grid-template-columns: repeat(4, 1fr); } }
+  @media (max-width: 768px)  { .metrics-grid.gf-grid { grid-template-columns: repeat(3, 1fr); gap: 8px; } }
+  @media (max-width: 480px)  { .metrics-grid.gf-grid { grid-template-columns: repeat(2, 1fr); } }
   .metric-card {
     background: var(--surface);
     border: 1px solid var(--border);
@@ -1427,6 +1432,7 @@
 <!-- TABS -->
 <div class="tabs-nav">
   <button class="tab-btn" id="tab-btn-gerencial" onclick="switchTab('gerencial', this)">📊 Gerencial</button>
+  <button class="tab-btn" id="tab-btn-gerfin" onclick="switchTab('gerfin', this)">💰 Gerencial Financeiro</button>
   <button class="tab-btn" id="tab-btn-producao" onclick="switchTab('producao', this)">🏭 Produção</button>
   <button class="tab-btn" id="tab-btn-discadora" onclick="switchTab('discadora', this)">📞 Discadora</button>
   <button class="tab-btn active" id="tab-btn-simulador2" onclick="switchTab('simulador2', this)">🧮 Simulador 2.0</button>
@@ -1541,6 +1547,60 @@
     <div id="stats-row-area"></div>
     <div id="metrics-area"><div class="loading-state"><div class="loading-spinner"></div><p>Carregando dados da BaseCRM...</p></div></div>
     <div id="table-area"></div>
+  </div>
+
+  <!-- TAB GERENCIAL FINANCEIRO (piloto, só admin) — mesmo desenho do Gerencial,
+       com o GROSS separado em Voz Novo + Portabilidade. Ids próprios (prefixo
+       gf-) pra não colidir com os filtros do Gerencial. Depois do piloto, a
+       ideia é integrar as duas abas. -->
+  <div class="tab-panel" id="tab-gerfin">
+    <div class="filters-bar">
+      <div class="filter-group"><label>UF da Operação</label><select id="gf-estado" onchange="gfRefresh()"><option>Todos</option></select></div>
+      <div class="filter-group" style="min-width:190px">
+        <label>Gestor</label>
+        <div class="custom-dropdown" id="dd-gf-gestor">
+          <button class="dropdown-btn" onclick="toggleDropdown('dd-content-gf-gestor')">Todos <span>&#9660;</span></button>
+          <div class="dropdown-content" id="dd-content-gf-gestor"></div>
+        </div>
+      </div>
+      <div class="filter-group" style="min-width:190px">
+        <label>Equipe</label>
+        <div class="custom-dropdown" id="dd-gf-equipe">
+          <button class="dropdown-btn" onclick="toggleDropdown('dd-content-gf-equipe')">Todas <span>&#9660;</span></button>
+          <div class="dropdown-content" id="dd-content-gf-equipe"></div>
+        </div>
+      </div>
+      <div class="filter-group" style="min-width:190px">
+        <label>Consultor</label>
+        <div class="custom-dropdown" id="dd-gf-consultor">
+          <button class="dropdown-btn" onclick="toggleDropdown('dd-content-gf-consultor')">Todos <span>&#9660;</span></button>
+          <div class="dropdown-content" id="dd-content-gf-consultor"></div>
+        </div>
+      </div>
+      <div class="filter-group"><label>Tag / Unidade</label><select id="gf-tag" onchange="gfRefresh()"><option>Todas</option></select></div>
+      <div class="filter-group">
+        <label>Cadastro de</label>
+        <input type="date" id="gf-cadastro-de" onchange="gfRefresh()">
+      </div>
+      <div class="filter-group">
+        <label>Cadastro até</label>
+        <input type="date" id="gf-cadastro-ate" onchange="gfRefresh()">
+      </div>
+      <div class="filter-group filter-group-full-mobile" style="min-width:220px">
+        <label>Buscar (CNPJ, razão social, vinculado ou nº)</label>
+        <input type="text" id="gf-busca" placeholder="Digite para buscar..." oninput="gfRefresh()" autocomplete="off">
+      </div>
+      <div class="filter-group" style="justify-content:flex-end;">
+        <label>&nbsp;</label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:500;cursor:pointer;padding-top:8px;white-space:nowrap;">
+          <input type="checkbox" id="gf-exibir-receita" onchange="gfRefresh()" checked> Exibir Receita
+        </label>
+      </div>
+    </div>
+
+    <div id="gf-stats-row-area"></div>
+    <div id="gf-metrics-area"><div class="loading-state"><div class="loading-spinner"></div><p>Carregando dados da BaseCRM...</p></div></div>
+    <div id="gf-table-area"></div>
   </div>
 
   <!-- TAB PRODUÇÃO -->
@@ -2917,6 +2977,7 @@ async function loadData() {
 
     buildFilters();
     render();
+    gfAposCarregarDados();
     renderSimulador();
     renderProducao();
     // Simulador 2.0: atualiza a Comissão de Ativação (e o Realizado de Voz/BL do Bônus
@@ -3138,13 +3199,20 @@ function onFilterChange(level) {
 // (cadastrado) num período específico, não só o status atual das filas.
 // Lê os 2 <input type="date"> uma vez por render; "até" inclui o dia
 // inteiro (23:59:59), senão o próprio dia final ficava de fora.
-function getFiltroCadastro() {
-  const deRaw = document.getElementById('f-cadastro-de')?.value || '';
-  const ateRaw = document.getElementById('f-cadastro-ate')?.value || '';
-  const de = deRaw ? new Date(deRaw) : null;
-  const ate = ateRaw ? new Date(ateRaw) : null;
-  if (ate) ate.setHours(23, 59, 59, 999);
-  return { de, ate };
+function getFiltroCadastro(idDe = 'f-cadastro-de', idAte = 'f-cadastro-ate') {
+  const deRaw = document.getElementById(idDe)?.value || '';
+  const ateRaw = document.getElementById(idAte)?.value || '';
+  // <input type="date"> devolve "YYYY-MM-DD". new Date("YYYY-MM-DD") é
+  // interpretado em UTC e, em Brasília (UTC-3), cai no fim do dia ANTERIOR —
+  // o setHours(23:59) seguinte então encerrava o período um dia antes e o
+  // último dia escolhido ficava de fora. Monta a data com os componentes
+  // locais pra casar com parseDataRefBR() (que também é meia-noite local).
+  const dataLocal = (raw, fimDoDia) => {
+    if (!raw) return null;
+    const [y, m, d] = raw.split('-').map(Number);
+    return fimDoDia ? new Date(y, m - 1, d, 23, 59, 59, 999) : new Date(y, m - 1, d);
+  };
+  return { de: dataLocal(deRaw, false), ate: dataLocal(ateRaw, true) };
 }
 function linhaDentroDoPeriodoCadastro(r, de, ate) {
   if (!de && !ate) return true;
@@ -3980,6 +4048,299 @@ function drillFila(categoria, fila) {
     const contId = `dd-content-${base}`;
     popularDropdownGenerico(contId, _drillOpcoes[campo] || [], _ddCallbacks[contId], `#dd-${base} .dropdown-btn`);
   });
+}
+
+// ─── GERENCIAL FINANCEIRO (piloto, só admin) ────────────────────────────────
+// Mesmo desenho do Gerencial (cards por categoria → status → pedidos), mas com
+// o GROSS separado em VOZ NOVO + PORTABILIDADE (1 card a mais). Código
+// próprio, com ids de filtro prefixados "gf-", de propósito: o Gerencial
+// atual não é tocado enquanto o piloto é validado; a integração das duas
+// abas vem num segundo momento. Reaproveita os helpers de lá (getGrupoKey,
+// linhaDentroDoEscopo, linhaBateBusca, linhaDentroDoPeriodoCadastro,
+// agruparFilasPorSubgrupo, gerReceitaLinha, abrirDetalheCliente...).
+const GF_CATS = ['GERAL', 'VOZ NOVO', 'PORTABILIDADE', 'RENOVAÇÃO', 'BL', 'TITULARIDADE', 'SERV. DIGITAIS'];
+// GROSS cuja Solicitação não é nem novo nem portabilidade — não some em
+// silêncio nem é empurrado pra Voz Novo: vira um card próprio, só aparece se
+// existir (assim Voz Novo + Portabilidade + Outros = GROSS do Gerencial).
+const GF_CAT_OUTROS = 'GROSS - OUTROS';
+const GF_SUBGRUPOS_APROVADO = ['Ativo', 'Esteira de ativação'];
+
+let GF_FILTROS_CONSTRUIDOS = false;
+let gfLastDrill = null;
+let gfSortCol = 'QTD';
+let gfSortAsc = false;
+
+function gfNorm(s) {
+  return (s || '').toString().toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+}
+
+// Categoria financeira de uma linha: igual ao getGrupoKey() do Gerencial,
+// exceto que o GROSS é aberto pela Solicitação do pedido.
+function gfKey(r) {
+  const key = getGrupoKey(r['GRUPO'] || '', r['PRODUTO'] || '', r['SOLICITACAO'] || '');
+  if (key !== 'GROSS') return key;
+  const sol = gfNorm(r['SOLICITACAO']);
+  if (sol.includes('PORTAB')) return 'PORTABILIDADE';
+  if (/\bNOV[OA]\b/.test(sol)) return 'VOZ NOVO';
+  return GF_CAT_OUTROS;
+}
+
+function gfLerFiltros() {
+  const buscaRaw = (document.getElementById('gf-busca')?.value || '').trim();
+  const { de, ate } = getFiltroCadastro('gf-cadastro-de', 'gf-cadastro-ate');
+  return {
+    estado: document.getElementById('gf-estado')?.value || 'Todos',
+    gestores: getCheckedValuesDd('dd-content-gf-gestor'),
+    equipes: getCheckedValuesDd('dd-content-gf-equipe'),
+    consultores: getCheckedValuesDd('dd-content-gf-consultor'),
+    tag: document.getElementById('gf-tag')?.value || 'Todas',
+    buscaLower: buscaRaw.toLowerCase(),
+    buscaDigits: buscaRaw.replace(/\D/g, ''),
+    cadastroDe: de,
+    cadastroAte: ate,
+    receita: !!document.getElementById('gf-exibir-receita')?.checked,
+  };
+}
+
+function gfLinhaPassa(r, f, escopo) {
+  const eq = r['EQUIPE'];
+  const cons = r['PROPRIETÁRIO DO PEDIDO'] || 'Sem Consultor';
+  if (!linhaDentroDoEscopo(r, escopo, eq)) return false;
+  if (f.estado !== 'Todos' && (EQUIPES_ESTADOS[eq] || '') !== f.estado) return false;
+  if (f.gestores.length > 0 && !f.gestores.includes(EQUIPES_GESTORES[eq] || '')) return false;
+  if (f.equipes.length > 0 && !f.equipes.includes(eq)) return false;
+  if (f.consultores.length > 0 && !f.consultores.some(c => c.toUpperCase() === cons.toUpperCase())) return false;
+  if (f.tag !== 'Todas' && (r['TAGS ATIVIDADE'] || '') !== f.tag) return false;
+  if (!linhaBateBusca(r, f.buscaLower, f.buscaDigits)) return false;
+  if (!linhaDentroDoPeriodoCadastro(r, f.cadastroDe, f.cadastroAte)) return false;
+  return true;
+}
+
+// Opções dos filtros a partir da base inteira (admin vê tudo, sem cascata
+// entre eles — suficiente pro piloto). Idempotente: preserva o que já estava
+// selecionado (fillSelect e popularDropdownGenerico guardam a seleção).
+function gfConstruirFiltros() {
+  const estados = new Set(), gestores = new Set(), equipes = new Set(), consultores = new Set(), tags = new Set();
+  ALL_DATA.forEach(r => {
+    const eq = r['EQUIPE'];
+    if (EQUIPES_ESTADOS[eq]) estados.add(EQUIPES_ESTADOS[eq]);
+    if (EQUIPES_GESTORES[eq]) gestores.add(EQUIPES_GESTORES[eq]);
+    if (eq) equipes.add(eq);
+    if (r['PROPRIETÁRIO DO PEDIDO']) consultores.add(r['PROPRIETÁRIO DO PEDIDO']);
+    if (r['TAGS ATIVIDADE']) tags.add(r['TAGS ATIVIDADE']);
+  });
+  fillSelect('gf-estado', ['Todos', ...[...estados].sort()]);
+  fillSelect('gf-tag', ['Todas', ...[...tags].sort()]);
+  [['gestor', gestores], ['equipe', equipes], ['consultor', consultores]].forEach(([nome, conjunto]) => {
+    const contId = `dd-content-gf-${nome}`;
+    const labelBtn = `#dd-gf-${nome} .dropdown-btn`;
+    // popularDropdownGenerico() gera onchange="..._ddOnChange_<contId com _>"
+    // — a global PRECISA existir antes do clique.
+    const onChange = () => { atualizarBotaoDropdown(contId, labelBtn); gfRefresh(); };
+    window[`_ddOnChange_dd_content_gf_${nome}`] = onChange;
+    ddRegisterCallback(contId, onChange);
+    popularDropdownGenerico(contId, [...conjunto].sort(), onChange, labelBtn);
+  });
+  GF_FILTROS_CONSTRUIDOS = true;
+}
+
+function initGerFin() {
+  if (USUARIO_ATUAL?.perfil !== 'admin') return;
+  if (ALL_DATA.length && !GF_FILTROS_CONSTRUIDOS) gfConstruirFiltros();
+  gfRefresh();
+}
+
+// Chamado por loadData() sempre que a base é (re)carregada.
+function gfAposCarregarDados() {
+  if (USUARIO_ATUAL?.perfil !== 'admin') return;
+  gfConstruirFiltros();
+  gfRefresh();
+}
+
+// Redesenha os cards e, se houver um drill-down aberto, atualiza ele também
+// (renderGerFin() não mexe em gf-table-area — mesmo cuidado de
+// toggleGerReceita() no Gerencial).
+function gfRefresh() {
+  renderGerFin();
+  if (gfLastDrill && document.querySelector('#gf-table-area .detail-breadcrumb')) gfDrill(...gfLastDrill);
+}
+
+function gfRenderSubgrupo(cat, { grupo, itens }, receita) {
+  const fmt = v => receita ? gerFmtMoeda(v) : v.toLocaleString('pt-BR');
+  const subtotal = itens.reduce((s, [, fv]) => s + fv, 0);
+  return `
+    <div class="fila-subgrupo-label">
+      <span>${grupo}</span>
+      <span class="fila-subgrupo-total">${fmt(subtotal)}</span>
+    </div>
+    ${itens.map(([fn, fv]) => `
+    <div class="fila-item" onclick="gfDrill('${cat}','${escapeJsAttr(fn)}')">
+      <span class="fila-name">${escapeHtml(fn)}</span>
+      <span class="fila-count">${fmt(fv)}</span>
+    </div>`).join('')}`;
+}
+
+function renderGerFin() {
+  if (USUARIO_ATUAL?.perfil !== 'admin' || !ALL_DATA.length) return;
+  const f = gfLerFiltros();
+  const escopo = getEscopoTravado();
+  const novaMetrica = () => ({ total: 0, filas: {}, totalRec: 0, filasRec: {} });
+  const metrics = {};
+  GF_CATS.forEach(c => metrics[c] = novaMetrica());
+  const nConsSet = new Set();
+  let totalRows = 0;
+
+  ALL_DATA.forEach(r => {
+    if (!gfLinhaPassa(r, f, escopo)) return;
+    totalRows++;
+    nConsSet.add(r['PROPRIETÁRIO DO PEDIDO'] || 'Sem Consultor');
+    const key = gfKey(r);
+    if (!key) return;
+    if (!metrics[key]) metrics[key] = novaMetrica();
+    const qtd = parseInt(r['QUANTIDADE']) || 1;
+    const fila = r['FILA'] || 'Sem Status';
+    const rec = gerReceitaLinha(r);
+    const acumular = m => {
+      m.total += qtd; m.filas[fila] = (m.filas[fila] || 0) + qtd;
+      m.totalRec += rec; m.filasRec[fila] = (m.filasRec[fila] || 0) + rec;
+    };
+    acumular(metrics[key]);
+    // SERV. DIGITAIS não soma no GERAL (mesma regra do Gerencial)
+    if (key !== 'SERV. DIGITAIS') acumular(metrics['GERAL']);
+  });
+
+  const nc = nConsSet.size || 1;
+  const receita = f.receita;
+  const geral = metrics['GERAL'];
+  document.getElementById('gf-stats-row-area').innerHTML = `<div class="stats-row">
+    <div class="stat-chip"><strong>${ALL_DATA.length}</strong> registros na base</div>
+    <div class="stat-chip"><strong>${totalRows}</strong> registros filtrados</div>
+    <div class="stat-chip"><strong>${nConsSet.size}</strong> consultores</div>
+    <div class="stat-chip"><strong>${nConsSet.size > 0 ? (receita ? gerFmtMoeda(geral.totalRec / nc) : (geral.total / nc).toFixed(1)) : 0}</strong> média geral/consultor</div>
+  </div>
+  <div style="font-size:11px;color:var(--text-3);margin:-4px 0 10px;">Piloto · o GROSS do Gerencial está aberto em Voz Novo + Portabilidade (pela Solicitação do pedido).</div>`;
+
+  const cats = [...GF_CATS];
+  if (metrics[GF_CAT_OUTROS] && metrics[GF_CAT_OUTROS].total > 0) cats.splice(cats.indexOf('PORTABILIDADE') + 1, 0, GF_CAT_OUTROS);
+
+  document.getElementById('gf-metrics-area').innerHTML = `<div class="metrics-grid gf-grid">${cats.map((c, i) => {
+    const m = metrics[c];
+    const med = receita ? gerFmtMoeda(m.totalRec / nc) : (m.total / nc).toFixed(1);
+    const filas = Object.entries(receita ? m.filasRec : m.filas).sort((a, b) => b[1] - a[1]);
+    const subgrupos = agruparFilasPorSubgrupo(filas);
+    const gruposAprovado = subgrupos.filter(s => GF_SUBGRUPOS_APROVADO.includes(s.grupo));
+    const outrosGrupos = subgrupos.filter(s => !GF_SUBGRUPOS_APROVADO.includes(s.grupo));
+    const totalAprovado = gruposAprovado.reduce((s, { itens }) => s + itens.reduce((s2, [, fv]) => s2 + fv, 0), 0);
+    const fmt = v => receita ? gerFmtMoeda(v) : v.toLocaleString('pt-BR');
+    const dica = c === GF_CAT_OUTROS ? ' title="GROSS cuja Solicitação não é nem Novo nem Portabilidade"' : '';
+    return `<div class="metric-card ${i === 0 ? 'highlight' : ''}">
+      <div class="metric-label"${dica}>${c}</div>
+      <div class="metric-value">${receita ? gerFmtMoeda(m.totalRec) : m.total.toLocaleString('pt-BR')}</div>
+      <div class="metric-avg">Média/consultor: ${med}</div>
+      <div class="filas-list">${gruposAprovado.length ? `
+        <div class="fila-aprovado-titulo">
+          <span>Aprovado</span>
+          <span>${fmt(totalAprovado)}</span>
+        </div>
+        <div class="fila-aprovado-box">${gruposAprovado.map(g => gfRenderSubgrupo(c, g, receita)).join('')}</div>
+      ` : ''}${outrosGrupos.map(g => gfRenderSubgrupo(c, g, receita)).join('')}
+      </div>
+    </div>`;
+  }).join('')}</div>`;
+
+  if (!document.querySelector('#gf-table-area .detail-breadcrumb')) {
+    document.getElementById('gf-table-area').innerHTML =
+      '<div class="coming-soon"><p>Clique num status de qualquer card para ver os pedidos.</p></div>';
+  }
+}
+
+function gfSetSort(col) {
+  gfSortAsc = (gfSortCol === col) ? !gfSortAsc : false;
+  gfSortCol = col;
+  if (gfLastDrill) gfDrill(...gfLastDrill);
+}
+
+function gfFecharDrill() {
+  gfLastDrill = null;
+  window._drillRows = [];
+  document.getElementById('gf-table-area').innerHTML = ''; // renderGerFin() só repõe a dica se não houver breadcrumb
+  renderGerFin();
+}
+
+function gfDrill(categoria, fila) {
+  if (USUARIO_ATUAL?.perfil !== 'admin' || !ALL_DATA.length) return;
+  gfLastDrill = [categoria, fila];
+  const f = gfLerFiltros();
+  const escopo = getEscopoTravado();
+  const receita = f.receita;
+
+  const linhas = ALL_DATA.filter(r => {
+    if (!gfLinhaPassa(r, f, escopo)) return false;
+    if ((r['FILA'] || 'Sem Status') !== fila) return false;
+    const key = gfKey(r);
+    if (!key) return false;
+    // O card GERAL não soma SERV. DIGITAIS — o drill também não.
+    return categoria === 'GERAL' ? key !== 'SERV. DIGITAIS' : key === categoria;
+  });
+
+  const valorLinha = r => receita ? gerReceitaLinha(r) : (parseInt(r['QUANTIDADE']) || 1);
+  const ts = v => { const d = parseDataRefBR(v); return d ? d.getTime() : 0; };
+  const sorted = [...linhas].sort((a, b) => {
+    if (gfSortCol === 'QTD') return gfSortAsc ? valorLinha(a) - valorLinha(b) : valorLinha(b) - valorLinha(a);
+    if (gfSortCol === 'CADASTRO' || gfSortCol === 'ATUALIZACAO') {
+      return gfSortAsc ? ts(a[gfSortCol]) - ts(b[gfSortCol]) : ts(b[gfSortCol]) - ts(a[gfSortCol]);
+    }
+    const ca = gfSortCol === 'CAT' ? (gfKey(a) || '') : (a[gfSortCol] || '').toString();
+    const cb = gfSortCol === 'CAT' ? (gfKey(b) || '') : (b[gfSortCol] || '').toString();
+    return gfSortAsc ? ca.localeCompare(cb) : cb.localeCompare(ca);
+  });
+  window._drillRows = sorted; // abrirDetalheCliente(idx) lê daqui
+
+  const totalNum = linhas.reduce((s, r) => s + valorLinha(r), 0);
+  const total = receita ? gerFmtMoeda(totalNum) : totalNum.toLocaleString('pt-BR') + ' pedidos';
+  const th = (col, label) => thDrill(col, label, gfSortCol, gfSortAsc, 'gfSetSort');
+
+  document.getElementById('gf-table-area').innerHTML = `
+    <div class="detail-header">
+      <div class="detail-breadcrumb">
+        <button class="breadcrumb-back" onclick="gfFecharDrill()">← Voltar</button>
+        <span class="breadcrumb-sep">›</span>
+        <span class="breadcrumb-item">${escapeHtml(categoria)}</span>
+        <span class="breadcrumb-sep">›</span>
+        <span class="breadcrumb-fila">${escapeHtml(fila)}</span>
+      </div>
+      <span class="count-badge">${total} · ${sorted.length} registros</span>
+    </div>
+    <div class="table-wrap"><div class="table-scroll">
+      <table>
+        <thead><tr>
+          ${th('CAT', 'Categoria')}
+          ${th('VINCULADO', 'Vinculado')}
+          ${th('NOME CLIENTE', 'Nome do Cliente')}
+          ${th('PROPRIETÁRIO DO PEDIDO', 'Proprietário')}
+          ${th('EQUIPE', 'Equipe')}
+          ${th('CADASTRO', 'Cadastro')}
+          ${th('ATUALIZACAO', 'Atualização')}
+          ${th('QTD', receita ? 'Receita' : 'Qtd')}
+        </tr></thead>
+        <tbody>${sorted.length === 0
+          ? `<tr><td colspan="8" style="text-align:center;padding:20px;color:var(--text3)">Nenhum registro.</td></tr>`
+          : sorted.map((r, idx) => {
+            const prop = r['PROPRIETÁRIO DO PEDIDO'] || '—';
+            return `<tr>
+              <td><span class="tag-pill" style="font-size:11px">${escapeHtml(gfKey(r) || '—')}</span></td>
+              <td style="font-size:12px;color:var(--text2)">${escapeHtml(r['VINCULADO'] || '—')}</td>
+              <td style="font-size:12px;font-weight:500"><span class="cliente-drill-link" onclick="abrirDetalheCliente(${idx})" title="Ver detalhes do registro">${escapeHtml(r['NOME CLIENTE'] || '—')}</span></td>
+              <td><div class="consultant-name"><div class="avatar" style="width:22px;height:22px;font-size:9px">${escapeHtml(initials(prop))}</div>${escapeHtml(prop)}</div></td>
+              <td style="font-size:12px">${escapeHtml(r['EQUIPE'] || '—')}</td>
+              <td class="center" style="font-size:11px;color:var(--text2)">${fmtDate(r['CADASTRO'])}</td>
+              <td class="center" style="font-size:11px;color:var(--text2)">${fmtDate(r['ATUALIZACAO'])}</td>
+              <td class="center"><span class="badge badge-red">${receita ? gerFmtMoeda(gerReceitaLinha(r)) : (parseInt(r['QUANTIDADE']) || 1)}</span></td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div></div>`;
 }
 
 // ─── DRILLDOWN DE DETALHES DO CLIENTE (aba Gerencial) ──────────────────────
@@ -5841,6 +6202,7 @@ function switchTab(name, el) {
   el.classList.add('active');
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   document.getElementById('tab-' + name).classList.add('active');
+  if (name === 'gerfin') initGerFin();
   if (name === 'producao') initProducao();
   if (name === 'discadora') initDiscadora();
   if (name === 'simulador2') initSimulador2();
@@ -5877,7 +6239,7 @@ let USUARIO_ATUAL = null;
 // aplicarPermissoes() quanto pelo preenchimento da preferência "aba padrão
 // ao abrir" no drawer de conta e pelo redirecionamento pós-login.
 const ABAS_PERMITIDAS_POR_PERFIL = {
-  'admin':          ['gerencial', 'producao', 'discadora', 'simulador2', 'churn', 'carteira', 'conectividade'],
+  'admin':          ['gerencial', 'gerfin', 'producao', 'discadora', 'simulador2', 'churn', 'carteira', 'conectividade'],
   'admin_beta':     ['gerencial', 'producao', 'carteira', 'conectividade'],
   'gestor_macro':   ['gerencial', 'discadora', 'conectividade'],
   'gestor_macro2':  ['gerencial', 'producao', 'discadora', 'conectividade'],
@@ -5901,6 +6263,7 @@ function getAbasPermitidas(usuario) {
 }
 const TAB_LABELS = {
   gerencial: '📊 Gerencial',
+  gerfin: '💰 Gerencial Financeiro',
   producao: '🏭 Produção',
   discadora: '📞 Discadora',
   simulador2: '🧮 Simulador 2.0',
