@@ -460,10 +460,17 @@
     align-items: start;
   }
   /* Gerencial Financeiro: 1 card a mais (GROSS vira Voz Novo + Portabilidade) */
-  .metrics-grid.gf-grid { grid-template-columns: repeat(7, 1fr); }
-  @media (max-width: 1280px) { .metrics-grid.gf-grid { grid-template-columns: repeat(4, 1fr); } }
-  @media (max-width: 768px)  { .metrics-grid.gf-grid { grid-template-columns: repeat(3, 1fr); gap: 8px; } }
-  @media (max-width: 480px)  { .metrics-grid.gf-grid { grid-template-columns: repeat(2, 1fr); } }
+  /* minmax(0,1fr): sem o 0 a coluna cresce até o conteúdo e o 7º card estoura a tela */
+  .metrics-grid.gf-grid { grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 10px; }
+  .gf-grid .metric-card { padding: 12px 10px; min-width: 0; }
+  .gf-grid .metric-value { font-size: 21px; white-space: nowrap; }
+  .gf-grid .fila-item { font-size: 10.5px; padding: 4px 2px; }
+  .gf-grid .fila-subgrupo-label, .gf-grid .fila-aprovado-titulo { padding: 0 2px; gap: 6px; }
+  .gf-grid .fila-subgrupo-label > span:first-child { min-width: 0; }
+  .gf-grid .fila-subgrupo-total, .gf-grid .fila-aprovado-titulo > span:last-child { white-space: nowrap; }
+  @media (max-width: 1280px) { .metrics-grid.gf-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+  @media (max-width: 768px)  { .metrics-grid.gf-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; } }
+  @media (max-width: 480px)  { .metrics-grid.gf-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   .metric-card {
     background: var(--surface);
     border: 1px solid var(--border);
@@ -4164,8 +4171,17 @@ function gfRefresh() {
   if (gfLastDrill && document.querySelector('#gf-table-area .detail-breadcrumb')) gfDrill(...gfLastDrill);
 }
 
+// Valor compacto dos cards: reais inteiros, sem "R$" nas linhas (o total do
+// card já traz o "R$") — com centavos os 7 cards não cabem lado a lado. O
+// valor exato continua na lista de pedidos (drill) e no tooltip.
+function gfFmtCard(v, receita, comCifrao) {
+  if (!receita) return v.toLocaleString('pt-BR');
+  const n = Math.round(v || 0).toLocaleString('pt-BR');
+  return comCifrao ? 'R$ ' + n : n;
+}
+
 function gfRenderSubgrupo(cat, { grupo, itens }, receita) {
-  const fmt = v => receita ? gerFmtMoeda(v) : v.toLocaleString('pt-BR');
+  const fmt = v => gfFmtCard(v, receita);
   const subtotal = itens.reduce((s, [, fv]) => s + fv, 0);
   return `
     <div class="fila-subgrupo-label">
@@ -4229,10 +4245,10 @@ function renderGerFin() {
     const gruposAprovado = subgrupos.filter(s => GF_SUBGRUPOS_APROVADO.includes(s.grupo));
     const outrosGrupos = subgrupos.filter(s => !GF_SUBGRUPOS_APROVADO.includes(s.grupo));
     const totalAprovado = gruposAprovado.reduce((s, { itens }) => s + itens.reduce((s2, [, fv]) => s2 + fv, 0), 0);
-    const fmt = v => receita ? gerFmtMoeda(v) : v.toLocaleString('pt-BR');
+    const fmt = v => gfFmtCard(v, receita);
     return `<div class="metric-card ${i === 0 ? 'highlight' : ''}">
       <div class="metric-label">${c}</div>
-      <div class="metric-value">${receita ? gerFmtMoeda(m.totalRec) : m.total.toLocaleString('pt-BR')}</div>
+      <div class="metric-value"${receita ? ` title="${gerFmtMoeda(m.totalRec)}"` : ''}>${gfFmtCard(receita ? m.totalRec : m.total, receita, true)}</div>
       <div class="metric-avg">Média/consultor: ${med}</div>
       <div class="filas-list">${gruposAprovado.length ? `
         <div class="fila-aprovado-titulo">
