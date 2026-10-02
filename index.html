@@ -4208,6 +4208,7 @@ function gfFmtCard(v, receita, comCifrao) {
 // FAIXA do BaseCRM (calculada pela Claro a partir do % VARIACAO); se vier
 // vazia, deriva do % VARIACAO pelos mesmos cortes da política. A receita
 // renovada é VALOR UNIT + VALOR AGREGADO (o Delta é medido sobre essa soma).
+// Em linhas customizadas, o % DESCONTO é a parcela do fator que a Claro paga.
 // Titularidade e Serv. Digitais não têm fator no Simulador, então ficam fora
 // da comissão (e do Geral) enquanto o checkbox estiver ligado.
 const GF_FATOR_POR_CAT = { 'BL': 'virtua', 'VOZ NOVO': 'vozNovo', 'PORTABILIDADE': 'vozPort', 'RENOVAÇÃO': 'renov' };
@@ -4262,11 +4263,18 @@ function gfComissaoLinha(r, key, fat) {
     const agregado = colA ? (gfNumero(r[colA]) || 0) : 0;
     const base = gerReceitaLinha(r) + agregado;
     const idx = gfFaixaDeltaIdx(r);
-    const fator = idx >= 0 ? GF_RENOVACAO_TABELA1[idx][fat.cluster] : 0;
-    return { base, fator, valor: base * fator, semFaixa: idx < 0 };
+    const fatorTabela = idx >= 0 ? GF_RENOVACAO_TABELA1[idx][fat.cluster] : 0;
+    // % DESCONTO = customização: a Claro paga só essa parte do fator da faixa
+    // (60 → ×0,6). Vazio = sem customização = 100%. O fator por linha tem 2
+    // casas decimais (política 2.4 vi-b).
+    const colD = gfColuna('% DESCONTO');
+    const pctDesc = colD ? gfNumero(r[colD]) : null;
+    const pagoPct = pctDesc === null || pctDesc <= 0 ? 1 : Math.min(pctDesc, 100) / 100;
+    const fator = Math.round(fatorTabela * pagoPct * 100) / 100;
+    return { base, fator, fatorTabela, pagoPct, valor: base * fator, semFaixa: idx < 0 };
   }
   const base = gerReceitaLinha(r), fator = fat.porCat[key] || 0;
-  return { base, fator, valor: base * fator, semFaixa: false };
+  return { base, fator, fatorTabela: fator, pagoPct: 1, valor: base * fator, semFaixa: false };
 }
 
 let GF_CFG_FATORES = null; // { periodo, cluster, metaMovelVoz, metaFixaBl, salva }
@@ -4347,7 +4355,7 @@ function gfBarraFatores(fat, ren) {
     Móvel Voz ${fat.realMovelVoz.toLocaleString('pt-BR')}/${cfg.metaMovelVoz.toLocaleString('pt-BR')} (${br(fat.pctMovelVoz, 1)}% · ${faixa(fat.idxMV)}) ·
     Fixa BL ${fat.realFixaBl.toLocaleString('pt-BR')}/${cfg.metaFixaBl.toLocaleString('pt-BR')} (${br(fat.pctFixaBl, 1)}% · ${faixa(fat.idxBL)})
     <br>BL <strong>×${br(fator.virtua)}</strong> · Voz Novo <strong>×${br(fator.vozNovo)}</strong> · Portabilidade <strong>×${br(fator.vozPort)}</strong> (inclui plugin +${br(PLUGIN_PORTABILIDADE_VOZ)}) ·
-    Renovação <strong>por linha</strong> (Tabela 1 · Cluster ${cluster} · coluna FAIXA do Delta Ticket${ren && ren.base > 0 ? ` · fator médio <strong>×${br(ren.valor / ren.base)}</strong>` : ''}) ·
+    Renovação <strong>por linha</strong> (Tabela 1 · Cluster ${cluster} · coluna FAIXA do Delta Ticket × % DESCONTO${ren && ren.base > 0 ? ` · fator médio <strong>×${br(ren.valor / ren.base)}</strong>` : ''}) ·
     Titularidade e Serv. Digitais não têm fator no Simulador e ficam fora do Geral.${avisoFaixa}${aviso}
   </div>`;
 }
@@ -4580,7 +4588,8 @@ function gfDrill(categoria, fila) {
               <td style="font-size:12px">${escapeHtml(r['EQUIPE'] || '—')}</td>
               <td class="center" style="font-size:11px;color:var(--text2)">${fmtDate(r['CADASTRO'])}</td>
               <td class="center" style="font-size:11px;color:var(--text2)">${fmtDate(r['ATUALIZACAO'])}</td>
-              ${fat ? `<td class="center" style="font-size:11px;color:var(--text2)">×${comLinha(r).fator.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>` : ''}
+              ${fat ? (() => { const c = comLinha(r), f2 = v => v.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+              return `<td class="center" style="font-size:11px;color:var(--text2)" ${c.pagoPct < 1 ? `title="Fator da faixa ×${f2(c.fatorTabela)} × ${Math.round(c.pagoPct * 100)}% (% DESCONTO)"` : ''}>×${f2(c.fator)}${c.pagoPct < 1 ? ` <span style="color:var(--text-3)">(${Math.round(c.pagoPct * 100)}%)</span>` : ''}</td>`; })() : ''}
               <td class="center"><span class="badge badge-red">${receita ? gerFmtMoeda(recLinha(r)) : (parseInt(r['QUANTIDADE']) || 1)}</span></td>
             </tr>`;
           }).join('')}
