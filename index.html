@@ -4202,10 +4202,12 @@ function gfFmtCard(v, receita, comCifrao) {
 // o realizado vem do BaseCRM no escopo (s2Visao) do Simulador 2.0 — a mesma
 // conta de s2RecalcularFatores(), sem depender da aba Simulador estar aberta.
 // Renovação (política PL-RCC-004, item 2.4): sem fator fixo nem adicional por
-// meta — receita renovada × fator da faixa de Delta Ticket × cluster P/M/G.
-// A Claro travou tudo na Tabela 1 por enquanto (Tabela 2 = área cabeada sem
-// BL/convergência, não usada). O Delta Ticket por linha NÃO vem do BaseCRM:
-// a faixa é escolhida à mão (estimativa) até existir a coluna.
+// meta — receita renovada × fator da faixa de Delta Ticket × cluster P/M/G,
+// LINHA A LINHA. A Claro travou tudo na Tabela 1 por enquanto (Tabela 2 = área
+// cabeada sem BL/convergência, não usada). A faixa de cada linha vem da coluna
+// FAIXA do BaseCRM (calculada pela Claro a partir do % VARIACAO); se vier
+// vazia, deriva do % VARIACAO pelos mesmos cortes da política. A receita
+// renovada é VALOR UNIT + VALOR AGREGADO (o Delta é medido sobre essa soma).
 // Titularidade e Serv. Digitais não têm fator no Simulador, então ficam fora
 // da comissão (e do Geral) enquanto o checkbox estiver ligado.
 const GF_FATOR_POR_CAT = { 'BL': 'virtua', 'VOZ NOVO': 'vozNovo', 'PORTABILIDADE': 'vozPort', 'RENOVAÇÃO': 'renov' };
@@ -4219,13 +4221,54 @@ const GF_RENOVACAO_TABELA1 = [
   { faixa: 'Faixa 6', delta: '-13% a -24,99%',    P: 0.90, M: 1.30, G: 1.70 },
   { faixa: 'Faixa 7', delta: '≤ -25%',            P: 0.70, M: 1.10, G: 1.50 },
 ];
-let GF_FAIXA_DELTA = 2; // índice na tabela acima; Faixa 3 (receita mantida) como ponto neutro
-try { const v = parseInt(localStorage.getItem('gf_faixa_delta')); if (v >= 0 && v < 7) GF_FAIXA_DELTA = v; } catch (e) {}
-function gfSetFaixaDelta(v) {
-  GF_FAIXA_DELTA = parseInt(v) || 0;
-  try { localStorage.setItem('gf_faixa_delta', String(GF_FAIXA_DELTA)); } catch (e) {}
-  gfRefresh();
+
+// Cabeçalhos da planilha vêm com a grafia exata do Sheets: acha a coluna sem
+// depender de caixa/acento (e guarda o resultado enquanto os headers forem os mesmos).
+let GF_COLS_CACHE = { ref: null, map: {} };
+function gfColuna(nome) {
+  if (GF_COLS_CACHE.ref !== headers) GF_COLS_CACHE = { ref: headers, map: {} };
+  if (!(nome in GF_COLS_CACHE.map)) GF_COLS_CACHE.map[nome] = (headers || []).find(h => gfNorm(h) === nome) || null;
+  return GF_COLS_CACHE.map[nome];
 }
+function gfNumero(v) {
+  const n = parseFloat((v || '').toString().replace('%', '').replace(',', '.'));
+  return isNaN(n) ? null : n;
+}
+
+// Índice (0-6) da faixa de Delta da linha, ou -1 se não der pra determinar.
+function gfFaixaDeltaIdx(r) {
+  const colF = gfColuna('FAIXA');
+  const m = colF && (r[colF] || '').toString().match(/(\d)/);
+  if (m && +m[1] >= 1 && +m[1] <= 7) return +m[1] - 1;
+  const colV = gfColuna('% VARIACAO');
+  const v = colV ? gfNumero(r[colV]) : null;
+  if (v === null) return -1;
+  const x = Math.round(v * 100) / 100;
+  if (x >= 10.01) return 0;
+  if (x >= 3.5) return 1;
+  if (x >= 0) return 2;
+  if (x > -6) return 3;
+  if (x > -13) return 4;
+  if (x > -25) return 5;
+  return 6;
+}
+
+// Receita-base e fator da linha no modo comissão. Renovação: receita =
+// VALOR UNIT + VALOR AGREGADO e fator da faixa da própria linha (sem faixa → 0,
+// e a barra de fatores avisa quantas linhas ficaram assim).
+function gfComissaoLinha(r, key, fat) {
+  if (key === 'RENOVAÇÃO') {
+    const colA = gfColuna('VALOR AGREGADO');
+    const agregado = colA ? (gfNumero(r[colA]) || 0) : 0;
+    const base = gerReceitaLinha(r) + agregado;
+    const idx = gfFaixaDeltaIdx(r);
+    const fator = idx >= 0 ? GF_RENOVACAO_TABELA1[idx][fat.cluster] : 0;
+    return { base, fator, valor: base * fator, semFaixa: idx < 0 };
+  }
+  const base = gerReceitaLinha(r), fator = fat.porCat[key] || 0;
+  return { base, fator, valor: base * fator, semFaixa: false };
+}
+
 let GF_CFG_FATORES = null; // { periodo, cluster, metaMovelVoz, metaFixaBl, salva }
 let GF_FATORES_CARREGANDO = false;
 
@@ -4285,28 +4328,27 @@ function gfFatoresAtuais() {
     virtua:  fFixo.virtua  + (idxBL >= 0 ? FATORES_ADICIONAIS_TABELA1.virtua[idxBL][cluster] : 0),
     vozNovo: fFixo.vozNovo + (idxMV >= 0 ? FATORES_ADICIONAIS_TABELA1.vozNovo[idxMV][cluster] : 0),
     vozPort: fFixo.vozPort + (idxMV >= 0 ? FATORES_ADICIONAIS_TABELA1.vozPort[idxMV][cluster] : 0) + PLUGIN_PORTABILIDADE_VOZ,
-    renov:   GF_RENOVACAO_TABELA1[GF_FAIXA_DELTA][cluster],
   };
   const porCat = {};
   Object.entries(GF_FATOR_POR_CAT).forEach(([cat, k]) => porCat[cat] = fator[k]);
   return { cfg, cluster, fator, porCat, realMovelVoz, realFixaBl, pctMovelVoz, pctFixaBl, idxMV, idxBL };
 }
 
-function gfBarraFatores(fat) {
+function gfBarraFatores(fat, ren) {
   const { cfg, cluster, fator } = fat;
   const br = (n, d = 2) => n.toLocaleString('pt-BR', { minimumFractionDigits: d, maximumFractionDigits: d });
   const faixa = i => i >= 0 ? `Faixa ${i + 1}` : 'sem adicional';
   const aviso = cfg.salva ? '' :
     `<div style="color:#B45309;margin-top:4px;">⚠ A competência ${cfg.periodo} não tem configuração salva no Simulador 2.0 — usando Cluster ${cluster} e metas zeradas (sem adicional por meta).</div>`;
+  const avisoFaixa = ren && ren.semFaixa > 0
+    ? `<div style="color:#B45309;margin-top:4px;">⚠ ${ren.semFaixa.toLocaleString('pt-BR')} linha(s) de Renovação sem Faixa/% Variação na base — ficaram com fator 0.</div>` : '';
   return `<div style="font-size:11.5px;color:var(--text-2);background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px 12px;margin:0 0 10px;">
     <strong>Fatores de comissão</strong> · Simulador 2.0 · competência ${cfg.periodo} · Cluster ${cluster} ·
     Móvel Voz ${fat.realMovelVoz.toLocaleString('pt-BR')}/${cfg.metaMovelVoz.toLocaleString('pt-BR')} (${br(fat.pctMovelVoz, 1)}% · ${faixa(fat.idxMV)}) ·
     Fixa BL ${fat.realFixaBl.toLocaleString('pt-BR')}/${cfg.metaFixaBl.toLocaleString('pt-BR')} (${br(fat.pctFixaBl, 1)}% · ${faixa(fat.idxBL)})
     <br>BL <strong>×${br(fator.virtua)}</strong> · Voz Novo <strong>×${br(fator.vozNovo)}</strong> · Portabilidade <strong>×${br(fator.vozPort)}</strong> (inclui plugin +${br(PLUGIN_PORTABILIDADE_VOZ)}) ·
-    Renovação <strong>×${br(fator.renov)}</strong> (Tabela 1 · Cluster ${cluster} ·
-    <select onchange="gfSetFaixaDelta(this.value)" title="Sem Delta Ticket por linha no cálculo: a faixa escolhida vale para toda a Renovação (estimativa)" style="font-size:11px;padding:1px 4px;">${GF_RENOVACAO_TABELA1.map((f, i) => `<option value="${i}"${i === GF_FAIXA_DELTA ? ' selected' : ''}>${f.faixa} · Delta ${f.delta}</option>`).join('')}</select>
-    <em>estimativa</em>) ·
-    Titularidade e Serv. Digitais não têm fator no Simulador e ficam fora do Geral.${aviso}
+    Renovação <strong>por linha</strong> (Tabela 1 · Cluster ${cluster} · coluna FAIXA do Delta Ticket${ren && ren.base > 0 ? ` · fator médio <strong>×${br(ren.valor / ren.base)}</strong>` : ''}) ·
+    Titularidade e Serv. Digitais não têm fator no Simulador e ficam fora do Geral.${avisoFaixa}${aviso}
   </div>`;
 }
 
@@ -4354,6 +4396,7 @@ function renderGerFin() {
 
   // Com fatores ligados: espera a config do Simulador 2.0 chegar
   const fat = f.fatores ? gfFatoresAtuais() : null;
+  const ren = { base: 0, valor: 0, semFaixa: 0 }; // totais da Renovação (linha a linha) para a barra de fatores
   if (f.fatores && (GF_FATORES_CARREGANDO || !fat)) {
     document.getElementById('gf-metrics-area').innerHTML = '<div class="loading-state"><div class="loading-spinner"></div><p>Carregando fatores do Simulador 2.0...</p></div>';
     return;
@@ -4368,8 +4411,14 @@ function renderGerFin() {
     if (!metrics[key]) metrics[key] = novaMetrica();
     const qtd = parseInt(r['QUANTIDADE']) || 1;
     const fila = r['FILA'] || 'Sem Status';
-    const fator = fat ? (fat.porCat[key] || 0) : 1;
-    const rec = gerReceitaLinha(r) * fator;
+    let rec;
+    if (fat) {
+      const c = gfComissaoLinha(r, key, fat);
+      rec = c.valor;
+      if (key === 'RENOVAÇÃO') { ren.base += c.base; ren.valor += c.valor; if (c.semFaixa) ren.semFaixa++; }
+    } else {
+      rec = gerReceitaLinha(r);
+    }
     const acumular = m => {
       m.total += qtd; m.filas[fila] = (m.filas[fila] || 0) + qtd;
       m.totalRec += rec; m.filasRec[fila] = (m.filasRec[fila] || 0) + rec;
@@ -4397,7 +4446,7 @@ function renderGerFin() {
     <div class="stat-chip"><strong>${nConsSet.size}</strong> consultores</div>
     <div class="stat-chip"><strong>${nConsSet.size > 0 ? (receita ? gerFmtMoeda(geral.totalRec / nc) : (geral.total / nc).toFixed(1)) : 0}</strong> média geral/consultor</div>
   </div>
-  ${fat ? gfBarraFatores(fat) : ''}
+  ${fat ? gfBarraFatores(fat, ren) : ''}
   <div style="font-size:11px;color:var(--text-3);margin:-4px 0 10px;">Piloto · Voz Novo e Portabilidade vêm dos grupos "VOZ - Novo" e "VOZ - Portabilidade" da base. O Gross é só referência e não entra na soma do Geral.</div>`;
 
   const cats = [...GF_CATS];
@@ -4475,7 +4524,8 @@ function gfDrill(categoria, fila) {
     return categoria === 'GERAL' ? !GF_FORA_DO_GERAL.includes(key) : key === categoria;
   });
 
-  const recLinha = r => gerReceitaLinha(r) * (fat ? (fat.porCat[gfKey(r)] || 0) : 1);
+  const comLinha = r => gfComissaoLinha(r, gfKey(r), fat);
+  const recLinha = r => fat ? comLinha(r).valor : gerReceitaLinha(r);
   const valorLinha = r => receita ? recLinha(r) : (parseInt(r['QUANTIDADE']) || 1);
   const ts = v => { const d = parseDataRefBR(v); return d ? d.getTime() : 0; };
   const sorted = [...linhas].sort((a, b) => {
@@ -4483,6 +4533,7 @@ function gfDrill(categoria, fila) {
     if (gfSortCol === 'CADASTRO' || gfSortCol === 'ATUALIZACAO') {
       return gfSortAsc ? ts(a[gfSortCol]) - ts(b[gfSortCol]) : ts(b[gfSortCol]) - ts(a[gfSortCol]);
     }
+    if (gfSortCol === 'FATOR' && fat) return gfSortAsc ? comLinha(a).fator - comLinha(b).fator : comLinha(b).fator - comLinha(a).fator;
     const ca = gfSortCol === 'CAT' ? (gfKey(a) || '') : (a[gfSortCol] || '').toString();
     const cb = gfSortCol === 'CAT' ? (gfKey(b) || '') : (b[gfSortCol] || '').toString();
     return gfSortAsc ? ca.localeCompare(cb) : cb.localeCompare(ca);
@@ -4514,10 +4565,11 @@ function gfDrill(categoria, fila) {
           ${th('EQUIPE', 'Equipe')}
           ${th('CADASTRO', 'Cadastro')}
           ${th('ATUALIZACAO', 'Atualização')}
+          ${fat ? th('FATOR', 'Fator') : ''}
           ${th('QTD', fat ? 'Comissão' : receita ? 'Receita' : 'Qtd')}
         </tr></thead>
         <tbody>${sorted.length === 0
-          ? `<tr><td colspan="8" style="text-align:center;padding:20px;color:var(--text3)">Nenhum registro.</td></tr>`
+          ? `<tr><td colspan="9" style="text-align:center;padding:20px;color:var(--text3)">Nenhum registro.</td></tr>`
           : sorted.map((r, idx) => {
             const prop = r['PROPRIETÁRIO DO PEDIDO'] || '—';
             return `<tr>
@@ -4528,6 +4580,7 @@ function gfDrill(categoria, fila) {
               <td style="font-size:12px">${escapeHtml(r['EQUIPE'] || '—')}</td>
               <td class="center" style="font-size:11px;color:var(--text2)">${fmtDate(r['CADASTRO'])}</td>
               <td class="center" style="font-size:11px;color:var(--text2)">${fmtDate(r['ATUALIZACAO'])}</td>
+              ${fat ? `<td class="center" style="font-size:11px;color:var(--text2)">×${comLinha(r).fator.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>` : ''}
               <td class="center"><span class="badge badge-red">${receita ? gerFmtMoeda(recLinha(r)) : (parseInt(r['QUANTIDADE']) || 1)}</span></td>
             </tr>`;
           }).join('')}
