@@ -4068,6 +4068,12 @@ function drillFila(categoria, fila) {
 // abas vem num segundo momento. Reaproveita os helpers de lá (getGrupoKey,
 // linhaDentroDoEscopo, linhaBateBusca, linhaDentroDoPeriodoCadastro,
 // agruparFilasPorSubgrupo, gerReceitaLinha, abrirDetalheCliente...).
+// Piloto restrito: só estes e-mails (e só se forem admin) enxergam a aba.
+const GF_EMAILS_PERMITIDOS = ['raphael@vstgroup.com.br', 'everton@vstgroup.com.br'];
+function gfPodeVer(usuario) {
+  const u = usuario === undefined ? USUARIO_ATUAL : usuario;
+  return u?.perfil === 'admin' && GF_EMAILS_PERMITIDOS.includes((u.email || '').trim().toLowerCase());
+}
 const GF_CATS = ['GERAL', 'GROSS', 'VOZ NOVO', 'PORTABILIDADE', 'RENOVAÇÃO', 'BL', 'TITULARIDADE', 'SERV. DIGITAIS'];
 // GROSS é só referência: espelha Voz Novo + Portabilidade, então não entra na
 // soma do GERAL (nem no drill dele) — senão o volume seria contado em dobro.
@@ -4158,14 +4164,14 @@ function gfConstruirFiltros() {
 }
 
 function initGerFin() {
-  if (USUARIO_ATUAL?.perfil !== 'admin') return;
+  if (!gfPodeVer()) return;
   if (ALL_DATA.length && !GF_FILTROS_CONSTRUIDOS) gfConstruirFiltros();
   gfRefresh();
 }
 
 // Chamado por loadData() sempre que a base é (re)carregada.
 function gfAposCarregarDados() {
-  if (USUARIO_ATUAL?.perfil !== 'admin') return;
+  if (!gfPodeVer()) return;
   gfConstruirFiltros();
   gfRefresh();
 }
@@ -4310,7 +4316,7 @@ function gfRenderSubgrupo(cat, { grupo, itens }, receita) {
 }
 
 function renderGerFin() {
-  if (USUARIO_ATUAL?.perfil !== 'admin' || !ALL_DATA.length) return;
+  if (!gfPodeVer() || !ALL_DATA.length) return;
   const f = gfLerFiltros();
   const escopo = getEscopoTravado();
   const novaMetrica = () => ({ total: 0, filas: {}, totalRec: 0, filasRec: {} });
@@ -4420,7 +4426,7 @@ function gfFecharDrill() {
 }
 
 function gfDrill(categoria, fila) {
-  if (USUARIO_ATUAL?.perfil !== 'admin' || !ALL_DATA.length) return;
+  if (!gfPodeVer() || !ALL_DATA.length) return;
   gfLastDrill = [categoria, fila];
   const f = gfLerFiltros();
   const escopo = getEscopoTravado();
@@ -6399,7 +6405,7 @@ let USUARIO_ATUAL = null;
 // aplicarPermissoes() quanto pelo preenchimento da preferência "aba padrão
 // ao abrir" no drawer de conta e pelo redirecionamento pós-login.
 const ABAS_PERMITIDAS_POR_PERFIL = {
-  'admin':          ['gerencial', 'gerfin', 'producao', 'discadora', 'simulador2', 'churn', 'carteira', 'conectividade'],
+  'admin':          ['gerencial', 'producao', 'discadora', 'simulador2', 'churn', 'carteira', 'conectividade'],
   'admin_beta':     ['gerencial', 'producao', 'carteira', 'conectividade'],
   'gestor_macro':   ['gerencial', 'discadora', 'conectividade'],
   'gestor_macro2':  ['gerencial', 'producao', 'discadora', 'conectividade'],
@@ -6419,7 +6425,9 @@ const ABAS_PERMITIDAS_POR_PERFIL = {
 function getAbasPermitidas(usuario) {
   const base = ABAS_PERMITIDAS_POR_PERFIL[usuario?.perfil] || ['gerencial'];
   const extras = usuario?.acesso_extra_abas || [];
-  return extras.length ? [...new Set([...base, ...extras])] : base;
+  const todas = extras.length ? [...new Set([...base, ...extras])] : base;
+  // Gerencial Financeiro (piloto): lista fechada de e-mails, não vale pra todo admin
+  return gfPodeVer(usuario) ? [...new Set([...todas, 'gerfin'])] : todas.filter(a => a !== 'gerfin');
 }
 const TAB_LABELS = {
   gerencial: '📊 Gerencial',
