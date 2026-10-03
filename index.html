@@ -1404,7 +1404,7 @@
   @media (min-width: 769px) {
     .app-header {
       display: block; position: sticky; top: 10px; z-index: 100;
-      width: min(1392px, calc(100% - 36px)); margin: 10px auto 0;
+      width: calc(100% - 48px); margin: 10px auto 0; /* mesma margem lateral do .content (24px) */
       background: linear-gradient(180deg, #C0201F, #9F1818);
       border-radius: 20px; box-shadow: 0 6px 18px rgba(159, 24, 24, .28);
     }
@@ -1444,6 +1444,12 @@
     border: 2px solid var(--brand); border-radius: 4px; background-color: var(--surface); min-height: 36px;
   }
   .metric-card, .table-wrap { border-radius: 14px; }
+  /* Ocupa a tela toda (antes limitado a 1440px, sobrava faixa vazia nas laterais em monitor
+     largo). Abas de formulário continuam centralizadas com limite, senão os campos esticam. */
+  .content { max-width: none; }
+  #tab-conectividade, #tab-simulador2 { max-width: 1440px; margin-left: auto; margin-right: auto; }
+  /* filtros distribuídos pela linha inteira (antes: 5 colunas fixas, a 2ª linha ficava pela metade) */
+  .filters-bar { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px 16px; }
 </style>
 </head>
 <body>
