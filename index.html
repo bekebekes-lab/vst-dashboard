@@ -473,21 +473,15 @@
   @media (max-width: 480px)  { .metrics-grid.gf-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   /* ─── Painel Analítico (piloto) ─── */
   .pn-hero {
-    background: linear-gradient(180deg, #C0201F, #9F1818);
-    border-radius: 20px; padding: 12px 22px; color: #fff;
-    display: flex; align-items: center; gap: 28px; flex-wrap: wrap;
-    box-shadow: 0 4px 14px rgba(159, 24, 24, .25);
+    background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 10px 18px;
+    display: flex; align-items: center; gap: 18px; flex-wrap: wrap; box-shadow: var(--shadow-xs);
   }
-  .pn-logo img { height: 40px; filter: brightness(0) invert(1); display: block; }
-  #pn-logo-txt { font-weight: 800; font-size: 26px; font-style: italic; letter-spacing: -.02em; }
-  #pn-logo-txt small { display: block; font-size: 7px; letter-spacing: .5em; font-style: normal; font-weight: 600; }
-  .pn-titulo { font-size: 14px; font-weight: 700; letter-spacing: .08em; }
+  .pn-titulo { font-size: 14px; font-weight: 700; letter-spacing: .08em; color: var(--brand); }
   .pn-hero-dir { margin-left: auto; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-  .pn-progresso { font-size: 12px; opacity: .95; }
-  .pn-progresso .pn-link { color: #fff; }
-  .pn-btn-claro { background: transparent; color: #fff; border: 1.5px solid rgba(255,255,255,.75); border-radius: 8px; padding: 7px 14px; font-size: 12px; font-weight: 600; cursor: pointer; }
-  .pn-btn-claro:hover { background: rgba(255,255,255,.15); }
-  .pn-pill { background: #fff; color: #333; border-radius: 8px; padding: 8px 14px; font-size: 13px; font-weight: 600; white-space: nowrap; }
+  .pn-progresso { font-size: 12px; color: var(--text-2); }
+  .pn-btn-claro { background: transparent; color: var(--brand); border: 1.5px solid var(--brand); border-radius: 8px; padding: 6px 14px; font-size: 12px; font-weight: 600; cursor: pointer; }
+  .pn-btn-claro:hover { background: var(--brand-light); }
+  .pn-pill { background: var(--brand-light); color: var(--brand-dark); border-radius: 8px; padding: 7px 14px; font-size: 12.5px; font-weight: 600; white-space: nowrap; }
   .pn-filtros { display: grid; grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); gap: 10px 14px; margin: 14px 4px 16px; }
   .pn-fg label { display: block; font-size: 12px; color: var(--text-2); margin-bottom: 4px; }
   .pn-fg select, .pn-fg .dropdown-btn { width: 100%; height: 36px; border: 2px solid var(--brand); border-radius: 4px; background: var(--surface); color: var(--text); font-size: 12.5px; }
@@ -1401,6 +1395,55 @@
     .fila-item { min-height: 36px; }
     .filter-group select, .prod-filter-group select { min-height: 40px; }
   }
+
+  /* ─── LAYOUT VERMELHO (referência: faixa arredondada + filtros com borda vermelha) ───
+     Cabeçalho só no desktop; no mobile o wrapper some e nada muda. Filtros e cards
+     valem para todas as abas que usam .filters-bar / .metric-card / .table-wrap. */
+  .app-header { display: contents; }
+  .app-logo-wrap { display: none; }
+  @media (min-width: 769px) {
+    .app-header {
+      display: block; position: sticky; top: 10px; z-index: 100;
+      width: min(1392px, calc(100% - 36px)); margin: 10px auto 0;
+      background: linear-gradient(180deg, #C0201F, #9F1818);
+      border-radius: 20px; box-shadow: 0 6px 18px rgba(159, 24, 24, .28);
+    }
+    .app-header .topbar {
+      position: static; height: auto; min-height: 58px; padding: 10px 24px 2px;
+      background: transparent; box-shadow: none;
+    }
+    .app-header .topbar h1 { display: none; }
+    .app-logo-wrap { display: block; width: 83px; height: 38px; overflow: hidden; flex-shrink: 0; }
+    /* o PNG tem o VST GROUP + a bola da Claro à direita: mostra só os 72% da esquerda (o VST termina em x=315 de 440, a bola começa em 319) */
+    .app-logo { height: 38px; width: auto; max-width: none; display: block; filter: brightness(0) invert(1); }
+    .app-header .last-update:not(:empty) {
+      background: #fff; color: #333; opacity: 1; border-radius: 8px;
+      padding: 6px 12px; font-size: 12px; font-weight: 600;
+    }
+    .app-header .tabs-nav {
+      position: static; background: transparent; border: none; box-shadow: none;
+      padding: 0 20px 10px; flex-wrap: wrap;
+    }
+    .app-header .tab-btn {
+      color: rgba(255, 255, 255, .78); text-transform: uppercase; letter-spacing: .06em;
+      font-size: 12.5px; font-weight: 600; padding: 10px 14px;
+    }
+    .app-header .tab-btn:hover { color: #fff; }
+    .app-header .tab-btn.active { color: #fff; border-bottom-color: #fff; }
+    .app-header #tab-btn-conectividade { margin: 2px 4px 2px 10px; padding: 8px 16px; letter-spacing: .04em; }
+  }
+  .filters-bar { background: transparent; border: none; box-shadow: none; padding: 4px 2px; }
+  .filter-group label { text-transform: none; letter-spacing: 0; font-size: 12px; font-weight: 500; color: var(--text-2); }
+  .filters-bar .filter-group select,
+  .filters-bar .filter-group input[type="text"],
+  .filters-bar .filter-group input[type="date"],
+  .filters-bar .filter-group input[type="time"],
+  .filters-bar .filter-group input[type="number"],
+  .filters-bar .filter-group input[type="search"],
+  .filters-bar .dropdown-btn {
+    border: 2px solid var(--brand); border-radius: 4px; background-color: var(--surface); min-height: 36px;
+  }
+  .metric-card, .table-wrap { border-radius: 14px; }
 </style>
 </head>
 <body>
@@ -1468,9 +1511,13 @@
   </div>
 </div>
 
+<!-- CABEÇALHO (desktop: faixa vermelha arredondada com logo, abas e controles; no mobile o
+     wrapper some via display:contents e topbar/abas se comportam como antes) -->
+<div class="app-header" id="app-header">
 <!-- TOPBAR -->
 <div class="topbar">
   <div class="topbar-left">
+    <div class="app-logo-wrap"><img class="app-logo" id="app-logo" alt="VST Group"></div>
     <h1>VST Dashboard Gerencial</h1>
     <span class="topbar-badge" id="topbar-badge">BaseCRM Live</span>
   </div>
@@ -1497,16 +1544,24 @@
 
 <!-- TABS -->
 <div class="tabs-nav">
-  <button class="tab-btn" id="tab-btn-gerencial" onclick="switchTab('gerencial', this)">📊 Gerencial</button>
-  <button class="tab-btn" id="tab-btn-gerfin" onclick="switchTab('gerfin', this)">💰 Gerencial Financeiro</button>
-  <button class="tab-btn" id="tab-btn-painel" onclick="switchTab('painel', this)">📈 Painel Analítico</button>
-  <button class="tab-btn" id="tab-btn-producao" onclick="switchTab('producao', this)">🏭 Produção</button>
-  <button class="tab-btn" id="tab-btn-discadora" onclick="switchTab('discadora', this)">📞 Discadora</button>
-  <button class="tab-btn active" id="tab-btn-simulador2" onclick="switchTab('simulador2', this)">🧮 Simulador 2.0</button>
-  <button class="tab-btn" id="tab-btn-churn" onclick="switchTab('churn', this)">📉 Churn</button>
-  <button class="tab-btn" id="tab-btn-carteira" onclick="switchTab('carteira', this)">💼 Carteira</button>
-  <button class="tab-btn" id="tab-btn-conectividade" onclick="switchTab('conectividade', this)">📡 Conectividade/SD</button>
+  <button class="tab-btn" id="tab-btn-gerencial" onclick="switchTab('gerencial', this)">Gerencial</button>
+  <button class="tab-btn" id="tab-btn-gerfin" onclick="switchTab('gerfin', this)">Gerencial Financeiro</button>
+  <button class="tab-btn" id="tab-btn-painel" onclick="switchTab('painel', this)">Painel Analítico</button>
+  <button class="tab-btn" id="tab-btn-producao" onclick="switchTab('producao', this)">Produção</button>
+  <button class="tab-btn" id="tab-btn-discadora" onclick="switchTab('discadora', this)">Discadora</button>
+  <button class="tab-btn active" id="tab-btn-simulador2" onclick="switchTab('simulador2', this)">Simulador 2.0</button>
+  <button class="tab-btn" id="tab-btn-churn" onclick="switchTab('churn', this)">Churn</button>
+  <button class="tab-btn" id="tab-btn-carteira" onclick="switchTab('carteira', this)">Carteira</button>
+  <button class="tab-btn" id="tab-btn-conectividade" onclick="switchTab('conectividade', this)">Conectividade/SD</button>
 </div>
+</div>
+<script>
+  // o logo do cabeçalho reaproveita o PNG da tela de login (sem duplicar os ~60KB em base64)
+  (function () {
+    var l = document.querySelector('.login-logo-img'), a = document.getElementById('app-logo');
+    if (l && a) a.src = l.src;
+  })();
+</script>
 
 <!-- BOTTOM NAV (mobile only — casca visual nova, chama switchTab() já existente) -->
 <div class="mobile-bottom-nav" id="mobile-bottom-nav">
@@ -1678,10 +1733,6 @@
        Grupo e linhas por Mês com a métrica à escolha. Ids com prefixo pn-. -->
   <div class="tab-panel" id="tab-painel">
     <div class="pn-hero">
-      <div class="pn-logo">
-        <img id="pn-logo" alt="VST Group" style="display:none">
-        <span id="pn-logo-txt">VST <small>G R O U P</small></span>
-      </div>
       <div class="pn-titulo">PAINEL ANALÍTICO</div>
       <div class="pn-hero-dir">
         <span id="pn-progresso" class="pn-progresso"></span>
@@ -4913,10 +4964,6 @@ async function pnIniciar() {
 
 // ── Filtros ──────────────────────────────────────────────────────────────────
 function pnMontarEsqueleto() {
-  const logo = document.querySelector('.login-logo-img');
-  const imgLogo = document.getElementById('pn-logo');
-  if (logo && imgLogo) { imgLogo.src = logo.src; imgLogo.style.display = ''; document.getElementById('pn-logo-txt').style.display = 'none'; }
-
   document.getElementById('pn-filtros').innerHTML = PN_FILTROS.map(([nome, rotulo]) => `
     <div class="pn-fg">
       <label>${rotulo}</label>
