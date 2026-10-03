@@ -473,55 +473,55 @@
   @media (max-width: 480px)  { .metrics-grid.gf-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   /* ─── Painel Analítico (piloto) ─── */
   .pn-hero {
-    background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 10px 18px;
-    display: flex; align-items: center; gap: 18px; flex-wrap: wrap; box-shadow: var(--shadow-xs);
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 6px 14px;
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap; box-shadow: var(--shadow-xs);
   }
-  .pn-titulo { font-size: 14px; font-weight: 700; letter-spacing: .08em; color: var(--brand); }
+  .pn-titulo { font-size: 12.5px; font-weight: 700; letter-spacing: .08em; color: var(--brand); }
   .pn-hero-dir { margin-left: auto; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .pn-progresso { font-size: 12px; color: var(--text-2); }
-  .pn-btn-claro { background: transparent; color: var(--brand); border: 1.5px solid var(--brand); border-radius: 8px; padding: 6px 14px; font-size: 12px; font-weight: 600; cursor: pointer; }
+  .pn-btn-claro { background: transparent; color: var(--brand); border: 1.5px solid var(--brand); border-radius: 7px; padding: 4px 12px; font-size: 11px; font-weight: 600; cursor: pointer; }
   .pn-btn-claro:hover { background: var(--brand-light); }
-  .pn-pill { background: var(--brand-light); color: var(--brand-dark); border-radius: 8px; padding: 7px 14px; font-size: 12.5px; font-weight: 600; white-space: nowrap; }
-  .pn-filtros { display: grid; grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); gap: 10px 14px; margin: 14px 4px 16px; }
-  .pn-fg label { display: block; font-size: 12px; color: var(--text-2); margin-bottom: 4px; }
-  .pn-fg select, .pn-fg .dropdown-btn { width: 100%; height: 36px; border: 2px solid var(--brand); border-radius: 4px; background: var(--surface); color: var(--text); font-size: 12.5px; }
-  .pn-topo { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+  .pn-pill { background: var(--brand-light); color: var(--brand-dark); border-radius: 7px; padding: 5px 12px; font-size: 11.5px; font-weight: 600; white-space: nowrap; }
+  .pn-filtros { display: grid; grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); gap: 6px 12px; margin: 8px 2px 10px; }
+  .pn-fg label { display: block; font-size: 11px; color: var(--text-2); margin-bottom: 2px; }
+  .pn-fg select, .pn-fg .dropdown-btn { width: 100%; height: 30px; min-height: 30px; border: 2px solid var(--brand); border-radius: 4px; background: var(--surface); color: var(--text); font-size: 11.5px; padding-top: 0; padding-bottom: 0; }
+  .pn-topo { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
   @media (max-width: 900px) { .pn-topo { grid-template-columns: 1fr; } }
-  .pn-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 16px 18px; box-shadow: var(--shadow-xs); min-width: 0; }
-  .pn-card-cab { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
-  .pn-card-cab h3 { font-size: 16px; font-weight: 600; margin: 0; color: var(--text); }
-  .pn-total { font-weight: 700; font-size: 14px; }
+  .pn-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 10px 14px; box-shadow: var(--shadow-xs); min-width: 0; }
+  .pn-card-cab { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
+  .pn-card-cab h3 { font-size: 13.5px; font-weight: 600; margin: 0; color: var(--text); }
+  .pn-total { font-weight: 700; font-size: 12.5px; }
   .pn-btns { display: flex; gap: 6px; flex-wrap: wrap; }
-  .pn-btn { background: var(--surface); color: var(--text); border: 1.5px solid var(--text-2); border-radius: 4px; padding: 6px 14px; font-size: 12px; cursor: pointer; }
-  .pn-btn-sm { padding: 4px 12px; font-size: 11.5px; }
+  .pn-btn { background: var(--surface); color: var(--text); border: 1.5px solid var(--text-2); border-radius: 4px; padding: 3px 11px; font-size: 11px; cursor: pointer; }
+  .pn-btn-sm { padding: 2px 9px; font-size: 10.5px; }
   .pn-btn.ativo { background: var(--brand); border-color: var(--brand); color: #fff; font-weight: 600; }
-  .pn-bars { max-height: 300px; overflow-y: auto; padding-right: 6px; }
-  .pn-bar-row { display: grid; grid-template-columns: 76px 1fr 78px; gap: 8px; align-items: center; padding: 3px 0; font-size: 12px; }
+  .pn-bars { max-height: 190px; overflow-y: auto; padding-right: 6px; }
+  .pn-bar-row { display: grid; grid-template-columns: 76px 1fr 78px; gap: 8px; align-items: center; padding: 1px 0; font-size: 11px; }
   .pn-bar-lab { color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .pn-bar-track { height: 16px; }
+  .pn-bar-track { height: 12px; }
   .pn-bar-fill { height: 100%; background: var(--brand); border-radius: 2px; }
-  .pn-bar-val { color: var(--text-2); text-align: right; font-size: 11.5px; }
+  .pn-bar-val { color: var(--text-2); text-align: right; font-size: 10.5px; }
   .pn-donut-wrap { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; justify-content: center; }
-  .pn-donut { width: 210px; height: 210px; flex-shrink: 0; }
-  .pn-donut-t1 { font-size: 20px; font-weight: 700; fill: var(--text); }
+  .pn-donut { width: 160px; height: 160px; flex-shrink: 0; }
+  .pn-donut-t1 { font-size: 22px; font-weight: 700; fill: var(--text); }
   .pn-donut-t2 { font-size: 10px; fill: var(--text-3); }
   .pn-donut-leg { min-width: 190px; flex: 1; }
-  .pn-leg-row { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 12.5px; }
+  .pn-leg-row { display: flex; align-items: center; gap: 8px; padding: 2px 0; font-size: 11.5px; }
   .pn-leg-nome { flex: 1; color: var(--text-2); }
   .pn-leg-val { font-weight: 600; white-space: nowrap; }
   .pn-leg-val small { color: var(--text-3); font-weight: 400; }
   .pn-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
   .pn-nota { font-size: 11px; color: var(--text-3); margin-top: 6px; }
-  .pn-legenda { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-bottom: 6px; }
-  .pn-leg-btn { background: none; border: none; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text); padding: 2px 0; }
+  .pn-legenda { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-bottom: 2px; }
+  .pn-leg-btn { background: none; border: none; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text); padding: 1px 0; }
   .pn-leg-btn.off { opacity: .35; text-decoration: line-through; }
   .pn-linhas { width: 100%; height: auto; display: block; }
   .pn-grid-l { stroke: var(--border); stroke-width: 1; }
-  .pn-axis { font-size: 11px; fill: var(--text-2); }
+  .pn-axis { font-size: 10px; fill: var(--text-2); }
   .pn-axis-ano { font-weight: 600; }
   .pn-sep-ano { stroke: var(--border-strong); stroke-dasharray: 3 3; }
-  .pn-lbl { fill: #fff; font-size: 11px; font-weight: 700; }
-  .pn-vazio { color: var(--text-3); text-align: center; padding: 28px 0; font-size: 13px; }
+  .pn-lbl { fill: #fff; font-size: 10.5px; font-weight: 700; }
+  .pn-vazio { color: var(--text-3); text-align: center; padding: 20px 0; font-size: 12px; }
   .pn-link { background: none; border: none; color: var(--brand); cursor: pointer; text-decoration: underline; font-size: 12px; padding: 0; }
 
   .metric-card {
@@ -1409,31 +1409,31 @@
       border-radius: 20px; box-shadow: 0 6px 18px rgba(159, 24, 24, .28);
     }
     .app-header .topbar {
-      position: static; height: auto; min-height: 58px; padding: 10px 24px 2px;
+      position: static; height: auto; min-height: 48px; padding: 7px 22px 0;
       background: transparent; box-shadow: none;
     }
     .app-header .topbar h1 { display: none; }
-    .app-logo-wrap { display: block; width: 83px; height: 38px; overflow: hidden; flex-shrink: 0; }
+    .app-logo-wrap { display: block; width: 70px; height: 32px; overflow: hidden; flex-shrink: 0; }
     /* o PNG tem o VST GROUP + a bola da Claro à direita: mostra só os 72% da esquerda (o VST termina em x=315 de 440, a bola começa em 319) */
-    .app-logo { height: 38px; width: auto; max-width: none; display: block; filter: brightness(0) invert(1); }
+    .app-logo { height: 32px; width: auto; max-width: none; display: block; filter: brightness(0) invert(1); }
     .app-header .last-update:not(:empty) {
       background: #fff; color: #333; opacity: 1; border-radius: 8px;
-      padding: 6px 12px; font-size: 12px; font-weight: 600;
+      padding: 4px 11px; font-size: 11.5px; font-weight: 600;
     }
     .app-header .tabs-nav {
       position: static; background: transparent; border: none; box-shadow: none;
-      padding: 0 20px 10px; flex-wrap: wrap;
+      padding: 0 18px 6px; flex-wrap: wrap;
     }
     .app-header .tab-btn {
       color: rgba(255, 255, 255, .78); text-transform: uppercase; letter-spacing: .06em;
-      font-size: 12.5px; font-weight: 600; padding: 10px 14px;
+      font-size: 11.5px; font-weight: 600; padding: 7px 12px;
     }
     .app-header .tab-btn:hover { color: #fff; }
     .app-header .tab-btn.active { color: #fff; border-bottom-color: #fff; }
-    .app-header #tab-btn-conectividade { margin: 2px 4px 2px 10px; padding: 8px 16px; letter-spacing: .04em; }
+    .app-header #tab-btn-conectividade { margin: 1px 4px 1px 10px; padding: 6px 14px; letter-spacing: .04em; font-size: 11.5px; }
   }
   .filters-bar { background: transparent; border: none; box-shadow: none; padding: 4px 2px; }
-  .filter-group label { text-transform: none; letter-spacing: 0; font-size: 12px; font-weight: 500; color: var(--text-2); }
+  .filter-group label { text-transform: none; letter-spacing: 0; font-size: 11px; font-weight: 500; color: var(--text-2); margin-bottom: 3px; }
   .filters-bar .filter-group select,
   .filters-bar .filter-group input[type="text"],
   .filters-bar .filter-group input[type="date"],
@@ -1441,7 +1441,7 @@
   .filters-bar .filter-group input[type="number"],
   .filters-bar .filter-group input[type="search"],
   .filters-bar .dropdown-btn {
-    border: 2px solid var(--brand); border-radius: 4px; background-color: var(--surface); min-height: 36px;
+    border: 2px solid var(--brand); border-radius: 4px; background-color: var(--surface); min-height: 31px; font-size: 11.5px;
   }
   .metric-card, .table-wrap { border-radius: 14px; }
   /* Ocupa a tela toda (antes limitado a 1440px, sobrava faixa vazia nas laterais em monitor
@@ -1449,7 +1449,7 @@
   .content { max-width: none; }
   #tab-conectividade, #tab-simulador2 { max-width: 1440px; margin-left: auto; margin-right: auto; }
   /* filtros distribuídos pela linha inteira (antes: 5 colunas fixas, a 2ª linha ficava pela metade) */
-  .filters-bar { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px 16px; }
+  .filters-bar { grid-template-columns: repeat(auto-fit, minmax(165px, 1fr)); gap: 8px 14px; }
 </style>
 </head>
 <body>
@@ -5148,11 +5148,12 @@ function pnRenderLinhas(agg) {
   const serie = {};
   chaves.forEach(k => serie[k] = meses.map(x => pnValor(agg.porMes[x.chave][k], m)));
   const visiveis = chaves.filter(k => !PN.seriesOff.has(k));
-  const W = 1000, H = 340, ml = 66, mr = 26, mt = 34, mb = 56;
+  const cont = document.getElementById('pn-mes-corpo');
+  const W = Math.max(520, Math.floor((cont && cont.clientWidth) || 1000)), H = 250, ml = 58, mr = 20, mt = 28, mb = 46;
   const max = Math.max(1, ...visiveis.flatMap(k => serie[k]));
   const { passo, topo } = pnEscala(max);
   const n = meses.length;
-  const pad = 34; // afasta o primeiro/último ponto do eixo pra o rótulo do Total não encostar nele
+  const pad = 30; // afasta o primeiro/último ponto do eixo pra o rótulo do Total não encostar nele
   const x = i => ml + pad + (n === 1 ? (W - ml - mr - 2 * pad) / 2 : i * (W - ml - mr - 2 * pad) / (n - 1));
   const y = v => mt + (H - mt - mb) * (1 - v / topo);
 
@@ -5163,13 +5164,13 @@ function pnRenderLinhas(agg) {
   }
   let eixo = '', anos = [];
   meses.forEach((mm, i) => {
-    eixo += `<text x="${x(i)}" y="${H - mb + 18}" text-anchor="middle" class="pn-axis">${PN_MES_ABREV[parseInt(mm.mm, 10) - 1]}</text>`;
+    eixo += `<text x="${x(i)}" y="${H - mb + 15}" text-anchor="middle" class="pn-axis">${PN_MES_ABREV[parseInt(mm.mm, 10) - 1]}</text>`;
     const ult = anos[anos.length - 1];
     if (ult && ult.ano === mm.yyyy) ult.fim = i; else anos.push({ ano: mm.yyyy, ini: i, fim: i });
   });
   anos.forEach((a, j) => {
-    eixo += `<text x="${(x(a.ini) + x(a.fim)) / 2}" y="${H - 8}" text-anchor="middle" class="pn-axis pn-axis-ano">${a.ano}</text>`;
-    if (j > 0) eixo += `<line x1="${(x(a.ini) + x(a.ini - 1)) / 2}" x2="${(x(a.ini) + x(a.ini - 1)) / 2}" y1="${mt}" y2="${H - mb + 24}" class="pn-sep-ano"/>`;
+    eixo += `<text x="${(x(a.ini) + x(a.fim)) / 2}" y="${H - 6}" text-anchor="middle" class="pn-axis pn-axis-ano">${a.ano}</text>`;
+    if (j > 0) eixo += `<line x1="${(x(a.ini) + x(a.ini - 1)) / 2}" x2="${(x(a.ini) + x(a.ini - 1)) / 2}" y1="${mt}" y2="${H - mb + 20}" class="pn-sep-ano"/>`;
   });
 
   let linhas = '', rotulos = '';
@@ -5181,15 +5182,15 @@ function pnRenderLinhas(agg) {
     pts.forEach(([px, py, v], i) => {
       linhas += `<circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="${k === 'TOTAL' ? 4 : 3}" fill="${PN_COR[k]}"><title>${meses[i].label} · ${k === 'TOTAL' ? 'Total' : PN_GRUPO_LABEL[k]}: ${pnFmt(v, m)}</title></circle>`;
       if (k === 'TOTAL') {
-        const t = pnFmt(v, m, true), w = t.length * 7 + 14;
-        rotulos += `<g><rect x="${(px - w / 2).toFixed(1)}" y="${(py - 28).toFixed(1)}" width="${w}" height="19" rx="5" fill="${PN_COR.TOTAL}"/><text x="${px.toFixed(1)}" y="${(py - 14.5).toFixed(1)}" text-anchor="middle" class="pn-lbl">${t}</text></g>`;
+        const t = pnFmt(v, m, true), w = t.length * 6.2 + 12;
+        rotulos += `<g><rect x="${(px - w / 2).toFixed(1)}" y="${(py - 25).toFixed(1)}" width="${w.toFixed(1)}" height="17" rx="4" fill="${PN_COR.TOTAL}"/><text x="${px.toFixed(1)}" y="${(py - 12.7).toFixed(1)}" text-anchor="middle" class="pn-lbl">${t}</text></g>`;
       }
     });
   });
   const legenda = chaves.map(k => `
     <button class="pn-leg-btn${PN.seriesOff.has(k) ? ' off' : ''}" onclick="pnToggleSerie('${k}')"><span class="pn-dot" style="background:${PN_COR[k]}"></span>${k === 'TOTAL' ? 'Total' : PN_GRUPO_LABEL[k]}</button>`).join('');
   return `<div class="pn-legenda">${legenda}</div>
-    <svg viewBox="0 0 ${W} ${H}" class="pn-linhas" preserveAspectRatio="xMidYMid meet">${grade}${eixo}${linhas}${rotulos}</svg>`;
+    <svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" class="pn-linhas">${grade}${eixo}${linhas}${rotulos}</svg>`;
 }
 
 // ── Render ───────────────────────────────────────────────────────────────────
@@ -5226,6 +5227,12 @@ function pnRender() {
     `<button class="pn-btn${PN.metrica === k ? ' ativo' : ''}" onclick="pnSetMetrica('${k}')">${rot}</button>`).join('');
   document.getElementById('pn-mes-corpo').innerHTML = pnRenderLinhas(agg);
 }
+
+let _pnResizeT = null;
+window.addEventListener('resize', () => {
+  clearTimeout(_pnResizeT);
+  _pnResizeT = setTimeout(() => { if (document.getElementById('tab-painel')?.classList.contains('active')) pnRender(); }, 150);
+});
 
 function pnSetMetrica(k) { PN.metrica = k; pnRender(); }
 function pnSetDim(k) { PN.dim = k; pnRender(); }
