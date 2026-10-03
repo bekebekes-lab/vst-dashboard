@@ -1444,6 +1444,13 @@
     border: 2px solid var(--brand); border-radius: 4px; background-color: var(--surface); min-height: 31px; font-size: 11.5px;
   }
   .metric-card, .table-wrap { border-radius: 14px; }
+  /* Densidade em monitor largo: escala uniforme (fontes, espaços e cartões juntos) só ≥1500px, em vez de
+     mexer componente por componente. O Painel Analítico fica de fora (já é compacto e seus gráficos
+     medem a própria largura). Cartões da mesma linha com a mesma altura (antes ficavam em degraus). */
+  @media (min-width: 1500px) {
+    .tab-panel:not(#tab-painel) { zoom: .88; }
+  }
+  .metrics-grid { align-items: stretch; }
   /* Ocupa a tela toda (antes limitado a 1440px, sobrava faixa vazia nas laterais em monitor
      largo). Abas de formulário continuam centralizadas com limite, senão os campos esticam. */
   .content { max-width: none; }
