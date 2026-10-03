@@ -1741,7 +1741,7 @@
     <div id="gf-table-area"></div>
   </div>
 
-  <!-- TAB PAINEL ANALÍTICO (piloto, mesmo acesso do Gerencial Financeiro) — nome provisório.
+  <!-- TAB PAINEL ANALÍTICO (piloto, só perfil admin) — nome provisório.
        Visão histórica mês a mês: barras por Estado/DDD/Cidade/Equipe/Vendedor, rosca por
        Grupo e linhas por Mês com a métrica à escolha. Ids com prefixo pn-. -->
   <div class="tab-panel" id="tab-painel">
@@ -4786,7 +4786,7 @@ function gfDrill(categoria, fila) {
     </div></div>`;
 }
 
-// ─── PAINEL ANALÍTICO (piloto, mesmo acesso do Gerencial Financeiro) ─────────
+// ─── PAINEL ANALÍTICO (piloto, só perfil admin) ──────────────────────────────
 // Visão histórica mês a mês (Gross, Renovação, BL, Titularidade, Serv. Digitais)
 // com filtros em cascata, gráficos em SVG próprio (a CSP do projeto só aceita
 // script do próprio domínio, então nada de biblioteca externa) e a exportação em CSV.
@@ -4830,7 +4830,7 @@ const PN = {
   atualizadoEm: null,
 };
 
-function pnPodeVer() { return gfPodeVer(); }
+function pnPodeVer() { return USUARIO_ATUAL?.perfil === 'admin'; }
 
 // ── Carga dos dados ──────────────────────────────────────────────────────────
 function pnListarMeses() {
@@ -7182,8 +7182,10 @@ function getAbasPermitidas(usuario) {
   const base = ABAS_PERMITIDAS_POR_PERFIL[usuario?.perfil] || ['gerencial'];
   const extras = usuario?.acesso_extra_abas || [];
   const todas = extras.length ? [...new Set([...base, ...extras])] : base;
-  // Gerencial Financeiro (piloto): lista fechada de e-mails, não vale pra todo admin
-  return gfPodeVer(usuario) ? [...new Set([...todas, 'gerfin', 'painel'])] : todas.filter(a => a !== 'gerfin' && a !== 'painel');
+  // Gerencial Financeiro (piloto): lista fechada de e-mails, não vale pra todo admin.
+  // Painel Analítico: todo admin.
+  const comGerfin = gfPodeVer(usuario) ? [...new Set([...todas, 'gerfin'])] : todas.filter(a => a !== 'gerfin');
+  return usuario?.perfil === 'admin' ? [...new Set([...comGerfin, 'painel'])] : comGerfin.filter(a => a !== 'painel');
 }
 const TAB_LABELS = {
   gerencial: '📊 Gerencial',
