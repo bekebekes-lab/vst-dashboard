@@ -471,6 +471,65 @@
   @media (max-width: 1280px) { .metrics-grid.gf-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
   @media (max-width: 768px)  { .metrics-grid.gf-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; } }
   @media (max-width: 480px)  { .metrics-grid.gf-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  /* ─── Painel Analítico (piloto) ─── */
+  .pn-hero {
+    background: linear-gradient(180deg, #C0201F, #9F1818);
+    border-radius: 20px; padding: 12px 22px; color: #fff;
+    display: flex; align-items: center; gap: 28px; flex-wrap: wrap;
+    box-shadow: 0 4px 14px rgba(159, 24, 24, .25);
+  }
+  .pn-logo img { height: 40px; filter: brightness(0) invert(1); display: block; }
+  #pn-logo-txt { font-weight: 800; font-size: 26px; font-style: italic; letter-spacing: -.02em; }
+  #pn-logo-txt small { display: block; font-size: 7px; letter-spacing: .5em; font-style: normal; font-weight: 600; }
+  .pn-titulo { font-size: 14px; font-weight: 700; letter-spacing: .08em; }
+  .pn-hero-dir { margin-left: auto; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .pn-progresso { font-size: 12px; opacity: .95; }
+  .pn-progresso .pn-link { color: #fff; }
+  .pn-btn-claro { background: transparent; color: #fff; border: 1.5px solid rgba(255,255,255,.75); border-radius: 8px; padding: 7px 14px; font-size: 12px; font-weight: 600; cursor: pointer; }
+  .pn-btn-claro:hover { background: rgba(255,255,255,.15); }
+  .pn-pill { background: #fff; color: #333; border-radius: 8px; padding: 8px 14px; font-size: 13px; font-weight: 600; white-space: nowrap; }
+  .pn-filtros { display: grid; grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); gap: 10px 14px; margin: 14px 4px 16px; }
+  .pn-fg label { display: block; font-size: 12px; color: var(--text-2); margin-bottom: 4px; }
+  .pn-fg select, .pn-fg .dropdown-btn { width: 100%; height: 36px; border: 2px solid var(--brand); border-radius: 4px; background: var(--surface); color: var(--text); font-size: 12.5px; }
+  .pn-topo { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+  @media (max-width: 900px) { .pn-topo { grid-template-columns: 1fr; } }
+  .pn-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 16px 18px; box-shadow: var(--shadow-xs); min-width: 0; }
+  .pn-card-cab { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+  .pn-card-cab h3 { font-size: 16px; font-weight: 600; margin: 0; color: var(--text); }
+  .pn-total { font-weight: 700; font-size: 14px; }
+  .pn-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+  .pn-btn { background: var(--surface); color: var(--text); border: 1.5px solid var(--text-2); border-radius: 4px; padding: 6px 14px; font-size: 12px; cursor: pointer; }
+  .pn-btn-sm { padding: 4px 12px; font-size: 11.5px; }
+  .pn-btn.ativo { background: var(--brand); border-color: var(--brand); color: #fff; font-weight: 600; }
+  .pn-bars { max-height: 300px; overflow-y: auto; padding-right: 6px; }
+  .pn-bar-row { display: grid; grid-template-columns: 76px 1fr 78px; gap: 8px; align-items: center; padding: 3px 0; font-size: 12px; }
+  .pn-bar-lab { color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pn-bar-track { height: 16px; }
+  .pn-bar-fill { height: 100%; background: var(--brand); border-radius: 2px; }
+  .pn-bar-val { color: var(--text-2); text-align: right; font-size: 11.5px; }
+  .pn-donut-wrap { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; justify-content: center; }
+  .pn-donut { width: 210px; height: 210px; flex-shrink: 0; }
+  .pn-donut-t1 { font-size: 20px; font-weight: 700; fill: var(--text); }
+  .pn-donut-t2 { font-size: 10px; fill: var(--text-3); }
+  .pn-donut-leg { min-width: 190px; flex: 1; }
+  .pn-leg-row { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 12.5px; }
+  .pn-leg-nome { flex: 1; color: var(--text-2); }
+  .pn-leg-val { font-weight: 600; white-space: nowrap; }
+  .pn-leg-val small { color: var(--text-3); font-weight: 400; }
+  .pn-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .pn-nota { font-size: 11px; color: var(--text-3); margin-top: 6px; }
+  .pn-legenda { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-bottom: 6px; }
+  .pn-leg-btn { background: none; border: none; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text); padding: 2px 0; }
+  .pn-leg-btn.off { opacity: .35; text-decoration: line-through; }
+  .pn-linhas { width: 100%; height: auto; display: block; }
+  .pn-grid-l { stroke: var(--border); stroke-width: 1; }
+  .pn-axis { font-size: 11px; fill: var(--text-2); }
+  .pn-axis-ano { font-weight: 600; }
+  .pn-sep-ano { stroke: var(--border-strong); stroke-dasharray: 3 3; }
+  .pn-lbl { fill: #fff; font-size: 11px; font-weight: 700; }
+  .pn-vazio { color: var(--text-3); text-align: center; padding: 28px 0; font-size: 13px; }
+  .pn-link { background: none; border: none; color: var(--brand); cursor: pointer; text-decoration: underline; font-size: 12px; padding: 0; }
+
   .metric-card {
     background: var(--surface);
     border: 1px solid var(--border);
@@ -1440,6 +1499,7 @@
 <div class="tabs-nav">
   <button class="tab-btn" id="tab-btn-gerencial" onclick="switchTab('gerencial', this)">📊 Gerencial</button>
   <button class="tab-btn" id="tab-btn-gerfin" onclick="switchTab('gerfin', this)">💰 Gerencial Financeiro</button>
+  <button class="tab-btn" id="tab-btn-painel" onclick="switchTab('painel', this)">📈 Painel Analítico</button>
   <button class="tab-btn" id="tab-btn-producao" onclick="switchTab('producao', this)">🏭 Produção</button>
   <button class="tab-btn" id="tab-btn-discadora" onclick="switchTab('discadora', this)">📞 Discadora</button>
   <button class="tab-btn active" id="tab-btn-simulador2" onclick="switchTab('simulador2', this)">🧮 Simulador 2.0</button>
@@ -1611,6 +1671,49 @@
     <div id="gf-stats-row-area"></div>
     <div id="gf-metrics-area"><div class="loading-state"><div class="loading-spinner"></div><p>Carregando dados da BaseCRM...</p></div></div>
     <div id="gf-table-area"></div>
+  </div>
+
+  <!-- TAB PAINEL ANALÍTICO (piloto, mesmo acesso do Gerencial Financeiro) — nome provisório.
+       Visão histórica mês a mês: barras por Estado/DDD/Cidade/Equipe/Vendedor, rosca por
+       Grupo e linhas por Mês com a métrica à escolha. Ids com prefixo pn-. -->
+  <div class="tab-panel" id="tab-painel">
+    <div class="pn-hero">
+      <div class="pn-logo">
+        <img id="pn-logo" alt="VST Group" style="display:none">
+        <span id="pn-logo-txt">VST <small>G R O U P</small></span>
+      </div>
+      <div class="pn-titulo">PAINEL ANALÍTICO</div>
+      <div class="pn-hero-dir">
+        <span id="pn-progresso" class="pn-progresso"></span>
+        <button class="pn-btn-claro" onclick="pnExportarCsv()" title="Baixa em CSV a série mês × grupo com os filtros atuais">Extração</button>
+        <button class="pn-btn-claro" onclick="pnRecarregar()" title="Baixa de novo todos os meses">↻</button>
+        <div class="pn-pill" id="pn-atualizado">Carregando…</div>
+      </div>
+    </div>
+    <div class="pn-filtros" id="pn-filtros"></div>
+    <div class="pn-topo">
+      <div class="pn-card">
+        <div class="pn-card-cab">
+          <h3 id="pn-card-dim-titulo">Quantidade por Estado</h3>
+          <div class="pn-btns" id="pn-dims"></div>
+        </div>
+        <div id="pn-dim-corpo"></div>
+      </div>
+      <div class="pn-card">
+        <div class="pn-card-cab">
+          <h3>Quantidade por Grupo</h3>
+          <div class="pn-total" id="pn-grupo-total"></div>
+        </div>
+        <div id="pn-grupo-corpo"></div>
+      </div>
+    </div>
+    <div class="pn-card">
+      <div class="pn-card-cab">
+        <h3 id="pn-card-mes-titulo">Quantidade por Mês</h3>
+        <div class="pn-btns" id="pn-metricas"></div>
+      </div>
+      <div id="pn-mes-corpo"></div>
+    </div>
   </div>
 
   <!-- TAB PRODUÇÃO -->
@@ -4281,55 +4384,75 @@ function gfComissaoLinha(r, key, fat) {
 let GF_CFG_FATORES = null; // { periodo, cluster, metaMovelVoz, metaFixaBl, salva }
 let GF_FATORES_CARREGANDO = false;
 
-async function gfCarregarConfigFatores() {
-  const periodo = s2PeriodoDoSeletorAtivo();
+// Config do Simulador 2.0 de UMA competência a partir das linhas de
+// config_simulador2 dela (cluster + metas trimestrais). Sem nada salvo vale o
+// Cluster G (o parceiro está no G); o P do S2_DEFAULTS é só o valor inicial do
+// formulário de lá.
+function gfMontarCfg(periodo, data) {
   const cfg = {
     periodo, salva: false,
-    // sem nada salvo no Simulador 2.0 vale o Cluster G (o parceiro está no G); o P
-    // do S2_DEFAULTS é só o valor inicial do formulário de lá
     cluster: 'G',
     metaMovelVoz: S2_DEFAULTS['meta-movel-voz'],
     metaFixaBl: S2_DEFAULTS['meta-fixa-bl'],
   };
+  const v = chave => (data || []).find(d => d.chave === chave)?.valor;
+  if (data && data.length) {
+    cfg.salva = true;
+    if (v('cluster')) cfg.cluster = v('cluster');
+    if (v('meta-movel-voz') != null) cfg.metaMovelVoz = parseFloat(v('meta-movel-voz')) || 0;
+    if (v('meta-fixa-bl') != null) cfg.metaFixaBl = parseFloat(v('meta-fixa-bl')) || 0;
+  }
+  // mesma regra de carregarSimulador2(): metas conhecidas do trimestre só valem sem nada salvo
+  const metasDoMes = S2_METAS_TRIMESTRE[periodo];
+  const jaTemMeta = data && data.some(d => d.chave === 'meta-movel-voz' || d.chave === 'meta-fixa-bl');
+  if (metasDoMes && !jaTemMeta) {
+    cfg.metaMovelVoz = metasDoMes['meta-movel-voz'];
+    cfg.metaFixaBl = metasDoMes['meta-fixa-bl'];
+  }
+  return cfg;
+}
+
+async function gfCarregarConfigFatores() {
+  const periodo = s2PeriodoDoSeletorAtivo();
+  let data = [];
   try {
-    const { data, error } = await supa.from('config_simulador2').select('*').eq('periodo', periodo);
-    if (error) console.warn('Gerencial Financeiro: erro ao consultar config_simulador2 —', error.message);
-    const v = chave => (data || []).find(d => d.chave === chave)?.valor;
-    if (data && data.length) {
-      cfg.salva = true;
-      if (v('cluster')) cfg.cluster = v('cluster');
-      if (v('meta-movel-voz') != null) cfg.metaMovelVoz = parseFloat(v('meta-movel-voz')) || 0;
-      if (v('meta-fixa-bl') != null) cfg.metaFixaBl = parseFloat(v('meta-fixa-bl')) || 0;
-    }
-    // mesma regra de carregarSimulador2(): metas conhecidas do trimestre só valem sem nada salvo
-    const metasDoMes = S2_METAS_TRIMESTRE[periodo];
-    const jaTemMeta = data && data.some(d => d.chave === 'meta-movel-voz' || d.chave === 'meta-fixa-bl');
-    if (metasDoMes && !jaTemMeta) {
-      cfg.metaMovelVoz = metasDoMes['meta-movel-voz'];
-      cfg.metaFixaBl = metasDoMes['meta-fixa-bl'];
-    }
+    const resp = await supa.from('config_simulador2').select('*').eq('periodo', periodo);
+    if (resp.error) console.warn('Gerencial Financeiro: erro ao consultar config_simulador2 —', resp.error.message);
+    data = resp.data || [];
   } catch (e) {
     console.warn('Gerencial Financeiro: config_simulador2 indisponível —', e.message);
   }
-  GF_CFG_FATORES = cfg;
+  GF_CFG_FATORES = gfMontarCfg(periodo, data);
 }
 
 // Fatores finais (fixo + adicional [+ plugin]) e os números do atingimento,
 // recalculados a cada render (o realizado muda quando a base é recarregada).
-function gfFatoresAtuais() {
-  const cfg = GF_CFG_FATORES;
-  if (!cfg) return null;
-  const cluster = FATORES_FIXOS_TABELA1[cfg.cluster] ? cfg.cluster : 'P';
-  const fFixo = FATORES_FIXOS_TABELA1[cluster];
+// Realizado do mês (linhas de Móvel Voz e de Fixa BL no escopo s2Visao do
+// Simulador 2.0) — base do atingimento de meta.
+function gfRealizadoDe(linhas) {
   const filas = FILAS_POR_VISAO[s2Visao] || FILAS_POR_VISAO.ativo;
   let realMovelVoz = 0, realFixaBl = 0;
-  ALL_DATA.forEach(r => {
+  linhas.forEach(r => {
     if (!filas.includes(r['FILA'] || '')) return;
     const g = r['GRUPO'] || '';
     const qtd = parseInt(r['QUANTIDADE']) || 1;
     if (g === 'VOZ - Novo' || g === 'VOZ - Portabilidade') realMovelVoz += qtd;
     else if (g === 'NET PJ - VIRTUA') realFixaBl += qtd;
   });
+  return { realMovelVoz, realFixaBl };
+}
+
+function gfFatoresAtuais() {
+  if (!GF_CFG_FATORES) return null;
+  const { realMovelVoz, realFixaBl } = gfRealizadoDe(ALL_DATA);
+  return gfFatoresDe(GF_CFG_FATORES, realMovelVoz, realFixaBl);
+}
+
+// Fatores de uma competência dado o realizado dela (usado também pelo Painel,
+// que calcula a comissão mês a mês).
+function gfFatoresDe(cfg, realMovelVoz, realFixaBl) {
+  const cluster = FATORES_FIXOS_TABELA1[cfg.cluster] ? cfg.cluster : 'P';
+  const fFixo = FATORES_FIXOS_TABELA1[cluster];
   const pctMovelVoz = cfg.metaMovelVoz > 0 ? realMovelVoz / cfg.metaMovelVoz * 100 : 0;
   const pctFixaBl = cfg.metaFixaBl > 0 ? realFixaBl / cfg.metaFixaBl * 100 : 0;
   const idxMV = s2FaixaAdicionalIdx(pctMovelVoz), idxBL = s2FaixaAdicionalIdx(pctFixaBl);
@@ -4597,6 +4720,481 @@ function gfDrill(categoria, fila) {
         </tbody>
       </table>
     </div></div>`;
+}
+
+// ─── PAINEL ANALÍTICO (piloto, mesmo acesso do Gerencial Financeiro) ─────────
+// Visão histórica mês a mês (Gross, Renovação, BL, Titularidade, Serv. Digitais)
+// com filtros em cascata, gráficos em SVG próprio (a CSP do projeto só aceita
+// script do próprio domínio, então nada de biblioteca externa) e a exportação em CSV.
+// Cada aba mensal da planilha é baixada uma vez, reduzida a registros
+// compactos (só o que o painel usa, já com receita e comissão calculadas com
+// os fatores do Simulador 2.0 daquele mês — mesmas regras do Gerencial
+// Financeiro) e descartada; o histórico em memória fica leve.
+//  · Gross: quantidade/receita/CNPJs vêm do grupo GROSS; a comissão vem dos
+//    pedidos reais de VOZ - Novo/Portabilidade (que o GROSS espelha).
+//  · Total = Gross + Renovação + BL + Titularidade (Serv. Digitais fica fora,
+//    como no Gerencial).
+const PN_MESES_INICIAIS = 13; // mês corrente + 12 anteriores; o resto sob demanda
+const PN_MES_ABREV = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+const PN_GRUPOS = ['GROSS', 'RENOVAÇÃO', 'BL', 'TITULARIDADE', 'SERV. DIGITAIS'];
+const PN_GRUPO_LABEL = { 'GROSS': 'Gross', 'RENOVAÇÃO': 'Renovação', 'BL': 'BL (Fixa Básica)', 'TITULARIDADE': 'Titularidade', 'SERV. DIGITAIS': 'Serv. Digitais' };
+const PN_FORA_DO_TOTAL = ['SERV. DIGITAIS'];
+const PN_COR = { TOTAL: '#B91C1C', 'GROSS': '#111827', 'RENOVAÇÃO': '#F08A8A', 'BL': '#D4A017', 'TITULARIDADE': '#7C3AED', 'SERV. DIGITAIS': '#94A3B8' };
+const PN_METRICAS = [
+  ['comissao', 'Comissão', 'Comissão'],
+  ['receita', 'Receita', 'Receita'],
+  ['quantidade', 'Quantidade', 'Quantidade'],
+  ['cnpjs', 'CNPJs', 'CNPJs'],
+  ['ticket', 'Ticket Médio', 'Ticket médio'],
+];
+const PN_FILTROS = [
+  ['mes', 'Ano, Mês'], ['grupo', 'Tipo'], ['tag', 'Tags'], ['estado', 'Estado'],
+  ['uf', 'UF'], ['gestor', 'Gestor'], ['equipe', 'Equipe'], ['vendedor', 'Vendedor'],
+];
+const PN_DIMS = [['estado', 'Estado'], ['ddd', 'DDD'], ['cidade', 'Cidade'], ['equipe', 'Equipe'], ['vendedor', 'Vendedor']];
+
+const PN = {
+  iniciou: false,
+  dados: {},            // 'YYYY-MM' -> registros compactos
+  meses: [],            // [{ chave, sheet, label, yyyy, mm }] em ordem crescente
+  cfgMapa: {},          // 'YYYY-MM' -> cfg do Simulador 2.0
+  pendentes: 0, erros: {},
+  metrica: 'quantidade', dim: 'estado',
+  seriesOff: new Set(),
+  opcoes: { tag: new Set(), estado: new Set(), uf: new Set(), gestor: new Set(), equipe: new Set(), vendedor: new Set() },
+  opcoesSig: {},
+  atualizadoEm: null,
+};
+
+function pnPodeVer() { return gfPodeVer(); }
+
+// ── Carga dos dados ──────────────────────────────────────────────────────────
+function pnListarMeses() {
+  const hoje = new Date();
+  const chaveHoje = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`;
+  const mapa = {};
+  (window.ABAS_HISTORICO || []).forEach(a => { mapa[`${a.yyyy}-${a.mm}`] = nomeAba(a.mm, a.yyyy); });
+  mapa[chaveHoje] = 'BaseCRM'; // mês corrente = base viva
+  return Object.keys(mapa).sort().map(k => ({
+    chave: k, sheet: mapa[k], yyyy: k.slice(0, 4), mm: k.slice(5),
+    label: `${PN_MES_ABREV[parseInt(k.slice(5), 10) - 1]}/${k.slice(0, 4)}`,
+  }));
+}
+
+async function pnCarregarCfgs() {
+  PN.cfgMapa = {};
+  try {
+    const { data, error } = await supa.from('config_simulador2').select('*');
+    if (error) { console.warn('Painel: config_simulador2 —', error.message); return; }
+    const porPeriodo = {};
+    (data || []).forEach(d => { (porPeriodo[d.periodo] = porPeriodo[d.periodo] || []).push(d); });
+    Object.entries(porPeriodo).forEach(([p, linhas]) => { PN.cfgMapa[p] = gfMontarCfg(p, linhas); });
+  } catch (e) { console.warn('Painel: config_simulador2 indisponível —', e.message); }
+}
+
+// Reduz as linhas de um mês aos campos que o painel usa. Comissão calculada
+// com os fatores DAQUELE mês (cluster/metas salvos + realizado do próprio mês).
+function pnCompactar(objs, chave) {
+  const cfg = PN.cfgMapa[chave] || gfMontarCfg(chave, []);
+  const { realMovelVoz, realFixaBl } = gfRealizadoDe(objs);
+  const fat = gfFatoresDe(cfg, realMovelVoz, realFixaBl);
+  const colCidade = objs.length ? ['CIDADE', 'MUNICIPIO', 'MUNICÍPIO', 'DSC_MUNICIPIO', 'CIDADE CLIENTE'].find(c => c in objs[0]) || null : null;
+  const out = [];
+  objs.forEach(r => {
+    const key = gfKey(r);
+    if (!key) return;
+    const eq = r['EQUIPE'] || '';
+    const num = (r['NUMERO'] || r['Numero'] || r['NÚMERO'] || '').toString().replace(/\D/g, '');
+    const tagRaw = r['TAGS ATIVIDADE'] || '';
+    const base = {
+      m: chave, eq,
+      uf: EQUIPES_ESTADOS[eq] || '',
+      es: (r['Estado'] || r['ESTADO'] || '').trim().toUpperCase(),
+      dd: num.length >= 2 ? num.substring(0, 2) : '',
+      ci: colCidade ? (r[colCidade] || '').trim() : '',
+      ve: r['PROPRIETÁRIO DO PEDIDO'] || 'Sem Consultor',
+      tg: MAPEAMENTO_TAGS[tagRaw] || 'Sem Tag',
+      ge: EQUIPES_GESTORES[eq] || '',
+      sg: SUBGRUPOS_FILA[r['FILA'] || ''] || 'Outros',
+    };
+    if (key === 'VOZ NOVO' || key === 'PORTABILIDADE') {
+      // espelho do Gross: só leva a comissão (quantidade/receita já vêm do GROSS)
+      out.push({ ...base, g: 'GROSS', q: 0, r: 0, c: gfComissaoLinha(r, key, fat).valor, cn: '' });
+      return;
+    }
+    out.push({
+      ...base, g: key, q: parseInt(r['QUANTIDADE']) || 1, r: gerReceitaLinha(r),
+      c: GF_FATOR_POR_CAT[key] ? gfComissaoLinha(r, key, fat).valor : 0,
+      cn: (r['CPF/CNPJ'] || '').replace(/\D/g, ''),
+    });
+  });
+  return out;
+}
+
+async function pnCarregarMes(m) {
+  let objs;
+  const seletorVivo = (document.getElementById('mes-selector')?.value || 'BaseCRM') === 'BaseCRM';
+  if (m.sheet === 'BaseCRM' && seletorVivo && ALL_DATA.length) {
+    objs = ALL_DATA; // já está em memória
+  } else {
+    const res = await fetch(`/api/sheets?action=values&sheet=${encodeURIComponent(m.sheet)}`, { headers: authHeaders() });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const rows = (await res.json()).values || [];
+    if (rows.length < 2) return [];
+    const hdrs = rows[0];
+    objs = rows.slice(1).map(r => {
+      const o = {};
+      hdrs.forEach((h, i) => o[h] = h === 'EQUIPE' ? normalizarNomeEquipe(r[i]) : (r[i] || '').toString().trim());
+      return o;
+    });
+  }
+  return pnCompactar(objs, m.chave);
+}
+
+function pnIndexarOpcoes(recs) {
+  const o = PN.opcoes;
+  recs.forEach(r => {
+    if (r.tg) o.tag.add(r.tg);
+    if (r.es) o.estado.add(r.es);
+    if (r.uf) o.uf.add(r.uf);
+    if (r.ge) o.gestor.add(r.ge);
+    if (r.eq) o.equipe.add(r.eq);
+    if (r.ve) o.vendedor.add(r.ve);
+  });
+}
+
+async function pnCarregarLista(lista) {
+  const fila = lista.filter(m => !PN.dados[m.chave]).reverse(); // mais recentes primeiro
+  PN.pendentes += fila.length;
+  pnRenderProgresso();
+  const worker = async () => {
+    while (fila.length) {
+      const m = fila.shift();
+      try {
+        const recs = await pnCarregarMes(m);
+        PN.dados[m.chave] = recs;
+        pnIndexarOpcoes(recs);
+        delete PN.erros[m.chave];
+        PN.atualizadoEm = new Date();
+      } catch (e) { PN.erros[m.chave] = e.message; }
+      PN.pendentes--;
+      pnAtualizarFiltros();
+      pnRender();
+    }
+  };
+  await Promise.all([worker(), worker()]);
+}
+
+function pnCarregarMaisAntigos() {
+  pnCarregarLista(PN.meses.filter(m => !PN.dados[m.chave]));
+}
+
+async function pnRecarregar() {
+  if (PN.pendentes > 0) return;
+  PN.dados = {};
+  PN.opcoes = { tag: new Set(), estado: new Set(), uf: new Set(), gestor: new Set(), equipe: new Set(), vendedor: new Set() };
+  PN.opcoesSig = {};
+  await pnCarregarCfgs();
+  PN.meses = pnListarMeses();
+  pnCarregarLista(PN.meses.slice(-PN_MESES_INICIAIS));
+}
+
+async function pnIniciar() {
+  if (!pnPodeVer()) return;
+  if (!PN.iniciou) {
+    PN.iniciou = true;
+    pnMontarEsqueleto();
+    await pnCarregarCfgs();
+    PN.meses = pnListarMeses();
+    pnCarregarLista(PN.meses.slice(-PN_MESES_INICIAIS));
+  }
+  pnRender();
+}
+
+// ── Filtros ──────────────────────────────────────────────────────────────────
+function pnMontarEsqueleto() {
+  const logo = document.querySelector('.login-logo-img');
+  const imgLogo = document.getElementById('pn-logo');
+  if (logo && imgLogo) { imgLogo.src = logo.src; imgLogo.style.display = ''; document.getElementById('pn-logo-txt').style.display = 'none'; }
+
+  document.getElementById('pn-filtros').innerHTML = PN_FILTROS.map(([nome, rotulo]) => `
+    <div class="pn-fg">
+      <label>${rotulo}</label>
+      <div class="custom-dropdown" id="dd-pn-${nome}">
+        <button class="dropdown-btn" onclick="toggleDropdown('dd-content-pn-${nome}')">Todos <span>&#9660;</span></button>
+        <div class="dropdown-content" id="dd-content-pn-${nome}"></div>
+      </div>
+    </div>`).join('') + `
+    <div class="pn-fg" title="Aprovado = Ativo + Esteira de ativação"><label>Status</label>
+      <select id="pn-status" onchange="pnRender()">
+        <option value="todos">Todos</option>
+        <option value="aprovado" title="Ativo + Esteira de ativação">Aprovado</option>
+        <option value="ativo">Somente Ativo</option>
+      </select>
+    </div>`;
+  pnAtualizarFiltros(true);
+}
+
+function pnAtualizarFiltros(forcar) {
+  const ord = s => [...s].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  const itens = {
+    mes: [...PN.meses].reverse().filter(m => PN.dados[m.chave]).map(m => m.label),
+    grupo: PN_GRUPOS.map(g => PN_GRUPO_LABEL[g]),
+    tag: ord(PN.opcoes.tag), estado: ord(PN.opcoes.estado), uf: ord(PN.opcoes.uf),
+    gestor: ord(PN.opcoes.gestor), equipe: ord(PN.opcoes.equipe), vendedor: ord(PN.opcoes.vendedor),
+  };
+  Object.entries(itens).forEach(([nome, lista]) => {
+    const sig = lista.length + '|' + lista[0] + '|' + lista[lista.length - 1];
+    if (!forcar && PN.opcoesSig[nome] === sig) return;
+    PN.opcoesSig[nome] = sig;
+    const contId = `dd-content-pn-${nome}`;
+    const labelBtn = `#dd-pn-${nome} .dropdown-btn`;
+    const onChange = () => { atualizarBotaoDropdown(contId, labelBtn); pnRender(); };
+    window[`_ddOnChange_dd_content_pn_${nome}`] = onChange; // exigido por popularDropdownGenerico()
+    ddRegisterCallback(contId, onChange);
+    popularDropdownGenerico(contId, lista, onChange, labelBtn);
+  });
+}
+
+function pnLerFiltros() {
+  const sel = n => { const v = getCheckedValuesDd(`dd-content-pn-${n}`); return v.length ? new Set(v) : null; };
+  const mesLabels = sel('mes'), grupoLabels = sel('grupo');
+  return {
+    meses: mesLabels ? new Set(PN.meses.filter(m => mesLabels.has(m.label)).map(m => m.chave)) : null,
+    grupos: grupoLabels ? new Set(PN_GRUPOS.filter(g => grupoLabels.has(PN_GRUPO_LABEL[g]))) : null,
+    tags: sel('tag'), estados: sel('estado'), ufs: sel('uf'), gestores: sel('gestor'), equipes: sel('equipe'), vendedores: sel('vendedor'),
+    status: document.getElementById('pn-status')?.value || 'todos',
+  };
+}
+
+function pnPassa(r, f) {
+  if (f.grupos && !f.grupos.has(r.g)) return false;
+  if (f.tags && !f.tags.has(r.tg)) return false;
+  if (f.estados && !f.estados.has(r.es)) return false;
+  if (f.ufs && !f.ufs.has(r.uf)) return false;
+  if (f.gestores && !f.gestores.has(r.ge)) return false;
+  if (f.equipes && !f.equipes.has(r.eq)) return false;
+  if (f.vendedores && !f.vendedores.has(r.ve)) return false;
+  if (f.status === 'aprovado' && !GF_SUBGRUPOS_APROVADO.includes(r.sg)) return false;
+  if (f.status === 'ativo' && r.sg !== 'Ativo') return false;
+  return true;
+}
+
+// ── Agregação ────────────────────────────────────────────────────────────────
+const pnAcc = () => ({ q: 0, r: 0, c: 0, cn: new Set() });
+function pnSoma(a, r) { a.q += r.q; a.r += r.r; a.c += r.c; if (r.cn) a.cn.add(r.cn); }
+function pnValor(a, metrica) {
+  if (!a) return 0;
+  switch (metrica) {
+    case 'comissao': return a.c;
+    case 'receita': return a.r;
+    case 'cnpjs': return a.cn.size;
+    case 'ticket': return a.q ? a.r / a.q : 0;
+    default: return a.q;
+  }
+}
+function pnDimValor(r, dim) {
+  switch (dim) {
+    case 'ddd': return r.dd || '—';
+    case 'cidade': return r.ci || '—';
+    case 'equipe': return r.eq || '—';
+    case 'vendedor': return r.ve || '—';
+    default: return r.es || r.uf || '—'; // Estado do cliente; sem a coluna, cai na UF da operação
+  }
+}
+
+function pnAgregar() {
+  const f = pnLerFiltros();
+  const mesesCarregados = PN.meses.filter(m => PN.dados[m.chave] && (!f.meses || f.meses.has(m.chave)));
+  const porMes = {}, porGrupo = {}, porDim = new Map();
+  mesesCarregados.forEach(m => { porMes[m.chave] = { TOTAL: pnAcc() }; PN_GRUPOS.forEach(g => porMes[m.chave][g] = pnAcc()); });
+  PN_GRUPOS.forEach(g => porGrupo[g] = pnAcc());
+  const total = pnAcc();
+  const get = (mapa, k) => { let a = mapa.get(k); if (!a) { a = pnAcc(); mapa.set(k, a); } return a; };
+  let registros = 0;
+  mesesCarregados.forEach(m => {
+    PN.dados[m.chave].forEach(r => {
+      if (!pnPassa(r, f)) return;
+      registros++;
+      pnSoma(porMes[m.chave][r.g], r);
+      pnSoma(porGrupo[r.g], r);
+      if (PN_FORA_DO_TOTAL.includes(r.g)) return;
+      pnSoma(porMes[m.chave].TOTAL, r);
+      pnSoma(total, r);
+      pnSoma(get(porDim, pnDimValor(r, PN.dim)), r);
+    });
+  });
+  return { meses: mesesCarregados, porMes, porGrupo, porDim, total, registros };
+}
+
+// ── Formatação ───────────────────────────────────────────────────────────────
+function pnFmt(v, metrica, compacto) {
+  const moeda = metrica === 'comissao' || metrica === 'receita' || metrica === 'ticket';
+  if (!moeda) return Math.round(v).toLocaleString('pt-BR');
+  if (compacto) {
+    const a = Math.abs(v);
+    if (a >= 1e6) return 'R$ ' + (v / 1e6).toLocaleString('pt-BR', { maximumFractionDigits: 2 }) + ' mi';
+    if (a >= 1e4) return 'R$ ' + Math.round(v / 1e3).toLocaleString('pt-BR') + ' mil';
+    return 'R$ ' + Math.round(v).toLocaleString('pt-BR');
+  }
+  return 'R$ ' + v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function pnNomeMetrica() { return (PN_METRICAS.find(m => m[0] === PN.metrica) || PN_METRICAS[2])[2]; }
+
+// ── Gráficos ─────────────────────────────────────────────────────────────────
+function pnRenderBarras(agg) {
+  const m = 'quantidade'; // como na referência: os cards de Estado e Grupo são sempre Quantidade
+  const linhas = [...agg.porDim.entries()].map(([k, a]) => [k, pnValor(a, m)]).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]).slice(0, 80);
+  if (!linhas.length) return '<div class="pn-vazio">Sem dados para os filtros.</div>';
+  const max = linhas[0][1] || 1;
+  return `<div class="pn-bars">${linhas.map(([k, v]) => `
+    <div class="pn-bar-row" title="${escapeHtml(k)}: ${pnFmt(v, m)}">
+      <span class="pn-bar-lab">${escapeHtml(k)}</span>
+      <div class="pn-bar-track"><div class="pn-bar-fill" style="width:${Math.max(1.5, v / max * 100).toFixed(1)}%"></div></div>
+      <span class="pn-bar-val">${pnFmt(v, m, true)}</span>
+    </div>`).join('')}</div>`;
+}
+
+function pnRenderRosca(agg) {
+  const m = 'quantidade';
+  const grupos = PN_GRUPOS.filter(g => !PN_FORA_DO_TOTAL.includes(g));
+  const vals = grupos.map(g => [g, pnValor(agg.porGrupo[g], m)]);
+  const soma = vals.reduce((s, [, v]) => s + Math.max(0, v), 0);
+  if (!soma) return '<div class="pn-vazio">Sem dados para os filtros.</div>';
+  const R = 70, C = 2 * Math.PI * R;
+  let acum = 0;
+  const arcos = vals.filter(([, v]) => v > 0).map(([g, v]) => {
+    const len = v / soma * C;
+    const el = `<circle r="${R}" cx="100" cy="100" fill="none" stroke="${PN_COR[g]}" stroke-width="30" stroke-dasharray="${len.toFixed(2)} ${(C - len).toFixed(2)}" stroke-dashoffset="${(-acum).toFixed(2)}" transform="rotate(-90 100 100)"><title>${PN_GRUPO_LABEL[g]}: ${pnFmt(v, m)}</title></circle>`;
+    acum += len;
+    return el;
+  }).join('');
+  const sd = agg.porGrupo['SERV. DIGITAIS'];
+  const nota = sd && pnValor(sd, m) > 0 ? `<div class="pn-nota">Serv. Digitais (fora do total): ${pnFmt(pnValor(sd, m), m)}</div>` : '';
+  return `<div class="pn-donut-wrap">
+    <svg viewBox="0 0 200 200" class="pn-donut">${arcos}<text x="100" y="97" text-anchor="middle" class="pn-donut-t1">${pnFmt(soma, m, true)}</text><text x="100" y="116" text-anchor="middle" class="pn-donut-t2">Quantidade</text></svg>
+    <div class="pn-donut-leg">${vals.map(([g, v]) => `
+      <div class="pn-leg-row"><span class="pn-dot" style="background:${PN_COR[g]}"></span>
+        <span class="pn-leg-nome">${PN_GRUPO_LABEL[g]}</span>
+        <span class="pn-leg-val">${pnFmt(v, m, true)} <small>(${(v / soma * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%)</small></span></div>`).join('')}
+      ${nota}</div></div>`;
+}
+
+function pnEscala(max) {
+  const bruto = Math.max(max, 1) / 4;
+  const pot = Math.pow(10, Math.floor(Math.log10(bruto)));
+  const passo = [1, 2, 2.5, 5, 10].map(x => x * pot).find(p => p >= bruto) || pot * 10;
+  return { passo, topo: passo * 4 };
+}
+
+function pnRenderLinhas(agg) {
+  const m = PN.metrica;
+  const meses = agg.meses;
+  if (!meses.length) return '<div class="pn-vazio">Carregando meses…</div>';
+  const chaves = ['TOTAL', ...PN_GRUPOS];
+  const serie = {};
+  chaves.forEach(k => serie[k] = meses.map(x => pnValor(agg.porMes[x.chave][k], m)));
+  const visiveis = chaves.filter(k => !PN.seriesOff.has(k));
+  const W = 1000, H = 340, ml = 66, mr = 26, mt = 34, mb = 56;
+  const max = Math.max(1, ...visiveis.flatMap(k => serie[k]));
+  const { passo, topo } = pnEscala(max);
+  const n = meses.length;
+  const pad = 34; // afasta o primeiro/último ponto do eixo pra o rótulo do Total não encostar nele
+  const x = i => ml + pad + (n === 1 ? (W - ml - mr - 2 * pad) / 2 : i * (W - ml - mr - 2 * pad) / (n - 1));
+  const y = v => mt + (H - mt - mb) * (1 - v / topo);
+
+  let grade = '';
+  for (let t = 0; t <= 4; t++) {
+    const v = passo * t;
+    grade += `<line x1="${ml}" x2="${W - mr}" y1="${y(v)}" y2="${y(v)}" class="pn-grid-l"/><text x="${ml - 8}" y="${y(v) + 4}" text-anchor="end" class="pn-axis">${pnFmt(v, m, true)}</text>`;
+  }
+  let eixo = '', anos = [];
+  meses.forEach((mm, i) => {
+    eixo += `<text x="${x(i)}" y="${H - mb + 18}" text-anchor="middle" class="pn-axis">${PN_MES_ABREV[parseInt(mm.mm, 10) - 1]}</text>`;
+    const ult = anos[anos.length - 1];
+    if (ult && ult.ano === mm.yyyy) ult.fim = i; else anos.push({ ano: mm.yyyy, ini: i, fim: i });
+  });
+  anos.forEach((a, j) => {
+    eixo += `<text x="${(x(a.ini) + x(a.fim)) / 2}" y="${H - 8}" text-anchor="middle" class="pn-axis pn-axis-ano">${a.ano}</text>`;
+    if (j > 0) eixo += `<line x1="${(x(a.ini) + x(a.ini - 1)) / 2}" x2="${(x(a.ini) + x(a.ini - 1)) / 2}" y1="${mt}" y2="${H - mb + 24}" class="pn-sep-ano"/>`;
+  });
+
+  let linhas = '', rotulos = '';
+  // Total por último na ordem de desenho pra ficar por cima; rótulos só nele
+  [...visiveis.filter(k => k !== 'TOTAL'), ...visiveis.filter(k => k === 'TOTAL')].forEach(k => {
+    const pts = serie[k].map((v, i) => [x(i), y(v), v]);
+    const larg = k === 'TOTAL' ? 3 : 2;
+    linhas += `<polyline fill="none" stroke="${PN_COR[k]}" stroke-width="${larg}" stroke-linejoin="round" points="${pts.map(p => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ')}"/>`;
+    pts.forEach(([px, py, v], i) => {
+      linhas += `<circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="${k === 'TOTAL' ? 4 : 3}" fill="${PN_COR[k]}"><title>${meses[i].label} · ${k === 'TOTAL' ? 'Total' : PN_GRUPO_LABEL[k]}: ${pnFmt(v, m)}</title></circle>`;
+      if (k === 'TOTAL') {
+        const t = pnFmt(v, m, true), w = t.length * 7 + 14;
+        rotulos += `<g><rect x="${(px - w / 2).toFixed(1)}" y="${(py - 28).toFixed(1)}" width="${w}" height="19" rx="5" fill="${PN_COR.TOTAL}"/><text x="${px.toFixed(1)}" y="${(py - 14.5).toFixed(1)}" text-anchor="middle" class="pn-lbl">${t}</text></g>`;
+      }
+    });
+  });
+  const legenda = chaves.map(k => `
+    <button class="pn-leg-btn${PN.seriesOff.has(k) ? ' off' : ''}" onclick="pnToggleSerie('${k}')"><span class="pn-dot" style="background:${PN_COR[k]}"></span>${k === 'TOTAL' ? 'Total' : PN_GRUPO_LABEL[k]}</button>`).join('');
+  return `<div class="pn-legenda">${legenda}</div>
+    <svg viewBox="0 0 ${W} ${H}" class="pn-linhas" preserveAspectRatio="xMidYMid meet">${grade}${eixo}${linhas}${rotulos}</svg>`;
+}
+
+// ── Render ───────────────────────────────────────────────────────────────────
+function pnRenderProgresso() {
+  const el = document.getElementById('pn-progresso');
+  if (!el) return;
+  const faltam = PN.meses.filter(m => !PN.dados[m.chave]).length;
+  const erros = Object.keys(PN.erros).length;
+  el.innerHTML = PN.pendentes > 0
+    ? `<span class="loading-spinner" style="width:12px;height:12px;border-width:2px;display:inline-block;vertical-align:-2px;margin-right:6px"></span>Carregando histórico… ${PN.pendentes} mês(es) restante(s)`
+    : (faltam > 0 ? `<button class="pn-link" onclick="pnCarregarMaisAntigos()">Carregar ${faltam} mês(es) mais antigo(s)</button>` : '')
+      + (erros ? ` <span style="color:#B45309">⚠ ${erros} mês(es) com erro: ${Object.keys(PN.erros).join(', ')}</span>` : '');
+}
+
+function pnRender() {
+  if (!pnPodeVer() || !PN.iniciou) return;
+  const agg = pnAgregar();
+  pnRenderProgresso();
+  const at = document.getElementById('pn-atualizado');
+  if (at) at.textContent = PN.atualizadoEm
+    ? 'Atualizado: ' + PN.atualizadoEm.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) + ' ' + PN.atualizadoEm.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+    : 'Carregando…';
+
+  document.getElementById('pn-card-dim-titulo').textContent = 'Quantidade por ' + (PN_DIMS.find(d => d[0] === PN.dim) || PN_DIMS[0])[1];
+  document.getElementById('pn-dims').innerHTML = PN_DIMS.map(([k, rot]) =>
+    `<button class="pn-btn pn-btn-sm${PN.dim === k ? ' ativo' : ''}" onclick="pnSetDim('${k}')">${rot}</button>`).join('');
+  document.getElementById('pn-dim-corpo').innerHTML = pnRenderBarras(agg);
+
+  document.getElementById('pn-grupo-total').textContent = 'Total: ' + pnFmt(pnValor(agg.total, 'quantidade'), 'quantidade');
+  document.getElementById('pn-grupo-corpo').innerHTML = pnRenderRosca(agg);
+
+  document.getElementById('pn-card-mes-titulo').textContent = `${pnNomeMetrica()} por Mês`;
+  document.getElementById('pn-metricas').innerHTML = PN_METRICAS.map(([k, rot]) =>
+    `<button class="pn-btn${PN.metrica === k ? ' ativo' : ''}" onclick="pnSetMetrica('${k}')">${rot}</button>`).join('');
+  document.getElementById('pn-mes-corpo').innerHTML = pnRenderLinhas(agg);
+}
+
+function pnSetMetrica(k) { PN.metrica = k; pnRender(); }
+function pnSetDim(k) { PN.dim = k; pnRender(); }
+function pnToggleSerie(k) { if (PN.seriesOff.has(k)) PN.seriesOff.delete(k); else PN.seriesOff.add(k); pnRender(); }
+
+// ── Extração (CSV) ───────────────────────────────────────────────────────────
+function pnExportarCsv() {
+  const agg = pnAgregar();
+  if (!agg.meses.length) { alert('Nenhum mês carregado ainda.'); return; }
+  const cab = ['Mês', 'Grupo', 'Quantidade', 'Receita', 'Comissão', 'CNPJs', 'Ticket médio'];
+  const linhas = [];
+  agg.meses.forEach(m => ['TOTAL', ...PN_GRUPOS].forEach(g => {
+    const a = agg.porMes[m.chave][g];
+    linhas.push([m.label, g === 'TOTAL' ? 'Total (sem Serv. Digitais)' : PN_GRUPO_LABEL[g], a.q, a.r.toFixed(2), a.c.toFixed(2), a.cn.size, (a.q ? a.r / a.q : 0).toFixed(2)]);
+  }));
+  const esc = v => '"' + String(v).replace(/"/g, '""') + '"';
+  const csv = '﻿' + [cab, ...linhas].map(l => l.map(esc).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
+  const t = new Date().toISOString().slice(0, 16).replace(/[-T:]/g, '').replace(/(\d{8})(\d{4})/, '$1_$2');
+  a.download = `painel_${t}.csv`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(a.href);
 }
 
 // ─── DRILLDOWN DE DETALHES DO CLIENTE (aba Gerencial) ──────────────────────
@@ -6459,6 +7057,7 @@ function switchTab(name, el) {
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   document.getElementById('tab-' + name).classList.add('active');
   if (name === 'gerfin') initGerFin();
+  if (name === 'painel') pnIniciar();
   if (name === 'producao') initProducao();
   if (name === 'discadora') initDiscadora();
   if (name === 'simulador2') initSimulador2();
@@ -6517,11 +7116,12 @@ function getAbasPermitidas(usuario) {
   const extras = usuario?.acesso_extra_abas || [];
   const todas = extras.length ? [...new Set([...base, ...extras])] : base;
   // Gerencial Financeiro (piloto): lista fechada de e-mails, não vale pra todo admin
-  return gfPodeVer(usuario) ? [...new Set([...todas, 'gerfin'])] : todas.filter(a => a !== 'gerfin');
+  return gfPodeVer(usuario) ? [...new Set([...todas, 'gerfin', 'painel'])] : todas.filter(a => a !== 'gerfin' && a !== 'painel');
 }
 const TAB_LABELS = {
   gerencial: '📊 Gerencial',
   gerfin: '💰 Gerencial Financeiro',
+  painel: '📈 Painel Analítico',
   producao: '🏭 Produção',
   discadora: '📞 Discadora',
   simulador2: '🧮 Simulador 2.0',
