@@ -1457,6 +1457,32 @@
   #tab-conectividade, #tab-simulador2 { max-width: 1440px; margin-left: auto; margin-right: auto; }
   /* filtros distribuídos pela linha inteira (antes: 5 colunas fixas, a 2ª linha ficava pela metade) */
   .filters-bar { grid-template-columns: repeat(auto-fit, minmax(165px, 1fr)); gap: 8px 14px; }
+
+  /* ─── Painel: tipografia e botões da referência (BI) ───
+     Segoe UI (a fonte do Power BI; cai em Tahoma/system-ui fora do Windows), botões brancos com
+     borda preta e o ativo em vermelho, filtros em vermelho sólido com texto branco. */
+  #tab-painel, #tab-painel button, #tab-painel select, #tab-painel input {
+    font-family: 'Segoe UI', 'Segoe UI Variable Text', Tahoma, system-ui, sans-serif;
+  }
+  .pn-card-cab h3 { font-weight: 400; color: #222; letter-spacing: 0; }
+  .pn-btn { border: 2px solid #1a1a1a; border-radius: 6px; color: #1a1a1a; font-weight: 500; }
+  .pn-btn.ativo { background: #B01E14; border-color: #B01E14; color: #fff; font-weight: 700; }
+  .pn-btn-sm.ativo { background: #2b2b2b; border-color: #2b2b2b; }
+  .pn-fg label { color: #333; font-size: 12px; }
+  .pn-lbl-s { fill: #555; font-size: 9.5px; paint-order: stroke; stroke: #fff; stroke-width: 3px; stroke-linejoin: round; }
+  .pn-leg-btn { color: #666; }
+  .pn-legenda .pn-dot { width: 9px; height: 9px; }
+  /* filtros: vermelho sólido, texto branco, chevron branco (select e dropdown de checkboxes) */
+  .pn-fg select, .pn-fg .dropdown-btn, .filters-bar .filter-group select, .filters-bar .dropdown-btn {
+    background-color: #B01E14; color: #fff; border: none; border-radius: 3px;
+    -webkit-appearance: none; appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.5'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 8px center; background-size: 12px;
+    padding-right: 26px; text-align: left;
+  }
+  .pn-fg .dropdown-btn span, .filters-bar .dropdown-btn span { display: none; }
+  .pn-fg select option, .filters-bar .filter-group select option { background: #fff; color: #222; }
+  .pn-fg select:disabled, .filters-bar .filter-group select:disabled { opacity: .55; }
 </style>
 </head>
 <body>
@@ -4803,7 +4829,7 @@ const PN_MES_ABREV = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'S
 const PN_GRUPOS = ['GROSS', 'RENOVAÇÃO', 'BL', 'TITULARIDADE', 'SERV. DIGITAIS'];
 const PN_GRUPO_LABEL = { 'GROSS': 'Gross', 'RENOVAÇÃO': 'Renovação', 'BL': 'BL (Fixa Básica)', 'TITULARIDADE': 'Titularidade', 'SERV. DIGITAIS': 'Serv. Digitais' };
 const PN_FORA_DO_TOTAL = ['SERV. DIGITAIS'];
-const PN_COR = { TOTAL: '#B91C1C', 'GROSS': '#111827', 'RENOVAÇÃO': '#F08A8A', 'BL': '#D4A017', 'TITULARIDADE': '#7C3AED', 'SERV. DIGITAIS': '#94A3B8' };
+const PN_COR = { TOTAL: '#C0281C', 'GROSS': '#111111', 'RENOVAÇÃO': '#8E1B12', 'BL': '#D6D6D6', 'TITULARIDADE': '#E2B100', 'SERV. DIGITAIS': '#7C4DCC' };
 const PN_METRICAS = [
   ['comissao', 'Comissão', 'Comissão'],
   ['receita', 'Receita', 'Receita'],
@@ -5188,7 +5214,9 @@ function pnRenderLinhas(agg) {
     linhas += `<polyline fill="none" stroke="${PN_COR[k]}" stroke-width="${larg}" stroke-linejoin="round" points="${pts.map(p => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ')}"/>`;
     pts.forEach(([px, py, v], i) => {
       linhas += `<circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="${k === 'TOTAL' ? 4 : 3}" fill="${PN_COR[k]}"><title>${meses[i].label} · ${k === 'TOTAL' ? 'Total' : PN_GRUPO_LABEL[k]}: ${pnFmt(v, m)}</title></circle>`;
-      if (k === 'TOTAL') {
+      if (k !== 'TOTAL') {
+        rotulos += `<text x="${px.toFixed(1)}" y="${(py - 6).toFixed(1)}" text-anchor="middle" class="pn-lbl-s">${pnFmt(v, m, true)}</text>`;
+      } else {
         const t = pnFmt(v, m, true), w = t.length * 6.2 + 12;
         rotulos += `<g><rect x="${(px - w / 2).toFixed(1)}" y="${(py - 25).toFixed(1)}" width="${w.toFixed(1)}" height="17" rx="4" fill="${PN_COR.TOTAL}"/><text x="${px.toFixed(1)}" y="${(py - 12.7).toFixed(1)}" text-anchor="middle" class="pn-lbl">${t}</text></g>`;
       }
