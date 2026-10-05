@@ -4262,7 +4262,7 @@ function drillFila(categoria, fila) {
 // linhaDentroDoEscopo, linhaBateBusca, linhaDentroDoPeriodoCadastro,
 // agruparFilasPorSubgrupo, gerReceitaLinha, abrirDetalheCliente...).
 // Piloto restrito: só estes e-mails (e só se forem admin) enxergam a aba.
-const GF_EMAILS_PERMITIDOS = ['raphael@vstgroup.com.br', 'everton@vstgroup.com.br'];
+const GF_EMAILS_PERMITIDOS = ['raphael@vstgroup.com.br', 'everton@vstgroup.com.br', 'financeiro@vstgroup.com.br']; // financeiro@ = Dariane Slaski
 function gfPodeVer(usuario) {
   const u = usuario === undefined ? USUARIO_ATUAL : usuario;
   return u?.perfil === 'admin' && GF_EMAILS_PERMITIDOS.includes((u.email || '').trim().toLowerCase());
