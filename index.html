@@ -2501,6 +2501,20 @@
           <div class="dropdown-content" id="dd-content-churn-equipe"></div>
         </div>
       </div>
+      <div class="filter-group" style="min-width:170px">
+        <label>Recebido (mês)</label>
+        <div class="custom-dropdown" id="dd-churn-recebido">
+          <button class="dropdown-btn" onclick="toggleDropdown('dd-content-churn-recebido')">Todos <span>&#9660;</span></button>
+          <div class="dropdown-content" id="dd-content-churn-recebido"></div>
+        </div>
+      </div>
+      <div class="filter-group" style="min-width:170px">
+        <label>Janela (mês)</label>
+        <div class="custom-dropdown" id="dd-churn-janela">
+          <button class="dropdown-btn" onclick="toggleDropdown('dd-content-churn-janela')">Todos <span>&#9660;</span></button>
+          <div class="dropdown-content" id="dd-content-churn-janela"></div>
+        </div>
+      </div>
     </div>
     <div id="churn-stats-area"></div>
     <div id="churn-table-area"></div>
@@ -10512,6 +10526,7 @@ async function initChurn() {
   ddRegisterCallback('dd-content-churn-equipe', window._ddOnChange_dd_content_churn_equipe);
   popularDropdownGenerico('dd-content-churn-equipe', equipes, window._ddOnChange_dd_content_churn_equipe, '#dd-churn-equipe .dropdown-btn');
 
+  churnPopularFiltrosMes();
   renderChurn();
 }
 
@@ -10582,6 +10597,35 @@ function churnUnidade(r) {
   return MAPEAMENTO_TAGS['#' + codigo.toUpperCase()] || codigo;
 }
 
+// ── Filtros por mês (Recebido / Janela) ──
+// Recebido: mês do carimbo recebido_em (horário local). Janela: mês de data_janela, que
+// vem como "dd/mm/aaaa" (aceita também "aaaa-mm-dd"). Rótulo "Out/2026"; sem data → '' (não
+// aparece nas opções e some quando o filtro está ligado).
+const CHURN_MES_ABREV = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+function churnMesChave(ano, mes) { return `${ano}-${String(mes).padStart(2, '0')}`; }
+function churnMesRotulo(chave) { return chave ? `${CHURN_MES_ABREV[parseInt(chave.slice(5), 10) - 1]}/${chave.slice(0, 4)}` : ''; }
+function churnChaveRecebido(r) {
+  const d = r.recebido_em ? new Date(r.recebido_em) : null;
+  return d && !isNaN(d) ? churnMesChave(d.getFullYear(), d.getMonth() + 1) : '';
+}
+function churnChaveJanela(r) {
+  const t = (r.data_janela || '').toString().trim();
+  let m = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (m) return churnMesChave(m[3], parseInt(m[2], 10));
+  m = t.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? churnMesChave(m[1], parseInt(m[2], 10)) : '';
+}
+function churnPopularFiltrosMes() {
+  [['recebido', churnChaveRecebido], ['janela', churnChaveJanela]].forEach(([nome, chaveFn]) => {
+    const contId = `dd-content-churn-${nome}`, labelBtn = `#dd-churn-${nome} .dropdown-btn`;
+    const meses = [...new Set(CHURN_DADOS.map(chaveFn))].filter(Boolean).sort().reverse().map(churnMesRotulo); // mais recente primeiro
+    const onChange = () => { atualizarBotaoDropdown(contId, labelBtn); renderChurn(); };
+    window[`_ddOnChange_dd_content_churn_${nome}`] = onChange; // exigido por popularDropdownGenerico()
+    ddRegisterCallback(contId, onChange);
+    popularDropdownGenerico(contId, meses, onChange, labelBtn);
+  });
+}
+
 let churnSortCol = 'recebido_em';
 let churnSortAsc = false;
 function churnSetSort(col) {
@@ -10615,6 +10659,8 @@ function renderChurn() {
   // vazio = "Todas".
   const unidadeSel = getCheckedValuesDd('dd-content-churn-unidade');
   const equipeSel = getCheckedValuesDd('dd-content-churn-equipe');
+  const recebidoSel = getCheckedValuesDd('dd-content-churn-recebido');
+  const janelaSel = getCheckedValuesDd('dd-content-churn-janela');
 
   const linhas = CHURN_DADOS.filter(r => {
     if (statusFiltro === 'pendentes' && r.respondido) return false;
@@ -10624,6 +10670,8 @@ function renderChurn() {
     if (atribuidoFiltro !== 'todos' && atribuidoFiltro !== 'ninguem' && String(r.atribuido_a) !== atribuidoFiltro) return false;
     if (unidadeSel.length > 0 && !unidadeSel.includes(churnUnidade(r))) return false;
     if (equipeSel.length > 0 && !equipeSel.includes(churnDonoCliente(r)?.equipe || '')) return false;
+    if (recebidoSel.length > 0 && !recebidoSel.includes(churnMesRotulo(churnChaveRecebido(r)))) return false;
+    if (janelaSel.length > 0 && !janelaSel.includes(churnMesRotulo(churnChaveJanela(r)))) return false;
     return true;
   });
 
