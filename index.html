@@ -2551,6 +2551,24 @@
           <option value="">Todas</option>
         </select>
       </div>
+      <div class="filter-group" style="min-width:190px;">
+        <label>TM Voz (tempo de contrato)</label>
+        <div class="custom-dropdown" id="dd-carteira-tm-voz">
+          <button class="dropdown-btn" onclick="toggleDropdown('dd-content-carteira-tm-voz')">Todos <span>&#9660;</span></button>
+          <div class="dropdown-content" id="dd-content-carteira-tm-voz"></div>
+        </div>
+      </div>
+      <div class="filter-group" style="min-width:190px;">
+        <label>TM BL (tempo de contrato)</label>
+        <div class="custom-dropdown" id="dd-carteira-tm-bl">
+          <button class="dropdown-btn" onclick="toggleDropdown('dd-content-carteira-tm-bl')">Todos <span>&#9660;</span></button>
+          <div class="dropdown-content" id="dd-content-carteira-tm-bl"></div>
+        </div>
+      </div>
+      <div class="filter-group" style="justify-content:flex-end;">
+        <label>&nbsp;</label>
+        <button class="btn-secondary" onclick="carteiraExportarCsv()" style="padding:7px 14px;font-size:12px;white-space:nowrap;" title="Baixa em CSV todos os clientes que batem com os filtros e a busca atuais (não só os 200 mostrados na tabela)">⬇ Extrair CSV</button>
+      </div>
       <div class="filter-group" style="justify-content:flex-end;">
         <label>&nbsp;</label>
         <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:500;cursor:pointer;padding-top:8px;white-space:nowrap;" title="Piloto: considera apto a renovar a partir de 12 meses de contrato, pra todas as classificações, no lugar do limiar normal">
@@ -11457,6 +11475,73 @@ async function carregarCarteiraDados(tituloForcado) {
   CARTEIRA_CARREGADA = true;
 }
 
+// ── Filtros da Carteira num lugar só (visão geral, tabela de busca e extração usam o mesmo) ──
+// TM = tempo de contrato em meses, em faixas (as mesmas dos gráficos). Seleção múltipla; sem
+// nada marcado = sem filtro. Voz e BL combinam com E: o cliente precisa ter linha do produto
+// e cair numa das faixas marcadas de cada um.
+function carteiraFiltrosAtuais() {
+  const sel = nome => { const v = getCheckedValuesDd(`dd-content-carteira-tm-${nome}`); return v.length ? new Set(v) : null; };
+  return {
+    revenda: document.getElementById('carteira-filtro-revenda').value,
+    uf: document.getElementById('carteira-filtro-uf').value,
+    associada: document.getElementById('carteira-filtro-associada').value,
+    tmVoz: sel('voz'),
+    tmBL: sel('bl'),
+  };
+}
+function carteiraAlgumFiltro(f) { return !!(f.revenda || f.uf || f.associada || f.tmVoz || f.tmBL); }
+function carteiraPassaFiltros(r, f) {
+  if (f.revenda && carteiraUnidade(r) !== f.revenda) return false;
+  if (f.uf && (r['UF'] || '').trim().toUpperCase() !== f.uf) return false;
+  if (f.associada && carteiraAssociada(r) !== f.associada) return false;
+  if (f.tmVoz && !(carteiraLinhas(r) > 0 && f.tmVoz.has(carteiraFaixaDe(carteiraTM(r), CARTEIRA_FAIXAS_TM)))) return false;
+  if (f.tmBL && !(carteiraLinhasBL(r) > 0 && f.tmBL.has(carteiraFaixaDe(carteiraTM_BL(r), CARTEIRA_FAIXAS_TM)))) return false;
+  return true;
+}
+function carteiraPassaBusca(r, termo, termoDigitos) {
+  if (!termo) return true;
+  const razao = (r['Razão Social'] || '').toLowerCase();
+  const cnpj = (r['CNPJ'] || '').replace(/\D/g, '');
+  return razao.includes(termo) || !!(termoDigitos && cnpj.includes(termoDigitos));
+}
+
+// Dropdowns de checkbox de TM Voz / TM BL (faixas de CARTEIRA_FAIXAS_TM)
+function popularFiltrosTMCarteira() {
+  ['voz', 'bl'].forEach(nome => {
+    const contId = `dd-content-carteira-tm-${nome}`, labelBtn = `#dd-carteira-tm-${nome} .dropdown-btn`;
+    const onChange = () => { atualizarBotaoDropdown(contId, labelBtn); renderCarteiraOverview(); };
+    window[`_ddOnChange_dd_content_carteira_tm_${nome}`] = onChange; // exigido por popularDropdownGenerico()
+    ddRegisterCallback(contId, onChange);
+    popularDropdownGenerico(contId, CARTEIRA_FAIXAS_TM.map(x => x.label), onChange, labelBtn);
+  });
+}
+
+// Extração em CSV: TODOS os clientes que batem com filtros + busca (a tabela mostra só 200)
+function carteiraExportarCsv() {
+  const f = carteiraFiltrosAtuais();
+  const termo = (document.getElementById('carteira-busca').value || '').trim().toLowerCase();
+  const termoDigitos = termo.replace(/\D/g, '');
+  const linhas = CARTEIRA_DADOS.filter(r => carteiraPassaFiltros(r, f) && carteiraPassaBusca(r, termo, termoDigitos));
+  if (!linhas.length) { alert('Nenhum cliente para os filtros atuais.'); return; }
+  const cab = ['CNPJ', 'Razão Social', 'Unidade', 'Carteira Associada', 'Cidade', 'UF', 'Classificação',
+    'Linhas Voz', 'TM Voz (meses)', 'Faixa TM Voz', 'Apto Voz', 'Linhas BL', 'TM BL (meses)', 'Faixa TM BL', 'Apto BL',
+    'Telefone de Contato', 'Nome do ADM'];
+  const sn = v => v ? 'Sim' : 'Não';
+  const dados = linhas.map(r => [
+    r['CNPJ'] || '', r['Razão Social'] || '', carteiraUnidade(r), carteiraAssociada(r) || '', r['DSC_MUNICIPIO'] || '', r['UF'] || '', r['Classificação'] || '',
+    carteiraLinhas(r), carteiraTM(r), carteiraLinhas(r) > 0 ? (carteiraFaixaDe(carteiraTM(r), CARTEIRA_FAIXAS_TM) || '') : '', sn(carteiraLinhas(r) > 0 && carteiraApto(r)),
+    carteiraLinhasBL(r), carteiraTM_BL(r), carteiraLinhasBL(r) > 0 ? (carteiraFaixaDe(carteiraTM_BL(r), CARTEIRA_FAIXAS_TM) || '') : '', sn(carteiraLinhasBL(r) > 0 && carteiraAptoBL(r)),
+    carteiraValor(r['Telefone de Contato']), carteiraValor(r['Nome do ADM']),
+  ]);
+  const esc = v => '"' + String(v).replace(/"/g, '""') + '"';
+  const csv = '﻿' + [cab, ...dados].map(l => l.map(esc).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
+  const t = new Date().toISOString().slice(0, 16).replace(/[-T:]/g, '').replace(/(\d{8})(\d{4})/, '$1_$2');
+  a.download = `carteira_${(CARTEIRA_BASE_ATUAL || 'base').replace(/\s+/g, '_')}_${t}.csv`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(a.href);
+}
+
 // Preenche o <select> de Tag da Unidade da aba Carteira com os valores
 // distintos vistos em CARTEIRA_DADOS — extraído à parte pra poder rodar
 // tanto na primeira carga quanto quando os dados já vieram pré-carregados
@@ -11499,6 +11584,7 @@ async function initCarteira() {
     popularFiltroTagUnidadeCarteira();
     popularFiltroUFCarteira();
     popularFiltroAssociadaCarteira();
+    popularFiltrosTMCarteira();
     renderCarteiraOverview();
     return;
   }
@@ -11515,6 +11601,7 @@ async function initCarteira() {
     popularFiltroTagUnidadeCarteira();
     popularFiltroUFCarteira();
     popularFiltroAssociadaCarteira();
+    popularFiltrosTMCarteira();
     renderCarteiraOverview();
   } catch (e) {
     document.getElementById('carteira-status-area').innerHTML = `<div class="error-state"><strong>Erro ao carregar carteira</strong>${escapeHtml(e.message)}</div>`;
@@ -11664,14 +11751,8 @@ function renderCarteiraOverview() {
   // Filtros de revenda/UF/associada: quando selecionados, TODA a visão
   // geral (chips e os gráficos) recalcula em cima só dos clientes que
   // batem — não só a tabela de busca.
-  const revendaFiltro = document.getElementById('carteira-filtro-revenda').value;
-  const ufFiltro = document.getElementById('carteira-filtro-uf').value;
-  const associadaFiltro = document.getElementById('carteira-filtro-associada').value;
-  const dados = CARTEIRA_DADOS.filter(r =>
-    (!revendaFiltro || carteiraUnidade(r) === revendaFiltro) &&
-    (!ufFiltro || (r['UF'] || '').trim().toUpperCase() === ufFiltro) &&
-    (!associadaFiltro || carteiraAssociada(r) === associadaFiltro)
-  );
+  const filtros = carteiraFiltrosAtuais();
+  const dados = CARTEIRA_DADOS.filter(r => carteiraPassaFiltros(r, filtros));
 
   // Clientes sem nenhuma linha ativa (Voz e BL ambos zerados/"-") continuam
   // na base pra busca/detalhe, só não contam no total de clientes.
@@ -11711,25 +11792,14 @@ function renderCarteiraOverview() {
 
 function renderCarteiraBusca() {
   const termo = (document.getElementById('carteira-busca').value || '').trim().toLowerCase();
-  const revendaFiltro = document.getElementById('carteira-filtro-revenda').value;
-  const ufFiltro = document.getElementById('carteira-filtro-uf').value;
-  const associadaFiltro = document.getElementById('carteira-filtro-associada').value;
-  if (!termo && !revendaFiltro && !ufFiltro && !associadaFiltro) {
+  const filtros = carteiraFiltrosAtuais();
+  if (!termo && !carteiraAlgumFiltro(filtros)) {
     document.getElementById('carteira-table-area').innerHTML = '';
     return;
   }
   const termoDigitos = termo.replace(/\D/g, '');
-  const resultados = CARTEIRA_DADOS.filter(r => {
-    if (revendaFiltro && carteiraUnidade(r) !== revendaFiltro) return false;
-    if (ufFiltro && (r['UF'] || '').trim().toUpperCase() !== ufFiltro) return false;
-    if (associadaFiltro && carteiraAssociada(r) !== associadaFiltro) return false;
-    if (!termo) return true;
-    const razao = (r['Razão Social'] || '').toLowerCase();
-    const cnpj = (r['CNPJ'] || '').replace(/\D/g, '');
-    if (razao.includes(termo)) return true;
-    if (termoDigitos && cnpj.includes(termoDigitos)) return true;
-    return false;
-  }).slice(0, 200);
+  const todos = CARTEIRA_DADOS.filter(r => carteiraPassaFiltros(r, filtros) && carteiraPassaBusca(r, termo, termoDigitos));
+  const resultados = todos.slice(0, 200);
 
   window._carteiraResultados = resultados;
 
@@ -11741,7 +11811,7 @@ function renderCarteiraBusca() {
   document.getElementById('carteira-table-area').innerHTML = `
     <div class="section-header">
       <span class="section-title">Resultados</span>
-      <span class="count-badge">${resultados.length}${resultados.length === 200 ? '+' : ''} cliente(s)</span>
+      <span class="count-badge">${todos.length.toLocaleString('pt-BR')} cliente(s)${todos.length > 200 ? ' · mostrando os 200 primeiros — use "Extrair CSV" para todos' : ''}</span>
     </div>
     <div class="table-wrap"><div class="table-scroll">
       <table>
