@@ -2552,14 +2552,14 @@
         </select>
       </div>
       <div class="filter-group" style="min-width:190px;">
-        <label>TM Voz (tempo de contrato)</label>
+        <label>TM Voz (meses de contrato)</label>
         <div class="custom-dropdown" id="dd-carteira-tm-voz">
           <button class="dropdown-btn" onclick="toggleDropdown('dd-content-carteira-tm-voz')">Todos <span>&#9660;</span></button>
           <div class="dropdown-content" id="dd-content-carteira-tm-voz"></div>
         </div>
       </div>
       <div class="filter-group" style="min-width:190px;">
-        <label>TM BL (tempo de contrato)</label>
+        <label>TM BL (meses de contrato)</label>
         <div class="custom-dropdown" id="dd-carteira-tm-bl">
           <button class="dropdown-btn" onclick="toggleDropdown('dd-content-carteira-tm-bl')">Todos <span>&#9660;</span></button>
           <div class="dropdown-content" id="dd-content-carteira-tm-bl"></div>
@@ -10939,6 +10939,7 @@ async function carteiraTrocarBase() {
     popularFiltroTagUnidadeCarteira();
     popularFiltroUFCarteira();
     popularFiltroAssociadaCarteira();
+    popularFiltrosTMCarteira();
     renderCarteiraOverview();
     // A base atual mudou — a lista de bases pra comparar (que exclui a
     // atual) e o resultado do comparativo já em tela ficam desatualizados.
@@ -11476,9 +11477,9 @@ async function carregarCarteiraDados(tituloForcado) {
 }
 
 // ── Filtros da Carteira num lugar só (visão geral, tabela de busca e extração usam o mesmo) ──
-// TM = tempo de contrato em meses, em faixas (as mesmas dos gráficos). Seleção múltipla; sem
-// nada marcado = sem filtro. Voz e BL combinam com E: o cliente precisa ter linha do produto
-// e cair numa das faixas marcadas de cada um.
+// TM = tempo de contrato em meses. O filtro lista os valores REAIS (0, 1, 2, ... como o filtro
+// da planilha), não faixas agrupadas. Seleção múltipla; sem nada marcado = sem filtro. Voz e BL
+// combinam com E: o cliente precisa ter linha do produto e o TM de cada um entre os marcados.
 function carteiraFiltrosAtuais() {
   const sel = nome => { const v = getCheckedValuesDd(`dd-content-carteira-tm-${nome}`); return v.length ? new Set(v) : null; };
   return {
@@ -11494,8 +11495,8 @@ function carteiraPassaFiltros(r, f) {
   if (f.revenda && carteiraUnidade(r) !== f.revenda) return false;
   if (f.uf && (r['UF'] || '').trim().toUpperCase() !== f.uf) return false;
   if (f.associada && carteiraAssociada(r) !== f.associada) return false;
-  if (f.tmVoz && !(carteiraLinhas(r) > 0 && f.tmVoz.has(carteiraFaixaDe(carteiraTM(r), CARTEIRA_FAIXAS_TM)))) return false;
-  if (f.tmBL && !(carteiraLinhasBL(r) > 0 && f.tmBL.has(carteiraFaixaDe(carteiraTM_BL(r), CARTEIRA_FAIXAS_TM)))) return false;
+  if (f.tmVoz && !(carteiraLinhas(r) > 0 && f.tmVoz.has(String(carteiraTM(r))))) return false;
+  if (f.tmBL && !(carteiraLinhasBL(r) > 0 && f.tmBL.has(String(carteiraTM_BL(r))))) return false;
   return true;
 }
 function carteiraPassaBusca(r, termo, termoDigitos) {
@@ -11505,14 +11506,18 @@ function carteiraPassaBusca(r, termo, termoDigitos) {
   return razao.includes(termo) || !!(termoDigitos && cnpj.includes(termoDigitos));
 }
 
-// Dropdowns de checkbox de TM Voz / TM BL (faixas de CARTEIRA_FAIXAS_TM)
+// Dropdowns de checkbox de TM Voz / TM BL: um item por valor distinto de meses (só de clientes
+// que têm linha daquele produto), em ordem numérica — igual à lista do filtro da planilha.
 function popularFiltrosTMCarteira() {
+  const valores = (fnLinhas, fnTM) => [...new Set(CARTEIRA_DADOS.filter(r => fnLinhas(r) > 0).map(r => fnTM(r)))]
+    .sort((a, b) => a - b).map(String);
+  const itensPor = { voz: valores(carteiraLinhas, carteiraTM), bl: valores(carteiraLinhasBL, carteiraTM_BL) };
   ['voz', 'bl'].forEach(nome => {
     const contId = `dd-content-carteira-tm-${nome}`, labelBtn = `#dd-carteira-tm-${nome} .dropdown-btn`;
     const onChange = () => { atualizarBotaoDropdown(contId, labelBtn); renderCarteiraOverview(); };
     window[`_ddOnChange_dd_content_carteira_tm_${nome}`] = onChange; // exigido por popularDropdownGenerico()
     ddRegisterCallback(contId, onChange);
-    popularDropdownGenerico(contId, CARTEIRA_FAIXAS_TM.map(x => x.label), onChange, labelBtn);
+    popularDropdownGenerico(contId, itensPor[nome], onChange, labelBtn);
   });
 }
 
