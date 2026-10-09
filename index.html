@@ -11479,7 +11479,10 @@ async function carregarCarteiraDados(tituloForcado) {
 // ── Filtros da Carteira num lugar só (visão geral, tabela de busca e extração usam o mesmo) ──
 // TM = tempo de contrato em meses. O filtro lista os valores REAIS (0, 1, 2, ... como o filtro
 // da planilha), não faixas agrupadas. Seleção múltipla; sem nada marcado = sem filtro. Voz e BL
-// combinam com E: o cliente precisa ter linha do produto e o TM de cada um entre os marcados.
+// combinam com E. Como na planilha, existe o item "(Vazias)" = cliente sem linha daquele produto
+// (TM em branco): marcar todos os valores + "(Vazias)" equivale a não filtrar; sem "(Vazias)"
+// marcado, quem não tem o produto sai.
+const CARTEIRA_TM_VAZIO = '(Vazias)';
 function carteiraFiltrosAtuais() {
   const sel = nome => { const v = getCheckedValuesDd(`dd-content-carteira-tm-${nome}`); return v.length ? new Set(v) : null; };
   return {
@@ -11495,8 +11498,8 @@ function carteiraPassaFiltros(r, f) {
   if (f.revenda && carteiraUnidade(r) !== f.revenda) return false;
   if (f.uf && (r['UF'] || '').trim().toUpperCase() !== f.uf) return false;
   if (f.associada && carteiraAssociada(r) !== f.associada) return false;
-  if (f.tmVoz && !(carteiraLinhas(r) > 0 && f.tmVoz.has(String(carteiraTM(r))))) return false;
-  if (f.tmBL && !(carteiraLinhasBL(r) > 0 && f.tmBL.has(String(carteiraTM_BL(r))))) return false;
+  if (f.tmVoz && !f.tmVoz.has(carteiraLinhas(r) > 0 ? String(carteiraTM(r)) : CARTEIRA_TM_VAZIO)) return false;
+  if (f.tmBL && !f.tmBL.has(carteiraLinhasBL(r) > 0 ? String(carteiraTM_BL(r)) : CARTEIRA_TM_VAZIO)) return false;
   return true;
 }
 function carteiraPassaBusca(r, termo, termoDigitos) {
@@ -11506,11 +11509,13 @@ function carteiraPassaBusca(r, termo, termoDigitos) {
   return razao.includes(termo) || !!(termoDigitos && cnpj.includes(termoDigitos));
 }
 
-// Dropdowns de checkbox de TM Voz / TM BL: um item por valor distinto de meses (só de clientes
-// que têm linha daquele produto), em ordem numérica — igual à lista do filtro da planilha.
+// Dropdowns de checkbox de TM Voz / TM BL: um item por valor distinto de meses (de clientes que
+// têm linha daquele produto), em ordem numérica, mais "(Vazias)" — igual ao filtro da planilha.
 function popularFiltrosTMCarteira() {
-  const valores = (fnLinhas, fnTM) => [...new Set(CARTEIRA_DADOS.filter(r => fnLinhas(r) > 0).map(r => fnTM(r)))]
-    .sort((a, b) => a - b).map(String);
+  const valores = (fnLinhas, fnTM) => {
+    const lista = [...new Set(CARTEIRA_DADOS.filter(r => fnLinhas(r) > 0).map(r => fnTM(r)))].sort((a, b) => a - b).map(String);
+    return CARTEIRA_DADOS.some(r => !(fnLinhas(r) > 0)) ? [...lista, CARTEIRA_TM_VAZIO] : lista; // "(Vazias)" no fim, como na planilha
+  };
   const itensPor = { voz: valores(carteiraLinhas, carteiraTM), bl: valores(carteiraLinhasBL, carteiraTM_BL) };
   ['voz', 'bl'].forEach(nome => {
     const contId = `dd-content-carteira-tm-${nome}`, labelBtn = `#dd-carteira-tm-${nome} .dropdown-btn`;
