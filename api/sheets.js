@@ -11,7 +11,7 @@
 
 import { createSign } from 'crypto';
 import { requireAuth, getUsuarioDashboard } from './_lib/auth.js';
-import { getEscopoTravado, linhaDentroDoEscopo, normalizarNomeEquipe } from './_lib/escopo.js';
+import { getEscopoTravado, linhaDentroDoEscopo, normalizarNomeEquipe, getCarteiraCodigosPermitidos, carteiraCodigoDoTerritorio } from './_lib/escopo.js';
 
 function base64url(input) {
   return Buffer.from(input)
@@ -136,7 +136,29 @@ export default async function handler(req, res) {
     // (escopo null) continua recebendo exatamente o que sempre recebeu,
     // sem passar por nenhuma linha de código nova abaixo.
     if (action === 'values' && response.ok && Array.isArray(data.values) && data.values.length > 0) {
-      const escopo = getEscopoTravado(perfilUsuario, perfilRow);
+      // Carteira de gestor/supervisão com grupo_ref: trava por unidade (código
+      // da tag no fim do "Território"). Substitui o filtro de equipe abaixo,
+      // que não se aplica a essa planilha (não tem EQUIPE/PROPRIETÁRIO).
+      const carteiraCodigos = planilha === 'carteira'
+        ? getCarteiraCodigosPermitidos(perfilUsuario, perfilRow)
+        : null;
+
+      if (carteiraCodigos) {
+        const header = data.values[0];
+        const idxTerritorio = header.findIndex(h =>
+          (h || '').toString().normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase() === 'territorio');
+        if (idxTerritorio === -1 || carteiraCodigos.length === 0) {
+          // Sem coluna de território (ou grupo sem unidade liberada): não dá
+          // pra filtrar com segurança — só o cabeçalho, nunca a base inteira.
+          data.values = [header];
+        } else {
+          const permitidos = new Set(carteiraCodigos.map(c => c.toUpperCase()));
+          data.values = [header, ...data.values.slice(1).filter(row =>
+            permitidos.has(carteiraCodigoDoTerritorio(row[idxTerritorio])))];
+        }
+      }
+
+      const escopo = carteiraCodigos ? null : getEscopoTravado(perfilUsuario, perfilRow);
 
       if (escopo) {
         const header = data.values[0];

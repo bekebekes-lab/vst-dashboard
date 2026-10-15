@@ -2567,7 +2567,7 @@
       </div>
       <div class="filter-group" style="justify-content:flex-end;">
         <label>&nbsp;</label>
-        <button class="btn-secondary" onclick="carteiraExportarCsv()" style="padding:7px 14px;font-size:12px;white-space:nowrap;" title="Baixa em CSV todos os clientes que batem com os filtros e a busca atuais (não só os 200 mostrados na tabela)">⬇ Extrair CSV</button>
+        <button class="btn-secondary" id="carteira-btn-exportar-csv" onclick="carteiraExportarCsv()" style="padding:7px 14px;font-size:12px;white-space:nowrap;" title="Baixa em CSV todos os clientes que batem com os filtros e a busca atuais (não só os 200 mostrados na tabela)">⬇ Extrair CSV</button>
       </div>
       <div class="filter-group" style="justify-content:flex-end;">
         <label>&nbsp;</label>
@@ -11282,7 +11282,7 @@ function carteiraRenderComparativoHtml() {
   area.innerHTML = htmlErros + `<div class="prod-status-section" style="margin-top:0;">
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
       <div style="font-size:13px;font-weight:700;">${tituloBases}</div>
-      <button class="btn-secondary" style="padding:5px 12px;font-size:11px;" onclick="carteiraExportarComparativoCsv()">⬇ Baixar relatório (CSV)</button>
+      ${carteiraExportacaoBloqueada() ? '' : '<button class="btn-secondary" style="padding:5px 12px;font-size:11px;" onclick="carteiraExportarComparativoCsv()">⬇ Baixar relatório (CSV)</button>'}
     </div>
     <div style="font-size:10px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">CNPJ</div>
     <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
@@ -11336,6 +11336,7 @@ function carteiraRenderComparativoHtml() {
 // relatório em tela (CARTEIRA_COMPARATIVO_ULTIMO) — não recalcula nada,
 // só formata o que já está renderizado.
 function carteiraExportarComparativoCsv() {
+  if (carteiraExportacaoBloqueada()) { alert('Seu acesso à Carteira não inclui extração em CSV.'); return; }
   if (!CARTEIRA_COMPARATIVO_ULTIMO || CARTEIRA_COMPARATIVO_ULTIMO.saiu.length === 0) return;
   const header = ['CNPJ', 'Razão Social', 'Unidade', 'Cidade', 'UF', 'Voz Antes', 'Voz Agora', 'BL Antes', 'BL Agora', 'Classificação', 'Situação', 'Pico de linhas em'];
   // Exporta na mesma ordem que está na tela agora (clique no cabeçalho já
@@ -11526,8 +11527,17 @@ function popularFiltrosTMCarteira() {
   });
 }
 
+// Gestor/supervisão com a Carteira liberada por acesso extra (travada na
+// unidade deles pelo servidor) pode consultar na tela, mas NÃO extrair CSV.
+// Admin, admin_beta e quem já tinha a aba (ex.: gestor_macro2) seguem como sempre.
+function carteiraExportacaoBloqueada() {
+  const p = USUARIO_ATUAL?.perfil;
+  return p === 'gestor' || p === 'supervisao';
+}
+
 // Extração em CSV: TODOS os clientes que batem com filtros + busca (a tabela mostra só 200)
 function carteiraExportarCsv() {
+  if (carteiraExportacaoBloqueada()) { alert('Seu acesso à Carteira não inclui extração em CSV.'); return; }
   const f = carteiraFiltrosAtuais();
   const termo = (document.getElementById('carteira-busca').value || '').trim().toLowerCase();
   const termoDigitos = termo.replace(/\D/g, '');
@@ -11582,6 +11592,8 @@ function popularFiltroAssociadaCarteira() {
 }
 
 async function initCarteira() {
+  const btnExportarCarteira = document.getElementById('carteira-btn-exportar-csv');
+  if (btnExportarCarteira) btnExportarCarteira.style.display = carteiraExportacaoBloqueada() ? 'none' : '';
   try {
     const bases = await carteiraListarBases();
     popularFiltroBaseCarteira(bases);
@@ -11821,7 +11833,7 @@ function renderCarteiraBusca() {
   document.getElementById('carteira-table-area').innerHTML = `
     <div class="section-header">
       <span class="section-title">Resultados</span>
-      <span class="count-badge">${todos.length.toLocaleString('pt-BR')} cliente(s)${todos.length > 200 ? ' · mostrando os 200 primeiros — use "Extrair CSV" para todos' : ''}</span>
+      <span class="count-badge">${todos.length.toLocaleString('pt-BR')} cliente(s)${todos.length > 200 ? (carteiraExportacaoBloqueada() ? ' · mostrando os 200 primeiros — refine a busca/filtros para ver os demais' : ' · mostrando os 200 primeiros — use "Extrair CSV" para todos') : ''}</span>
     </div>
     <div class="table-wrap"><div class="table-scroll">
       <table>

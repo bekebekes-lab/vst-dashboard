@@ -125,3 +125,32 @@ export function linhaDentroDoEscopo(equipeNorm, proprietario, escopo) {
   if (escopo.consultorRef && (proprietario || '').toUpperCase() !== escopo.consultorRef) return false;
   return true;
 }
+
+// ── Carteira ─────────────────────────────────────────────────────────────────
+// A planilha de Carteira não tem EQUIPE/PROPRIETARIO — a unidade de cada
+// cliente vem do código no fim da coluna "Território" (mesma regra de
+// carteiraUnidade() em index.html: último pedaço depois do "-", em
+// maiúsculas, é o código da tag, ex.: "6OV1" = #6OV1 - CRICIUMA).
+//
+// Quais códigos um gestor/supervisão pode ver na Carteira é definido aqui,
+// por grupo_ref. Se o grupo não estiver na lista, devolve [] (nada liberado)
+// — falha fechada em vez de vazar a carteira inteira.
+const CARTEIRA_CODIGOS_POR_GRUPO = {
+  'EQUIPE CRICIUMA': ['6OV1'],
+};
+
+// Devolve null quando NÃO há trava específica de Carteira pro usuário (aí
+// vale o comportamento que já existia — admin vê tudo, e quem tem a aba por
+// acesso extra sem esse tipo de trava segue como sempre). Só gestor/supervisão
+// com grupo_ref preenchido entram na trava por unidade.
+export function getCarteiraCodigosPermitidos(perfil, u) {
+  if (perfil !== 'gestor' && perfil !== 'supervisao') return null;
+  const grupo = (u?.grupo_ref || '').toString().trim().toUpperCase();
+  if (!grupo) return null;
+  return CARTEIRA_CODIGOS_POR_GRUPO[grupo] || [];
+}
+
+export function carteiraCodigoDoTerritorio(territorio) {
+  const partes = (territorio || '').toString().split('-').map(s => s.trim()).filter(Boolean);
+  return (partes[partes.length - 1] || '').toUpperCase();
+}
