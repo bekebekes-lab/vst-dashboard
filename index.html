@@ -8724,17 +8724,8 @@ function aplicarPermissoes() {
           .map(([eq]) => EQUIPES_ESTADOS[eq])
           .filter(Boolean)
       )].sort();
-      if (estadosMacro2.length >= 1) {
-        const selEst = document.getElementById('f-estado');
-        if (selEst) {
-          // Repopula com as options corretas e então trava
-          fillSelect('f-estado', estadosMacro2);
-          selEst.value = estadosMacro2[0];
-          selEst.disabled = true;
-          selEst.style.opacity = '0.5';
-          selEst.style.pointerEvents = 'none';
-        }
-      }
+      // Trava na UF única, ou libera a escolha entre as UFs do escopo
+      aplicarTravaEstado('f-estado', estadosMacro2, fillSelect);
       restringirListasGerencial(USUARIO_ATUAL.gestores_ref, null);
       render();
     } else if ((p === 'supervisao' || p === 'supervisao_beta') && (USUARIO_ATUAL.equipes_ref || []).length > 0) {
@@ -8749,17 +8740,8 @@ function aplicarPermissoes() {
       const estadosSupervisao = [...new Set(
         USUARIO_ATUAL.equipes_ref.map(eq => EQUIPES_ESTADOS[eq]).filter(Boolean)
       )].sort();
-      if (estadosSupervisao.length >= 1) {
-        const selEst = document.getElementById('f-estado');
-        if (selEst) {
-          // Repopula com as options corretas e então trava
-          fillSelect('f-estado', estadosSupervisao);
-          selEst.value = estadosSupervisao[0];
-          selEst.disabled = true;
-          selEst.style.opacity = '0.5';
-          selEst.style.pointerEvents = 'none';
-        }
-      }
+      // Trava na UF única, ou libera a escolha entre as UFs do escopo
+      aplicarTravaEstado('f-estado', estadosSupervisao, fillSelect);
       restringirListasGerencial(null, USUARIO_ATUAL.equipes_ref);
       render();
     }
@@ -8814,20 +8796,39 @@ function podeExportarDiscadoraCSV() {
   return p === 'admin' || p === 'gestor_macro';
 }
 
+// Filtro de UF/Estado de quem tem escopo travado. Com UMA UF no escopo, trava
+// nela (como sempre foi). Com DUAS OU MAIS (ex.: gestor com equipes em RS e
+// SC), travar na primeira escondia as equipes das outras UFs — então libera a
+// escolha entre as UFs do próprio escopo (ou Todos). Isso é só conveniência de
+// filtro: o que o usuário pode ver continua travado à parte por
+// getEscopoTravado() (cliente) e pelo servidor, independente deste select.
+// Reaplicado várias vezes (timers de aplicarPermissoes), então não pode
+// atropelar a UF que o usuário já escolheu.
+function aplicarTravaEstado(selId, estados, preencher) {
+  const sel = document.getElementById(selId);
+  if (!sel || !estados.length) return;
+  const ordenados = [...estados].sort();
+  if (ordenados.length === 1) {
+    preencher(selId, ordenados);
+    sel.value = ordenados[0];
+    sel.disabled = true;
+    sel.style.opacity = '0.5';
+    sel.style.pointerEvents = 'none';
+    return;
+  }
+  const atual = sel.value;
+  preencher(selId, ['Todos', ...ordenados]);
+  sel.value = ordenados.includes(atual) ? atual : 'Todos';
+  sel.disabled = false;
+  sel.style.opacity = '';
+  sel.style.pointerEvents = '';
+}
+
 // ─── TRAVA DA ABA PRODUÇÃO (Gestor Macro 2.0 — trava por 1+ gestores) ───────
 function aplicarTravaProducao() {
   const p = USUARIO_ATUAL?.perfil;
 
-  const travarProdEstado = (estadosPermitidos) => {
-    const selEst = document.getElementById('prod-estado');
-    if (!selEst || estadosPermitidos.length === 0) return;
-    // Sempre repopula com as options corretas antes de setar e travar
-    fillProdSelect('prod-estado', [...estadosPermitidos].sort());
-    selEst.value = estadosPermitidos[0];
-    selEst.disabled = true;
-    selEst.style.opacity = '0.5';
-    selEst.style.pointerEvents = 'none';
-  };
+  const travarProdEstado = (estadosPermitidos) => aplicarTravaEstado('prod-estado', estadosPermitidos, fillProdSelect);
 
   if (p === 'gestor_macro2' && (USUARIO_ATUAL.gestores_ref || []).length > 0 && document.getElementById('dd-content-prod-gestor')) {
     travarDropdownMulti('dd-content-prod-gestor', '#dd-prod-gestor .dropdown-btn', USUARIO_ATUAL.gestores_ref);
