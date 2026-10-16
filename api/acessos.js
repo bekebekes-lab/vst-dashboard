@@ -4,8 +4,9 @@
 // Tudo aqui roda com a chave de serviço do Supabase, então a autorização é
 // 100% daqui — o navegador só pede, nunca decide:
 //  - só os perfis de PERFIS_QUE_GERENCIAM entram;
-//  - perfil não-admin precisa ter escopo definido (gestor/equipes) — quem
-//    "vê tudo" só por falta de configuração NÃO ganha poder de criar acesso;
+//  - perfil não-admin precisa ter escopo definido (gestor/equipes), com UMA
+//    exceção explícita e deliberada: gestor_macro2 sem gestores_ref (Laura e
+//    Maria) gerencia consultores de toda a empresa — igual à visão que já têm;
 //  - o consultor escolhido tem que existir DENTRO da visão de quem pede (a
 //    lista de candidatos vem do /api/sheets, que já devolve a base filtrada
 //    pelo escopo de quem chama);
@@ -28,7 +29,7 @@ const PERFIS_QUE_GERENCIAM = new Set([
   'admin', 'admin_beta',
   'gestor_macro', 'gestor_macro2', 'gestor_macro3', 'gestor', 'gestor_beta',
 ]);
-const PERFIS_VEEM_TUDO = new Set(['admin', 'admin_beta']);
+const PERFIS_ADMIN = new Set(['admin', 'admin_beta']);
 
 class ErroHttp extends Error {
   constructor(status, msg) { super(msg); this.status = status; }
@@ -102,9 +103,15 @@ async function contextoDoChamador(req, res) {
   if (!perfilRow || perfilRow.ativo === false) throw new ErroHttp(403, 'Acesso desativado');
   if (!PERFIS_QUE_GERENCIAM.has(perfil)) throw new ErroHttp(403, 'Seu perfil não gerencia acessos');
   const escopo = getEscopoTravado(perfil, perfilRow);
-  const veTudo = PERFIS_VEEM_TUDO.has(perfil);
+  // ehAdmin: pode desfazer bloqueio feito por admin. veTudo: enxerga (e pode
+  // gerenciar) consultores de toda a empresa. Admin é os dois; gestor_macro2
+  // SEM gestores_ref (hoje Laura e Maria, que já enxergam a base inteira) é só
+  // veTudo — nunca ganha o poder de admin sobre bloqueios. Se alguém preencher
+  // o gestores_ref delas, o escopo volta a valer e a visão encolhe junto.
+  const ehAdmin = PERFIS_ADMIN.has(perfil);
+  const veTudo = ehAdmin || (perfil === 'gestor_macro2' && !escopo);
   if (!veTudo && !escopo) throw new ErroHttp(403, 'Seu perfil não tem uma equipe/gestor definido — peça ao admin');
-  return { authUser, perfilRow, perfil, escopo, veTudo };
+  return { authUser, perfilRow, perfil, escopo, veTudo, ehAdmin };
 }
 
 // A conta de consultor está "abaixo" de quem chamou?
@@ -145,7 +152,7 @@ function nivelDoBloqueio(ativo, bloqueio) {
 
 // Pode reativar? Bloqueio feito por admin só admin desfaz.
 function podeReativar(ctx, nivel) {
-  return nivel !== 'admin' || ctx.veTudo;
+  return nivel !== 'admin' || ctx.ehAdmin;
 }
 
 function auditar(ctx, acao, alvo) {
@@ -267,12 +274,12 @@ export default async function handler(req, res) {
       }
       // Quem não é admin não pode "rebaixar" um bloqueio de admin re-bloqueando
       // por cima (isso trocaria o nível e liberaria a reativação por gestor).
-      if (bloquear && alvo.nivel_bloqueio === 'admin' && !ctx.veTudo) {
+      if (bloquear && alvo.nivel_bloqueio === 'admin' && !ctx.ehAdmin) {
         throw new ErroHttp(403, 'Esse acesso já está bloqueado por um administrador');
       }
 
       const corpoAuth = bloquear
-        ? { ban_duration: '876000h', app_metadata: { bloqueio: { nivel: ctx.veTudo ? 'admin' : 'gestor', por: ctx.authUser.email, em: new Date().toISOString() } } }
+        ? { ban_duration: '876000h', app_metadata: { bloqueio: { nivel: ctx.ehAdmin ? 'admin' : 'gestor', por: ctx.authUser.email, em: new Date().toISOString() } } }
         : { ban_duration: 'none', app_metadata: { bloqueio: null } };
       const r = await supa(`/auth/v1/admin/users/${alvo.id}`, { method: 'PUT', body: corpoAuth });
       if (!r.ok) throw new ErroHttp(502, 'Não consegui alterar o bloqueio');
