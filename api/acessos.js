@@ -1,5 +1,5 @@
-// Gestão de acessos de CONSULTOR por quem está acima deles (admin, gestores,
-// supervisão): criar, listar, bloquear/reativar e redefinir senha.
+// Gestão de acessos de CONSULTOR por quem está acima deles (admin e gestores):
+// criar, listar, bloquear/reativar e redefinir senha.
 //
 // Tudo aqui roda com a chave de serviço do Supabase, então a autorização é
 // 100% daqui — o navegador só pede, nunca decide:
@@ -21,10 +21,12 @@ const SUPA_URL = 'https://kzlchetrpsfefwybaaoy.supabase.co';
 // requisição (Host/X-Forwarded-Host), senão dava pra apontar pra outro servidor.
 const ORIGEM_DASH = 'https://vst-dashboard.vercel.app';
 
+// Admin e gestores. Supervisão NÃO gerencia acesso (decisão do negócio) — e
+// isso vale mesmo que alguém receba 'acessos' em acesso_extra_abas: a aba pode
+// até aparecer, mas o servidor recusa.
 const PERFIS_QUE_GERENCIAM = new Set([
   'admin', 'admin_beta',
   'gestor_macro', 'gestor_macro2', 'gestor_macro3', 'gestor', 'gestor_beta',
-  'supervisao', 'supervisao_beta',
 ]);
 const PERFIS_VEEM_TUDO = new Set(['admin', 'admin_beta']);
 
