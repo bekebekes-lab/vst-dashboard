@@ -11785,11 +11785,14 @@ function acessosRenderLista() {
   };
   const botao = (acao, id, rotulo, extra = '') =>
     `<button class="btn-secondary" style="padding:3px 10px;font-size:11px;margin-right:6px;" onclick="acessosAcao('${acao}','${escapeJsAttr(id)}')" ${extra}>${rotulo}</button>`;
+  const botaoExcluir = c => c.pode_excluir
+    ? `<button class="btn-secondary" style="padding:3px 10px;font-size:11px;margin-right:6px;color:var(--red-sem);border-color:var(--red-sem);" onclick="acessosAcao('excluir','${escapeJsAttr(c.id)}')">Excluir login</button>`
+    : '';
   const acoes = c => {
-    if (c.ativo) return botao('redefinir_senha', c.id, 'Redefinir senha') + botao('bloquear', c.id, 'Bloquear');
-    return c.pode_reativar
+    if (c.ativo) return botao('redefinir_senha', c.id, 'Redefinir senha') + botao('bloquear', c.id, 'Bloquear') + botaoExcluir(c);
+    return (c.pode_reativar
       ? botao('reativar', c.id, 'Reativar')
-      : '<span style="font-size:11px;color:var(--text-3);">Só um administrador pode reativar</span>';
+      : '<span style="font-size:11px;color:var(--text-3);margin-right:6px;">Só um administrador pode reativar</span>') + botaoExcluir(c);
   };
   area.innerHTML = `<div class="table-wrap"><div class="table-scroll"><table>
     <thead><tr><th>Consultor</th><th>E-mail</th><th>Equipe</th><th>Criado por</th><th>Último acesso</th><th>Situação</th><th>Ações</th></tr></thead>
@@ -11811,12 +11814,22 @@ async function acessosAcao(acao, id) {
     bloquear: `Bloquear o acesso de ${conta.nome}? Ele deixa de entrar e de ver dados agora.`,
     reativar: `Reativar o acesso de ${conta.nome}?`,
     redefinir_senha: `Gerar uma nova senha temporária para ${conta.nome}? A senha atual deixa de valer.`,
+    excluir: `EXCLUIR o login de ${conta.nome} (${conta.email})?
+
+Isso apaga o acesso de forma definitiva e não dá para desfazer (para voltar a entrar, será preciso criar o acesso de novo).
+
+Para confirmar, digite o e-mail do login:`,
   }[acao];
-  if (!confirm(confirmacao)) return;
+  if (acao === 'excluir') {
+    const digitado = (prompt(confirmacao) || '').trim().toLowerCase();
+    if (!digitado) return;
+    if (digitado !== (conta.email || '').toLowerCase()) { acessosMostrarMsg('E-mail não confere — o login NÃO foi excluído.', true); return; }
+  } else if (!confirm(confirmacao)) return;
   acessosMostrarMsg('');
   try {
     const r = await acessosApi(acao, { id });
     if (acao === 'redefinir_senha') acessosMostrarSenha('Nova senha gerada', conta.email, r.senha_temporaria);
+    else if (acao === 'excluir') acessosMostrarMsg(r.aviso || `Login de ${conta.nome} excluído.`, !!r.aviso);
     else acessosMostrarMsg(acao === 'bloquear' ? 'Acesso bloqueado.' : 'Acesso reativado.', false);
     await acessosRecarregar();
   } catch (e) {

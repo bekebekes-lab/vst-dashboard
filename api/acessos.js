@@ -214,6 +214,7 @@ export default async function handler(req, res) {
           criado_em: info.criado_por?.em || c.criado_em || null,
           bloqueado_por: nivel, // null | 'admin' | 'gestor'
           pode_reativar: nivel ? podeReativar(ctx, nivel) : false,
+          pode_excluir: ctx.ehAdmin, // só admin/admin_beta exclui o login
         };
       });
       return res.status(200).json({ contas: lista });
@@ -261,6 +262,20 @@ export default async function handler(req, res) {
       }
       auditar(ctx, 'criar', { email, consultor_ref: cand.nome });
       return res.status(200).json({ ok: true, conta: { id: uid, email, nome, consultor_ref: cand.nome, equipe: cand.equipe }, senha_temporaria: senha });
+    }
+
+    // ── POST excluir: remove o login de vez (só admin/admin_beta) ──
+    if (action === 'excluir') {
+      if (!ctx.ehAdmin) throw new ErroHttp(403, 'Só um administrador pode excluir um login');
+      const alvo = await carregarAlvo(ctx, req, corpo.id); // só conta de consultor
+      // Ordem importa: primeiro o login. Se falhar, nada mudou. Apagar o perfil
+      // antes deixaria um login vivo sem perfil (o app trata como "sem trava").
+      const del = await supa(`/auth/v1/admin/users/${alvo.id}`, { method: 'DELETE' });
+      if (!del.ok) throw new ErroHttp(502, 'Não consegui excluir o login — nada foi alterado');
+      const delPerfil = await supa(`/rest/v1/usuarios_dashboard?id=eq.${alvo.id}`, { method: 'DELETE', prefer: 'return=minimal' });
+      auditar(ctx, 'excluir', { email: alvo.email, consultor_ref: alvo.consultor_ref });
+      if (!delPerfil.ok) return res.status(200).json({ ok: true, aviso: 'Login excluído, mas o registro de perfil não saiu — avise o suporte técnico' });
+      return res.status(200).json({ ok: true });
     }
 
     // ── POST bloquear / reativar / redefinir_senha ──
