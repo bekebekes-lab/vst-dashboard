@@ -214,7 +214,7 @@ export default async function handler(req, res) {
           criado_em: info.criado_por?.em || c.criado_em || null,
           bloqueado_por: nivel, // null | 'admin' | 'gestor'
           pode_reativar: nivel ? podeReativar(ctx, nivel) : false,
-          pode_excluir: ctx.ehAdmin, // só admin/admin_beta exclui o login
+          pode_excluir: ctx.perfil === 'admin', // só 'admin' exclui o login (admin_beta não)
         };
       });
       return res.status(200).json({ contas: lista });
@@ -264,9 +264,9 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, conta: { id: uid, email, nome, consultor_ref: cand.nome, equipe: cand.equipe }, senha_temporaria: senha });
     }
 
-    // ── POST excluir: remove o login de vez (só admin/admin_beta) ──
+    // ── POST excluir: remove o login de vez (só perfil 'admin' — admin_beta não) ──
     if (action === 'excluir') {
-      if (!ctx.ehAdmin) throw new ErroHttp(403, 'Só um administrador pode excluir um login');
+      if (ctx.perfil !== 'admin') throw new ErroHttp(403, 'Só um administrador pode excluir um login');
       const alvo = await carregarAlvo(ctx, req, corpo.id); // só conta de consultor
       // Ordem importa: primeiro o login. Se falhar, nada mudou. Apagar o perfil
       // antes deixaria um login vivo sem perfil (o app trata como "sem trava").
