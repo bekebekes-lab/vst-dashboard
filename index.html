@@ -11792,11 +11792,12 @@ function acessosRenderLista() {
       : '<span style="font-size:11px;color:var(--text-3);">Só um administrador pode reativar</span>';
   };
   area.innerHTML = `<div class="table-wrap"><div class="table-scroll"><table>
-    <thead><tr><th>Consultor</th><th>E-mail</th><th>Equipe</th><th>Último acesso</th><th>Situação</th><th>Ações</th></tr></thead>
+    <thead><tr><th>Consultor</th><th>E-mail</th><th>Equipe</th><th>Criado por</th><th>Último acesso</th><th>Situação</th><th>Ações</th></tr></thead>
     <tbody>${ACESSOS_CONTAS.map(c => `<tr>
       <td><div style="font-weight:500">${escapeHtml(c.nome || '—')}</div><div style="font-size:11px;color:var(--text-3)">${escapeHtml(c.consultor_ref || '')}</div></td>
       <td style="font-size:12px">${escapeHtml(c.email || '')}</td>
       <td style="font-size:12px">${escapeHtml(c.equipe || '—')}</td>
+      <td style="font-size:12px" ${c.criado_por_email ? `title="${escapeHtml(c.criado_por_email)}"` : ''}>${c.criado_por ? escapeHtml(c.criado_por) : '<span style="color:var(--text-3)" title="Conta criada antes do registro de autoria">—</span>'}${c.criado_em && c.criado_por ? `<div style="font-size:11px;color:var(--text-3)">${acessosFmtAcesso(c.criado_em)}</div>` : ''}</td>
       <td style="font-size:12px;white-space:nowrap">${acessosFmtAcesso(c.ultimo_acesso)}</td>
       <td style="font-size:12px;white-space:nowrap">${situacao(c)}</td>
       <td style="white-space:nowrap">${acoes(c)}</td>

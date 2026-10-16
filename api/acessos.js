@@ -137,6 +137,7 @@ async function infoAuthDeTodos() {
   (r.json?.users || []).forEach(u => mapa.set(u.id, {
     ultimo_acesso: u.last_sign_in_at || null,
     bloqueio: u.app_metadata?.bloqueio || null,
+    criado_por: u.app_metadata?.criado_por || null,
   }));
   return mapa;
 }
@@ -208,6 +209,9 @@ export default async function handler(req, res) {
         return {
           id: c.id, nome: c.nome, email: c.email, consultor_ref: c.consultor_ref,
           equipe: c.equipe_ref, ativo: c.ativo !== false, ultimo_acesso: info.ultimo_acesso || null,
+          criado_por: info.criado_por ? (info.criado_por.nome || info.criado_por.email || null) : null, // null = conta anterior ao registro
+          criado_por_email: info.criado_por?.email || null,
+          criado_em: info.criado_por?.em || c.criado_em || null,
           bloqueado_por: nivel, // null | 'admin' | 'gestor'
           pode_reativar: nivel ? podeReativar(ctx, nivel) : false,
         };
@@ -236,7 +240,11 @@ export default async function handler(req, res) {
       if (contas.some(c => (c.email || '').toLowerCase() === email)) throw new ErroHttp(409, 'Já existe uma conta com esse e-mail');
 
       const senha = senhaTemporaria();
-      const criado = await supa('/auth/v1/admin/users', { method: 'POST', body: { email, password: senha, email_confirm: true } });
+      const criado = await supa('/auth/v1/admin/users', { method: 'POST', body: {
+        email, password: senha, email_confirm: true,
+        // Quem criou o acesso: só a chave de serviço escreve em app_metadata.
+        app_metadata: { criado_por: { nome: ctx.perfilRow?.nome || ctx.authUser.email, email: ctx.authUser.email, em: new Date().toISOString() } },
+      } });
       if (!criado.ok) {
         const msg = (criado.json?.msg || criado.json?.message || '').toString();
         if (/already|registered|exists/i.test(msg)) throw new ErroHttp(409, 'Já existe uma conta com esse e-mail');
