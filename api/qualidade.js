@@ -15,7 +15,7 @@
 // UMA só aba; se aparecer em mais de uma, vale a aba mais recente onde ele
 // está ativo.
 //
-// Segurança: só perfil 'admin' (leitura e escrita). As marcações ficam em
+// Segurança: perfil 'admin' ou concessão individual 'qualidade' em acesso_extra_abas (leitura e escrita). As marcações ficam em
 // tabelas com RLS sem policy — só esta função (chave de serviço) acessa.
 import { requireAuth, getUsuarioDashboard } from './_lib/auth.js';
 import { listarAbas, lerColunas, normalizarCabecalho } from './_lib/gsheets.js';
@@ -221,7 +221,11 @@ async function exigirAdmin(req, res) {
   const authUser = await requireAuth(req, res);
   if (!authUser) return null;
   const perfilRow = await getUsuarioDashboard(req, authUser.id);
-  if (!perfilRow || perfilRow.ativo === false || perfilRow.perfil !== 'admin') {
+  // Admin, ou quem recebeu a aba por concessão individual ('qualidade' em
+  // usuarios_dashboard.acesso_extra_abas — ex.: Laura e Maria). A concessão
+  // vale por usuário e não muda o perfil nem a trava de escopo dele.
+  const concedido = (perfilRow?.acesso_extra_abas || []).includes('qualidade');
+  if (!perfilRow || perfilRow.ativo === false || (perfilRow.perfil !== 'admin' && !concedido)) {
     throw new ErroHttp(403, 'Acesso restrito a administradores');
   }
   return { authUser, perfilRow, quem: perfilRow.nome || authUser.email };
