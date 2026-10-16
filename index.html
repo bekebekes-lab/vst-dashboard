@@ -3366,7 +3366,23 @@ function atualizarCascataGerencial() {
   fillSelect('f-tag', ['Todas', ...[...tagsSet].sort()]);
 }
 
+// Defesa em profundidade: nas listas de Gestor dos filtros só entra quem tem
+// equipe DENTRO do escopo travado do usuário (gestor/supervisão). Sem isso, se
+// a base chegasse com linhas de fora, os nomes de outros gestores apareceriam
+// na lista (travada, mas visível). Sem escopo de gestor/equipe (admin,
+// consultor etc.) a lista segue exatamente como estava.
+function filtrarGestoresDoEscopo(nomes) {
+  const escopo = getEscopoTravado();
+  if (!escopo || (!escopo.gestores && !escopo.equipes)) return nomes;
+  const permitidos = new Set(
+    Object.keys(EQUIPES_GESTORES)
+      .filter(eq => linhaDentroDoEscopo({ EQUIPE: eq }, escopo, eq))
+      .map(eq => EQUIPES_GESTORES[eq]));
+  return nomes.filter(g => permitidos.has(g));
+}
+
 function popularDropdownFGestor(itens) {
+  itens = filtrarGestoresDoEscopo(itens);
   window._ddOnChange_dd_content_f_gestor = function(){
     atualizarBotaoDropdown('dd-content-f-gestor','#dd-f-gestor .dropdown-btn');
     atualizarCascataGerencial();
@@ -3376,7 +3392,16 @@ function popularDropdownFGestor(itens) {
   popularDropdownGenerico('dd-content-f-gestor', itens, window._ddOnChange_dd_content_f_gestor, '#dd-f-gestor .dropdown-btn');
 }
 
+// Mesma defesa pra lista de Equipe: só equipes dentro do escopo travado (ex.:
+// supervisão com 2 equipes não vê, na lista, as outras equipes do gestor dela).
+function filtrarEquipesDoEscopo(equipes) {
+  const escopo = getEscopoTravado();
+  if (!escopo || (!escopo.gestores && !escopo.equipes)) return equipes;
+  return equipes.filter(eq => linhaDentroDoEscopo({ EQUIPE: eq }, escopo, eq));
+}
+
 function popularDropdownFEquipe(itens) {
+  itens = filtrarEquipesDoEscopo(itens);
   window._ddOnChange_dd_content_f_equipe = function(){
     atualizarBotaoDropdown('dd-content-f-equipe','#dd-f-equipe .dropdown-btn');
     atualizarCascataGerencial();
@@ -6575,6 +6600,7 @@ function atualizarCascataProducao() {
 }
 
 function popularDropdownProdGestor(gestores) {
+  gestores = filtrarGestoresDoEscopo(gestores);
   window._ddOnChange_dd_content_prod_gestor = function(){
     atualizarBotaoDropdown('dd-content-prod-gestor','#dd-prod-gestor .dropdown-btn');
     atualizarCascataProducao();
@@ -6585,6 +6611,7 @@ function popularDropdownProdGestor(gestores) {
 }
 
 function popularDropdownEquipe(equipes) {
+  equipes = filtrarEquipesDoEscopo(equipes);
   window._ddOnChange_dd_content_prod_equipe = function(){
     atualizarBotaoDropdown('dd-content-prod-equipe','#dd-prod-equipe .dropdown-btn');
     atualizarCascataProducao();
