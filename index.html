@@ -591,6 +591,28 @@
     display: flex; align-items: center; justify-content: space-between;
     margin-bottom: 10px;
   }
+  /* Aba Qualidade (estorno): parcelas 1-9 */
+  .qual-kpis { display:flex; flex-wrap:wrap; gap:10px; margin:12px 0; }
+  .qual-kpi { background:var(--surface,#fff); border:1px solid var(--border,#e5e7eb); border-radius:var(--radius,8px); padding:10px 14px; min-width:150px; cursor:pointer; text-align:left; font:inherit; color:inherit; }
+  .qual-kpi.ativo { outline:2px solid var(--red,#b91c1c); }
+  .qual-kpi .k-t { font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--text-3); }
+  .qual-kpi .k-n { font-size:22px; font-weight:700; line-height:1.2; }
+  .qual-kpi .k-v { font-size:11.5px; color:var(--text-3); }
+  .qual-p { width:26px; height:26px; border-radius:6px; border:1px solid #cbd5e1; background:#fff; color:#64748b; font-size:11px; font-weight:700; cursor:pointer; margin:0 1px; padding:0; }
+  .qual-p.st-pago { background:#16a34a; border-color:#16a34a; color:#fff; }
+  .qual-p.st-atrasado { background:#f59e0b; border-color:#f59e0b; color:#fff; }
+  .qual-p.st-cancelado { background:#991b1b; border-color:#991b1b; color:#fff; }
+  .qual-p.st-pendente.venc { border-color:#dc2626; background:#fef2f2; color:#dc2626; }
+  .qual-sit { font-weight:600; font-size:12px; white-space:nowrap; }
+  .qual-sit.em_dia { color:#0369a1; }
+  .qual-sit.atrasado { color:#d97706; }
+  .qual-sit.cancelado { color:#991b1b; }
+  .qual-sit.concluido { color:#16a34a; }
+  .qual-barra { height:4px; background:#e5e7eb; border-radius:2px; margin-top:3px; width:90px; }
+  .qual-barra > i { display:block; height:100%; background:#0369a1; border-radius:2px; }
+  .qual-modal-fundo { position:fixed; inset:0; background:rgba(15,23,42,.45); z-index:1000; display:none; align-items:center; justify-content:center; padding:16px; }
+  .qual-modal-fundo.aberto { display:flex; }
+  .qual-modal { background:var(--surface,#fff); color:var(--text,#111827); border-radius:10px; padding:18px 20px; width:100%; max-width:420px; box-shadow:0 10px 40px rgba(0,0,0,.25); }
   .section-title {
     font-size: 12px; font-weight: 600; color: var(--text-2);
     text-transform: uppercase; letter-spacing: .06em;
@@ -1591,6 +1613,7 @@
   <button class="tab-btn active" id="tab-btn-simulador2" onclick="switchTab('simulador2', this)">Simulador 2.0</button>
   <button class="tab-btn" id="tab-btn-churn" onclick="switchTab('churn', this)">Churn</button>
   <button class="tab-btn" id="tab-btn-carteira" onclick="switchTab('carteira', this)">Carteira</button>
+  <button class="tab-btn" id="tab-btn-qualidade" onclick="switchTab('qualidade', this)">Qualidade</button>
   <button class="tab-btn" id="tab-btn-acessos" onclick="switchTab('acessos', this)">Acessos</button>
   <button class="tab-btn" id="tab-btn-conectividade" onclick="switchTab('conectividade', this)">Conectividade/SD</button>
 </div>
@@ -2554,6 +2577,54 @@
       <span class="count-badge" id="acessos-contador"></span>
     </div>
     <div id="acessos-lista-area"></div>
+  </div>
+
+  <!-- TAB QUALIDADE — acompanhamento das 9 parcelas (270 dias) por contratação, só admin -->
+  <div class="tab-panel" id="tab-qualidade">
+    <div class="filters-bar">
+      <div class="filter-group" style="min-width:240px;flex:1;">
+        <label>Buscar (pedido, CNPJ, cliente ou vendedor)</label>
+        <input type="text" id="qual-busca" autocomplete="off" oninput="qualAoFiltrarTexto()">
+      </div>
+      <div class="filter-group" style="min-width:150px;">
+        <label>Janela</label>
+        <select id="qual-janela" onchange="qualCarregar(1)">
+          <option value="andamento">Em acompanhamento (até 270d)</option>
+          <option value="encerrado">Encerradas (+270d)</option>
+          <option value="todos">Todas</option>
+        </select>
+      </div>
+      <div class="filter-group" style="min-width:130px;">
+        <label>Tipo</label>
+        <select id="qual-tipo" onchange="qualCarregar(1)">
+          <option value="">Todos</option><option value="NOVO">NOVO</option><option value="BASE">BASE</option>
+        </select>
+      </div>
+      <div class="filter-group" style="min-width:190px;">
+        <label>Equipe</label>
+        <select id="qual-equipe" onchange="qualCarregar(1)"><option value="">Todas</option></select>
+      </div>
+      <div class="filter-group" style="min-width:130px;">
+        <label>DATA REF de</label>
+        <input type="date" id="qual-de" onchange="qualCarregar(1)">
+      </div>
+      <div class="filter-group" style="min-width:130px;">
+        <label>DATA REF até</label>
+        <input type="date" id="qual-ate" onchange="qualCarregar(1)">
+      </div>
+      <div class="filter-group" style="justify-content:flex-end;">
+        <label>&nbsp;</label>
+        <button class="btn-secondary" onclick="qualCarregar(1, true)" style="padding:7px 14px;font-size:12px;white-space:nowrap;" title="Relê as planilhas do CRM (a base é guardada por 5 minutos)">↻ Atualizar base</button>
+      </div>
+    </div>
+    <div id="qual-kpis" class="qual-kpis"></div>
+    <div id="qual-msg"></div>
+    <div id="qual-bulk"></div>
+    <div id="qual-lista-area"></div>
+    <div id="qual-pag" style="margin:12px 0;display:flex;gap:10px;align-items:center;font-size:12.5px;"></div>
+    <div class="qual-modal-fundo" id="qual-modal" onclick="if(event.target===this)qualFecharMarcacao()">
+      <div class="qual-modal" id="qual-modal-corpo"></div>
+    </div>
   </div>
 
   <!-- TAB CARTEIRA — planilha separada, só admin -->
@@ -7253,6 +7324,7 @@ function switchTab(name, el) {
   if (name === 'simulador2') initSimulador2();
   if (name === 'churn') initChurn();
   if (name === 'carteira') initCarteira();
+  if (name === 'qualidade') initQualidade();
   if (name === 'acessos') initAcessos();
   if (name === 'conectividade') initConectividade();
 
@@ -7285,7 +7357,7 @@ let USUARIO_ATUAL = null;
 // aplicarPermissoes() quanto pelo preenchimento da preferência "aba padrão
 // ao abrir" no drawer de conta e pelo redirecionamento pós-login.
 const ABAS_PERMITIDAS_POR_PERFIL = {
-  'admin':          ['gerencial', 'producao', 'discadora', 'simulador2', 'churn', 'carteira', 'acessos', 'conectividade'],
+  'admin':          ['gerencial', 'producao', 'discadora', 'simulador2', 'churn', 'carteira', 'qualidade', 'acessos', 'conectividade'],
   'admin_beta':     ['gerencial', 'producao', 'carteira', 'acessos', 'conectividade'],
   'gestor_macro':   ['gerencial', 'discadora', 'acessos', 'conectividade'],
   'gestor_macro2':  ['gerencial', 'producao', 'discadora', 'acessos', 'conectividade'],
@@ -7320,6 +7392,7 @@ const TAB_LABELS = {
   simulador2: '🧮 Simulador 2.0',
   churn: '📉 Churn',
   carteira: '💼 Carteira',
+  qualidade: '🛡️ Qualidade',
   acessos: '🔑 Acessos',
   conectividade: '📡 Conectividade/SD',
 };
@@ -11834,6 +11907,243 @@ Para confirmar, digite o e-mail do login:`,
     await acessosRecarregar();
   } catch (e) {
     acessosMostrarMsg(e.message, true);
+  }
+}
+
+// ─── QUALIDADE: acompanhamento das 9 parcelas (270 dias) por contratação ─────
+// Contratação = (pedido, DATA REF). A regra, as datas e a situação são
+// calculadas no servidor (/api/qualidade, só admin): aqui só pede e mostra.
+let QUAL_DADOS = null;
+let QUAL_PAGINA = 1;
+let QUAL_TIMER = null;
+let QUAL_SELECAO = new Map(); // "pedido|data_ref" -> {pedido, data_ref}
+let QUAL_CARREGOU = false;
+let QUAL_SITUACAO = 'todas';
+let QUAL_REQ = 0;
+
+async function qualApi(action, params, body) {
+  const qs = new URLSearchParams({ action, ...(params || {}) });
+  const res = await fetch('/api/qualidade?' + qs.toString(), {
+    method: body ? 'POST' : 'GET',
+    headers: { ...authHeaders(), ...(body ? { 'Content-Type': 'application/json' } : {}) },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  let json = {};
+  try { json = await res.json(); } catch (e) { /* corpo vazio */ }
+  if (!res.ok) { const err = new Error(json.error || ('Erro ' + res.status)); err.setup = !!json.setup; throw err; }
+  return json;
+}
+
+function qualFmtData(iso) { return iso ? iso.split('-').reverse().join('/') : ''; }
+function qualFmtMoeda(v) { return (v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
+const QUAL_SIT_ROTULO = { em_dia: 'Em dia', atrasado: 'Atrasado', cancelado: 'Cancelado', concluido: 'Concluído' };
+const QUAL_ST_ROTULO = { pago: 'Pago', atrasado: 'Atrasado', cancelado: 'Cancelado', pendente: 'Pendente' };
+
+function qualMensagem(texto, erro) {
+  document.getElementById('qual-msg').innerHTML = texto
+    ? `<div style="margin:8px 0;font-size:12.5px;font-weight:500;color:${erro ? 'var(--red-sem)' : '#16a34a'};">${escapeHtml(texto)}</div>` : '';
+}
+
+function initQualidade() {
+  if (!QUAL_CARREGOU) qualCarregar(1);
+}
+
+function qualAoFiltrarTexto() {
+  clearTimeout(QUAL_TIMER);
+  QUAL_TIMER = setTimeout(() => qualCarregar(1), 400);
+}
+
+async function qualCarregar(pagina, refresh) {
+  QUAL_PAGINA = pagina || 1;
+  const eu = ++QUAL_REQ;
+  const area = document.getElementById('qual-lista-area');
+  area.innerHTML = '<div class="loading-state"><div class="loading-spinner"></div><p>Carregando contratações (lê as planilhas do CRM na primeira vez, pode levar alguns segundos)...</p></div>';
+  qualMensagem('');
+  const params = {
+    pagina: String(QUAL_PAGINA),
+    janela: document.getElementById('qual-janela').value,
+    situacao: QUAL_SITUACAO,
+    tipo: document.getElementById('qual-tipo').value,
+    equipe: document.getElementById('qual-equipe').value,
+    de: document.getElementById('qual-de').value,
+    ate: document.getElementById('qual-ate').value,
+    busca: document.getElementById('qual-busca').value.trim(),
+  };
+  Object.keys(params).forEach(k => { if (!params[k]) delete params[k]; });
+  if (refresh) params.refresh = '1';
+  try {
+    const d = await qualApi('lista', params);
+    if (eu !== QUAL_REQ) return; // chegou uma consulta mais nova
+    QUAL_DADOS = d;
+    QUAL_CARREGOU = true;
+    const sel = document.getElementById('qual-equipe');
+    if (sel.options.length <= 1) {
+      sel.innerHTML = '<option value="">Todas</option>' + d.equipes.map(e => `<option value="${escapeHtml(e)}">${escapeHtml(e)}</option>`).join('');
+    }
+    qualRenderKpis();
+    qualRenderLista();
+  } catch (e) {
+    if (eu !== QUAL_REQ) return;
+    document.getElementById('qual-kpis').innerHTML = '';
+    document.getElementById('qual-pag').innerHTML = '';
+    if (e.setup) {
+      area.innerHTML = '<div class="error-state"><strong>Falta criar as tabelas da aba Qualidade no Supabase</strong>Rode o arquivo supabase/migrations/20261016000001_qualidade_parcelas.sql no SQL Editor do Supabase e recarregue esta aba.</div>';
+    } else {
+      area.innerHTML = `<div class="error-state"><strong>Erro ao carregar a Qualidade</strong>${escapeHtml(e.message)}</div>`;
+    }
+  }
+}
+
+function qualFiltrarSituacao(sit) {
+  QUAL_SITUACAO = (QUAL_SITUACAO === sit) ? 'todas' : sit;
+  qualCarregar(1);
+}
+
+function qualRenderKpis() {
+  const r = QUAL_DADOS.resumo;
+  const chip = (sit, titulo) => {
+    const n = sit === 'todas' ? r.total : (r.por_situacao[sit] || 0);
+    const v = sit === 'todas' ? r.valor_total : (r.valor_por_situacao[sit] || 0);
+    return `<button class="qual-kpi ${QUAL_SITUACAO === sit ? 'ativo' : ''}" onclick="qualFiltrarSituacao('${sit}')">
+      <div class="k-t">${titulo}</div><div class="k-n">${n.toLocaleString('pt-BR')}</div><div class="k-v">${qualFmtMoeda(v)}</div></button>`;
+  };
+  document.getElementById('qual-kpis').innerHTML =
+    chip('todas', 'Contratações') + chip('em_dia', 'Em dia') + chip('atrasado', 'Atrasadas / sem marcação') +
+    chip('cancelado', 'Canceladas') + chip('concluido', 'Concluídas (9/9)') +
+    (r.fora_de_ativo ? `<div class="qual-kpi" style="cursor:default;border-color:#f59e0b;"><div class="k-t">⚠ Não estão mais ativas no CRM</div><div class="k-n">${r.fora_de_ativo.toLocaleString('pt-BR')}</div><div class="k-v">etapa atual diferente de ATIVO/CONECTADO</div></div>` : '');
+}
+
+function qualChave(c) { return c.pedido + '|' + c.data_ref; }
+
+function qualRenderLista() {
+  const d = QUAL_DADOS;
+  const area = document.getElementById('qual-lista-area');
+  if (!d.contratos.length) {
+    area.innerHTML = '<div class="coming-soon"><p>Nenhuma contratação para esses filtros.</p></div>';
+    document.getElementById('qual-pag').innerHTML = '';
+    qualRenderBulk();
+    return;
+  }
+  const linhas = d.contratos.map((c, i) => {
+    const pills = c.parcelas.map(p => {
+      const dica = `Parcela ${p.n} — vence ${qualFmtData(p.venc)} — ${QUAL_ST_ROTULO[p.status]}${p.vencida && p.status === 'pendente' ? ' (vencida sem marcação)' : ''}${p.por ? ' — por ' + p.por : ''}`;
+      return `<button class="qual-p st-${p.status}${p.vencida && p.status === 'pendente' ? ' venc' : ''}" title="${escapeHtml(dica)}" onclick="qualAbrirMarcacao(${i},${p.n})">${p.n}</button>`;
+    }).join('');
+    const pctDia = Math.max(0, Math.min(100, Math.round(c.dia / 270 * 100)));
+    const diaTxt = c.dia > 270 ? `${c.dia}d · encerrada` : `Dia ${Math.max(c.dia, 0)}/270`;
+    const alerta = c.ainda_ativo ? '' : `<div style="font-size:11px;color:#b45309;font-weight:600;" title="Etapa atual no CRM">⚠ ${escapeHtml(c.etapa_atual || 'sem etapa')}</div>`;
+    const marcada = QUAL_SELECAO.has(qualChave(c)) ? 'checked' : '';
+    const itens = c.itens.map(it => `<div>${escapeHtml(it.p || '—')} <span style="color:var(--text-3)">· ${escapeHtml(it.n || 'sem número')}</span> <strong style="float:right">${qualFmtMoeda(it.v)}</strong></div>`).join('');
+    return `<tr>
+      <td><input type="checkbox" ${marcada} onchange="qualSelecionar(${i}, this.checked)"></td>
+      <td style="font-size:12px;white-space:nowrap"><strong>${escapeHtml(c.pedido)}</strong><div style="font-size:11px;color:var(--text-3)">${escapeHtml(c.tipo)}</div></td>
+      <td style="font-size:12px;min-width:200px"><div style="font-weight:500">${escapeHtml(c.cliente || '—')}</div><div style="font-size:11px;color:var(--text-3)">${escapeHtml(c.cnpj)}</div>${alerta}</td>
+      <td style="font-size:12px"><div>${escapeHtml(c.proprietario || '—')}</div><div style="font-size:11px;color:var(--text-3)">${escapeHtml(c.equipe)}</div></td>
+      <td style="font-size:12px;white-space:nowrap">${qualFmtData(c.data_ref)}<div style="font-size:11px;color:var(--text-3)">${diaTxt}</div><div class="qual-barra"><i style="width:${pctDia}%"></i></div></td>
+      <td style="font-size:12px;white-space:nowrap;text-align:right">${qualFmtMoeda(c.valor)}<div><a href="#" style="font-size:11px" onclick="event.preventDefault();qualToggleItens(${i})">${c.itens.length} item(ns) ▾</a></div></td>
+      <td style="white-space:nowrap">${pills}</td>
+      <td><span class="qual-sit ${c.situacao}">${QUAL_SIT_ROTULO[c.situacao]}</span></td>
+    </tr>
+    <tr id="qual-itens-${i}" style="display:none"><td></td><td colspan="7" style="font-size:12px;background:var(--bg-2,#f8fafc);padding:8px 14px;">${itens}</td></tr>`;
+  }).join('');
+  const todasMarcadas = d.contratos.every(c => QUAL_SELECAO.has(qualChave(c)));
+  area.innerHTML = `<div class="table-wrap"><div class="table-scroll"><table>
+    <thead><tr><th><input type="checkbox" ${todasMarcadas ? 'checked' : ''} onchange="qualSelecionarTodos(this.checked)" title="Selecionar a página"></th>
+      <th>Pedido</th><th>Cliente</th><th>Vendedor / Equipe</th><th>Data ref.</th><th style="text-align:right">Valor</th><th>Parcelas (1–9)</th><th>Situação</th></tr></thead>
+    <tbody>${linhas}</tbody></table></div></div>`;
+  const totalPag = Math.max(1, Math.ceil(d.total_filtrado / d.por_pagina));
+  document.getElementById('qual-pag').innerHTML = `
+    <button class="btn-secondary" style="padding:4px 12px;font-size:12px" ${d.pagina <= 1 ? 'disabled' : ''} onclick="qualCarregar(${d.pagina - 1})">← Anterior</button>
+    <span>Página ${d.pagina} de ${totalPag} · ${d.total_filtrado.toLocaleString('pt-BR')} contratações</span>
+    <button class="btn-secondary" style="padding:4px 12px;font-size:12px" ${d.pagina >= totalPag ? 'disabled' : ''} onclick="qualCarregar(${d.pagina + 1})">Próxima →</button>
+    <span style="margin-left:auto;color:var(--text-3)">Base lida em ${new Date(d.base_atualizada_em).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'short' })}</span>`;
+  qualRenderBulk();
+}
+
+function qualToggleItens(i) {
+  const tr = document.getElementById('qual-itens-' + i);
+  if (tr) tr.style.display = tr.style.display === 'none' ? '' : 'none';
+}
+
+function qualSelecionar(i, marcado) {
+  const c = QUAL_DADOS.contratos[i];
+  if (marcado) QUAL_SELECAO.set(qualChave(c), { pedido: c.pedido, data_ref: c.data_ref });
+  else QUAL_SELECAO.delete(qualChave(c));
+  qualRenderBulk();
+}
+
+function qualSelecionarTodos(marcado) {
+  QUAL_DADOS.contratos.forEach(c => {
+    if (marcado) QUAL_SELECAO.set(qualChave(c), { pedido: c.pedido, data_ref: c.data_ref });
+    else QUAL_SELECAO.delete(qualChave(c));
+  });
+  qualRenderLista();
+}
+
+function qualRenderBulk() {
+  const el = document.getElementById('qual-bulk');
+  const n = QUAL_SELECAO.size;
+  if (!n) { el.innerHTML = ''; return; }
+  el.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:10px 14px;margin-bottom:10px;border:1px solid var(--border,#e5e7eb);border-radius:var(--radius,8px);background:var(--bg-2,#f8fafc);font-size:12.5px;">
+    <strong>${n} selecionada(s)</strong>
+    <span>Marcar da parcela 1 até a</span>
+    <select id="qual-bulk-ate" style="padding:4px 6px">${[1, 2, 3, 4, 5, 6, 7, 8, 9].map(k => `<option value="${k}" ${k === 9 ? 'selected' : ''}>${k}</option>`).join('')}</select>
+    <span>como</span>
+    <select id="qual-bulk-status" style="padding:4px 6px"><option value="pago">Pago</option><option value="atrasado">Atrasado</option><option value="cancelado">Cancelado</option></select>
+    <span style="color:var(--text-3)">(só parcelas já vencidas e ainda sem marcação — nunca sobrescreve)</span>
+    <button class="btn-secondary" style="padding:4px 12px;font-size:12px" onclick="qualAplicarLote()">Aplicar</button>
+    <button class="btn-secondary" style="padding:4px 12px;font-size:12px" onclick="QUAL_SELECAO.clear();qualRenderLista()">Limpar seleção</button>
+  </div>`;
+}
+
+async function qualAplicarLote() {
+  const ate = Number(document.getElementById('qual-bulk-ate').value);
+  const status = document.getElementById('qual-bulk-status').value;
+  const itens = [...QUAL_SELECAO.values()];
+  if (itens.length > 200) { qualMensagem('Selecione no máximo 200 contratações por vez.', true); return; }
+  if (!confirm(`Marcar como "${QUAL_ST_ROTULO[status]}" as parcelas 1 a ${ate} (já vencidas e sem marcação) de ${itens.length} contratação(ões)?`)) return;
+  try {
+    const r = await qualApi('marcar_lote', {}, { itens, ate_parcela: ate, status });
+    QUAL_SELECAO.clear();
+    await qualCarregar(QUAL_PAGINA);
+    qualMensagem(`${r.parcelas_marcadas} parcela(s) marcada(s).`, false);
+  } catch (e) { qualMensagem(e.message, true); }
+}
+
+function qualAbrirMarcacao(i, n) {
+  const c = QUAL_DADOS.contratos[i];
+  const p = c.parcelas[n - 1];
+  const opc = ['pago', 'atrasado', 'cancelado', 'pendente'].map(s =>
+    `<label style="display:block;margin:4px 0;font-size:13px;"><input type="radio" name="qual-st" value="${s}" ${p.status === s ? 'checked' : ''}> ${QUAL_ST_ROTULO[s]}${s === 'pendente' ? ' (remove a marcação)' : ''}</label>`).join('');
+  document.getElementById('qual-modal-corpo').innerHTML = `
+    <div style="font-weight:700;font-size:15px;margin-bottom:2px;">Parcela ${n} de 9</div>
+    <div style="font-size:12px;color:var(--text-3);margin-bottom:10px;">Pedido ${escapeHtml(c.pedido)} · ${escapeHtml(c.cliente || '')}<br>Vence em ${qualFmtData(p.venc)} (${n * 30} dias após ${qualFmtData(c.data_ref)})${p.vencida ? '' : ' — ainda não venceu'}</div>
+    ${opc}
+    <input type="text" id="qual-obs" maxlength="300" placeholder="Observação (opcional)" value="${escapeHtml(p.obs || '')}" style="width:100%;margin-top:8px;padding:6px 8px;">
+    ${p.por ? `<div style="font-size:11px;color:var(--text-3);margin-top:6px;">Última marcação: ${escapeHtml(p.por)} em ${new Date(p.em).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'short' })}</div>` : ''}
+    <div id="qual-modal-erro" style="font-size:12px;color:var(--red-sem);min-height:16px;margin-top:6px;"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:6px;">
+      <button class="btn-secondary" style="padding:5px 14px;font-size:12px" onclick="qualFecharMarcacao()">Cancelar</button>
+      <button class="btn-secondary" id="qual-salvar" style="padding:5px 14px;font-size:12px;font-weight:700" onclick="qualSalvarMarcacao('${escapeJsAttr(c.pedido)}','${escapeJsAttr(c.data_ref)}',${n})">Salvar</button>
+    </div>`;
+  document.getElementById('qual-modal').classList.add('aberto');
+}
+
+function qualFecharMarcacao() {
+  document.getElementById('qual-modal').classList.remove('aberto');
+}
+
+async function qualSalvarMarcacao(pedido, dataRef, n) {
+  const status = (document.querySelector('input[name="qual-st"]:checked') || {}).value;
+  const btn = document.getElementById('qual-salvar');
+  btn.disabled = true;
+  try {
+    await qualApi('marcar', {}, { pedido, data_ref: dataRef, parcela: n, status, observacao: document.getElementById('qual-obs').value });
+    qualFecharMarcacao();
+    await qualCarregar(QUAL_PAGINA);
+  } catch (e) {
+    document.getElementById('qual-modal-erro').textContent = e.message;
+    btn.disabled = false;
   }
 }
 

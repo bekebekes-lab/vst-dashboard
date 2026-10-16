@@ -25,5 +25,10 @@
         }
       ]
     }
-  ]
+  ],
+  "functions": {
+    "api/qualidade.js": {
+      "maxDuration": 60
+    }
+  }
 }
