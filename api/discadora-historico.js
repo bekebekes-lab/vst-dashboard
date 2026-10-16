@@ -29,6 +29,7 @@ export default async function handler(req, res) {
   if (!desde || !ate) return res.status(400).json({ error: 'Parâmetros "desde" e "ate" são obrigatórios (YYYY-MM-DD)' });
 
   const perfilRow = await getUsuarioDashboard(req, authUser.id);
+  if (perfilRow && perfilRow.ativo === false) return res.status(403).json({ error: 'Acesso desativado' });
   const perfil = perfilRow?.perfil || 'consultor';
   const grupoTravado = getGrupoTravado(perfil, perfilRow);
 

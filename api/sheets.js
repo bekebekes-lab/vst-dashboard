@@ -93,6 +93,12 @@ export default async function handler(req, res) {
   const perfilRow = await getUsuarioDashboard(req, authUser.id);
   const perfilUsuario = perfilRow?.perfil || 'consultor';
 
+  // Conta bloqueada (aba Acessos / admin): corta o dado já na hora, mesmo com
+  // token ainda válido — o bloqueio no Auth só impede NOVOS tokens.
+  if (perfilRow && perfilRow.ativo === false) {
+    return res.status(403).json({ error: 'Acesso desativado' });
+  }
+
   // 'suporte' só existe pra dar acesso à Conectividade/EV (dados via RLS
   // própria, nunca por aqui) — não tem NENHUM uso legítimo de dado de
   // planilha. Bloqueia explícito em vez de confiar só na aba escondida na
