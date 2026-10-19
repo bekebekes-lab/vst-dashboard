@@ -225,7 +225,7 @@ async function exigirAdmin(req, res) {
   // usuarios_dashboard.acesso_extra_abas — ex.: Laura e Maria). A concessão
   // vale por usuário e não muda o perfil nem a trava de escopo dele.
   const concedido = (perfilRow?.acesso_extra_abas || []).includes('qualidade');
-  if (!perfilRow || perfilRow.ativo === false || (perfilRow.perfil !== 'admin' && !concedido)) {
+  if (!perfilRow || perfilRow.ativo === false || (!['admin', 'admin_gestao'].includes(perfilRow.perfil) && !concedido)) {
     throw new ErroHttp(403, 'Acesso restrito a administradores');
   }
   return { authUser, perfilRow, quem: perfilRow.nome || authUser.email };

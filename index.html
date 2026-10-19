@@ -3632,6 +3632,24 @@ function thDrill(col, label, currentCol, currentAsc, onclickFn) {
 // calcula o escopo real do perfil direto de USUARIO_ATUAL — sem depender de
 // nenhum elemento da tela — para ser usada como um filtro obrigatório e
 // independente em cima de ALL_DATA, em Gerencial e Produção.
+// admin_gestao: "quase admin" — mesmas abas/ações do admin, sem trava de escopo
+// (getEscopoTravado() devolve null pra ele), EXCETO no Gerencial Financeiro e
+// no Painel Analítico, onde só enxerga a gestão dela (gestor_ref/gestores_ref).
+// Falha fechada: sem gestão definida no perfil, essas duas abas ficam vazias.
+function ehAdminLike(perfil) {
+  return perfil === 'admin' || perfil === 'admin_gestao';
+}
+function getEscopoGestaoPropria() {
+  const u = USUARIO_ATUAL;
+  if (u?.perfil !== 'admin_gestao') return null;
+  const g = (u.gestores_ref || []).length ? u.gestores_ref : (u.gestor_ref ? [u.gestor_ref] : []);
+  return { gestores: new Set(g) };
+}
+// Escopo usado pelo Gerencial Financeiro: o travado do perfil, ou a gestão própria.
+function getEscopoFinanceiro() {
+  return getEscopoTravado() || getEscopoGestaoPropria();
+}
+
 function getEscopoTravado() {
   const u = USUARIO_ATUAL;
   const p = u?.perfil;
@@ -4429,6 +4447,7 @@ function drillFila(categoria, fila) {
 const GF_EMAILS_PERMITIDOS = ['raphael@vstgroup.com.br', 'everton@vstgroup.com.br', 'financeiro@vstgroup.com.br']; // financeiro@ = Dariane Slaski
 function gfPodeVer(usuario) {
   const u = usuario === undefined ? USUARIO_ATUAL : usuario;
+  if (u?.perfil === 'admin_gestao') return true; // vê só a gestão dela (getEscopoFinanceiro)
   return u?.perfil === 'admin' && GF_EMAILS_PERMITIDOS.includes((u.email || '').trim().toLowerCase());
 }
 const GF_CATS = ['GERAL', 'GROSS', 'VOZ NOVO', 'PORTABILIDADE', 'RENOVAÇÃO', 'BL', 'TITULARIDADE', 'SERV. DIGITAIS'];
@@ -4773,7 +4792,7 @@ function gfRenderSubgrupo(cat, { grupo, itens }, receita) {
 function renderGerFin() {
   if (!gfPodeVer() || !ALL_DATA.length) return;
   const f = gfLerFiltros();
-  const escopo = getEscopoTravado();
+  const escopo = getEscopoFinanceiro();
   const novaMetrica = () => ({ total: 0, filas: {}, totalRec: 0, filasRec: {} });
   const metrics = {};
   GF_CATS.forEach(c => metrics[c] = novaMetrica());
@@ -4891,7 +4910,7 @@ function gfDrill(categoria, fila) {
   if (!gfPodeVer() || !ALL_DATA.length) return;
   gfLastDrill = [categoria, fila];
   const f = gfLerFiltros();
-  const escopo = getEscopoTravado();
+  const escopo = getEscopoFinanceiro();
   const receita = f.receita;
   const fat = f.fatores ? gfFatoresAtuais() : null;
 
@@ -5020,7 +5039,7 @@ const PN = {
   atualizadoEm: null,
 };
 
-function pnPodeVer() { return USUARIO_ATUAL?.perfil === 'admin'; }
+function pnPodeVer() { return ehAdminLike(USUARIO_ATUAL?.perfil); }
 
 // ── Carga dos dados ──────────────────────────────────────────────────────────
 function pnListarMeses() {
@@ -5102,7 +5121,9 @@ async function pnCarregarMes(m) {
       return o;
     });
   }
-  return pnCompactar(objs, m.chave);
+  const recs = pnCompactar(objs, m.chave); // fatores calculados na base inteira, antes do filtro
+  const escopoGestao = getEscopoGestaoPropria();
+  return escopoGestao ? recs.filter(r => escopoGestao.gestores.has(r.ge)) : recs;
 }
 
 function pnIndexarOpcoes(recs) {
@@ -6558,7 +6579,7 @@ function verificarEquipesSemHierarquia() {
 
   // Aviso técnico só interessa ao admin — os demais perfis não têm o que
   // fazer com isso, e a mensagem menciona nomes internos de variáveis.
-  if (USUARIO_ATUAL?.perfil !== 'admin') {
+  if (!ehAdminLike(USUARIO_ATUAL?.perfil)) {
     alertaEl.innerHTML = '';
     return;
   }
@@ -7358,6 +7379,7 @@ let USUARIO_ATUAL = null;
 // ao abrir" no drawer de conta e pelo redirecionamento pós-login.
 const ABAS_PERMITIDAS_POR_PERFIL = {
   'admin':          ['gerencial', 'producao', 'discadora', 'simulador2', 'churn', 'carteira', 'qualidade', 'acessos', 'conectividade'],
+  'admin_gestao':   ['gerencial', 'producao', 'discadora', 'simulador2', 'churn', 'carteira', 'qualidade', 'acessos', 'conectividade'],
   'admin_beta':     ['gerencial', 'producao', 'carteira', 'acessos', 'conectividade'],
   'gestor_macro':   ['gerencial', 'discadora', 'acessos', 'conectividade'],
   'gestor_macro2':  ['gerencial', 'producao', 'discadora', 'acessos', 'conectividade'],
@@ -7381,7 +7403,7 @@ function getAbasPermitidas(usuario) {
   // Gerencial Financeiro (piloto): lista fechada de e-mails, não vale pra todo admin.
   // Painel Analítico: todo admin.
   const comGerfin = gfPodeVer(usuario) ? [...new Set([...todas, 'gerfin'])] : todas.filter(a => a !== 'gerfin');
-  return usuario?.perfil === 'admin' ? [...new Set([...comGerfin, 'painel'])] : comGerfin.filter(a => a !== 'painel');
+  return ehAdminLike(usuario?.perfil) ? [...new Set([...comGerfin, 'painel'])] : comGerfin.filter(a => a !== 'painel');
 }
 const TAB_LABELS = {
   gerencial: '📊 Gerencial',
@@ -7449,7 +7471,7 @@ function _onMetaInput() {
 // Salva ao fechar/recarregar com fetch keepalive
 window.addEventListener('beforeunload', () => {
   if (!_metasSujas || !USUARIO_ATUAL) return;
-  if (USUARIO_ATUAL.perfil !== 'admin') return;
+  if (!ehAdminLike(USUARIO_ATUAL.perfil)) return;
 
   const periodo = getPeriodoAtivo();
   const rows = [];
@@ -7486,7 +7508,7 @@ window.addEventListener('beforeunload', () => {
 // carregada se tiver edição pendente não salva.
 window.addEventListener('beforeunload', () => {
   if (!_simulador2Sujo || !USUARIO_ATUAL || !_s2PeriodoCarregado) return;
-  if (USUARIO_ATUAL.perfil !== 'admin') return;
+  if (!ehAdminLike(USUARIO_ATUAL.perfil)) return;
 
   const campos = s2CamposParaSalvar();
   const rows = Object.entries(campos).map(([chave, valor]) => ({ periodo: _s2PeriodoCarregado, chave, valor }));
@@ -7566,7 +7588,7 @@ async function salvarTudoSimulador(silencioso = false) {
 
 async function salvarMetasNoBanco() {
   if (!USUARIO_ATUAL) return;
-  if (USUARIO_ATUAL.perfil !== 'admin') {
+  if (!ehAdminLike(USUARIO_ATUAL.perfil)) {
     alert('Você não tem permissão para editar metas.');
     return;
   }
@@ -7626,7 +7648,7 @@ async function carregarConfigSimulador() {
 
 async function salvarConfigSimulador() {
   if (!USUARIO_ATUAL) return;
-  if (USUARIO_ATUAL.perfil !== 'admin') return;
+  if (!ehAdminLike(USUARIO_ATUAL.perfil)) return;
   const configs = [
     { chave: 'mult_virtua',   valor: parseFloat(document.getElementById('mult-virtua')?.value)    || 4 },
     { chave: 'mult_voz_novo', valor: parseFloat(document.getElementById('mult-voz-novo')?.value)  || 5.5 },
@@ -8307,7 +8329,7 @@ function resetarCamposSimulador2() {
 }
 
 async function salvarSimulador2(silencioso, periodoForcado) {
-  if (!USUARIO_ATUAL || USUARIO_ATUAL.perfil !== 'admin') {
+  if (!USUARIO_ATUAL || !ehAdminLike(USUARIO_ATUAL.perfil)) {
     if (!silencioso) alert('Apenas administradores podem salvar o Simulador 2.0.');
     return;
   }
@@ -8384,7 +8406,7 @@ async function carregarHistoricoListaSimulador2() {
 async function trocarPeriodoSimulador2(novoPeriodo) {
   if (!novoPeriodo) return;
   if (_simulador2Sujo && _s2PeriodoCarregado && _s2PeriodoCarregado !== novoPeriodo &&
-      USUARIO_ATUAL && USUARIO_ATUAL.perfil === 'admin') {
+      USUARIO_ATUAL && ehAdminLike(USUARIO_ATUAL.perfil)) {
     await salvarSimulador2(true, _s2PeriodoCarregado).catch(e => console.warn('Falha ao autosalvar Simulador 2.0:', e));
   }
   _simulador2Sujo = false;
@@ -8451,7 +8473,7 @@ function exportarSimulador2() {
 // ─── TROCA DE MÊS ────────────────────────────────────────────────────────────
 async function trocarMes() {
   // Salva metas pendentes do período anterior
-  if (_metasSujas && USUARIO_ATUAL && USUARIO_ATUAL.perfil === 'admin') {
+  if (_metasSujas && USUARIO_ATUAL && ehAdminLike(USUARIO_ATUAL.perfil)) {
     await salvarMetasNoBanco().catch(e => console.warn('Falha ao salvar ao trocar mês:', e));
     _metasSujas = false;
   }
@@ -8743,7 +8765,7 @@ async function carregarPerfil(user) {
 
   // Sino de notificações (Churn) — só admin, consulta leve independente
   // de já ter aberto a aba Churn alguma vez.
-  if (USUARIO_ATUAL.perfil === 'admin') atualizarNotificacoesChurn();
+  if (ehAdminLike(USUARIO_ATUAL.perfil)) atualizarNotificacoesChurn();
 
   // Esconde login, mostra dashboard
   document.getElementById('login-screen').classList.remove('active');
@@ -8760,6 +8782,8 @@ async function carregarPerfil(user) {
 
 // ─── ESQUEMA DE PERFIS (reorganizado) ────────────────────────────────────────
 //  admin          — acesso 100% a tudo
+//  admin_gestao   — igual admin em abas/ações e sem trava de escopo, EXCETO Gerencial
+//                   Financeiro e Painel Analítico: só a gestão dela (gestor_ref)
 //  admin_beta     — sem trava de escopo (vê tudo, igual admin), mas só nas
 //                   abas Gerencial/Produção/Carteira/Conectividade (sem
 //                   Discadora/Simulador 2.0/Churn)
@@ -8777,7 +8801,7 @@ function aplicarPermissoes() {
 
   // Exportar CSV da Produção — só admin (pedido explícito).
   const btnExportarProdCsv = document.getElementById('prod-btn-exportar-csv');
-  if (btnExportarProdCsv) btnExportarProdCsv.style.display = p === 'admin' ? '' : 'none';
+  if (btnExportarProdCsv) btnExportarProdCsv.style.display = ehAdminLike(p) ? '' : 'none';
 
   // Esconde abas não permitidas
   document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -8945,7 +8969,7 @@ function getGrupoDiscadoraTravado() {
 // Só admin e gestor_macro podem exportar o CSV de ligações produtivas da Discadora
 function podeExportarDiscadoraCSV() {
   const p = USUARIO_ATUAL?.perfil;
-  return p === 'admin' || p === 'gestor_macro';
+  return ehAdminLike(p) || p === 'gestor_macro';
 }
 
 // Filtro de UF/Estado de quem tem escopo travado. Com UMA UF no escopo, trava
@@ -9344,7 +9368,7 @@ function initDiscadora() {
 
   // Botão "Centro de Custos" — só admin. O painel em si (#disc-voip-area)
   // só abre quando clicado (discToggleCentroCustos()), não fica sempre visível.
-  if (USUARIO_ATUAL?.perfil === 'admin') {
+  if (ehAdminLike(USUARIO_ATUAL?.perfil)) {
     document.getElementById('disc-btn-centro-custos-wrap').style.display = '';
     const seteDiasAtras = new Date();
     seteDiasAtras.setUTCDate(seteDiasAtras.getUTCDate() - 7);
@@ -13386,7 +13410,7 @@ function conectRenderFunil() {
             <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px;position:relative;">
               <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:4px;">
                 <div style="font-weight:600;font-size:13px;color:var(--brand);margin-bottom:4px;cursor:pointer;text-decoration:underline;text-decoration-style:dotted;" onclick="conectAbrirDetalhe(${item.id})">${escapeHtml(item.cliente_nome)}</div>
-                ${USUARIO_ATUAL?.perfil === 'admin' ? `
+                ${ehAdminLike(USUARIO_ATUAL?.perfil) ? `
                 <div style="position:relative;flex-shrink:0;">
                   <button onclick="conectToggleMenu(event, ${item.id})" title="Mais opções" style="background:none;border:none;cursor:pointer;font-size:15px;line-height:1;color:var(--text-2);padding:0 3px;">⋮</button>
                   <div id="conect-menu-${item.id}" style="display:none;position:absolute;right:0;top:100%;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:0 4px 14px rgba(0,0,0,.18);z-index:20;min-width:100px;overflow:hidden;">

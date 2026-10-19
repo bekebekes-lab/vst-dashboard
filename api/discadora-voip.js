@@ -23,7 +23,7 @@ export default async function handler(req, res) {
   if (!authUser) return;
 
   const perfilRow = await getUsuarioDashboard(req, authUser.id);
-  if ((perfilRow?.perfil || 'consultor') !== 'admin') {
+  if (!['admin', 'admin_gestao'].includes(perfilRow?.perfil || 'consultor')) {
     return res.status(403).json({ error: 'Acesso restrito a administradores' });
   }
 

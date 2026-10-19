@@ -26,10 +26,10 @@ const ORIGEM_DASH = 'https://vst-dashboard.vercel.app';
 // isso vale mesmo que alguém receba 'acessos' em acesso_extra_abas: a aba pode
 // até aparecer, mas o servidor recusa.
 const PERFIS_QUE_GERENCIAM = new Set([
-  'admin', 'admin_beta',
+  'admin', 'admin_gestao', 'admin_beta',
   'gestor_macro', 'gestor_macro2', 'gestor_macro3', 'gestor', 'gestor_beta',
 ]);
-const PERFIS_ADMIN = new Set(['admin', 'admin_beta']);
+const PERFIS_ADMIN = new Set(['admin', 'admin_gestao', 'admin_beta']);
 
 class ErroHttp extends Error {
   constructor(status, msg) { super(msg); this.status = status; }
