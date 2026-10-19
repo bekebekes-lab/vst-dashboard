@@ -2601,6 +2601,10 @@
           <button class="btn-secondary acessos-status-filtro" data-f="online" onclick="acessosStatusFiltrar('online')" style="padding:6px 14px;font-size:12px;">Online</button>
           <button class="btn-secondary acessos-status-filtro" data-f="offline" onclick="acessosStatusFiltrar('offline')" style="padding:6px 14px;font-size:12px;">Offline</button>
         </div>
+        <div class="filter-group" style="flex-direction:row;align-items:center;gap:10px;">
+          <button class="btn-secondary" id="acessos-status-btn-atualizar" onclick="acessosStatusAtualizarManual()" style="padding:6px 14px;font-size:12px;border:1.5px solid var(--brand);background:var(--surface);color:var(--brand);border-radius:6px;cursor:pointer;font-weight:600;">↻ Atualizar</button>
+          <span id="acessos-status-atualizado" style="font-size:11px;color:var(--text-3);white-space:nowrap;"></span>
+        </div>
       </div>
       <div id="acessos-status-area" style="margin-top:12px;"></div>
     </div>
@@ -11916,7 +11920,22 @@ async function acessosStatusCarregar() {
   const { data, error } = await supa.rpc('listar_presenca');
   if (error) { area.innerHTML = `<div class="error-state"><strong>Erro ao carregar status</strong>${escapeHtml(error.message)}</div>`; return; }
   ACESSOS_STATUS.dados = data || [];
+  const lbl = document.getElementById('acessos-status-atualizado');
+  if (lbl) lbl.textContent = 'Atualizado às ' + new Date().toLocaleTimeString('pt-BR');
   acessosStatusRender();
+}
+
+// Botão "Atualizar": busca o status agora, sem esperar os 20s da atualização
+// automática (quem acabou de entrar ou de fechar a página aparece na hora —
+// quem fecha a aba sem sair ainda leva até ~2,5 min pra virar Offline).
+async function acessosStatusAtualizarManual() {
+  const btn = document.getElementById('acessos-status-btn-atualizar');
+  if (btn.disabled) return;
+  btn.disabled = true;
+  const txt = btn.textContent;
+  btn.textContent = 'Atualizando...';
+  try { await acessosStatusCarregar(); }
+  finally { btn.disabled = false; btn.textContent = txt; }
 }
 
 function acessosStatusFiltrar(f) {
