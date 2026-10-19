@@ -5041,7 +5041,15 @@ const PN = {
   atualizadoEm: null,
 };
 
-function pnPodeVer() { return ehAdminLike(USUARIO_ATUAL?.perfil); }
+// Admin/admin_gestao, ou concessão individual 'painel' em acesso_extra_abas
+// (ex.: gestor_macro2 com mais de uma gestão) — nesse caso os dados já vêm
+// travados no escopo do perfil (ver pnEscopo()).
+function pnPodeVer() { return ehAdminLike(USUARIO_ATUAL?.perfil) || (USUARIO_ATUAL?.acesso_extra_abas || []).includes('painel'); }
+// Comissão ainda está em desenvolvimento: só admin/admin_gestao enxergam.
+function pnPodeVerComissao() { return ehAdminLike(USUARIO_ATUAL?.perfil); }
+// Escopo do Painel: o travado do perfil (gestor/equipe/consultor) ou, no
+// admin_gestao, a gestão própria.
+function pnEscopo() { return getEscopoTravado() || getEscopoGestaoPropria(); }
 
 // ── Carga dos dados ──────────────────────────────────────────────────────────
 function pnListarMeses() {
@@ -5124,8 +5132,11 @@ async function pnCarregarMes(m) {
     });
   }
   const recs = pnCompactar(objs, m.chave); // fatores calculados na base inteira, antes do filtro
-  const escopoGestao = getEscopoGestaoPropria();
-  return escopoGestao ? recs.filter(r => escopoGestao.gestores.has(r.ge)) : recs;
+  const esc = pnEscopo();
+  if (!esc) return recs;
+  return recs.filter(r => (!esc.gestores || esc.gestores.has(r.ge))
+    && (!esc.equipes || esc.equipes.has(r.eq))
+    && (!esc.consultorRef || (r.ve || '').toUpperCase() === esc.consultorRef));
 }
 
 function pnIndexarOpcoes(recs) {
@@ -5445,7 +5456,7 @@ function pnRender() {
   document.getElementById('pn-grupo-corpo').innerHTML = pnRenderRosca(agg);
 
   document.getElementById('pn-card-mes-titulo').textContent = `${pnNomeMetrica()} por Mês`;
-  document.getElementById('pn-metricas').innerHTML = PN_METRICAS.map(([k, rot]) =>
+  document.getElementById('pn-metricas').innerHTML = PN_METRICAS.filter(([k]) => k !== 'comissao' || pnPodeVerComissao()).map(([k, rot]) =>
     `<button class="pn-btn${PN.metrica === k ? ' ativo' : ''}" onclick="pnSetMetrica('${k}')">${rot}</button>`).join('');
   document.getElementById('pn-mes-corpo').innerHTML = pnRenderLinhas(agg);
 }
@@ -5456,7 +5467,7 @@ window.addEventListener('resize', () => {
   _pnResizeT = setTimeout(() => { if (document.getElementById('tab-painel')?.classList.contains('active')) pnRender(); }, 150);
 });
 
-function pnSetMetrica(k) { PN.metrica = k; pnRender(); }
+function pnSetMetrica(k) { if (k === 'comissao' && !pnPodeVerComissao()) return; PN.metrica = k; pnRender(); }
 function pnSetDim(k) { PN.dim = k; pnRender(); }
 function pnToggleSerie(k) { if (PN.seriesOff.has(k)) PN.seriesOff.delete(k); else PN.seriesOff.add(k); pnRender(); }
 
@@ -5464,11 +5475,12 @@ function pnToggleSerie(k) { if (PN.seriesOff.has(k)) PN.seriesOff.delete(k); els
 function pnExportarCsv() {
   const agg = pnAgregar();
   if (!agg.meses.length) { alert('Nenhum mês carregado ainda.'); return; }
-  const cab = ['Mês', 'Grupo', 'Quantidade', 'Receita', 'Comissão', 'CNPJs', 'Ticket médio'];
+  const comCom = pnPodeVerComissao();
+  const cab = ['Mês', 'Grupo', 'Quantidade', 'Receita', ...(comCom ? ['Comissão'] : []), 'CNPJs', 'Ticket médio'];
   const linhas = [];
   agg.meses.forEach(m => ['TOTAL', ...PN_GRUPOS].forEach(g => {
     const a = agg.porMes[m.chave][g];
-    linhas.push([m.label, g === 'TOTAL' ? 'Total (sem Serv. Digitais)' : PN_GRUPO_LABEL[g], a.q, a.r.toFixed(2), a.c.toFixed(2), a.cn.size, (a.q ? a.r / a.q : 0).toFixed(2)]);
+    linhas.push([m.label, g === 'TOTAL' ? 'Total (sem Serv. Digitais)' : PN_GRUPO_LABEL[g], a.q, a.r.toFixed(2), ...(comCom ? [a.c.toFixed(2)] : []), a.cn.size, (a.q ? a.r / a.q : 0).toFixed(2)]);
   }));
   const esc = v => '"' + String(v).replace(/"/g, '""') + '"';
   const csv = '﻿' + [cab, ...linhas].map(l => l.map(esc).join(',')).join('\n');
@@ -7405,7 +7417,7 @@ function getAbasPermitidas(usuario) {
   // Gerencial Financeiro (piloto): lista fechada de e-mails, não vale pra todo admin.
   // Painel Analítico: todo admin.
   const comGerfin = gfPodeVer(usuario) ? [...new Set([...todas, 'gerfin'])] : todas.filter(a => a !== 'gerfin');
-  return ehAdminLike(usuario?.perfil) ? [...new Set([...comGerfin, 'painel'])] : comGerfin.filter(a => a !== 'painel');
+  return ehAdminLike(usuario?.perfil) || extras.includes('painel') ? [...new Set([...comGerfin, 'painel'])] : comGerfin.filter(a => a !== 'painel');
 }
 const TAB_LABELS = {
   gerencial: '📊 Gerencial',
