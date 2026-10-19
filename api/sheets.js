@@ -116,7 +116,7 @@ export default async function handler(req, res) {
   // nem a trava de escopo dele).
   if (planilha === 'carteira') {
     const temAcessoExtra = (perfilRow?.acesso_extra_abas || []).includes('carteira');
-    if (!['admin', 'admin_gestao', 'admin_beta'].includes(perfilUsuario) && !temAcessoExtra) {
+    if (!['admin', 'admin_beta'].includes(perfilUsuario) && !temAcessoExtra) {
       return res.status(403).json({ error: 'Acesso restrito a administradores' });
     }
   }
