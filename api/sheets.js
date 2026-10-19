@@ -166,7 +166,9 @@ export default async function handler(req, res) {
 
       const escopo = carteiraCodigos ? null : getEscopoTravado(perfilUsuario, perfilRow);
 
-      if (escopo) {
+      // 'StatusBot' (carimbo do robô) não tem dado de venda nem coluna EQUIPE:
+      // é só aba/horário, liberado pra qualquer usuário logado.
+      if (escopo && sheet !== 'StatusBot') {
         const header = data.values[0];
         const idxEquipe = header.indexOf('EQUIPE');
         const idxProprietario = header.indexOf('PROPRIETÁRIO DO PEDIDO');

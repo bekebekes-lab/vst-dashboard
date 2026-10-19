@@ -11,7 +11,7 @@ import os
 import time
 import json
 import logging
-from datetime import date, datetime
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import gspread
@@ -458,6 +458,33 @@ def atualizar_sheets(cabecalhos: list, dados: list[list], aba_destino: str):
     aba.clear()
     aba.update([cabecalhos] + dados, value_input_option="RAW")
     log.info(f"  ✅ {len(dados)} linhas gravadas em '{aba_destino}'.")
+    registrar_status(sheet, aba_destino, len(dados))
+
+
+# Aba "StatusBot": uma linha por aba de destino com o momento em que o robô
+# CONFIRMOU a gravação (é o que o Dash mostra em "Base atualizada em ...",
+# no lugar da hora em que o navegador carregou a página). Brasília é UTC-3 o
+# ano todo (sem horário de verão), então o offset fixo -03:00 é seguro.
+ABA_STATUS = "StatusBot"
+
+
+def registrar_status(sheet, aba_destino: str, n_linhas: int):
+    try:
+        agora = datetime.now(timezone(timedelta(hours=-3))).strftime("%Y-%m-%dT%H:%M:%S-03:00")
+        try:
+            ws = sheet.worksheet(ABA_STATUS)
+            linhas = ws.get_all_values()
+        except gspread.WorksheetNotFound:
+            ws = sheet.add_worksheet(title=ABA_STATUS, rows=20, cols=3)
+            linhas = []
+        registros = {l[0]: l for l in linhas[1:] if l and l[0]}
+        registros[aba_destino] = [aba_destino, agora, n_linhas]
+        ws.clear()
+        ws.update([["aba", "atualizado_em", "linhas"]] + list(registros.values()), value_input_option="RAW")
+        log.info(f"  🕒 Status registrado em '{ABA_STATUS}': {aba_destino} @ {agora}")
+    except Exception as e:
+        # Falha só do carimbo nunca pode derrubar uma atualização que deu certo.
+        log.warning(f"  Não foi possível registrar o status do robô: {e}")
 
 
 # ─── MAIN ─────────────────────────────────────────────────────────────────────

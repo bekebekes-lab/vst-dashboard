@@ -3345,8 +3345,7 @@ async function loadData() {
       return gu !== 'SVA MOVEL' && gu !== 'SVA MÓVEL';
     });
 
-    const now = new Date();
-    document.getElementById('last-update').textContent = 'Atualizado às ' + now.toLocaleTimeString('pt-BR');
+    atualizarRotuloBase(sheetName);
 
     buildFilters();
     render();
@@ -3370,6 +3369,37 @@ async function loadData() {
         ${e.message}. Verifique se a planilha está compartilhada como "Qualquer pessoa com o link pode visualizar".
       </div>`;
   }
+}
+
+// "Base atualizada em ..." = momento em que o ROBÔ confirmou a gravação da
+// base (aba StatusBot, escrita pelo bot.py), e não a hora em que o navegador
+// carregou/recarregou a página. A data/hora vem em texto ISO de Brasília
+// (-03:00) e é exibida como veio, sem converter pro fuso do navegador.
+let _baseStatusTimer = null;
+async function atualizarRotuloBase(sheetName) {
+  const el = document.getElementById('last-update');
+  if (!el) return;
+  const sheet = sheetName || document.getElementById('mes-selector')?.value || 'BaseCRM';
+  try {
+    const res = await fetch('/api/sheets?action=values&sheet=StatusBot', { headers: authHeaders() });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const linhas = ((await res.json()).values || []).slice(1);
+    const linha = linhas.find(l => l[0] === sheet);
+    const m = linha && /^(\d{4})-(\d{2})-(\d{2})T(\d{2}:\d{2}:\d{2})/.exec(linha[1] || '');
+    el.textContent = m ? `Base atualizada em ${m[3]}/${m[2]}/${m[1]} às ${m[4]}` : 'Base: sem registro do robô';
+    el.title = m ? 'Horário em que o robô confirmou a atualização desta base' : 'O robô ainda não registrou a atualização desta aba';
+  } catch (e) {
+    el.textContent = 'Base: horário do robô indisponível';
+  }
+  agendarRotuloBase();
+}
+// Reconsulta a cada 3 min, só com a aba visível, pro horário acompanhar o robô sem F5.
+function agendarRotuloBase() {
+  clearTimeout(_baseStatusTimer);
+  _baseStatusTimer = setTimeout(() => {
+    if (document.visibilityState === 'visible') atualizarRotuloBase();
+    else agendarRotuloBase();
+  }, 180000);
 }
 
 // Busca abas disponíveis na planilha e popula o dropdown dinamicamente
