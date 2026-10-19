@@ -495,6 +495,8 @@
   .pn-btn { background: var(--surface); color: var(--text); border: 1.5px solid var(--text-2); border-radius: 4px; padding: 3px 11px; font-size: 11px; cursor: pointer; }
   .pn-btn-sm { padding: 2px 9px; font-size: 10.5px; }
   .pn-btn.ativo { background: var(--brand); border-color: var(--brand); color: #fff; font-weight: 600; }
+  .acessos-subtab, .acessos-status-filtro { background: var(--surface); color: var(--text); border: 1.5px solid var(--text-2); border-radius: 6px; cursor: pointer; }
+  .acessos-subtab.active, .acessos-status-filtro.active { background: var(--brand); border-color: var(--brand); color: #fff; font-weight: 600; }
   .pn-bars { max-height: 190px; overflow-y: auto; padding-right: 6px; }
   .pn-bar-row { display: grid; grid-template-columns: 76px 1fr 78px; gap: 8px; align-items: center; padding: 1px 0; font-size: 11px; }
   .pn-bar-lab { color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -2546,6 +2548,11 @@
 
   <!-- TAB ACESSOS — admin/gestor/supervisão criam e gerenciam acesso de consultor da própria visão -->
   <div class="tab-panel" id="tab-acessos">
+    <div id="acessos-subtabs" style="display:none;gap:8px;margin-bottom:14px;">
+      <button class="btn-secondary acessos-subtab active" data-sub="contas" onclick="acessosTrocarSubaba('contas')" style="padding:6px 16px;font-size:12px;">Acessos</button>
+      <button class="btn-secondary acessos-subtab" data-sub="status" id="acessos-subtab-status" onclick="acessosTrocarSubaba('status')" style="padding:6px 16px;font-size:12px;">Status</button>
+    </div>
+    <div id="acessos-view-contas">
     <div class="prod-status-section" style="margin-top:0;">
       <div class="section-header"><span class="section-title">Criar acesso de consultor</span></div>
       <div style="font-size:12px;color:var(--text-3);margin-bottom:10px;">Só aparecem consultores que estão dentro da sua visão e ainda não têm acesso. A conta criada vê apenas os próprios pedidos.</div>
@@ -2577,6 +2584,26 @@
       <span class="count-badge" id="acessos-contador"></span>
     </div>
     <div id="acessos-lista-area"></div>
+    </div>
+    <div id="acessos-view-status" style="display:none;">
+      <div class="section-header" style="margin-top:0;">
+        <span class="section-title">Status dos usuários</span>
+        <span class="count-badge" id="acessos-status-contador"></span>
+      </div>
+      <div style="font-size:12px;color:var(--text-3);margin-bottom:10px;">Online = com a plataforma aberta e em uso agora (aba visível e atividade nos últimos 5 minutos). Quem só fez login há dias, ou deixou a aba parada, aparece como Offline.</div>
+      <div class="filters-bar" style="box-shadow:none;padding:0;align-items:flex-end;">
+        <div class="filter-group" style="min-width:220px;flex:1;">
+          <label>Buscar (nome, e-mail ou gestão)</label>
+          <input type="text" id="acessos-status-busca" autocomplete="off" oninput="acessosStatusRender()">
+        </div>
+        <div class="filter-group" style="flex-direction:row;gap:6px;">
+          <button class="btn-secondary acessos-status-filtro active" data-f="todos" onclick="acessosStatusFiltrar('todos')" style="padding:6px 14px;font-size:12px;">Todos</button>
+          <button class="btn-secondary acessos-status-filtro" data-f="online" onclick="acessosStatusFiltrar('online')" style="padding:6px 14px;font-size:12px;">Online</button>
+          <button class="btn-secondary acessos-status-filtro" data-f="offline" onclick="acessosStatusFiltrar('offline')" style="padding:6px 14px;font-size:12px;">Offline</button>
+        </div>
+      </div>
+      <div id="acessos-status-area" style="margin-top:12px;"></div>
+    </div>
   </div>
 
   <!-- TAB QUALIDADE — acompanhamento das 9 parcelas (270 dias) por contratação, só admin -->
@@ -8784,6 +8811,7 @@ async function carregarPerfil(user) {
   // Esconde login, mostra dashboard
   document.getElementById('login-screen').classList.remove('active');
   loadData();
+  presencaIniciar();
 
   // Carrega metas e config após o dashboard estar visível
   setTimeout(async () => {
@@ -9159,6 +9187,7 @@ async function triggerBotEAtualizar(btn) {
 
 async function fazerLogout() {
   if (!confirm('Deseja sair do dashboard?')) return;
+  await presencaParar(); // antes do signOut: depois dele nao ha sessao pra registrar
   await supa.auth.signOut();
   USUARIO_ATUAL = null;
   document.getElementById('login-screen').classList.add('active');
@@ -11822,8 +11851,117 @@ function acessosCopiarSenha(senha, btn) {
   if (navigator.clipboard?.writeText) navigator.clipboard.writeText(senha).then(ok).catch(() => {});
 }
 
+// ─── PRESENÇA (Online/Offline) ───────────────────────────────────────────────
+// "Online" = está USANDO a plataforma agora, não só logado: cada navegador
+// manda um sinal a cada 60s (registrar_presenca) mas SÓ enquanto a aba está
+// visível e houve atividade (mouse/teclado/toque) nos últimos 5 minutos. A
+// aba Status considera online quem mandou sinal há até 150s (calculado no
+// servidor, em listar_presenca — sem depender do relógio do navegador).
+const PRES_INTERVALO_MS = 60000;
+const PRES_OCIOSO_MS = 5 * 60000;
+let PRES_TIMER = null, PRES_LISTENERS = false, PRES_ULTIMA_ATIVIDADE = Date.now();
+function presencaMarcarAtividade() { PRES_ULTIMA_ATIVIDADE = Date.now(); }
+function presencaEstaUsando() {
+  return document.visibilityState === 'visible' && Date.now() - PRES_ULTIMA_ATIVIDADE < PRES_OCIOSO_MS;
+}
+async function presencaEnviar() {
+  if (!USUARIO_ATUAL || !presencaEstaUsando()) return;
+  try { await supa.rpc('registrar_presenca', { p_online: true }); } catch (e) { /* presença nunca atrapalha o uso */ }
+}
+function presencaIniciar() {
+  if (!PRES_LISTENERS) {
+    PRES_LISTENERS = true;
+    ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'].forEach(ev =>
+      window.addEventListener(ev, presencaMarcarAtividade, { passive: true, capture: true }));
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') { presencaMarcarAtividade(); presencaEnviar(); }
+    });
+  }
+  if (PRES_TIMER) return;
+  PRES_ULTIMA_ATIVIDADE = Date.now();
+  presencaEnviar();
+  PRES_TIMER = setInterval(presencaEnviar, PRES_INTERVALO_MS);
+}
+async function presencaParar() {
+  if (PRES_TIMER) { clearInterval(PRES_TIMER); PRES_TIMER = null; }
+  try { await supa.rpc('registrar_presenca', { p_online: false }); } catch (e) { /* sai de qualquer jeito */ }
+}
+
+// Aba Status — só o perfil 'admin' (não admin_beta/admin_gestao). O servidor
+// também só devolve linhas pra 'admin' (listar_presenca).
+const ACESSOS_STATUS = { dados: [], filtro: 'todos', timer: null };
+function acessosPodeVerStatus() { return USUARIO_ATUAL?.perfil === 'admin'; }
+
+function acessosTrocarSubaba(qual) {
+  if (qual === 'status' && !acessosPodeVerStatus()) qual = 'contas';
+  document.getElementById('acessos-view-contas').style.display = qual === 'contas' ? '' : 'none';
+  document.getElementById('acessos-view-status').style.display = qual === 'status' ? '' : 'none';
+  document.querySelectorAll('.acessos-subtab').forEach(b => b.classList.toggle('active', b.dataset.sub === qual));
+  clearInterval(ACESSOS_STATUS.timer); ACESSOS_STATUS.timer = null;
+  if (qual === 'status') {
+    acessosStatusCarregar();
+    ACESSOS_STATUS.timer = setInterval(() => {
+      const aberta = document.getElementById('tab-acessos')?.classList.contains('active')
+        && document.getElementById('acessos-view-status')?.style.display !== 'none';
+      if (!aberta) { clearInterval(ACESSOS_STATUS.timer); ACESSOS_STATUS.timer = null; return; }
+      acessosStatusCarregar();
+    }, 20000);
+  }
+}
+
+async function acessosStatusCarregar() {
+  if (!acessosPodeVerStatus()) return;
+  const area = document.getElementById('acessos-status-area');
+  if (!ACESSOS_STATUS.dados.length) area.innerHTML = '<div class="loading-state"><div class="loading-spinner"></div><p>Carregando...</p></div>';
+  const { data, error } = await supa.rpc('listar_presenca');
+  if (error) { area.innerHTML = `<div class="error-state"><strong>Erro ao carregar status</strong>${escapeHtml(error.message)}</div>`; return; }
+  ACESSOS_STATUS.dados = data || [];
+  acessosStatusRender();
+}
+
+function acessosStatusFiltrar(f) {
+  ACESSOS_STATUS.filtro = f;
+  document.querySelectorAll('.acessos-status-filtro').forEach(b => b.classList.toggle('active', b.dataset.f === f));
+  acessosStatusRender();
+}
+
+function acessosStatusFmtTempo(seg) {
+  if (seg == null) return 'sem registro';
+  if (seg < 60) return 'agora há pouco';
+  if (seg < 3600) return `há ${Math.floor(seg / 60)} min`;
+  if (seg < 86400) return `há ${Math.floor(seg / 3600)} h`;
+  return `há ${Math.floor(seg / 86400)} dia(s)`;
+}
+
+function acessosStatusRender() {
+  const area = document.getElementById('acessos-status-area');
+  const todos = ACESSOS_STATUS.dados;
+  const nOn = todos.filter(u => u.online).length;
+  document.getElementById('acessos-status-contador').textContent = `${nOn} online · ${todos.length - nOn} offline`;
+  const busca = (document.getElementById('acessos-status-busca')?.value || '').trim().toLowerCase();
+  const lista = todos.filter(u => {
+    if (ACESSOS_STATUS.filtro === 'online' && !u.online) return false;
+    if (ACESSOS_STATUS.filtro === 'offline' && u.online) return false;
+    return !busca || [u.nome, u.email, u.gestor_ref, u.perfil].some(v => (v || '').toLowerCase().includes(busca));
+  }).sort((a, b) => (b.online - a.online) || ((a.segundos ?? 1e12) - (b.segundos ?? 1e12)) || (a.nome || '').localeCompare(b.nome || '', 'pt-BR'));
+  if (!lista.length) { area.innerHTML = '<div class="coming-soon"><p>Nenhum usuário nesse filtro.</p></div>'; return; }
+  area.innerHTML = `<div class="table-wrap"><div class="table-scroll"><table>
+    <thead><tr><th>Status</th><th>Usuário</th><th>E-mail</th><th>Perfil</th><th>Gestão</th><th>Último sinal</th></tr></thead>
+    <tbody>${lista.map(u => `<tr>
+      <td style="white-space:nowrap;font-weight:600;color:${u.online ? '#16a34a' : 'var(--text-3)'}"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;background:${u.online ? '#16a34a' : '#9ca3af'}"></span>${u.online ? 'Online' : 'Offline'}</td>
+      <td style="font-weight:500">${escapeHtml(u.nome || '—')}</td>
+      <td style="font-size:12px">${escapeHtml(u.email || '')}</td>
+      <td style="font-size:12px">${escapeHtml(u.perfil || '')}</td>
+      <td style="font-size:12px">${escapeHtml(u.gestor_ref || '—')}</td>
+      <td style="font-size:12px;white-space:nowrap;color:var(--text-3)">${u.online ? 'agora' : acessosStatusFmtTempo(u.segundos)}</td>
+    </tr>`).join('')}</tbody></table></div></div>`;
+}
+
 async function initAcessos() {
   acessosMostrarMsg('');
+  const podeStatus = acessosPodeVerStatus();
+  document.getElementById('acessos-subtabs').style.display = podeStatus ? 'flex' : 'none';
+  if (!podeStatus) acessosTrocarSubaba('contas');
   await acessosRecarregar();
 }
 
