@@ -4516,8 +4516,10 @@ function gfLinhaPassa(r, f, escopo) {
 // selecionado (fillSelect e popularDropdownGenerico guardam a seleção).
 function gfConstruirFiltros() {
   const estados = new Set(), gestores = new Set(), equipes = new Set(), consultores = new Set(), tags = new Set();
+  const escopoOpcoes = getEscopoFinanceiro(); // admin_gestao só vê opções da gestão dela
   ALL_DATA.forEach(r => {
     const eq = r['EQUIPE'];
+    if (!linhaDentroDoEscopo(r, escopoOpcoes, eq)) return;
     if (EQUIPES_ESTADOS[eq]) estados.add(EQUIPES_ESTADOS[eq]);
     if (EQUIPES_GESTORES[eq]) gestores.add(EQUIPES_GESTORES[eq]);
     if (eq) equipes.add(eq);
@@ -4846,7 +4848,7 @@ function renderGerFin() {
   const receita = f.receita;
   const geral = metrics['GERAL'];
   document.getElementById('gf-stats-row-area').innerHTML = `<div class="stats-row">
-    <div class="stat-chip"><strong>${ALL_DATA.length}</strong> registros na base</div>
+    <div class="stat-chip"><strong>${escopo ? ALL_DATA.filter(r => linhaDentroDoEscopo(r, escopo, r['EQUIPE'])).length : ALL_DATA.length}</strong> registros na base</div>
     <div class="stat-chip"><strong>${totalRows}</strong> registros filtrados</div>
     <div class="stat-chip"><strong>${nConsSet.size}</strong> consultores</div>
     <div class="stat-chip"><strong>${nConsSet.size > 0 ? (receita ? gerFmtMoeda(geral.totalRec / nc) : (geral.total / nc).toFixed(1)) : 0}</strong> média geral/consultor</div>
@@ -7379,7 +7381,7 @@ let USUARIO_ATUAL = null;
 // ao abrir" no drawer de conta e pelo redirecionamento pós-login.
 const ABAS_PERMITIDAS_POR_PERFIL = {
   'admin':          ['gerencial', 'producao', 'discadora', 'simulador2', 'churn', 'carteira', 'qualidade', 'acessos', 'conectividade'],
-  'admin_gestao':   ['gerencial', 'producao', 'discadora', 'simulador2', 'churn', 'carteira', 'qualidade', 'acessos', 'conectividade'],
+  'admin_gestao':   ['gerencial', 'producao', 'discadora', 'churn', 'carteira', 'qualidade', 'acessos', 'conectividade'], // sem Simulador 2.0
   'admin_beta':     ['gerencial', 'producao', 'carteira', 'acessos', 'conectividade'],
   'gestor_macro':   ['gerencial', 'discadora', 'acessos', 'conectividade'],
   'gestor_macro2':  ['gerencial', 'producao', 'discadora', 'acessos', 'conectividade'],
