@@ -26,7 +26,9 @@ import json
 import os
 import re
 import sys
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 
 import requests
@@ -35,7 +37,9 @@ SUPA_URL = "https://kzlchetrpsfefwybaaoy.supabase.co"
 BRASILAPI = "https://brasilapi.com.br/api/cnpj/v1/"
 COL_CNAE = "CNAE"
 COL_DESC = "Descrição CNAE"
-PAUSA_ENTRE_CONSULTAS = 0.2          # ~5 consultas/s: bem abaixo do que a API aguentou nos testes (~9/s)
+PAUSA_ENTRE_CONSULTAS = 0.2          # usado só no modo --consultar (teste manual)
+TRABALHADORES = 5                    # consultas em paralelo (a rede do GitHub Actions tem latência alta)
+INTERVALO_MIN_CONSULTAS = 0.15       # trava GLOBAL entre inícios de consulta: no máximo ~6,6/s no total
 REVALIDAR_NAO_ENCONTRADOS_DIAS = 30  # CNPJ "não encontrado" é reconsultado depois desse prazo
 # Mesmo visual do cabeçalho da Carteira (fundo preto, texto branco em negrito)
 ESTILO_CABECALHO = {
@@ -159,6 +163,23 @@ def cache_gravar(chave, registros, sessao=None):
         headers=_hdr(chave, {"Prefer": "resolution=merge-duplicates,return=minimal"}),
         data=json.dumps(registros), timeout=60)
     r.raise_for_status()
+
+
+class Limitador:
+    """Garante um intervalo mínimo entre o INÍCIO de consultas, somando todas as threads."""
+
+    def __init__(self, intervalo):
+        self.intervalo = intervalo
+        self.lock = threading.Lock()
+        self.proxima = 0.0
+
+    def esperar(self):
+        with self.lock:
+            agora = time.monotonic()
+            espera = max(0.0, self.proxima - agora)
+            self.proxima = max(agora, self.proxima) + self.intervalo
+        if espera:
+            time.sleep(espera)
 
 
 def agora_iso():
@@ -306,8 +327,20 @@ def executar():
     log(f"Bases-alvo: {[w.title for w in alvos]}" + ("  [MODO TESTE — não grava]" if modo_teste else ""))
     cache = cache_carregar(chave)
     log(f"Cache: {len(cache)} CNPJs já conhecidos")
-    sessao = requests.Session()
     pendentes_total = 0
+
+    # uma sessão HTTP por thread (Session não é garantidamente thread-safe) + trava global de ritmo
+    local = threading.local()
+    limitador = Limitador(INTERVALO_MIN_CONSULTAS)
+
+    def consultar_limitado(cnpj):
+        if not hasattr(local, "sessao"):
+            local.sessao = requests.Session()
+        limitador.esperar()
+        return consultar_cnae(cnpj, local.sessao)
+
+    n_trab = int(os.environ.get("CNAE_TRABALHADORES", "").strip() or TRABALHADORES)
+    pool = ThreadPoolExecutor(max_workers=n_trab)
 
     for ws in alvos:
         valores = ws.get_all_values()
@@ -321,30 +354,27 @@ def executar():
         faltam = sorted(c for c in cnpjs if precisa_consultar(c, cache))
         log(f"[{ws.title}] {len(dados)} linhas · {len(cnpjs)} CNPJs válidos · {len(faltam)} a consultar")
 
-        lote, feitos, erros = [], 0, 0
-        for cnpj in faltam:
+        feitos, erros = 0, 0
+        for ini in range(0, len(faltam), LOTE_CACHE):
             if time.time() > limite:
                 log("  limite de tempo atingido — grava o que já tem; a próxima execução continua")
                 break
-            status, d = consultar_cnae(cnpj, sessao)
-            if status == "erro":
-                erros += 1  # não entra no cache: será tentado de novo na próxima execução
-            else:
+            lote = []
+            # as consultas do lote rodam em paralelo (resultado volta na ordem de envio)
+            for cnpj, (status, d) in zip(faltam[ini:ini + LOTE_CACHE], pool.map(consultar_limitado, faltam[ini:ini + LOTE_CACHE])):
+                if status == "erro":
+                    erros += 1  # não entra no cache: será tentado de novo na próxima execução
+                    continue
                 reg = {"cnpj": cnpj, "encontrado": status == "ok", "consultado_em": agora_iso(),
                        "cnae_codigo": d["cnae_codigo"] if d else None,
                        "cnae_descricao": d["cnae_descricao"] if d else None,
                        "situacao": d["situacao"] if d else None}
                 cache[cnpj] = reg
                 lote.append(reg)
-            feitos += 1
-            if len(lote) >= LOTE_CACHE:
-                if not modo_teste:
-                    cache_gravar(chave, lote)
-                lote = []
-                log(f"  {feitos}/{len(faltam)} consultados")
-            time.sleep(PAUSA_ENTRE_CONSULTAS)
-        if lote and not modo_teste:
-            cache_gravar(chave, lote)
+            feitos += len(faltam[ini:ini + LOTE_CACHE])
+            if lote and not modo_teste:
+                cache_gravar(chave, lote)  # progresso nunca se perde
+            log(f"  {feitos}/{len(faltam)} consultados · {erros} erro(s)")
         pendentes_total += max(0, len(faltam) - feitos) + erros
 
         pos = posicao_colunas(header)
@@ -358,6 +388,7 @@ def executar():
         else:
             log("  sem mudanças — planilha já estava atualizada")
 
+    pool.shutdown()
     if pendentes_total:
         log(f"Ainda restam {pendentes_total} CNPJ(s) — serão retomados na próxima execução")
     return 0
