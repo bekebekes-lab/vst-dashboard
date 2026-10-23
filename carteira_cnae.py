@@ -14,10 +14,14 @@ direto da planilha e oferece o filtro por CNAE na aba Carteira.
 - Retoma de onde parou: se estourar o limite de tempo, grava o que já tem (planilha
   e cache) e a próxima execução continua.
 - CPF (cliente pessoa física) e CNPJ inválido ficam em branco.
+- Além do CNAE, guarda no cache os demais dados cadastrais que a mesma consulta já devolve
+  (porte, capital, situação, endereço, contatos, sócios...). CNPJ consultado antes disso
+  (extras_em vazio) é refeito DEPOIS dos CNPJs novos (backfill).
 
 Uso:
   python carteira_cnae.py                      # execução normal (GitHub Actions)
   python carteira_cnae.py --consultar CNPJ...  # só testa a consulta, sem planilha/cache
+  python carteira_cnae.py --diagnostico        # tamanho real da planilha (limite de 10 mi de células)
 Variáveis: GOOGLE_CREDENTIALS, CARTEIRA_SHEET_ID, SUPABASE_SERVICE_ROLE_KEY,
            MODO_TESTE (1 = não grava nada), CARTEIRA_ABAS_MAX, CNAE_LIMITE_SEGUNDOS.
 """
@@ -50,8 +54,73 @@ ESTILO_CABECALHO = {
 LOTE_CACHE = 200                     # grava no cache a cada N consultas (progresso nunca se perde)
 
 
+# Colunas extras do cache (ver supabase/migrations/20261023000002_cnae_cache_extras.sql).
+CAMPOS_EXTRAS = [
+    "nome_fantasia", "porte", "capital_social", "data_inicio_atividade", "situacao_data", "situacao_motivo",
+    "matriz_filial", "natureza_juridica", "opcao_simples", "opcao_mei", "municipio", "uf", "cep", "endereco",
+    "telefone1", "telefone2", "email", "socios", "cnaes_secundarios",
+]
+CAMPOS_CACHE = ["cnpj", "encontrado", "cnae_codigo", "cnae_descricao", "situacao", "consultado_em", "extras_em"] + CAMPOS_EXTRAS
+
+
 def log(msg):
     print(msg, flush=True)
+
+
+def _txt(v, limite=None):
+    t = str(v).strip() if v is not None else ""
+    if not t:
+        return None
+    return t[:limite] if limite else t
+
+
+def _data(v):
+    t = _txt(v)
+    return t if t and re.fullmatch(r"\d{4}-\d{2}-\d{2}", t) else None
+
+
+def _fone(v):
+    d = so_digitos(v)
+    return d or None
+
+
+def extrair_dados(d: dict) -> dict:
+    """Resposta da BrasilAPI -> campos do cache. Tolerante a campo ausente.
+    Sócios: só nome e qualificação (NUNCA o CPF); CNAEs secundários: só os códigos."""
+    cod = d.get("cnae_fiscal")
+    endereco = ", ".join(x for x in [
+        " ".join(y for y in [_txt(d.get("descricao_tipo_de_logradouro")), _txt(d.get("logradouro"))] if y),
+        _txt(d.get("numero")), _txt(d.get("complemento")), _txt(d.get("bairro"))] if x) or None
+    socios = "; ".join(
+        f"{_txt(s.get('nome_socio')) or '?'} ({_txt(s.get('qualificacao_socio')) or '-'})"
+        for s in (d.get("qsa") or []) if isinstance(s, dict))
+    secundarios = ";".join(str(c.get("codigo")).zfill(7) for c in (d.get("cnaes_secundarios") or [])
+                           if isinstance(c, dict) and c.get("codigo"))
+    capital = d.get("capital_social")
+    return {
+        "cnae_codigo": str(cod).zfill(7),  # a API devolve inteiro: 600001 -> 0600001
+        "cnae_descricao": (d.get("cnae_fiscal_descricao") or "").strip(),
+        "situacao": (d.get("descricao_situacao_cadastral") or "").strip(),
+        "nome_fantasia": _txt(d.get("nome_fantasia")),
+        "porte": _txt(d.get("porte")),
+        "capital_social": capital if isinstance(capital, (int, float)) else None,
+        "data_inicio_atividade": _data(d.get("data_inicio_atividade")),
+        "situacao_data": _data(d.get("data_situacao_cadastral")),
+        "situacao_motivo": _txt(d.get("descricao_motivo_situacao_cadastral")),
+        "matriz_filial": _txt(d.get("descricao_identificador_matriz_filial")),
+        "natureza_juridica": _txt(d.get("natureza_juridica")),
+        "opcao_simples": d.get("opcao_pelo_simples") if isinstance(d.get("opcao_pelo_simples"), bool) else None,
+        "opcao_mei": d.get("opcao_pelo_mei") if isinstance(d.get("opcao_pelo_mei"), bool) else None,
+        "municipio": _txt(d.get("municipio")),
+        "uf": _txt(d.get("uf")),
+        "cep": _txt(d.get("cep")),
+        "endereco": endereco,
+        "telefone1": _fone(d.get("ddd_telefone_1")),
+        "telefone2": _fone(d.get("ddd_telefone_2")),
+        "email": _txt(d.get("email"), 200),
+        "socios": _txt(socios, 600),
+        "cnaes_secundarios": _txt(secundarios, 800),
+    }
 
 
 # ─── Documentos ──────────────────────────────────────────────────────────────
@@ -99,7 +168,7 @@ def normalizar_cnpj(valor):
 
 # ─── Consulta (BrasilAPI) ────────────────────────────────────────────────────
 def consultar_cnae(cnpj: str, sessao=None, tentativas=5, limitador=None):
-    """('ok', {cnae_codigo, cnae_descricao, situacao}) | ('nao_encontrado', None) | ('erro', None)."""
+    """('ok', dados do CNPJ — ver extrair_dados) | ('nao_encontrado', None) | ('erro', None)."""
     http = sessao or requests
     espera = 2
     for i in range(tentativas):
@@ -121,11 +190,7 @@ def consultar_cnae(cnpj: str, sessao=None, tentativas=5, limitador=None):
             cod = d.get("cnae_fiscal")
             if cod in (None, "", 0):
                 return "nao_encontrado", None
-            return "ok", {
-                "cnae_codigo": str(cod).zfill(7),  # a API devolve inteiro: 600001 -> 0600001
-                "cnae_descricao": (d.get("cnae_fiscal_descricao") or "").strip(),
-                "situacao": (d.get("descricao_situacao_cadastral") or "").strip(),
-            }
+            return "ok", extrair_dados(d)
         if r.status_code in (400, 404):
             if limitador:
                 limitador.ok()  # a API respondeu normalmente: o CNPJ é que não existe
@@ -154,7 +219,7 @@ def cache_carregar(chave, sessao=None):
     cache, ini = {}, 0
     while True:
         r = http.get(
-            f"{SUPA_URL}/rest/v1/cnae_cache?select=cnpj,encontrado,cnae_codigo,cnae_descricao,consultado_em",
+            f"{SUPA_URL}/rest/v1/cnae_cache?select=cnpj,encontrado,cnae_codigo,cnae_descricao,consultado_em,extras_em",
             headers=_hdr(chave, {"Range-Unit": "items", "Range": f"{ini}-{ini + 999}"}), timeout=60)
         r.raise_for_status()
         linhas = r.json()
@@ -216,12 +281,12 @@ def agora_iso():
 
 
 def precisa_consultar(cnpj, cache):
-    """Sem cache -> consulta. 'Não encontrado' antigo -> reconsulta. Encontrado -> usa o cache."""
+    """Sem cache -> consulta. Encontrado sem extras -> refaz (backfill). 'Não encontrado' antigo -> reconsulta."""
     c = cache.get(cnpj)
     if c is None:
         return True
     if c.get("encontrado"):
-        return False
+        return not c.get("extras_em")  # já tem CNAE mas ainda sem os campos extras -> backfill
     try:
         quando = datetime.fromisoformat(c["consultado_em"].replace("Z", "+00:00"))
     except (KeyError, ValueError):
@@ -380,8 +445,10 @@ def executar():
         idx, header, dados = plano
         cnpjs = {normalizar_cnpj(l[idx]) for l in dados if len(l) > idx}
         cnpjs.discard(None)
-        faltam = sorted(c for c in cnpjs if precisa_consultar(c, cache))
-        log(f"[{ws.title}] {len(dados)} linhas · {len(cnpjs)} CNPJs válidos · {len(faltam)} a consultar")
+        faltam = sorted((c for c in cnpjs if precisa_consultar(c, cache)), key=lambda c: (c in cache, c))  # novos 1º, backfill depois
+        n_backfill = sum(1 for c in faltam if c in cache and cache[c].get("encontrado"))
+        log(f"[{ws.title}] {len(dados)} linhas · {len(cnpjs)} CNPJs válidos · {len(faltam)} a consultar"
+            + (f" ({n_backfill} só pra completar os dados extras)" if n_backfill else ""))
 
         feitos, erros = 0, 0
         for ini in range(0, len(faltam), LOTE_CACHE):
@@ -394,10 +461,14 @@ def executar():
                 if status == "erro":
                     erros += 1  # não entra no cache: será tentado de novo na próxima execução
                     continue
-                reg = {"cnpj": cnpj, "encontrado": status == "ok", "consultado_em": agora_iso(),
-                       "cnae_codigo": d["cnae_codigo"] if d else None,
-                       "cnae_descricao": d["cnae_descricao"] if d else None,
-                       "situacao": d["situacao"] if d else None}
+                agora = agora_iso()
+                # todas as chaves SEMPRE presentes (None quando não há): o upsert em lote exige o mesmo
+                # conjunto de colunas e um valor ausente não pode apagar dado já guardado por engano
+                reg = {k: None for k in CAMPOS_CACHE}
+                reg.update(cnpj=cnpj, encontrado=status == "ok", consultado_em=agora)
+                if d:
+                    reg.update(d)
+                    reg["extras_em"] = agora
                 cache[cnpj] = reg
                 lote.append(reg)
             feitos += len(faltam[ini:ini + LOTE_CACHE])
@@ -423,7 +494,70 @@ def executar():
     return 0
 
 
+LIMITE_CELULAS = 10_000_000  # limite do Google Sheets por arquivo (conta a GRADE inteira de todas as abas)
+
+
+def diagnostico():
+    """Mede a planilha da Carteira: grade de cada aba, CNPJs únicos e quanto sobra até o limite
+    de 10 mi de células, comparando os dois desenhos possíveis pros campos extras."""
+    if not os.environ.get("CARTEIRA_SHEET_ID", "").strip():
+        raise SystemExit("CARTEIRA_SHEET_ID não configurado")
+    planilha = abrir_planilha()
+    abas, total, unicos = [], 0, set()
+    for ws in planilha.worksheets():
+        cel = ws.row_count * ws.col_count
+        total += cel
+        info = {"aba": ws.title, "linhas": ws.row_count, "colunas": ws.col_count, "celulas": cel}
+        plano = planejar_aba(ws.get_all_values()) if parse_nome_aba(ws.title) else None
+        if plano:
+            idx, header, dados = plano
+            cnpjs = {normalizar_cnpj(l[idx]) for l in dados if len(l) > idx}
+            cnpjs.discard(None)
+            unicos |= cnpjs
+            info.update(linhas_com_dados=len(dados), cnpjs_unicos=len(cnpjs))
+        abas.append(info)
+    n_extras = len(CAMPOS_EXTRAS) + 3  # + CNPJ, CNAE e Descrição CNAE na aba-base
+    bases = [a for a in abas if "cnpjs_unicos" in a]
+    por_aba = sum(a["linhas"] * len(CAMPOS_EXTRAS) for a in bases)   # N colunas novas em CADA aba
+    aba_base = (len(unicos) + 1000) * n_extras                        # UMA aba com 1 linha por CNPJ
+    resumo = {
+        "total_celulas": total, "limite": LIMITE_CELULAS, "pct_usado": round(100 * total / LIMITE_CELULAS, 1),
+        "sobra": LIMITE_CELULAS - total, "abas": abas, "cnpjs_unicos_total": len(unicos),
+        "extras_por_aba_celulas": por_aba, "extras_aba_base_celulas": aba_base,
+        "cabe_por_aba": total + por_aba <= LIMITE_CELULAS, "cabe_aba_base": total + aba_base <= LIMITE_CELULAS,
+        "colunas_extras": len(CAMPOS_EXTRAS),
+    }
+    def n(v):  # milhar com ponto (pt-BR), sem mexer em vírgulas do texto
+        return f"{v:,}".replace(",", ".")
+
+    linhas = [f"Planilha: {n(total)} de {n(LIMITE_CELULAS)} células ({resumo['pct_usado']}%) — sobram {n(resumo['sobra'])}"]
+    for a in abas:
+        linhas.append(f"  {a['aba']}: {n(a['linhas'])} lin × {a['colunas']} col = {n(a['celulas'])}"
+                      + (f" | {n(a['cnpjs_unicos'])} CNPJs únicos" if "cnpjs_unicos" in a else ""))
+    linhas += [
+        f"CNPJs únicos em todas as bases: {n(len(unicos))}",
+        f"Desenho A (colunas extras em CADA aba): +{n(por_aba)} células -> {'CABE' if resumo['cabe_por_aba'] else 'NÃO CABE'}",
+        f"Desenho B (uma aba-base, 1 linha por CNPJ): +{n(aba_base)} células -> {'CABE' if resumo['cabe_aba_base'] else 'NÃO CABE'}",
+    ]
+    texto = "\n".join(linhas)
+    log(texto)
+    resumo_md = os.environ.get("GITHUB_STEP_SUMMARY")
+    if resumo_md:
+        with open(resumo_md, "a", encoding="utf-8") as f:
+            f.write("```\n" + texto + "\n```\n")
+    chave = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+    if chave:
+        r = requests.post(f"{SUPA_URL}/rest/v1/robo_status?on_conflict=chave",
+                          headers=_hdr(chave, {"Prefer": "resolution=merge-duplicates,return=minimal"}),
+                          data=json.dumps([{"chave": "carteira_dimensoes", "valor": resumo, "atualizado_em": agora_iso()}]), timeout=60)
+        r.raise_for_status()
+        log("Resultado salvo em robo_status (carteira_dimensoes).")
+    return 0
+
+
 def main():
+    if len(sys.argv) > 1 and sys.argv[1] == "--diagnostico":
+        return diagnostico()
     if len(sys.argv) > 1 and sys.argv[1] == "--consultar":
         for bruto in sys.argv[2:]:
             cnpj = normalizar_cnpj(bruto)

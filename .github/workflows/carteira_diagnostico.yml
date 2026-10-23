@@ -1,0 +1,34 @@
+name: Carteira - diagnóstico de tamanho da planilha
+
+# Mede quantas células a planilha da Carteira já usa (limite do Google Sheets: 10 milhões por
+# arquivo) e se os campos extras de CNPJ cabem. Só leitura. Grupo de concorrência PRÓPRIO pra
+# não esperar na fila das execuções longas de "Carteira - preencher CNAE".
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: carteira-diagnostico
+  cancel-in-progress: false
+
+jobs:
+  diagnostico:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Instalar dependências
+        run: pip install gspread==6.1.2 google-auth==2.29.0 requests==2.32.3
+
+      - name: Medir a planilha
+        env:
+          GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+          CARTEIRA_SHEET_ID: ${{ secrets.CARTEIRA_SHEET_ID }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: python carteira_cnae.py --diagnostico
