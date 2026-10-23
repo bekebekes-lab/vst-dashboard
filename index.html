@@ -2703,6 +2703,13 @@
           <div class="dropdown-content" id="dd-content-carteira-tm-bl"></div>
         </div>
       </div>
+      <div class="filter-group" style="min-width:230px;">
+        <label>CNAE</label>
+        <div class="custom-dropdown" id="dd-carteira-cnae">
+          <button class="dropdown-btn" id="carteira-cnae-btn" onclick="toggleDropdown('dd-content-carteira-cnae')">Todos <span>&#9660;</span></button>
+          <div class="dropdown-content" id="dd-content-carteira-cnae"></div>
+        </div>
+      </div>
       <div class="filter-group" style="justify-content:flex-end;">
         <label>&nbsp;</label>
         <button class="btn-secondary" id="carteira-btn-exportar-csv" onclick="carteiraExportarCsv()" style="padding:7px 14px;font-size:12px;white-space:nowrap;" title="Baixa em CSV todos os clientes que batem com os filtros e a busca atuais (não só os 200 mostrados na tabela)">⬇ Extrair CSV</button>
@@ -11194,6 +11201,7 @@ async function carteiraTrocarBase() {
     popularFiltroUFCarteira();
     popularFiltroAssociadaCarteira();
     popularFiltrosTMCarteira();
+    popularFiltroCnaeCarteira();
     renderCarteiraOverview();
     // A base atual mudou — a lista de bases pra comparar (que exclui a
     // atual) e o resultado do comparativo já em tela ficam desatualizados.
@@ -11746,15 +11754,17 @@ function carteiraFiltrosAtuais() {
     associada: document.getElementById('carteira-filtro-associada').value,
     tmVoz: sel('voz'),
     tmBL: sel('bl'),
+    cnae: (v => v.length ? new Set(v) : null)(getCheckedValuesDd('dd-content-carteira-cnae')),
   };
 }
-function carteiraAlgumFiltro(f) { return !!(f.revenda || f.uf || f.associada || f.tmVoz || f.tmBL); }
+function carteiraAlgumFiltro(f) { return !!(f.revenda || f.uf || f.associada || f.tmVoz || f.tmBL || f.cnae); }
 function carteiraPassaFiltros(r, f) {
   if (f.revenda && carteiraUnidade(r) !== f.revenda) return false;
   if (f.uf && (r['UF'] || '').trim().toUpperCase() !== f.uf) return false;
   if (f.associada && carteiraAssociada(r) !== f.associada) return false;
   if (f.tmVoz && !f.tmVoz.has(carteiraLinhas(r) > 0 ? String(carteiraTM(r)) : CARTEIRA_TM_VAZIO)) return false;
   if (f.tmBL && !f.tmBL.has(carteiraLinhasBL(r) > 0 ? String(carteiraTM_BL(r)) : CARTEIRA_TM_VAZIO)) return false;
+  if (f.cnae && !f.cnae.has(carteiraCnaeChave(r))) return false;
   return true;
 }
 function carteiraPassaBusca(r, termo, termoDigitos) {
@@ -11781,6 +11791,48 @@ function popularFiltrosTMCarteira() {
   });
 }
 
+// ─── CNAE ────────────────────────────────────────────────────────────────────
+// As colunas "CNAE" (7 dígitos) e "Descrição CNAE" são preenchidas NA PRÓPRIA
+// planilha da Carteira pelo robô carteira_cnae.py (consulta a Receita via
+// BrasilAPI, uma vez por base). Base ainda sem essas colunas = filtro sem opções.
+const CARTEIRA_CNAE_VAZIO = '(Sem CNAE)';
+function carteiraCnaeCodigo(r) {
+  const d = String(carteiraCampo(r, 'CNAE') ?? '').replace(/\D/g, '');
+  return d ? d.padStart(7, '0') : '';
+}
+function carteiraCnaeDescricao(r) { return String(carteiraCampo(r, 'Descrição CNAE') ?? '').trim(); }
+// 6120501 -> 6120-5/01 (formato oficial da CNAE)
+function carteiraCnaeFormatado(cod) { return cod && cod.length === 7 ? `${cod.slice(0, 4)}-${cod[4]}/${cod.slice(5)}` : (cod || ''); }
+// Valor usado no dropdown e no filtro: "6120-5/01 · Telefonia móvel celular".
+function carteiraCnaeChave(r) {
+  const cod = carteiraCnaeCodigo(r);
+  if (!cod) return CARTEIRA_CNAE_VAZIO;
+  const desc = carteiraCnaeDescricao(r);
+  return carteiraCnaeFormatado(cod) + (desc ? ' · ' + desc : '');
+}
+function popularFiltroCnaeCarteira() {
+  const contId = 'dd-content-carteira-cnae', labelBtn = '#dd-carteira-cnae .dropdown-btn';
+  const chaves = new Set(CARTEIRA_DADOS.map(carteiraCnaeChave));
+  const temSem = chaves.delete(CARTEIRA_CNAE_VAZIO);
+  const itens = [...chaves].sort();
+  const btn = document.getElementById('carteira-cnae-btn');
+  if (!itens.length) { // base sem CNAE preenchido ainda
+    _ddState[contId] = null;
+    document.getElementById(contId).innerHTML = '';
+    btn.disabled = true;
+    btn.innerHTML = 'Sem CNAE nesta base <span>&#9660;</span>';
+    btn.title = 'O robô ainda não preencheu o CNAE desta base na planilha';
+    return;
+  }
+  btn.disabled = false;
+  btn.title = '';
+  const onChange = () => { atualizarBotaoDropdown(contId, labelBtn); renderCarteiraOverview(); };
+  window._ddOnChange_dd_content_carteira_cnae = onChange; // exigido por popularDropdownGenerico()
+  ddRegisterCallback(contId, onChange);
+  popularDropdownGenerico(contId, temSem ? [...itens, CARTEIRA_CNAE_VAZIO] : itens, onChange, labelBtn);
+  atualizarBotaoDropdown(contId, labelBtn);
+}
+
 // Gestor/supervisão com a Carteira liberada por acesso extra (travada na
 // unidade deles pelo servidor) pode consultar na tela, mas NÃO extrair CSV.
 // Admin, admin_beta e quem já tinha a aba (ex.: gestor_macro2) seguem como sempre.
@@ -11799,13 +11851,14 @@ function carteiraExportarCsv() {
   if (!linhas.length) { alert('Nenhum cliente para os filtros atuais.'); return; }
   const cab = ['CNPJ', 'Razão Social', 'Unidade', 'Carteira Associada', 'Cidade', 'UF', 'Classificação',
     'Linhas Voz', 'TM Voz (meses)', 'Faixa TM Voz', 'Apto Voz', 'Linhas BL', 'TM BL (meses)', 'Faixa TM BL', 'Apto BL',
-    'Telefone de Contato', 'Nome do ADM'];
+    'Telefone de Contato', 'Nome do ADM', 'CNAE', 'Descrição CNAE'];
   const sn = v => v ? 'Sim' : 'Não';
   const dados = linhas.map(r => [
     r['CNPJ'] || '', r['Razão Social'] || '', carteiraUnidade(r), carteiraAssociada(r) || '', r['DSC_MUNICIPIO'] || '', r['UF'] || '', r['Classificação'] || '',
     carteiraLinhas(r), carteiraTM(r), carteiraLinhas(r) > 0 ? (carteiraFaixaDe(carteiraTM(r), CARTEIRA_FAIXAS_TM) || '') : '', sn(carteiraLinhas(r) > 0 && carteiraApto(r)),
     carteiraLinhasBL(r), carteiraTM_BL(r), carteiraLinhasBL(r) > 0 ? (carteiraFaixaDe(carteiraTM_BL(r), CARTEIRA_FAIXAS_TM) || '') : '', sn(carteiraLinhasBL(r) > 0 && carteiraAptoBL(r)),
     carteiraValor(r['Telefone de Contato']), carteiraValor(r['Nome do ADM']),
+    carteiraCnaeFormatado(carteiraCnaeCodigo(r)), carteiraCnaeDescricao(r),
   ]);
   const esc = v => '"' + String(v).replace(/"/g, '""') + '"';
   const csv = '﻿' + [cab, ...dados].map(l => l.map(esc).join(',')).join('\n');
@@ -12388,6 +12441,7 @@ async function initCarteira() {
     popularFiltroUFCarteira();
     popularFiltroAssociadaCarteira();
     popularFiltrosTMCarteira();
+    popularFiltroCnaeCarteira();
     renderCarteiraOverview();
     return;
   }
@@ -12405,6 +12459,7 @@ async function initCarteira() {
     popularFiltroUFCarteira();
     popularFiltroAssociadaCarteira();
     popularFiltrosTMCarteira();
+    popularFiltroCnaeCarteira();
     renderCarteiraOverview();
   } catch (e) {
     document.getElementById('carteira-status-area').innerHTML = `<div class="error-state"><strong>Erro ao carregar carteira</strong>${escapeHtml(e.message)}</div>`;
@@ -12619,7 +12674,7 @@ function renderCarteiraBusca() {
     <div class="table-wrap"><div class="table-scroll">
       <table>
         <thead><tr>
-          <th>CNPJ</th><th style="width:20%">Razão Social</th><th>Unidade</th><th>Cidade/UF</th>
+          <th>CNPJ</th><th style="width:20%">Razão Social</th><th>Unidade</th><th>Cidade/UF</th><th>CNAE</th>
           <th class="center">Linhas Voz</th><th class="center">TM Voz</th><th class="center">Apto Voz</th>
           <th class="center">Linhas BL</th><th class="center">TM BL</th><th class="center">Apto BL</th>
           <th class="center">Classe</th><th></th>
@@ -12632,6 +12687,7 @@ function renderCarteiraBusca() {
             <td style="font-weight:500"><span class="cliente-drill-link" onclick="carteiraAbrirDetalhe(${idx})">${escapeHtml(r['Razão Social'] || '—')}</span></td>
             <td style="font-size:12px">${escapeHtml(carteiraUnidade(r))}</td>
             <td style="font-size:12px">${escapeHtml(r['DSC_MUNICIPIO'] || '—')}/${escapeHtml(r['UF'] || '—')}</td>
+            <td style="font-size:12px;white-space:nowrap" title="${escapeHtml(carteiraCnaeDescricao(r))}">${escapeHtml(carteiraCnaeFormatado(carteiraCnaeCodigo(r)) || '—')}</td>
             <td class="center">${carteiraLinhas(r)}</td>
             <td class="center">${carteiraTM(r)}</td>
             <td class="center">${simNao(carteiraLinhas(r) > 0 && carteiraApto(r))}</td>

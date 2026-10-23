@@ -1,0 +1,50 @@
+name: Carteira - preencher CNAE
+
+on:
+  schedule:
+    # De hora em hora, em dias úteis, das 08h às 20h BRT (11–23h UTC): se subiu uma base
+    # nova de Carteira sem CNAE, preenche. Base já preenchida não é refeita.
+    - cron: "20 11-23 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      modo_teste:
+        description: "1 = consulta e conta, mas NÃO grava na planilha nem no cache"
+        required: false
+        default: ""
+      abas_max:
+        description: "Limita às N bases mais recentes (vazio/0 = todas)"
+        required: false
+        default: ""
+
+# Uma execução por vez: o primeiro preenchimento (várias bases) pode levar horas e as
+# execuções agendadas seguintes esperam na fila em vez de rodar em paralelo.
+concurrency:
+  group: carteira-cnae
+  cancel-in-progress: false
+
+jobs:
+  cnae:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Instalar dependências
+        run: pip install gspread==6.1.2 google-auth==2.29.0 requests==2.32.3
+
+      - name: Preencher CNAE
+        env:
+          GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+          CARTEIRA_SHEET_ID: ${{ secrets.CARTEIRA_SHEET_ID }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          MODO_TESTE: ${{ github.event.inputs.modo_teste }}
+          CARTEIRA_ABAS_MAX: ${{ github.event.inputs.abas_max }}
+          # para com folga antes do timeout do job: grava o que já tem e retoma na próxima
+          CNAE_LIMITE_SEGUNDOS: "18000"
+        run: python carteira_cnae.py
