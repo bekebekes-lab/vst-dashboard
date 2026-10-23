@@ -105,7 +105,7 @@ function montarEscopoTecnico(tipoOferta, dadosOferta) {
     return [
       ['Internet Dedicada (Business Link Direct - BLD):', 'Conexão contínua e exclusiva à rede, sem necessidade de discagem.'],
       ['Banda Simétrica:', `${dadosOferta.velocidade} de velocidade, com 100% da banda contratada garantida e disponível para download e upload.`],
-      ['Endereçamento:', 'Fornecimento de IP Estático, contemplando um bloco com 16 Endereços IP válidos.'],
+      ['Endereçamento:', 'Fornecimento de IP Estático, contemplando um bloco com 8 Endereços IP válidos.'],
       ['Equipamento (CPE):', 'Roteador avançado de alta performance incluso na solução (modelos Fortinet 40-F ou Huawei AR651).'],
       ['Voz Avançada (Vip Único):', 'Telefonia corporativa integrada com voz ilimitada OTT ou franquia de minutos unificados, permitindo originar e receber chamadas telefônicas locais e de longa distância nacional com alta qualidade.' + NOTA_CANAIS_FISICOS],
       ['Gerência de Rede (GRC):', 'Controle avançado das atividades e monitoramento do uso dos recursos no ambiente da rede, com testes operacionais e acompanhamento contínuo.'],
@@ -155,7 +155,7 @@ function montarEscopoTecnico(tipoOferta, dadosOferta) {
   return [
     ['Internet Dedicada (Business Link Direct - BLD):', 'Conexão contínua e exclusiva à rede, sem necessidade de discagem, para tráfego de dados.'],
     ['Banda Simétrica:', `${dadosOferta.velocidade} de velocidade, com 100% da banda contratada garantida e disponível para download e upload.`],
-    ['Endereçamento:', 'Fornecimento de IP Estático, contemplando um bloco com 16 Endereços IP válidos.'],
+    ['Endereçamento:', 'Fornecimento de IP Estático, contemplando um bloco com 8 Endereços IP válidos.'],
     ['Equipamento (CPE):', `Roteador ${dadosOferta.roteador}, com custo já incluso no valor mensal do investimento abaixo — o cliente não pode usar roteador próprio nesta oferta.`],
   ];
 }
