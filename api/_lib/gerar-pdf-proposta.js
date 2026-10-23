@@ -122,6 +122,7 @@ function montarEscopoTecnico(tipoOferta, dadosOferta) {
   if (tipoOferta === 'combo_2p_bld') {
     return [
       ['Internet Dedicada (Business Link Direct - BLD):', `Conexão contínua e exclusiva à rede de ${dadosOferta.velocidade}, sem necessidade de discagem, com roteador ${dadosOferta.roteador} incluso.`],
+      ['Endereçamento:', 'Fornecimento de IP Estático, contemplando um bloco com 8 Endereços IP válidos.'],
       ['Firewall Gerenciado sem fio:', 'Proteção da rede corporativa contra ataques, hackers e vírus, com suporte 24x7 e atualizações automáticas.'],
       ['Gerência de Rede (GRC):', 'Controle avançado das atividades e monitoramento do uso dos recursos no ambiente da rede, com testes operacionais e acompanhamento contínuo.'],
       ['Voz Ilimitada ou PABX Físico:', 'Telefonia corporativa com voz ilimitada, ou solução de PABX físico dedicado para a empresa.' + NOTA_CANAIS_FISICOS],
