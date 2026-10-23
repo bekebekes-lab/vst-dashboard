@@ -1507,6 +1507,19 @@
   .pn-fg .dropdown-btn span, .filters-bar .dropdown-btn span { display: none; }
   .pn-fg select option, .filters-bar .filter-group select option { background: #fff; color: #222; }
   .pn-fg select:disabled, .filters-bar .filter-group select:disabled { opacity: .55; }
+
+  /* Carteira tem muitos filtros e cada campo traz largura mínima própria. Na grade de colunas fixas
+     os campos largos passavam por cima do vizinho (o "Extrair CSV" sumia atrás do filtro de CNAE) e
+     a linha estourava a tela. Aqui os grupos quebram de linha e dividem o espaço sobrando; botões e
+     caixas de seleção mantêm o tamanho natural. O mobile segue com a grade de 2 colunas de sempre. */
+  @media (min-width: 769px) {
+    #tab-carteira > .filters-bar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 14px; }
+    #tab-carteira > .filters-bar > .filter-group { flex: 1 1 170px; min-width: 0; }
+    #tab-carteira > .filters-bar > .filter-group-acao { flex: 0 0 auto; }
+  }
+  /* o painel do CNAE tem rótulos longos ("6120-5/01 · Telefonia móvel celular"): abre mais largo que o botão */
+  #dd-content-carteira-cnae { width: max-content; min-width: 100%; max-width: min(520px, 90vw); }
+  #dd-content-carteira-cnae .dropdown-item { white-space: normal; line-height: 1.3; }
 </style>
 </head>
 <body>
@@ -2710,17 +2723,17 @@
           <div class="dropdown-content" id="dd-content-carteira-cnae"></div>
         </div>
       </div>
-      <div class="filter-group" style="justify-content:flex-end;">
+      <div class="filter-group filter-group-acao" style="justify-content:flex-end;">
         <label>&nbsp;</label>
         <button class="btn-secondary" id="carteira-btn-exportar-csv" onclick="carteiraExportarCsv()" style="padding:7px 14px;font-size:12px;white-space:nowrap;" title="Baixa em CSV todos os clientes que batem com os filtros e a busca atuais (não só os 200 mostrados na tabela)">⬇ Extrair CSV</button>
       </div>
-      <div class="filter-group" style="justify-content:flex-end;">
+      <div class="filter-group filter-group-acao" style="justify-content:flex-end;">
         <label>&nbsp;</label>
         <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:500;cursor:pointer;padding-top:8px;white-space:nowrap;" title="Piloto: considera apto a renovar a partir de 12 meses de contrato, pra todas as classificações, no lugar do limiar normal">
           <input type="checkbox" id="carteira-visao-12m" onchange="toggleCarteiraVisao12Meses()"> Visão piloto (12 meses)
         </label>
       </div>
-      <div class="filter-group" style="justify-content:flex-end;">
+      <div class="filter-group filter-group-acao" style="justify-content:flex-end;">
         <label>&nbsp;</label>
         <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:500;cursor:pointer;padding-top:8px;white-space:nowrap;" title="Compara a base selecionada acima com uma ou mais bases anteriores e lista os clientes que saíram">
           <input type="checkbox" id="carteira-comparativo-ativo" onchange="toggleCarteiraComparativo()"> Comparativo (churn entre carteiras)
