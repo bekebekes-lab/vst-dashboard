@@ -38,7 +38,7 @@ BRASILAPI = "https://brasilapi.com.br/api/cnpj/v1/"
 COL_CNAE = "CNAE"
 COL_DESC = "Descrição CNAE"
 PAUSA_ENTRE_CONSULTAS = 0.2          # usado só no modo --consultar (teste manual)
-TRABALHADORES = 5                    # consultas em paralelo (a rede do GitHub Actions tem latência alta)
+TRABALHADORES = 12                   # consultas em paralelo: medido no GitHub Actions, cada consulta leva ~2,4 s; o teto global abaixo é quem limita o ritmo
 INTERVALO_MIN_CONSULTAS = 0.15       # trava GLOBAL entre inícios de consulta: no máximo ~6,6/s no total
 REVALIDAR_NAO_ENCONTRADOS_DIAS = 30  # CNPJ "não encontrado" é reconsultado depois desse prazo
 # Mesmo visual do cabeçalho da Carteira (fundo preto, texto branco em negrito)
