@@ -38,8 +38,9 @@ BRASILAPI = "https://brasilapi.com.br/api/cnpj/v1/"
 COL_CNAE = "CNAE"
 COL_DESC = "Descrição CNAE"
 PAUSA_ENTRE_CONSULTAS = 0.2          # usado só no modo --consultar (teste manual)
-TRABALHADORES = 12                   # consultas em paralelo: medido no GitHub Actions, cada consulta leva ~2,4 s; o teto global abaixo é quem limita o ritmo
-INTERVALO_MIN_CONSULTAS = 0.15       # trava GLOBAL entre inícios de consulta: no máximo ~6,6/s no total
+TRABALHADORES = 6                    # com 12 a BrasilAPI começou a derrubar conexões (~10% de erro): 6 é o ponto estável
+INTERVALO_MIN_CONSULTAS = 0.3        # trava GLOBAL entre inícios de consulta: no máximo ~3,3/s (e sobe sozinha se houver erros)
+INTERVALO_MAX_CONSULTAS = 4.0        # teto da desaceleração automática (1 consulta a cada 4 s no pior caso)
 REVALIDAR_NAO_ENCONTRADOS_DIAS = 30  # CNPJ "não encontrado" é reconsultado depois desse prazo
 # Mesmo visual do cabeçalho da Carteira (fundo preto, texto branco em negrito)
 ESTILO_CABECALHO = {
@@ -97,19 +98,25 @@ def normalizar_cnpj(valor):
 
 
 # ─── Consulta (BrasilAPI) ────────────────────────────────────────────────────
-def consultar_cnae(cnpj: str, sessao=None, tentativas=5):
+def consultar_cnae(cnpj: str, sessao=None, tentativas=5, limitador=None):
     """('ok', {cnae_codigo, cnae_descricao, situacao}) | ('nao_encontrado', None) | ('erro', None)."""
     http = sessao or requests
     espera = 2
     for i in range(tentativas):
+        if i and limitador:
+            limitador.esperar()  # repetição também respeita o ritmo global
         try:
             r = http.get(BRASILAPI + cnpj, timeout=25, headers={"User-Agent": "vst-dashboard-carteira-cnae"})
         except requests.RequestException as e:
+            if limitador:
+                limitador.falha()
             log(f"    {cnpj}: falha de rede ({e.__class__.__name__}), tentativa {i + 1}/{tentativas}")
             time.sleep(espera)
             espera = min(espera * 2, 60)
             continue
         if r.status_code == 200:
+            if limitador:
+                limitador.ok()
             d = r.json()
             cod = d.get("cnae_fiscal")
             if cod in (None, "", 0):
@@ -120,8 +127,12 @@ def consultar_cnae(cnpj: str, sessao=None, tentativas=5):
                 "situacao": (d.get("descricao_situacao_cadastral") or "").strip(),
             }
         if r.status_code in (400, 404):
+            if limitador:
+                limitador.ok()  # a API respondeu normalmente: o CNPJ é que não existe
             return "nao_encontrado", None
         # 429 (limite) e 5xx: espera e tenta de novo, respeitando Retry-After
+        if limitador:
+            limitador.falha()
         try:
             espera_api = int(r.headers.get("Retry-After", "0"))
         except ValueError:
@@ -166,20 +177,38 @@ def cache_gravar(chave, registros, sessao=None):
 
 
 class Limitador:
-    """Garante um intervalo mínimo entre o INÍCIO de consultas, somando todas as threads."""
+    """Intervalo mínimo entre o INÍCIO de consultas (somando todas as threads) e ADAPTATIVO:
+    cada falha (rede, 429, 5xx) aumenta o intervalo em 50% (até o teto) e cada sequência de
+    sucessos o reduz de volta até o valor base. Assim o robô desacelera sozinho quando a API
+    começa a recusar conexões, em vez de insistir e piorar."""
 
-    def __init__(self, intervalo):
-        self.intervalo = intervalo
+    def __init__(self, base, maximo=None):
+        self.base = base
+        self.maximo = maximo or base
+        self.atual = base
         self.lock = threading.Lock()
         self.proxima = 0.0
+        self.sucessos = 0
 
     def esperar(self):
         with self.lock:
             agora = time.monotonic()
             espera = max(0.0, self.proxima - agora)
-            self.proxima = max(agora, self.proxima) + self.intervalo
+            self.proxima = max(agora, self.proxima) + self.atual
         if espera:
             time.sleep(espera)
+
+    def falha(self):
+        with self.lock:
+            self.sucessos = 0
+            self.atual = min(self.maximo, self.atual * 1.5)
+
+    def ok(self):
+        with self.lock:
+            self.sucessos += 1
+            if self.sucessos >= 20 and self.atual > self.base:
+                self.atual = max(self.base, self.atual * 0.8)
+                self.sucessos = 0
 
 
 def agora_iso():
@@ -331,13 +360,13 @@ def executar():
 
     # uma sessão HTTP por thread (Session não é garantidamente thread-safe) + trava global de ritmo
     local = threading.local()
-    limitador = Limitador(INTERVALO_MIN_CONSULTAS)
+    limitador = Limitador(INTERVALO_MIN_CONSULTAS, INTERVALO_MAX_CONSULTAS)
 
     def consultar_limitado(cnpj):
         if not hasattr(local, "sessao"):
             local.sessao = requests.Session()
         limitador.esperar()
-        return consultar_cnae(cnpj, local.sessao)
+        return consultar_cnae(cnpj, local.sessao, limitador=limitador)
 
     n_trab = int(os.environ.get("CNAE_TRABALHADORES", "").strip() or TRABALHADORES)
     pool = ThreadPoolExecutor(max_workers=n_trab)
@@ -374,7 +403,7 @@ def executar():
             feitos += len(faltam[ini:ini + LOTE_CACHE])
             if lote and not modo_teste:
                 cache_gravar(chave, lote)  # progresso nunca se perde
-            log(f"  {feitos}/{len(faltam)} consultados · {erros} erro(s)")
+            log(f"  {feitos}/{len(faltam)} consultados · {erros} erro(s) · intervalo atual {limitador.atual:.2f}s")
         pendentes_total += max(0, len(faltam) - feitos) + erros
 
         pos = posicao_colunas(header)
