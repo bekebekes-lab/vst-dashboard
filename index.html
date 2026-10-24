@@ -1881,7 +1881,7 @@
       </div>
       <div class="prod-filter-group">
         <label>UF BL</label>
-        <select id="prod-uf-bl" onchange="renderProducao()">
+        <select id="prod-uf-bl" onchange="prodAoFiltrar('ufbl')">
           <option value="Geral">Geral</option>
           <option value="PR">PR</option>
           <option value="RS">RS</option>
@@ -1905,7 +1905,7 @@
       </div>
       <div class="prod-filter-group" style="min-width:180px">
         <label>Grupo de Produto</label>
-        <select id="prod-grupo" onchange="atualizarVisibilidadeMomTri(); renderProducao()">
+        <select id="prod-grupo" onchange="atualizarVisibilidadeMomTri(); prodAoFiltrar('grupo')">
           <option value="Geral">Geral</option>
         </select>
       </div>
@@ -6570,7 +6570,7 @@ function toggleStatusChip(status, el) {
   }
   atualizarContadorStatus();
   atualizarVisibilidadeMomTri();
-  renderProducao();
+  prodAoFiltrar('status');
 }
 
 function selectAllStatus() {
@@ -6796,9 +6796,9 @@ function facetaAplicarDropdown(contId, labelBotaoSel, itens, onChange) {
 
 function popularDropdownTagUnidade() {
   const itens = Object.entries(MAPEAMENTO_TAGS).sort((a, b) => a[1].localeCompare(b[1])).map(([tag]) => tag).concat(['Sem Tag']);
-  ddRegisterCallback('dd-content-prod-tag', function(){ atualizarBotaoDropdown('dd-content-prod-tag','#dd-prod-tag .dropdown-btn'); renderProducao(); });
-  window._ddOnChange_dd_content_prod_tag = function(){ atualizarBotaoDropdown('dd-content-prod-tag','#dd-prod-tag .dropdown-btn'); renderProducao(); };
-  popularDropdownGenerico('dd-content-prod-tag', itens, function(){ atualizarBotaoDropdown('dd-content-prod-tag','#dd-prod-tag .dropdown-btn'); renderProducao(); }, '#dd-prod-tag .dropdown-btn');
+  ddRegisterCallback('dd-content-prod-tag', function(){ atualizarBotaoDropdown('dd-content-prod-tag','#dd-prod-tag .dropdown-btn'); prodAoFiltrar('tag'); });
+  window._ddOnChange_dd_content_prod_tag = function(){ atualizarBotaoDropdown('dd-content-prod-tag','#dd-prod-tag .dropdown-btn'); prodAoFiltrar('tag'); };
+  popularDropdownGenerico('dd-content-prod-tag', itens, function(){ atualizarBotaoDropdown('dd-content-prod-tag','#dd-prod-tag .dropdown-btn'); prodAoFiltrar('tag'); }, '#dd-prod-tag .dropdown-btn');
 }
 
 // Detecta equipes presentes na base (coluna EQUIPE) que ainda não têm hierarquia
@@ -6859,10 +6859,8 @@ function initProducao() {
   fillProdSelect('prod-estado', ['Todos', ...[...estados].sort()]);
 
   // Popula Gestor (checkbox multi), Equipe (checkbox multi) e Consultor (checkbox multi), com cascata
-  _prodEquipeItens = [...equipes].sort();
-  _prodGestorItens = [...gestores].sort();
-  popularDropdownProdGestor(_prodGestorItens);
-  popularDropdownEquipe(_prodEquipeItens);
+  popularDropdownProdGestor([...gestores].sort());
+  popularDropdownEquipe([...equipes].sort());
   const consultores = new Set();
   ALL_DATA.forEach(r => { if (r['PROPRIETÁRIO DO PEDIDO']) consultores.add(r['PROPRIETÁRIO DO PEDIDO']); });
   popularDropdownProdConsultor([...consultores].sort());
@@ -6917,179 +6915,118 @@ function fillProdSelect(id, opts) {
 }
 
 function onProdFilterChange(level) {
-  if (level === 'estado') atualizarCascataProducao();
-  renderProducao();
+  prodAoFiltrar(level);
 }
 
-// Listas base salvas para restaurar no reset de cascata
-let _prodGestorItens = [];
-let _prodEquipeItens = [];
-
-// ─── Cascata Produção: Estado → Gestor → Equipe → Consultor ────────────────
-function atualizarCascataProducao() {
-  const estado = document.getElementById('prod-estado')?.value || 'Todos';
-
-  // 1) Equipes dentro do Estado selecionado (ou todas, se "Todos")
-  const equipesEstado = estado === 'Todos'
-    ? _prodEquipeItens
-    : _prodEquipeItens.filter(eq => EQUIPES_ESTADOS[eq] === estado);
-
-  // 2) Gestores disponíveis dentro desse recorte de Estado
-  const gestoresDisponiveis = [...new Set(equipesEstado.map(eq => EQUIPES_GESTORES[eq]).filter(Boolean))]
-    .filter(g => _prodGestorItens.includes(g))
-    .sort();
-  popularDropdownProdGestor(gestoresDisponiveis);
-
-  // 3) Equipes disponíveis dentro do Estado E dos Gestores selecionados (se houver)
-  const gestoresSel = getCheckedValuesDd('dd-content-prod-gestor');
-  const equipesDisponiveis = gestoresSel.length > 0
-    ? equipesEstado.filter(eq => gestoresSel.includes(EQUIPES_GESTORES[eq]))
-    : equipesEstado;
-  popularDropdownEquipe(equipesDisponiveis);
-
-  // 4) Consultor: com base nas equipes efetivamente selecionadas (ou no
-  // recorte disponível, se nenhuma equipe específica estiver marcada)
-  const equipesSel = getCheckedValuesDd('dd-content-prod-equipe');
-  const equipesFinal = equipesSel.length > 0 ? equipesSel : equipesDisponiveis;
-  const consultoresSet = new Set();
-  ALL_DATA.forEach(r => {
-    if (equipesFinal.includes(r['EQUIPE']) && r['PROPRIETÁRIO DO PEDIDO'])
-      consultoresSet.add(r['PROPRIETÁRIO DO PEDIDO']);
-  });
-  _popularProdConsultorLista([...consultoresSet].sort());
+// Filtro que o usuário acabou de mexer: a cascata não reescreve a lista dele (preserva a busca
+// digitada no dropdown). Consumido (e zerado) no início de renderProducao().
+let _prodOrigemFiltro = null;
+function prodAoFiltrar(origem) {
+  _prodOrigemFiltro = origem;
+  renderProducao();
 }
 
 function popularDropdownProdGestor(gestores) {
   gestores = filtrarGestoresDoEscopo(gestores);
   window._ddOnChange_dd_content_prod_gestor = function(){
     atualizarBotaoDropdown('dd-content-prod-gestor','#dd-prod-gestor .dropdown-btn');
-    atualizarCascataProducao();
-    renderProducao();
+    prodAoFiltrar('gestor');
   };
   ddRegisterCallback('dd-content-prod-gestor', window._ddOnChange_dd_content_prod_gestor);
-  popularDropdownGenerico('dd-content-prod-gestor', gestores, window._ddOnChange_dd_content_prod_gestor, '#dd-prod-gestor .dropdown-btn');
+  popularDropdownGenerico('dd-content-prod-gestor', gestores, window._ddOnChange_dd_content_prod_gestor, '#dd-prod-gestor .dropdown-btn', FACETA_ROTULO_SEM_DADO);
 }
 
 function popularDropdownEquipe(equipes) {
   equipes = filtrarEquipesDoEscopo(equipes);
   window._ddOnChange_dd_content_prod_equipe = function(){
     atualizarBotaoDropdown('dd-content-prod-equipe','#dd-prod-equipe .dropdown-btn');
-    atualizarCascataProducao();
-    renderProducao();
+    prodAoFiltrar('equipe');
   };
   ddRegisterCallback('dd-content-prod-equipe', window._ddOnChange_dd_content_prod_equipe);
-  popularDropdownGenerico('dd-content-prod-equipe', equipes, window._ddOnChange_dd_content_prod_equipe, '#dd-prod-equipe .dropdown-btn');
-}
-
-function _popularProdConsultorLista(consultores) {
-  // Limpa consultores selecionados que ficaram fora do novo escopo
-  const consulSel = getCheckedValuesDd('dd-content-prod-consultor');
-  const consulFora = consulSel.filter(c => !consultores.includes(c));
-  if (consulFora.length > 0) _ddState['dd-content-prod-consultor'] = null;
-  popularDropdownProdConsultor(consultores);
+  popularDropdownGenerico('dd-content-prod-equipe', equipes, window._ddOnChange_dd_content_prod_equipe, '#dd-prod-equipe .dropdown-btn', FACETA_ROTULO_SEM_DADO);
 }
 
 function popularDropdownProdConsultor(consultores) {
   window._ddOnChange_dd_content_prod_consultor = function(){
     atualizarBotaoDropdown('dd-content-prod-consultor','#dd-prod-consultor .dropdown-btn');
-    renderProducao();
+    prodAoFiltrar('consultor');
   };
   ddRegisterCallback('dd-content-prod-consultor', window._ddOnChange_dd_content_prod_consultor);
-  popularDropdownGenerico('dd-content-prod-consultor', consultores, window._ddOnChange_dd_content_prod_consultor, '#dd-prod-consultor .dropdown-btn');
+  popularDropdownGenerico('dd-content-prod-consultor', consultores, window._ddOnChange_dd_content_prod_consultor, '#dd-prod-consultor .dropdown-btn', FACETA_ROTULO_SEM_DADO);
 }
 
 function popularDropdownProdUFCliente(itens) {
   window._ddOnChange_dd_content_prod_uf_cliente = function(){
     atualizarBotaoDropdown('dd-content-prod-uf-cliente','#dd-prod-uf-cliente .dropdown-btn');
-    renderProducao();
+    prodAoFiltrar('ufcliente');
   };
   ddRegisterCallback('dd-content-prod-uf-cliente', window._ddOnChange_dd_content_prod_uf_cliente);
-  popularDropdownGenerico('dd-content-prod-uf-cliente', itens, window._ddOnChange_dd_content_prod_uf_cliente, '#dd-prod-uf-cliente .dropdown-btn');
+  popularDropdownGenerico('dd-content-prod-uf-cliente', itens, window._ddOnChange_dd_content_prod_uf_cliente, '#dd-prod-uf-cliente .dropdown-btn', FACETA_ROTULO_SEM_DADO);
 }
 
 function popularDropdownProdDDD(itens) {
   window._ddOnChange_dd_content_prod_ddd = function(){
     atualizarBotaoDropdown('dd-content-prod-ddd','#dd-prod-ddd .dropdown-btn');
-    renderProducao();
+    prodAoFiltrar('ddd');
   };
   ddRegisterCallback('dd-content-prod-ddd', window._ddOnChange_dd_content_prod_ddd);
-  popularDropdownGenerico('dd-content-prod-ddd', itens, window._ddOnChange_dd_content_prod_ddd, '#dd-prod-ddd .dropdown-btn');
+  popularDropdownGenerico('dd-content-prod-ddd', itens, window._ddOnChange_dd_content_prod_ddd, '#dd-prod-ddd .dropdown-btn', FACETA_ROTULO_SEM_DADO);
 }
 
-// Recalcula, com base em TODOS os filtros ativos no momento (status de fila,
-// estado, gestor, equipe, consultor, UF BL, grupo, tag — e a interação entre
-// Estado / UF Cliente / DDD entre si), quais valores de Estado, UF Cliente e
-// DDD de fato existem no recorte atual. Isso garante que os dropdowns nunca
-// mostrem opções "fantasma" sem nenhuma linha correspondente (ex.: um DDD que
-// só existe em status diferentes do selecionado).
-function calcularOpcoesInteligentesProducao() {
-  const filtroEstado    = document.getElementById('prod-estado')?.value || 'Todos';
-  const gestoresChecked = getCheckedValuesDd('dd-content-prod-gestor');
-  const equipesChecked  = getCheckedValuesDd('dd-content-prod-equipe');
-  const consultoresChecked = getCheckedValuesDd('dd-content-prod-consultor');
-  const filtroUFBL      = document.getElementById('prod-uf-bl')?.value || 'Geral';
-  const filtroUFCliente = getCheckedValuesDd('dd-content-prod-uf-cliente');
-  const filtroDDD       = getCheckedValuesDd('dd-content-prod-ddd');
-  const filtroGrupo     = document.getElementById('prod-grupo')?.value || 'Geral';
-  const tagsFiltro      = getCheckedValuesDd('dd-content-prod-tag');
-  const statusArr       = [...prodStatusSelecionados];
-
-  const estadosSet = new Set();
-  const ufClienteSet = new Set();
-  const dddSet = new Set();
-  const escopoOpcoes = getEscopoTravado();
-
-  ALL_DATA.forEach(r => {
-    const equipe    = r['EQUIPE'] || '';
-    const uf        = r['UF'] || '';
-    const ufCliente = (r['Estado'] || r['ESTADO'] || '').trim().toUpperCase();
-    const numero    = (r['NUMERO'] || r['Numero'] || r['NÚMERO'] || '').toString().replace(/\D/g, '');
-    const ddd       = numero.length >= 2 ? numero.substring(0, 2) : '';
-    const grupo     = r['GRUPO'] || '';
-    const fila      = r['FILA'] || '';
-    const tagRaw    = r['TAGS ATIVIDADE'] || '';
-    const tag       = MAPEAMENTO_TAGS[tagRaw] ? tagRaw : 'Sem Tag';
-    const cons      = r['PROPRIETÁRIO DO PEDIDO'] || '';
-    const est       = EQUIPES_ESTADOS[equipe] || '';
-    const ges       = EQUIPES_GESTORES[equipe] || 'Sem Gestor';
-
-    if (!linhaDentroDoEscopo(r, escopoOpcoes, equipe)) return;
-    // Filtros que sempre valem para as três dimensões (status, gestor, equipe,
-    // consultor, UF BL, grupo, tag)
-    if (statusArr.length > 0 && !statusArr.includes(fila)) return;
-    if (gestoresChecked.length > 0 && !gestoresChecked.includes(ges)) return;
-    if (equipesChecked.length > 0 && !equipesChecked.includes(equipe)) return;
-    if (consultoresChecked.length > 0 && !consultoresChecked.includes(cons)) return;
-    if (!checkUF(filtroUFBL, uf)) return;
-    if (filtroGrupo !== 'Geral' && grupo !== filtroGrupo) return;
-    if (tagsFiltro.length > 0 && !tagsFiltro.includes(tag)) return;
-
-    // Checagens cruzadas entre Estado / UF Cliente / DDD — cada dimensão
-    // ignora a própria checagem ao montar sua própria lista de opções, mas
-    // respeita a seleção atual das outras duas.
-    const passEstado    = filtroEstado === 'Todos' || est === filtroEstado;
-    const passUFCliente = filtroUFCliente.length === 0 || filtroUFCliente.includes(ufCliente);
-    const passDDD       = filtroDDD.length === 0 || filtroDDD.includes(ddd);
-
-    if (est && passUFCliente && passDDD) estadosSet.add(est);
-    if (ufCliente && passEstado && passDDD) ufClienteSet.add(ufCliente);
-    if (ddd && passEstado && passUFCliente) dddSet.add(ddd);
-  });
-
-  return { estadosSet, ufClienteSet, dddSet };
+// Cascata da Produção: Estado, Gestor, Equipe, Consultor, UF BL, UF Cliente, DDD, Grupo e Tag
+// se restringem nos DOIS sentidos, e todos respeitam os status de fila marcados. As opções de cada
+// filtro vêm só das linhas que passam pelos OUTROS (ex.: escolher um DDD deixa só as Equipes e
+// Consultores com cliente naquele DDD; escolher um Consultor deixa só a Equipe/Gestor/Estado/Tag
+// dele). Base = ALL_DATA + a trava de escopo do perfil, nunca a base inteira; filtros travados
+// por perfil (Estado desabilitado, Gestor/Equipe travados) não são reescritos. Os chips de status
+// são o controle principal e ficam como estão (só entram como restrição).
+function prodFacetasDefs() {
+  const ufBlSel = () => { const v = document.getElementById('prod-uf-bl')?.value || 'Geral'; return v === 'Geral' ? null : new Set(v === 'RPS' ? ['RS', 'PR', 'SC'] : [v]); };
+  return [
+    { id: 'estado', valor: r => EQUIPES_ESTADOS[r['EQUIPE'] || ''] || null, sel: () => facetaSelSelect('prod-estado', 'Todos') },
+    { id: 'gestor', valor: r => EQUIPES_GESTORES[r['EQUIPE'] || ''] || null, sel: () => facetaSelDd('dd-content-prod-gestor') },
+    { id: 'equipe', valor: r => r['EQUIPE'] || null, sel: () => facetaSelDd('dd-content-prod-equipe') },
+    { id: 'consultor', valor: r => r['PROPRIETÁRIO DO PEDIDO'] || null, sel: () => facetaSelDd('dd-content-prod-consultor') },
+    { id: 'ufbl', valor: r => (r['UF'] || '').trim().toUpperCase() || null, sel: ufBlSel },
+    { id: 'ufcliente', valor: r => (r['Estado'] || r['ESTADO'] || '').trim().toUpperCase() || null, sel: () => facetaSelDd('dd-content-prod-uf-cliente') },
+    { id: 'ddd', valor: r => { const n = (r['NUMERO'] || r['Numero'] || r['NÚMERO'] || '').toString().replace(/\D/g, ''); return n.length >= 2 ? n.substring(0, 2) : null; }, sel: () => facetaSelDd('dd-content-prod-ddd') },
+    { id: 'grupo', valor: r => r['GRUPO'] || null, sel: () => facetaSelSelect('prod-grupo', 'Geral') },
+    { id: 'tag', valor: r => { const t = r['TAGS ATIVIDADE'] || ''; return MAPEAMENTO_TAGS[t] ? t : 'Sem Tag'; }, sel: () => facetaSelDd('dd-content-prod-tag') },
+  ];
 }
 
-function atualizarOpcoesInteligentesProducao() {
+// UF BL é um select de opções fixas (Geral, PR, RS, SC e "PR + RS + SC"): só mostra as UFs que existem
+// nas linhas dos outros filtros; o valor já escolhido nunca some sozinho (fica marcado como sem registro).
+function prodAplicarUfBl(ufsPresentes) {
+  const sel = document.getElementById('prod-uf-bl');
+  if (!sel || sel.disabled) return;
+  const atual = sel.value;
+  const nomes = { RPS: 'PR + RS + SC' };
+  const presentes = ['PR', 'RS', 'SC'].filter(u => ufsPresentes.includes(u));
+  const itens = [['Geral', 'Geral'], ...presentes.map(u => [u, u])];
+  if (presentes.length >= 2) itens.push(['RPS', nomes.RPS]);
+  if (atual && !itens.some(([v]) => v === atual)) itens.push([atual, `${nomes[atual] || atual} ${FACETA_ROTULO_SEM_DADO}`]);
+  sel.innerHTML = itens.map(([v, t]) => `<option value="${escapeHtml(v)}">${escapeHtml(t)}</option>`).join('');
+  sel.value = atual;
+}
+
+function atualizarOpcoesInteligentesProducao(origem) {
   if (!ALL_DATA.length) return;
-  const { estadosSet, ufClienteSet, dddSet } = calcularOpcoesInteligentesProducao();
+  const escopo = getEscopoTravado();
+  const statusArr = [...prodStatusSelecionados];
+  const base = ALL_DATA.filter(r => linhaDentroDoEscopo(r, escopo, r['EQUIPE'] || '')
+    && (statusArr.length === 0 || statusArr.includes(r['FILA'] || '')));
+  const op = facetasCalcular(base, prodFacetasDefs());
 
-  // Não sobrescreve o select de Estado se ele estiver travado por perfil
-  const selEst = document.getElementById('prod-estado');
-  if (!selEst || !selEst.disabled) {
-    fillProdSelect('prod-estado', ['Todos', ...[...estadosSet].sort()]);
-  }
-  popularDropdownProdUFCliente([...ufClienteSet].sort());
-  popularDropdownProdDDD([...dddSet].sort());
+  if (origem !== 'estado') facetaAplicarSelect('prod-estado', op.estado, { valor: 'Todos', rotulo: 'Todos' });
+  if (origem !== 'gestor' && !facetaDdTravado('dd-content-prod-gestor')) popularDropdownProdGestor(op.gestor);
+  if (origem !== 'equipe' && !facetaDdTravado('dd-content-prod-equipe')) popularDropdownEquipe(op.equipe);
+  if (origem !== 'consultor' && !facetaDdTravado('dd-content-prod-consultor')) popularDropdownProdConsultor(op.consultor);
+  if (origem !== 'ufbl') prodAplicarUfBl(op.ufbl);
+  if (origem !== 'ufcliente') popularDropdownProdUFCliente(op.ufcliente);
+  if (origem !== 'ddd') popularDropdownProdDDD(op.ddd);
+  if (origem !== 'grupo') facetaAplicarSelect('prod-grupo', op.grupo, { valor: 'Geral', rotulo: 'Geral' });
+  if (origem !== 'tag') facetaAplicarDropdown('dd-content-prod-tag', '#dd-prod-tag .dropdown-btn', op.tag);
 }
 
 function checkUF(filtro, uf) {
@@ -7119,7 +7056,9 @@ async function renderProducao() {
   // Recalcula, com base nos filtros já ativos (inclusive status de fila),
   // quais opções de Estado / UF Cliente / DDD de fato existem no recorte
   // atual, removendo do dropdown qualquer valor sem linha correspondente.
-  atualizarOpcoesInteligentesProducao();
+  const origemFiltro = _prodOrigemFiltro;
+  _prodOrigemFiltro = null;
+  atualizarOpcoesInteligentesProducao(origemFiltro);
 
   const filtroEstado = document.getElementById('prod-estado')?.value || 'Todos';
   const gestoresChecked = getCheckedValuesDd('dd-content-prod-gestor'); // vazio = todos
