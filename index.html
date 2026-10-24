@@ -5229,10 +5229,13 @@ async function pnCarregarMes(m) {
   }
   const recs = pnCompactar(objs, m.chave); // fatores calculados na base inteira, antes do filtro
   const esc = pnEscopo();
-  if (!esc) return recs;
-  return recs.filter(r => (!esc.gestores || esc.gestores.has(r.ge))
+  return esc ? recs.filter(r => pnRegistroNoEscopo(r, esc)) : recs;
+}
+// Registro compactado do Painel dentro do escopo do perfil (gestor/equipe/consultor/gestão própria).
+function pnRegistroNoEscopo(r, esc) {
+  return (!esc.gestores || esc.gestores.has(r.ge))
     && (!esc.equipes || esc.equipes.has(r.eq))
-    && (!esc.consultorRef || (r.ve || '').toUpperCase() === esc.consultorRef));
+    && (!esc.consultorRef || (r.ve || '').toUpperCase() === esc.consultorRef);
 }
 
 function pnIndexarOpcoes(recs) {
@@ -5306,7 +5309,7 @@ function pnMontarEsqueleto() {
       </div>
     </div>`).join('') + `
     <div class="pn-fg" title="Aprovado = Ativo + Esteira de ativação"><label>Status</label>
-      <select id="pn-status" onchange="pnRender()">
+      <select id="pn-status" onchange="pnAoFiltrar('status')">
         <option value="todos">Todos</option>
         <option value="aprovado" title="Ativo + Esteira de ativação">Aprovado</option>
         <option value="ativo">Somente Ativo</option>
@@ -5329,11 +5332,52 @@ function pnAtualizarFiltros(forcar) {
     PN.opcoesSig[nome] = sig;
     const contId = `dd-content-pn-${nome}`;
     const labelBtn = `#dd-pn-${nome} .dropdown-btn`;
-    const onChange = () => { atualizarBotaoDropdown(contId, labelBtn); pnRender(); };
+    const onChange = () => { atualizarBotaoDropdown(contId, labelBtn); pnAoFiltrar(nome); };
     window[`_ddOnChange_dd_content_pn_${nome}`] = onChange; // exigido por popularDropdownGenerico()
     ddRegisterCallback(contId, onChange);
     popularDropdownGenerico(contId, lista, onChange, labelBtn);
   });
+  pnAtualizarCascata(); // as listas passam a refletir os filtros já escolhidos
+}
+
+// ── Cascata dos filtros do Painel: se restringem nos dois sentidos ─────────────
+// Mês, Tipo, Tags, Estado, UF, Gestor, Equipe e Vendedor: cada lista vem só dos registros que
+// passam pelos OUTROS filtros (e pelo Status). Base = os registros carregados do Painel, que já
+// foram filtrados pelo escopo do perfil; o escopo é reaplicado aqui por garantia.
+function pnFacetasDefs() {
+  const labelMes = {}, ordemMes = {};
+  [...PN.meses].reverse().forEach((m, i) => { labelMes[m.chave] = m.label; ordemMes[m.label] = i; });
+  const sel = n => facetaSelDd(`dd-content-pn-${n}`);
+  const ordemGrupo = {}; PN_GRUPOS.forEach((g, i) => { ordemGrupo[PN_GRUPO_LABEL[g]] = i; });
+  return [
+    { id: 'mes', valor: r => labelMes[r.m] || null, sel: () => sel('mes'), ordem: (a, b) => (ordemMes[a] ?? 99) - (ordemMes[b] ?? 99) },
+    { id: 'grupo', valor: r => PN_GRUPO_LABEL[r.g] || null, sel: () => sel('grupo'), ordem: (a, b) => (ordemGrupo[a] ?? 99) - (ordemGrupo[b] ?? 99) },
+    { id: 'tag', valor: r => r.tg || null, sel: () => sel('tag') },
+    { id: 'estado', valor: r => r.es || null, sel: () => sel('estado') },
+    { id: 'uf', valor: r => r.uf || null, sel: () => sel('uf') },
+    { id: 'gestor', valor: r => r.ge || null, sel: () => sel('gestor') },
+    { id: 'equipe', valor: r => r.eq || null, sel: () => sel('equipe') },
+    { id: 'vendedor', valor: r => r.ve || null, sel: () => sel('vendedor') },
+  ];
+}
+function pnAtualizarCascata(origem) {
+  const esc = pnEscopo();
+  const status = document.getElementById('pn-status')?.value || 'todos';
+  const base = [];
+  Object.values(PN.dados).forEach(recs => (recs || []).forEach(r => {
+    if (esc && !pnRegistroNoEscopo(r, esc)) return;
+    if (status === 'aprovado' && !GF_SUBGRUPOS_APROVADO.includes(r.sg)) return;
+    if (status === 'ativo' && r.sg !== 'Ativo') return;
+    base.push(r);
+  }));
+  const op = facetasCalcular(base, pnFacetasDefs());
+  PN_FILTROS.forEach(([nome]) => {
+    if (nome !== origem) facetaAplicarDropdown(`dd-content-pn-${nome}`, `#dd-pn-${nome} .dropdown-btn`, op[nome]);
+  });
+}
+function pnAoFiltrar(origem) {
+  pnAtualizarCascata(origem);
+  pnRender();
 }
 
 function pnLerFiltros() {
@@ -6684,31 +6728,38 @@ function getCheckedValuesDd(contId) {
 // desabilitado ou dropdown com pointer-events:none) nunca é reescrito nem destravado.
 const FACETA_ROTULO_SEM_DADO = '(sem registro nos filtros atuais)';
 
-function facetaValores(r, d) {
-  const v = d.valor(r);
-  return Array.isArray(v) ? v : [v];
-}
-function facetaPassa(r, d, sel) {
-  if (!sel || sel.size === 0) return true;
-  return facetaValores(r, d).some(v => v != null && v !== '' && sel.has(String(v)));
-}
 // defs: [{ id, valor(r) -> texto | [textos] | null, sel() -> Set | null, ordem?(a,b) }]
 // devolve { id: [opções ordenadas] }, cada uma calculada sem a seleção do próprio filtro.
+// Uma única passada pelas linhas (O(linhas × filtros)): a máscara diz quais filtros a linha
+// satisfaz, e a linha alimenta as opções do filtro i quando satisfaz todos os OUTROS.
 function facetasCalcular(dados, defs) {
-  const sels = defs.map(d => d.sel());
-  const res = {};
-  defs.forEach((d, i) => {
-    const set = new Set();
-    for (const r of dados) {
-      let ok = true;
-      for (let j = 0; j < defs.length; j++) {
-        if (j !== i && !facetaPassa(r, defs[j], sels[j])) { ok = false; break; }
+  const F = defs.length;
+  const cheio = (1 << F) - 1;
+  const sels = defs.map(d => { const x = d.sel(); return x && x.size ? x : null; });
+  const sets = defs.map(() => new Set());
+  const vals = new Array(F);
+  for (const r of dados) {
+    let mask = 0;
+    for (let i = 0; i < F; i++) {
+      const v = defs[i].valor(r); // texto, [textos] ou null — sem alocar array por linha
+      vals[i] = v;
+      const sel = sels[i];
+      let ok = !sel;
+      if (!ok) {
+        if (Array.isArray(v)) { for (const x of v) if (x != null && x !== '' && sel.has(String(x))) { ok = true; break; } }
+        else ok = v != null && v !== '' && sel.has(typeof v === 'string' ? v : String(v));
       }
-      if (!ok) continue;
-      for (const v of facetaValores(r, d)) if (v != null && v !== '') set.add(String(v));
+      if (ok) mask |= (1 << i);
     }
-    res[d.id] = [...set].sort(d.ordem || ((a, b) => a.localeCompare(b, 'pt-BR', { numeric: true })));
-  });
+    for (let i = 0; i < F; i++) {
+      if ((mask | (1 << i)) !== cheio) continue;
+      const v = vals[i];
+      if (Array.isArray(v)) { for (const x of v) if (x != null && x !== '') sets[i].add(String(x)); }
+      else if (v != null && v !== '') sets[i].add(typeof v === 'string' ? v : String(v));
+    }
+  }
+  const res = {};
+  defs.forEach((d, i) => { res[d.id] = [...sets[i]].sort(d.ordem || ((x, y) => x.localeCompare(y, 'pt-BR', { numeric: true }))); });
   return res;
 }
 // helpers de seleção (usados pelos adaptadores de cada aba)
