@@ -2686,19 +2686,19 @@
       </div>
       <div class="filter-group" style="min-width:200px;">
         <label>Tag da Unidade</label>
-        <select id="carteira-filtro-revenda" onchange="renderCarteiraOverview()">
+        <select id="carteira-filtro-revenda" onchange="carteiraAoFiltrar('revenda')">
           <option value="">Todas as tags</option>
         </select>
       </div>
       <div class="filter-group" style="min-width:120px;">
         <label>UF</label>
-        <select id="carteira-filtro-uf" onchange="renderCarteiraOverview()">
+        <select id="carteira-filtro-uf" onchange="carteiraAoFiltrar('uf')">
           <option value="">Todas</option>
         </select>
       </div>
       <div class="filter-group" style="min-width:200px;">
         <label>Carteiras Associados</label>
-        <select id="carteira-filtro-associada" onchange="renderCarteiraOverview()">
+        <select id="carteira-filtro-associada" onchange="carteiraAoFiltrar('associada')">
           <option value="">Todas</option>
         </select>
       </div>
@@ -6544,7 +6544,7 @@ function atualizarContadorStatus() {
 // Estado persistente dos dropdowns (sobrevive ao repopulate)
 const _ddState = {}; // { contId: Set de valores selecionados, ou null = todos }
 
-function popularDropdownGenerico(contId, itens, onChangeFn, labelBotaoId) {
+function popularDropdownGenerico(contId, itens, onChangeFn, labelBotaoId, rotuloSemDado) {
   const cont = document.getElementById(contId);
   if (!cont) return;
 
@@ -6585,7 +6585,7 @@ function popularDropdownGenerico(contId, itens, onChangeFn, labelBotaoId) {
       return `<label class="dropdown-item"${semDadoNoPeriodo ? ' style="opacity:0.6"' : ''}>
         <input type="checkbox" value="${esc}" ${checked}
           onchange="onDdItemChange('${contId}', this, '${labelBotaoId}', _ddOnChange_${contId.replace(/-/g,'_')})">
-        ${item}${semDadoNoPeriodo ? ' <span style="font-size:11px;">(sem dado neste período)</span>' : ''}
+        ${item}${semDadoNoPeriodo ? ` <span style="font-size:11px;">${rotuloSemDado || '(sem dado neste período)'}</span>` : ''}
       </label>`;
     }).join('');
 
@@ -6655,6 +6655,77 @@ function getCheckedValuesDd(contId) {
   const sel = _ddState[contId];
   if (!sel || sel.size === 0) return []; // vazio = todos
   return Array.from(sel);
+}
+
+// ─── FILTROS EM CASCATA (FACETADOS) ──────────────────────────────────────────
+// Regra: as opções de CADA filtro vêm só das linhas que passam por TODOS OS OUTROS filtros já
+// escolhidos — nos dois sentidos (escolher um CNAE restringe as UFs, e escolher uma UF restringe
+// os CNAEs). O filtro que o usuário acabou de mexer não é reescrito (a lista dele não depende
+// da própria seleção), o que também preserva a busca digitada dentro do dropdown.
+//
+// SEGURANÇA — regra de ouro: `dados` TEM QUE ser a base que o usuário já pode ver (já filtrada
+// pelo servidor e/ou pela trava de escopo do perfil), NUNCA a base inteira. Assim a cascata não
+// revela gestor/equipe/consultor/cliente de fora do escopo. Filtro travado por perfil (select
+// desabilitado ou dropdown com pointer-events:none) nunca é reescrito nem destravado.
+const FACETA_ROTULO_SEM_DADO = '(sem registro nos filtros atuais)';
+
+function facetaValores(r, d) {
+  const v = d.valor(r);
+  return Array.isArray(v) ? v : [v];
+}
+function facetaPassa(r, d, sel) {
+  if (!sel || sel.size === 0) return true;
+  return facetaValores(r, d).some(v => v != null && v !== '' && sel.has(String(v)));
+}
+// defs: [{ id, valor(r) -> texto | [textos] | null, sel() -> Set | null, ordem?(a,b) }]
+// devolve { id: [opções ordenadas] }, cada uma calculada sem a seleção do próprio filtro.
+function facetasCalcular(dados, defs) {
+  const sels = defs.map(d => d.sel());
+  const res = {};
+  defs.forEach((d, i) => {
+    const set = new Set();
+    for (const r of dados) {
+      let ok = true;
+      for (let j = 0; j < defs.length; j++) {
+        if (j !== i && !facetaPassa(r, defs[j], sels[j])) { ok = false; break; }
+      }
+      if (!ok) continue;
+      for (const v of facetaValores(r, d)) if (v != null && v !== '') set.add(String(v));
+    }
+    res[d.id] = [...set].sort(d.ordem || ((a, b) => a.localeCompare(b, 'pt-BR', { numeric: true })));
+  });
+  return res;
+}
+// helpers de seleção (usados pelos adaptadores de cada aba)
+function facetaSelSelect(id, valorTodos) {
+  const v = document.getElementById(id)?.value;
+  return v && v !== valorTodos ? new Set([v]) : null;
+}
+function facetaSelDd(contId) {
+  const v = getCheckedValuesDd(contId);
+  return v.length ? new Set(v) : null;
+}
+function facetaDdTravado(contId) {
+  const wrap = document.getElementById(contId)?.closest('.custom-dropdown');
+  return !!wrap && wrap.style.pointerEvents === 'none';
+}
+// repovoa um <select> mantendo o valor escolhido (mesmo que não esteja mais nas opções: aparece
+// marcado como sem registro, pra dar pra desmarcar). Select desabilitado (travado) não é tocado.
+function facetaAplicarSelect(id, itens, todos) {
+  const sel = document.getElementById(id);
+  if (!sel || sel.disabled) return;
+  const atual = sel.value;
+  const extra = atual && atual !== todos.valor && !itens.includes(atual);
+  sel.innerHTML = `<option value="${escapeHtml(todos.valor)}">${escapeHtml(todos.rotulo)}</option>` +
+    itens.map(o => `<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`).join('') +
+    (extra ? `<option value="${escapeHtml(atual)}">${escapeHtml(atual)} ${FACETA_ROTULO_SEM_DADO}</option>` : '');
+  sel.value = atual;
+}
+// repovoa um dropdown de checkboxes (popularDropdownGenerico já preserva a seleção). Dropdown
+// travado por perfil não é tocado. `onChange` = o callback que o dropdown já usa.
+function facetaAplicarDropdown(contId, labelBotaoSel, itens, onChange) {
+  if (facetaDdTravado(contId)) return;
+  popularDropdownGenerico(contId, itens, onChange || _ddCallbacks[contId], labelBotaoSel, FACETA_ROTULO_SEM_DADO);
 }
 
 function popularDropdownTagUnidade() {
@@ -11215,6 +11286,7 @@ async function carteiraTrocarBase() {
     popularFiltroAssociadaCarteira();
     popularFiltrosTMCarteira();
     popularFiltroCnaeCarteira();
+    carteiraAtualizarFacetas();
     renderCarteiraOverview();
     // A base atual mudou — a lista de bases pra comparar (que exclui a
     // atual) e o resultado do comparativo já em tela ficam desatualizados.
@@ -11797,11 +11869,43 @@ function popularFiltrosTMCarteira() {
   const itensPor = { voz: valores(carteiraLinhas, carteiraTM), bl: valores(carteiraLinhasBL, carteiraTM_BL) };
   ['voz', 'bl'].forEach(nome => {
     const contId = `dd-content-carteira-tm-${nome}`, labelBtn = `#dd-carteira-tm-${nome} .dropdown-btn`;
-    const onChange = () => { atualizarBotaoDropdown(contId, labelBtn); renderCarteiraOverview(); };
+    const onChange = () => { atualizarBotaoDropdown(contId, labelBtn); carteiraAoFiltrar(nome === 'voz' ? 'tmVoz' : 'tmBL'); };
     window[`_ddOnChange_dd_content_carteira_tm_${nome}`] = onChange; // exigido por popularDropdownGenerico()
     ddRegisterCallback(contId, onChange);
     popularDropdownGenerico(contId, itensPor[nome], onChange, labelBtn);
   });
+}
+
+// ─── CASCATA DOS FILTROS DA CARTEIRA ─────────────────────────────────────────
+// Tag da Unidade, UF, Carteira Associada, TM Voz, TM BL e CNAE se restringem entre si nos dois
+// sentidos. A base (CARTEIRA_DADOS) já vem do servidor filtrada pelo escopo do usuário.
+function carteiraFacetasDefs() {
+  const tmOrdem = (a, b) => (a === CARTEIRA_TM_VAZIO) - (b === CARTEIRA_TM_VAZIO) || a.localeCompare(b, 'pt-BR', { numeric: true });
+  return [
+    { id: 'revenda', valor: r => { const u = carteiraUnidade(r); return u && u !== '—' ? u : null; }, sel: () => facetaSelSelect('carteira-filtro-revenda', '') },
+    { id: 'uf', valor: r => (r['UF'] || '').trim().toUpperCase() || null, sel: () => facetaSelSelect('carteira-filtro-uf', '') },
+    { id: 'associada', valor: r => carteiraAssociada(r) || null, sel: () => facetaSelSelect('carteira-filtro-associada', '') },
+    { id: 'tmVoz', valor: r => carteiraLinhas(r) > 0 ? String(carteiraTM(r)) : CARTEIRA_TM_VAZIO, sel: () => facetaSelDd('dd-content-carteira-tm-voz'), ordem: tmOrdem },
+    { id: 'tmBL', valor: r => carteiraLinhasBL(r) > 0 ? String(carteiraTM_BL(r)) : CARTEIRA_TM_VAZIO, sel: () => facetaSelDd('dd-content-carteira-tm-bl'), ordem: tmOrdem },
+    { id: 'cnae', valor: carteiraCnaeChave, sel: () => facetaSelDd('dd-content-carteira-cnae'),
+      ordem: (a, b) => (a === CARTEIRA_CNAE_VAZIO) - (b === CARTEIRA_CNAE_VAZIO) || a.localeCompare(b, 'pt-BR') },
+  ];
+}
+// `origem` = filtro que o usuário acabou de mexer (não é reescrito). Sem origem = repovoa todos.
+function carteiraAtualizarFacetas(origem) {
+  if (!CARTEIRA_DADOS.length) return;
+  const op = facetasCalcular(CARTEIRA_DADOS, carteiraFacetasDefs());
+  if (origem !== 'revenda') facetaAplicarSelect('carteira-filtro-revenda', op.revenda, { valor: '', rotulo: 'Todas as tags' });
+  if (origem !== 'uf') facetaAplicarSelect('carteira-filtro-uf', op.uf, { valor: '', rotulo: 'Todas' });
+  if (origem !== 'associada') facetaAplicarSelect('carteira-filtro-associada', op.associada, { valor: '', rotulo: 'Todas' });
+  if (origem !== 'tmVoz') facetaAplicarDropdown('dd-content-carteira-tm-voz', '#dd-carteira-tm-voz .dropdown-btn', op.tmVoz);
+  if (origem !== 'tmBL') facetaAplicarDropdown('dd-content-carteira-tm-bl', '#dd-carteira-tm-bl .dropdown-btn', op.tmBL);
+  const btnCnae = document.getElementById('carteira-cnae-btn');
+  if (origem !== 'cnae' && btnCnae && !btnCnae.disabled) facetaAplicarDropdown('dd-content-carteira-cnae', '#dd-carteira-cnae .dropdown-btn', op.cnae);
+}
+function carteiraAoFiltrar(origem) {
+  carteiraAtualizarFacetas(origem);
+  renderCarteiraOverview();
 }
 
 // ─── CNAE ────────────────────────────────────────────────────────────────────
@@ -11839,7 +11943,7 @@ function popularFiltroCnaeCarteira() {
   }
   btn.disabled = false;
   btn.title = '';
-  const onChange = () => { atualizarBotaoDropdown(contId, labelBtn); renderCarteiraOverview(); };
+  const onChange = () => { atualizarBotaoDropdown(contId, labelBtn); carteiraAoFiltrar('cnae'); };
   window._ddOnChange_dd_content_carteira_cnae = onChange; // exigido por popularDropdownGenerico()
   ddRegisterCallback(contId, onChange);
   popularDropdownGenerico(contId, temSem ? [...itens, CARTEIRA_CNAE_VAZIO] : itens, onChange, labelBtn);
@@ -12455,6 +12559,7 @@ async function initCarteira() {
     popularFiltroAssociadaCarteira();
     popularFiltrosTMCarteira();
     popularFiltroCnaeCarteira();
+    carteiraAtualizarFacetas();
     renderCarteiraOverview();
     return;
   }
@@ -12473,6 +12578,7 @@ async function initCarteira() {
     popularFiltroAssociadaCarteira();
     popularFiltrosTMCarteira();
     popularFiltroCnaeCarteira();
+    carteiraAtualizarFacetas();
     renderCarteiraOverview();
   } catch (e) {
     document.getElementById('carteira-status-area').innerHTML = `<div class="error-state"><strong>Erro ao carregar carteira</strong>${escapeHtml(e.message)}</div>`;
