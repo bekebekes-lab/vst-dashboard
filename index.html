@@ -2509,7 +2509,7 @@
     <div class="filters-bar">
       <div class="filter-group">
         <label>Status</label>
-        <select id="churn-status" onchange="renderChurn()">
+        <select id="churn-status" onchange="churnAoFiltrar('status')">
           <option value="pendentes">Pendentes</option>
           <option value="respondidos">Respondidos</option>
           <option value="todos">Todos</option>
@@ -2517,14 +2517,14 @@
       </div>
       <div class="filter-group">
         <label>Linhas</label>
-        <select id="churn-linhas" onchange="renderChurn()">
+        <select id="churn-linhas" onchange="churnAoFiltrar('linhas')">
           <option value="todos">Todos</option>
           <option value="10+">A partir de 10 (resposta obrigatória)</option>
         </select>
       </div>
       <div class="filter-group">
         <label>Atribuído a</label>
-        <select id="churn-atribuido" onchange="renderChurn()"><option value="todos">Todos</option></select>
+        <select id="churn-atribuido" onchange="churnAoFiltrar('atribuido')"><option value="todos">Todos</option></select>
       </div>
       <div class="filter-group" style="min-width:190px">
         <label>Tag da Unidade</label>
@@ -10882,7 +10882,7 @@ async function initChurn() {
   const tagsUnidade = [...new Set(CHURN_DADOS.map(churnUnidade))].filter(u => u && u !== '—').sort();
   window._ddOnChange_dd_content_churn_unidade = function() {
     atualizarBotaoDropdown('dd-content-churn-unidade', '#dd-churn-unidade .dropdown-btn');
-    renderChurn();
+    churnAoFiltrar('unidade');
   };
   ddRegisterCallback('dd-content-churn-unidade', window._ddOnChange_dd_content_churn_unidade);
   popularDropdownGenerico('dd-content-churn-unidade', tagsUnidade, window._ddOnChange_dd_content_churn_unidade, '#dd-churn-unidade .dropdown-btn');
@@ -10890,12 +10890,13 @@ async function initChurn() {
   const equipes = [...new Set(CHURN_DADOS.map(r => churnDonoCliente(r)?.equipe).filter(Boolean))].sort();
   window._ddOnChange_dd_content_churn_equipe = function() {
     atualizarBotaoDropdown('dd-content-churn-equipe', '#dd-churn-equipe .dropdown-btn');
-    renderChurn();
+    churnAoFiltrar('equipe');
   };
   ddRegisterCallback('dd-content-churn-equipe', window._ddOnChange_dd_content_churn_equipe);
   popularDropdownGenerico('dd-content-churn-equipe', equipes, window._ddOnChange_dd_content_churn_equipe, '#dd-churn-equipe .dropdown-btn');
 
   churnPopularFiltrosMes();
+  churnAtualizarCascata();
   renderChurn();
 }
 
@@ -10988,11 +10989,70 @@ function churnPopularFiltrosMes() {
   [['recebido', churnChaveRecebido], ['janela', churnChaveJanela]].forEach(([nome, chaveFn]) => {
     const contId = `dd-content-churn-${nome}`, labelBtn = `#dd-churn-${nome} .dropdown-btn`;
     const meses = [...new Set(CHURN_DADOS.map(chaveFn))].filter(Boolean).sort().reverse().map(churnMesRotulo); // mais recente primeiro
-    const onChange = () => { atualizarBotaoDropdown(contId, labelBtn); renderChurn(); };
+    const onChange = () => { atualizarBotaoDropdown(contId, labelBtn); churnAoFiltrar(nome); };
     window[`_ddOnChange_dd_content_churn_${nome}`] = onChange; // exigido por popularDropdownGenerico()
     ddRegisterCallback(contId, onChange);
     popularDropdownGenerico(contId, meses, onChange, labelBtn);
   });
+}
+
+// ── Cascata dos filtros do Churn: se restringem nos dois sentidos ───────────────
+// Atribuído a, Tag da Unidade, Equipe, Recebido e Janela: cada lista vem só dos alertas que passam
+// pelos OUTROS filtros. Status e Linhas são filtros de visão fixos e entram como restrição. Base =
+// CHURN_DADOS (o que o banco já liberou pra esse usuário).
+const CHURN_SEM_ATRIBUICAO = '__ninguem__';
+function churnRotuloParaChave(rotulo) {
+  const m = (rotulo || '').match(/^(\S+)\/(\d{4})$/);
+  return m ? churnMesChave(m[2], CHURN_MES_ABREV.indexOf(m[1]) + 1) : '';
+}
+function churnFacetasDefs() {
+  const ordemMes = (a, b) => churnRotuloParaChave(b).localeCompare(churnRotuloParaChave(a)); // mais recente primeiro
+  return [
+    { id: 'atribuido', valor: r => r.atribuido_a ? String(r.atribuido_a) : CHURN_SEM_ATRIBUICAO,
+      sel: () => { const v = document.getElementById('churn-atribuido')?.value || 'todos'; return v === 'todos' ? null : new Set([v === 'ninguem' ? CHURN_SEM_ATRIBUICAO : v]); } },
+    { id: 'unidade', valor: r => { const u = churnUnidade(r); return u && u !== '—' ? u : null; }, sel: () => facetaSelDd('dd-content-churn-unidade') },
+    { id: 'equipe', valor: r => churnDonoCliente(r)?.equipe || null, sel: () => facetaSelDd('dd-content-churn-equipe') },
+    { id: 'recebido', valor: r => churnMesRotulo(churnChaveRecebido(r)) || null, sel: () => facetaSelDd('dd-content-churn-recebido'), ordem: ordemMes },
+    { id: 'janela', valor: r => churnMesRotulo(churnChaveJanela(r)) || null, sel: () => facetaSelDd('dd-content-churn-janela'), ordem: ordemMes },
+  ];
+}
+function churnAplicarAtribuido(ids) {
+  const sel = document.getElementById('churn-atribuido');
+  if (!sel) return;
+  const atual = sel.value;
+  const presentes = new Set(ids);
+  const nomes = {}; CHURN_USUARIOS.forEach(u => { nomes[String(u.id)] = u.nome; });
+  const opts = [['todos', 'Todos']];
+  if (presentes.has(CHURN_SEM_ATRIBUICAO) || atual === 'ninguem') opts.push(['ninguem', 'Sem atribuição']);
+  CHURN_USUARIOS.filter(u => presentes.has(String(u.id)) || atual === String(u.id)).forEach(u => opts.push([String(u.id), u.nome]));
+  if (atual !== 'todos' && atual !== 'ninguem' && !presentes.has(atual)) {
+    const i = opts.findIndex(([v]) => v === atual);
+    if (i >= 0) opts[i] = [atual, `${nomes[atual] || atual} ${FACETA_ROTULO_SEM_DADO}`];
+  } else if (atual === 'ninguem' && !presentes.has(CHURN_SEM_ATRIBUICAO)) {
+    const i = opts.findIndex(([v]) => v === 'ninguem');
+    opts[i] = ['ninguem', `Sem atribuição ${FACETA_ROTULO_SEM_DADO}`];
+  }
+  sel.innerHTML = opts.map(([v, t]) => `<option value="${escapeHtml(v)}">${escapeHtml(t)}</option>`).join('');
+  sel.value = atual;
+}
+function churnAtualizarCascata(origem) {
+  const status = document.getElementById('churn-status')?.value || 'pendentes';
+  const linhas = document.getElementById('churn-linhas')?.value || 'todos';
+  const base = CHURN_DADOS.filter(r => {
+    if (status === 'pendentes' && r.respondido) return false;
+    if (status === 'respondidos' && !r.respondido) return false;
+    if (linhas === '10+' && !(r.qtd_linhas >= 10)) return false;
+    return true;
+  });
+  const op = facetasCalcular(base, churnFacetasDefs());
+  if (origem !== 'atribuido') churnAplicarAtribuido(op.atribuido);
+  ['unidade', 'equipe', 'recebido', 'janela'].forEach(nome => {
+    if (origem !== nome) facetaAplicarDropdown(`dd-content-churn-${nome}`, `#dd-churn-${nome} .dropdown-btn`, op[nome]);
+  });
+}
+function churnAoFiltrar(origem) {
+  churnAtualizarCascata(origem);
+  renderChurn();
 }
 
 let churnSortCol = 'recebido_em';
