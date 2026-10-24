@@ -1722,7 +1722,7 @@
           <div class="dropdown-content" id="dd-content-f-consultor"></div>
         </div>
       </div>
-      <div class="filter-group"><label>Tag / Unidade</label><select id="f-tag" onchange="render()"><option>Todas</option></select></div>
+      <div class="filter-group"><label>Tag / Unidade</label><select id="f-tag" onchange="onFilterChange('tag')"><option>Todas</option></select></div>
       <div class="filter-group">
         <label>Cadastro de</label>
         <input type="date" id="f-cadastro-de" onchange="onFilterChangeCadastro()">
@@ -1755,7 +1755,7 @@
        ideia é integrar as duas abas. -->
   <div class="tab-panel" id="tab-gerfin">
     <div class="filters-bar">
-      <div class="filter-group"><label>UF da Operação</label><select id="gf-estado" onchange="gfRefresh()"><option>Todos</option></select></div>
+      <div class="filter-group"><label>UF da Operação</label><select id="gf-estado" onchange="gfAoFiltrar('estado')"><option>Todos</option></select></div>
       <div class="filter-group" style="min-width:190px">
         <label>Gestor</label>
         <div class="custom-dropdown" id="dd-gf-gestor">
@@ -1777,7 +1777,7 @@
           <div class="dropdown-content" id="dd-content-gf-consultor"></div>
         </div>
       </div>
-      <div class="filter-group"><label>Tag / Unidade</label><select id="gf-tag" onchange="gfRefresh()"><option>Todas</option></select></div>
+      <div class="filter-group"><label>Tag / Unidade</label><select id="gf-tag" onchange="gfAoFiltrar('tag')"><option>Todas</option></select></div>
       <div class="filter-group">
         <label>Cadastro de</label>
         <input type="date" id="gf-cadastro-de" onchange="gfRefresh()">
@@ -3509,49 +3509,34 @@ function buildFilters() {
   _fConsultorItens = [...consultores].sort();
   popularDropdownFConsultor(_fConsultorItens);
   fillSelect('f-tag', ['Todas', ...[...tags].sort()]);
+  atualizarCascataGerencial();
 }
 
-// ─── Cascata Gerencial: Estado → Gestor → Equipe → Consultor/Tag ───────────
-// Chamada sempre que Estado, Gestor ou Equipe mudam. Recalcula em cadeia as
-// opções disponíveis nos níveis abaixo, preservando seleções que ainda são
-// válidas (popularDropdownGenerico já limpa sozinho o que ficou fora de escopo).
-function atualizarCascataGerencial() {
-  const estado = document.getElementById('f-estado')?.value || 'Todos';
-
-  // 1) Equipes dentro do Estado selecionado (ou todas, se "Todos")
-  const equipesEstado = estado === 'Todos'
-    ? _fEquipeItens
-    : _fEquipeItens.filter(eq => EQUIPES_ESTADOS[eq] === estado);
-
-  // 2) Gestores disponíveis dentro desse recorte de Estado
-  const gestoresDisponiveis = [...new Set(equipesEstado.map(eq => EQUIPES_GESTORES[eq]).filter(Boolean))]
-    .filter(g => _fGestorItens.includes(g))
-    .sort();
-  popularDropdownFGestor(gestoresDisponiveis);
-
-  // 3) Equipes disponíveis dentro do Estado E dos Gestores selecionados (se houver)
-  const gestoresSel = getCheckedValuesDd('dd-content-f-gestor'); // [] = Todos
-  const equipesDisponiveis = gestoresSel.length > 0
-    ? equipesEstado.filter(eq => gestoresSel.includes(EQUIPES_GESTORES[eq]))
-    : equipesEstado;
-  _fEquipeItensEscopo = equipesDisponiveis;
-  popularDropdownFEquipe(equipesDisponiveis);
-
-  // 4) Consultor/Tag: com base nas equipes efetivamente selecionadas (ou no
-  // recorte disponível, se nenhuma equipe específica estiver marcada)
-  const equipesSel = getCheckedValuesDd('dd-content-f-equipe'); // [] = Todas
-  const equipesFinal = equipesSel.length > 0 ? equipesSel : equipesDisponiveis;
-  const consultoresSet = new Set();
-  const tagsSet = new Set();
-  ALL_DATA.forEach(r => {
-    if (equipesFinal.includes(r['EQUIPE'])) {
-      if (r['PROPRIETÁRIO DO PEDIDO']) consultoresSet.add(r['PROPRIETÁRIO DO PEDIDO']);
-      if (r['TAGS ATIVIDADE']) tagsSet.add(r['TAGS ATIVIDADE']);
-    }
-  });
-  _fConsultorItens = [...consultoresSet].sort();
-  popularDropdownFConsultor(_fConsultorItens);
-  fillSelect('f-tag', ['Todas', ...[...tagsSet].sort()]);
+// ─── Cascata Gerencial: os filtros se restringem nos DOIS sentidos ──────────
+// Estado, Gestor, Equipe, Consultor e Tag: as opções de cada um vêm só das linhas que passam
+// pelos OUTROS quatro (ex.: escolher uma Tag deixa só as Equipes/Consultores com pedido naquela
+// Tag, e escolher uma Equipe deixa só os Consultores dela). Base = ALL_DATA (já filtrada pelo
+// servidor) + a trava de escopo do perfil, por garantia — nunca a base inteira. `origem` = filtro
+// que o usuário acabou de mexer (não é reescrito); sem origem, todos são repovoados.
+function gerencialFacetasDefs() {
+  return [
+    { id: 'estado', valor: r => EQUIPES_ESTADOS[r['EQUIPE']] || null, sel: () => facetaSelSelect('f-estado', 'Todos') },
+    { id: 'gestor', valor: r => EQUIPES_GESTORES[r['EQUIPE']] || null, sel: () => facetaSelDd('dd-content-f-gestor') },
+    { id: 'equipe', valor: r => r['EQUIPE'] || null, sel: () => facetaSelDd('dd-content-f-equipe') },
+    { id: 'consultor', valor: r => r['PROPRIETÁRIO DO PEDIDO'] || null, sel: () => facetaSelDd('dd-content-f-consultor') },
+    { id: 'tag', valor: r => r['TAGS ATIVIDADE'] || null, sel: () => facetaSelSelect('f-tag', 'Todas') },
+  ];
+}
+function atualizarCascataGerencial(origem) {
+  if (!ALL_DATA.length) return;
+  const escopo = getEscopoTravado();
+  const base = escopo ? ALL_DATA.filter(r => linhaDentroDoEscopo(r, escopo, r['EQUIPE'])) : ALL_DATA;
+  const op = facetasCalcular(base, gerencialFacetasDefs());
+  if (origem !== 'estado') facetaAplicarSelect('f-estado', op.estado, { valor: 'Todos', rotulo: 'Todos' });
+  if (origem !== 'gestor' && !facetaDdTravado('dd-content-f-gestor')) popularDropdownFGestor(op.gestor);
+  if (origem !== 'equipe' && !facetaDdTravado('dd-content-f-equipe')) { _fEquipeItensEscopo = op.equipe; popularDropdownFEquipe(op.equipe); }
+  if (origem !== 'consultor' && !facetaDdTravado('dd-content-f-consultor')) { _fConsultorItens = op.consultor; popularDropdownFConsultor(op.consultor); }
+  if (origem !== 'tag') facetaAplicarSelect('f-tag', op.tag, { valor: 'Todas', rotulo: 'Todas' });
 }
 
 // Defesa em profundidade: nas listas de Gestor dos filtros só entra quem tem
@@ -3573,11 +3558,11 @@ function popularDropdownFGestor(itens) {
   itens = filtrarGestoresDoEscopo(itens);
   window._ddOnChange_dd_content_f_gestor = function(){
     atualizarBotaoDropdown('dd-content-f-gestor','#dd-f-gestor .dropdown-btn');
-    atualizarCascataGerencial();
+    atualizarCascataGerencial('gestor');
     render();
   };
   ddRegisterCallback('dd-content-f-gestor', window._ddOnChange_dd_content_f_gestor);
-  popularDropdownGenerico('dd-content-f-gestor', itens, window._ddOnChange_dd_content_f_gestor, '#dd-f-gestor .dropdown-btn');
+  popularDropdownGenerico('dd-content-f-gestor', itens, window._ddOnChange_dd_content_f_gestor, '#dd-f-gestor .dropdown-btn', FACETA_ROTULO_SEM_DADO);
 }
 
 // Mesma defesa pra lista de Equipe: só equipes dentro do escopo travado (ex.:
@@ -3592,11 +3577,11 @@ function popularDropdownFEquipe(itens) {
   itens = filtrarEquipesDoEscopo(itens);
   window._ddOnChange_dd_content_f_equipe = function(){
     atualizarBotaoDropdown('dd-content-f-equipe','#dd-f-equipe .dropdown-btn');
-    atualizarCascataGerencial();
+    atualizarCascataGerencial('equipe');
     render();
   };
   ddRegisterCallback('dd-content-f-equipe', window._ddOnChange_dd_content_f_equipe);
-  popularDropdownGenerico('dd-content-f-equipe', itens, window._ddOnChange_dd_content_f_equipe, '#dd-f-equipe .dropdown-btn');
+  popularDropdownGenerico('dd-content-f-equipe', itens, window._ddOnChange_dd_content_f_equipe, '#dd-f-equipe .dropdown-btn', FACETA_ROTULO_SEM_DADO);
 }
 
 // Trava genérica: força a seleção do dropdown de checkbox e desabilita a interação
@@ -3631,15 +3616,16 @@ let _fConsultorItens = [];
 function popularDropdownFConsultor(itens) {
   window._ddOnChange_dd_content_f_consultor = function(){
     atualizarBotaoDropdown('dd-content-f-consultor','#dd-f-consultor .dropdown-btn');
+    atualizarCascataGerencial('consultor');
     render();
   };
   ddRegisterCallback('dd-content-f-consultor', window._ddOnChange_dd_content_f_consultor);
-  popularDropdownGenerico('dd-content-f-consultor', itens, window._ddOnChange_dd_content_f_consultor, '#dd-f-consultor .dropdown-btn');
+  popularDropdownGenerico('dd-content-f-consultor', itens, window._ddOnChange_dd_content_f_consultor, '#dd-f-consultor .dropdown-btn', FACETA_ROTULO_SEM_DADO);
 }
 
 function onFilterChange(level) {
-  // Estado dispara a cascata: recalcula Gestor → Equipe → Consultor/Tag.
-  if (level === 'estado') atualizarCascataGerencial();
+  // Estado e Tag disparam a cascata (os demais filtros reagem nos dois sentidos).
+  if (level === 'estado' || level === 'tag') atualizarCascataGerencial(level);
   render();
 }
 
@@ -4241,19 +4227,19 @@ function setDrillSort(col) {
 
 // ─── filtros por clique ─────────────────────────────────────────────────────
 function filterByConsultor(name) {
-  // zeramos só o consultor — mantém estado/gestor/equipe/tag
+  // mantém estado/gestor/equipe/tag; a cascata repovoa os demais filtros (e o próprio dropdown,
+  // pra refletir a seleção feita pelo clique)
   _ddState['dd-content-f-consultor'] = new Set([name]);
-  popularDropdownFConsultor(_fConsultorItens.length ? _fConsultorItens : [name]);
+  atualizarCascataGerencial();
   render();
 }
 
 function filterByEquipe(equipe) {
-  // zera consultor ao trocar equipe, mantém estado/gestor
+  // zera consultor ao trocar equipe, mantém estado/gestor; a cascata repovoa os demais filtros
   _ddState['dd-content-f-equipe'] = new Set([equipe]);
-  const listaBase = (_fEquipeItensEscopo && _fEquipeItensEscopo.length > 0) ? _fEquipeItensEscopo : _fEquipeItens;
-  popularDropdownFEquipe(listaBase.length ? listaBase : [equipe]);
   _ddState['dd-content-f-consultor'] = null;
   atualizarBotaoDropdown('dd-content-f-consultor', '#dd-f-consultor .dropdown-btn');
+  atualizarCascataGerencial();
   render();
 }
 
@@ -4614,12 +4600,41 @@ function gfConstruirFiltros() {
     const labelBtn = `#dd-gf-${nome} .dropdown-btn`;
     // popularDropdownGenerico() gera onchange="..._ddOnChange_<contId com _>"
     // — a global PRECISA existir antes do clique.
-    const onChange = () => { atualizarBotaoDropdown(contId, labelBtn); gfRefresh(); };
+    const onChange = () => { atualizarBotaoDropdown(contId, labelBtn); gfAoFiltrar(nome); };
     window[`_ddOnChange_dd_content_gf_${nome}`] = onChange;
     ddRegisterCallback(contId, onChange);
     popularDropdownGenerico(contId, [...conjunto].sort(), onChange, labelBtn);
   });
   GF_FILTROS_CONSTRUIDOS = true;
+  gfAtualizarCascata();
+}
+
+// Cascata do Gerencial Financeiro: mesmos 5 filtros do Gerencial, restringindo-se nos dois
+// sentidos. Base = só o que o usuário pode ver (escopo financeiro: a gestão própria no
+// admin_gestao). `origem` = filtro que acabou de mudar (não é reescrito).
+function gfFacetasDefs() {
+  return [
+    { id: 'estado', valor: r => EQUIPES_ESTADOS[r['EQUIPE']] || null, sel: () => facetaSelSelect('gf-estado', 'Todos') },
+    { id: 'gestor', valor: r => EQUIPES_GESTORES[r['EQUIPE']] || null, sel: () => facetaSelDd('dd-content-gf-gestor') },
+    { id: 'equipe', valor: r => r['EQUIPE'] || null, sel: () => facetaSelDd('dd-content-gf-equipe') },
+    { id: 'consultor', valor: r => r['PROPRIETÁRIO DO PEDIDO'] || null, sel: () => facetaSelDd('dd-content-gf-consultor') },
+    { id: 'tag', valor: r => r['TAGS ATIVIDADE'] || null, sel: () => facetaSelSelect('gf-tag', 'Todas') },
+  ];
+}
+function gfAtualizarCascata(origem) {
+  if (!ALL_DATA.length) return;
+  const escopo = getEscopoFinanceiro();
+  const base = escopo ? ALL_DATA.filter(r => linhaDentroDoEscopo(r, escopo, r['EQUIPE'])) : ALL_DATA;
+  const op = facetasCalcular(base, gfFacetasDefs());
+  if (origem !== 'estado') facetaAplicarSelect('gf-estado', op.estado, { valor: 'Todos', rotulo: 'Todos' });
+  if (origem !== 'tag') facetaAplicarSelect('gf-tag', op.tag, { valor: 'Todas', rotulo: 'Todas' });
+  ['gestor', 'equipe', 'consultor'].forEach(nome => {
+    if (origem !== nome) facetaAplicarDropdown(`dd-content-gf-${nome}`, `#dd-gf-${nome} .dropdown-btn`, op[nome]);
+  });
+}
+function gfAoFiltrar(origem) {
+  gfAtualizarCascata(origem);
+  gfRefresh();
 }
 
 function initGerFin() {
@@ -9093,6 +9108,7 @@ function aplicarPermissoes() {
   // Aplica imediatamente e após os dados carregarem (Gerencial + Discadora)
   const aplicarTudo = () => {
     aplicarFiltrosGerencial();
+    atualizarCascataGerencial(); // depois das travas: as listas respeitam o escopo e as seleções travadas
     aplicarTravaDiscadora();
     aplicarTravaProducao();
   };
