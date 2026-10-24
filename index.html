@@ -2332,19 +2332,19 @@
       </div>
       <div class="filter-group">
         <label>Grupo</label>
-        <select id="disc-grupo">
+        <select id="disc-grupo" onchange="discAoFiltrar('grupoTop')">
           <option value="">Todos</option>
         </select>
       </div>
       <div class="filter-group">
         <label>Fila</label>
-        <select id="disc-fila">
+        <select id="disc-fila" onchange="discAoFiltrar('fila')">
           <option value="">Todas</option>
         </select>
       </div>
       <div class="filter-group">
         <label>Consultor</label>
-        <select id="disc-consultor">
+        <select id="disc-consultor" onchange="discAoFiltrar('consultorTop')">
           <option value="">Todos</option>
         </select>
       </div>
@@ -3533,9 +3533,9 @@ function atualizarCascataGerencial(origem) {
   const base = escopo ? ALL_DATA.filter(r => linhaDentroDoEscopo(r, escopo, r['EQUIPE'])) : ALL_DATA;
   const op = facetasCalcular(base, gerencialFacetasDefs());
   if (origem !== 'estado') facetaAplicarSelect('f-estado', op.estado, { valor: 'Todos', rotulo: 'Todos' });
-  if (origem !== 'gestor' && !facetaDdTravado('dd-content-f-gestor')) popularDropdownFGestor(op.gestor);
-  if (origem !== 'equipe' && !facetaDdTravado('dd-content-f-equipe')) { _fEquipeItensEscopo = op.equipe; popularDropdownFEquipe(op.equipe); }
-  if (origem !== 'consultor' && !facetaDdTravado('dd-content-f-consultor')) { _fConsultorItens = op.consultor; popularDropdownFConsultor(op.consultor); }
+  if (origem !== 'gestor') { if (facetaDdTravado('dd-content-f-gestor')) facetaAplicarDropdown('dd-content-f-gestor', '#dd-f-gestor .dropdown-btn', []); else popularDropdownFGestor(op.gestor); }
+  if (origem !== 'equipe') { if (facetaDdTravado('dd-content-f-equipe')) facetaAplicarDropdown('dd-content-f-equipe', '#dd-f-equipe .dropdown-btn', []); else { _fEquipeItensEscopo = op.equipe; popularDropdownFEquipe(op.equipe); } }
+  if (origem !== 'consultor') { if (facetaDdTravado('dd-content-f-consultor')) facetaAplicarDropdown('dd-content-f-consultor', '#dd-f-consultor .dropdown-btn', []); else { _fConsultorItens = op.consultor; popularDropdownFConsultor(op.consultor); } }
   if (origem !== 'tag') facetaAplicarSelect('f-tag', op.tag, { valor: 'Todas', rotulo: 'Todas' });
 }
 
@@ -6735,9 +6735,17 @@ const FACETA_ROTULO_SEM_DADO = '(sem registro nos filtros atuais)';
 function facetasCalcular(dados, defs) {
   const F = defs.length;
   const cheio = (1 << F) - 1;
-  const sels = defs.map(d => { const x = d.sel(); return x && x.size ? x : null; });
-  const sets = defs.map(() => new Set());
+  // `norm` (opcional por filtro): compara por chave normalizada (ex.: sem maiúsculas/acentos),
+  // mas as opções mostradas continuam sendo o texto original (a 1ª ocorrência de cada chave).
+  const normas = defs.map(d => d.norm || null);
+  const sels = defs.map((d, i) => {
+    const x = d.sel();
+    if (!x || !x.size) return null;
+    return normas[i] ? new Set([...x].map(v => normas[i](String(v)))) : x;
+  });
+  const mapas = defs.map(() => new Map());
   const vals = new Array(F);
+  const chave = (i, v) => (normas[i] ? normas[i](String(v)) : (typeof v === 'string' ? v : String(v)));
   for (const r of dados) {
     let mask = 0;
     for (let i = 0; i < F; i++) {
@@ -6746,20 +6754,21 @@ function facetasCalcular(dados, defs) {
       const sel = sels[i];
       let ok = !sel;
       if (!ok) {
-        if (Array.isArray(v)) { for (const x of v) if (x != null && x !== '' && sel.has(String(x))) { ok = true; break; } }
-        else ok = v != null && v !== '' && sel.has(typeof v === 'string' ? v : String(v));
+        if (Array.isArray(v)) { for (const x of v) if (x != null && x !== '' && sel.has(chave(i, x))) { ok = true; break; } }
+        else ok = v != null && v !== '' && sel.has(chave(i, v));
       }
       if (ok) mask |= (1 << i);
     }
     for (let i = 0; i < F; i++) {
       if ((mask | (1 << i)) !== cheio) continue;
       const v = vals[i];
-      if (Array.isArray(v)) { for (const x of v) if (x != null && x !== '') sets[i].add(String(x)); }
-      else if (v != null && v !== '') sets[i].add(typeof v === 'string' ? v : String(v));
+      const add = x => { const k = chave(i, x); if (!mapas[i].has(k)) mapas[i].set(k, String(x)); };
+      if (Array.isArray(v)) { for (const x of v) if (x != null && x !== '') add(x); }
+      else if (v != null && v !== '') add(v);
     }
   }
   const res = {};
-  defs.forEach((d, i) => { res[d.id] = [...sets[i]].sort(d.ordem || ((x, y) => x.localeCompare(y, 'pt-BR', { numeric: true }))); });
+  defs.forEach((d, i) => { res[d.id] = [...mapas[i].values()].sort(d.ordem || ((x, y) => x.localeCompare(y, 'pt-BR', { numeric: true }))); });
   return res;
 }
 // helpers de seleção (usados pelos adaptadores de cada aba)
@@ -6779,8 +6788,16 @@ function facetaDdTravado(contId) {
 // marcado como sem registro, pra dar pra desmarcar). Select desabilitado (travado) não é tocado.
 function facetaAplicarSelect(id, itens, todos) {
   const sel = document.getElementById(id);
-  if (!sel || sel.disabled) return;
+  if (!sel) return;
   const atual = sel.value;
+  if (sel.disabled) {
+    // travado por perfil: o valor não muda e NUNCA fica com opções de outra sessão/usuário no DOM —
+    // reduz às opções do próprio valor travado (e "Todos")
+    const manter = [...sel.options].filter(o => o.value === atual || o.value === todos.valor);
+    sel.innerHTML = manter.map(o => `<option value="${escapeHtml(o.value)}">${escapeHtml(o.textContent)}</option>`).join('');
+    sel.value = atual;
+    return;
+  }
   const extra = atual && atual !== todos.valor && !itens.includes(atual);
   sel.innerHTML = `<option value="${escapeHtml(todos.valor)}">${escapeHtml(todos.rotulo)}</option>` +
     itens.map(o => `<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`).join('') +
@@ -6790,7 +6807,13 @@ function facetaAplicarSelect(id, itens, todos) {
 // repovoa um dropdown de checkboxes (popularDropdownGenerico já preserva a seleção). Dropdown
 // travado por perfil não é tocado. `onChange` = o callback que o dropdown já usa.
 function facetaAplicarDropdown(contId, labelBotaoSel, itens, onChange) {
-  if (facetaDdTravado(contId)) return;
+  if (facetaDdTravado(contId)) {
+    // travado por perfil: a seleção não muda e a lista NUNCA fica com itens de outra sessão/usuário —
+    // reduz aos valores da própria trava
+    const travado = _ddState[contId];
+    popularDropdownGenerico(contId, travado ? [...travado] : [], onChange || _ddCallbacks[contId], labelBotaoSel, FACETA_ROTULO_SEM_DADO);
+    return;
+  }
   popularDropdownGenerico(contId, itens, onChange || _ddCallbacks[contId], labelBotaoSel, FACETA_ROTULO_SEM_DADO);
 }
 
@@ -7019,9 +7042,9 @@ function atualizarOpcoesInteligentesProducao(origem) {
   const op = facetasCalcular(base, prodFacetasDefs());
 
   if (origem !== 'estado') facetaAplicarSelect('prod-estado', op.estado, { valor: 'Todos', rotulo: 'Todos' });
-  if (origem !== 'gestor' && !facetaDdTravado('dd-content-prod-gestor')) popularDropdownProdGestor(op.gestor);
-  if (origem !== 'equipe' && !facetaDdTravado('dd-content-prod-equipe')) popularDropdownEquipe(op.equipe);
-  if (origem !== 'consultor' && !facetaDdTravado('dd-content-prod-consultor')) popularDropdownProdConsultor(op.consultor);
+  if (origem !== 'gestor') { if (facetaDdTravado('dd-content-prod-gestor')) facetaAplicarDropdown('dd-content-prod-gestor', '#dd-prod-gestor .dropdown-btn', []); else popularDropdownProdGestor(op.gestor); }
+  if (origem !== 'equipe') { if (facetaDdTravado('dd-content-prod-equipe')) facetaAplicarDropdown('dd-content-prod-equipe', '#dd-prod-equipe .dropdown-btn', []); else popularDropdownEquipe(op.equipe); }
+  if (origem !== 'consultor') { if (facetaDdTravado('dd-content-prod-consultor')) facetaAplicarDropdown('dd-content-prod-consultor', '#dd-prod-consultor .dropdown-btn', []); else popularDropdownProdConsultor(op.consultor); }
   if (origem !== 'ufbl') prodAplicarUfBl(op.ufbl);
   if (origem !== 'ufcliente') popularDropdownProdUFCliente(op.ufcliente);
   if (origem !== 'ddd') popularDropdownProdDDD(op.ddd);
@@ -10098,7 +10121,17 @@ function getCheckedValues(containerId) {
   return Array.from(container.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
 }
 
+// Filtro que o usuário acabou de mexer: a cascata não reescreve a lista dele (preserva a busca
+// digitada no dropdown). Consumido (e zerado) no início de discadoraRender().
+let _discOrigemFiltro = null;
+function discAoFiltrar(origem) {
+  _discOrigemFiltro = origem;
+  discadoraRender();
+}
+
 function discadoraRender() {
+  const origemFiltro = _discOrigemFiltro;
+  _discOrigemFiltro = null;
   // Trava por perfil (Gestor/Supervisão) — não depende do estado do DOM
   const grupoTravado = getGrupoDiscadoraTravado();
   // Comparação tolerante a maiúsculo/minúsculo e espaços nas pontas — os nomes
@@ -10115,39 +10148,30 @@ function discadoraRender() {
   const gruposHeader = getCheckedValuesDd('dd-content-grupo');
   const consultoresHeader = getCheckedValuesDd('dd-content-consultor');
 
-  const grupos      = [...new Set(_discDados.map(r => r.grupo && r.grupo.nome).filter(Boolean))].sort();
   // Fila e Consultor são calculados só dentro do escopo travado (grupo/cidade),
   // pra não listar filas/consultores de outras cidades quando o perfil está preso a um Grupo
   const _discDadosEscopo = grupoTravado ? _discDados.filter(r => r.grupo && _normG(r.grupo.nome) === grupoTravadoNorm) : _discDados;
-  const filas       = [...new Set(_discDadosEscopo.map(r => r.fila && r.fila.nome).filter(Boolean))].sort();
-  const consultores = [...new Set(_discDadosEscopo.map(r => r.usuario && r.usuario.nome).filter(Boolean))].sort();
 
-  // Atualiza dropdowns Grupo e Consultor — só recria se os itens mudaram
-  const _gruposStr = grupos.join('|');
-  const _consStr = consultores.join('|');
-  if(document.getElementById('dd-content-grupo') && document.getElementById('dd-content-grupo').dataset.itens !== _gruposStr) {
-    window._ddOnChange_dd_content_grupo = function(){ atualizarBotaoDropdown('dd-content-grupo','#dd-grupo .dropdown-btn'); discadoraRender(); };
-    ddRegisterCallback('dd-content-grupo', window._ddOnChange_dd_content_grupo);
-    popularDropdownGenerico('dd-content-grupo', grupos, window._ddOnChange_dd_content_grupo, '#dd-grupo .dropdown-btn');
-    document.getElementById('dd-content-grupo').dataset.itens = _gruposStr;
-  }
-  if(document.getElementById('dd-content-consultor') && document.getElementById('dd-content-consultor').dataset.itens !== _consStr) {
-    window._ddOnChange_dd_content_consultor = function(){ atualizarBotaoDropdown('dd-content-consultor','#dd-consultor .dropdown-btn'); discadoraRender(); };
-    ddRegisterCallback('dd-content-consultor', window._ddOnChange_dd_content_consultor);
-    popularDropdownGenerico('dd-content-consultor', consultores, window._ddOnChange_dd_content_consultor, '#dd-consultor .dropdown-btn');
-    document.getElementById('dd-content-consultor').dataset.itens = _consStr;
-  }
-
-  // Popula os selects antigos da barra superior (se existirem)
-  if(document.getElementById('disc-grupo')) {
-    document.getElementById('disc-grupo').innerHTML = '<option value="">Todos</option>' + grupos.map(g => '<option value="' + escapeHtml(g) + '"' + (g===grupoFiltro?' selected':'') + '>' + escapeHtml(g) + '</option>').join('');
-  }
-  if(document.getElementById('disc-fila')) {
-    document.getElementById('disc-fila').innerHTML = '<option value="">Todas</option>' + filas.map(f => '<option value="' + escapeHtml(f) + '"' + (f===filaFiltro?' selected':'') + '>' + escapeHtml(f) + '</option>').join('');
-  }
-  if(document.getElementById('disc-consultor')) {
-    document.getElementById('disc-consultor').innerHTML = '<option value="">Todos</option>' + consultores.map(c => '<option value="' + escapeHtml(c) + '"' + (c===consultorFiltro?' selected':'') + '>' + escapeHtml(c) + '</option>').join('');
-  }
+  // Cascata dos filtros: Grupo (barra e cabeçalho), Fila e Consultor (barra e cabeçalho) se
+  // restringem nos dois sentidos. Base = só as ligações dentro do escopo do perfil (grupo/cidade
+  // travados); filtros travados por perfil não são reescritos.
+  window._ddOnChange_dd_content_grupo = function(){ atualizarBotaoDropdown('dd-content-grupo','#dd-grupo .dropdown-btn'); discAoFiltrar('grupoHdr'); };
+  window._ddOnChange_dd_content_consultor = function(){ atualizarBotaoDropdown('dd-content-consultor','#dd-consultor .dropdown-btn'); discAoFiltrar('consultorHdr'); };
+  ddRegisterCallback('dd-content-grupo', window._ddOnChange_dd_content_grupo);
+  ddRegisterCallback('dd-content-consultor', window._ddOnChange_dd_content_consultor);
+  const _selSimples = id => { const v = document.getElementById(id)?.value; return v ? new Set([v]) : null; };
+  const opDisc = facetasCalcular(_discDadosEscopo, [
+    { id: 'grupoTop', valor: r => r.grupo && r.grupo.nome, norm: _normG, sel: () => _selSimples('disc-grupo') },
+    { id: 'grupoHdr', valor: r => r.grupo && r.grupo.nome, norm: _normG, sel: () => facetaSelDd('dd-content-grupo') },
+    { id: 'fila', valor: r => r.fila && r.fila.nome, sel: () => _selSimples('disc-fila') },
+    { id: 'consultorTop', valor: r => r.usuario && r.usuario.nome, sel: () => _selSimples('disc-consultor') },
+    { id: 'consultorHdr', valor: r => r.usuario && r.usuario.nome, sel: () => facetaSelDd('dd-content-consultor') },
+  ]);
+  if (origemFiltro !== 'grupoTop') facetaAplicarSelect('disc-grupo', opDisc.grupoTop, { valor: '', rotulo: 'Todos' });
+  if (origemFiltro !== 'fila') facetaAplicarSelect('disc-fila', opDisc.fila, { valor: '', rotulo: 'Todas' });
+  if (origemFiltro !== 'consultorTop') facetaAplicarSelect('disc-consultor', opDisc.consultorTop, { valor: '', rotulo: 'Todos' });
+  if (origemFiltro !== 'grupoHdr') facetaAplicarDropdown('dd-content-grupo', '#dd-grupo .dropdown-btn', opDisc.grupoHdr);
+  if (origemFiltro !== 'consultorHdr') facetaAplicarDropdown('dd-content-consultor', '#dd-consultor .dropdown-btn', opDisc.consultorHdr);
 
   // Filtra os dados
   let dados = _discDados;
@@ -12437,10 +12461,11 @@ async function qualCarregar(pagina, refresh) {
     if (eu !== QUAL_REQ) return; // chegou uma consulta mais nova
     QUAL_DADOS = d;
     QUAL_CARREGOU = true;
-    const sel = document.getElementById('qual-equipe');
-    if (sel.options.length <= 1) {
-      sel.innerHTML = '<option value="">Todas</option>' + d.equipes.map(e => `<option value="${escapeHtml(e)}">${escapeHtml(e)}</option>`).join('');
-    }
+    // Cascata Equipe <-> Tipo: o servidor devolve as opções de cada um já considerando os outros
+    // filtros (janela, datas, busca e o outro desses dois). A escolha atual continua visível
+    // (marcada como sem registro) se não existir mais na lista.
+    facetaAplicarSelect('qual-equipe', d.equipes || [], { valor: '', rotulo: 'Todas' });
+    if (Array.isArray(d.tipos)) facetaAplicarSelect('qual-tipo', d.tipos, { valor: '', rotulo: 'Todos' });
     qualRenderKpis();
     qualRenderLista();
   } catch (e) {

@@ -266,20 +266,28 @@ export default async function handler(req, res) {
       const ate = /^\d{4}-\d{2}-\d{2}$/.test(q.ate || '') ? q.ate : null;
 
       const comSituacao = [];
+      // Opções dos filtros Equipe e Tipo (cascata nos dois sentidos): cada lista considera TODOS os
+      // outros filtros (janela, datas, busca e o outro desses dois), mas não o próprio — assim
+      // escolher uma equipe deixa só os tipos que ela tem, e escolher um tipo deixa só as equipes dele.
+      const equipesDisp = new Set();
+      const tiposDisp = new Set();
       for (const j of uni.jornadas) {
         const dia = hojeD - diasDe(j.data_ref);
         if (janela === 'andamento' && dia > N_PARCELAS * DIAS_POR_PARCELA) continue;
         if (janela === 'encerrado' && dia <= N_PARCELAS * DIAS_POR_PARCELA) continue;
         if (de && j.data_ref < de) continue;
         if (ate && j.data_ref > ate) continue;
-        if (q.equipe && j.equipe !== q.equipe) continue;
-        if (q.tipo && j.tipo !== q.tipo) continue;
         if (busca) {
           const alvo = semAcento(`${j.pedido} ${j.cliente} ${j.proprietario} ${j.cnpj}`);
           const bateTexto = alvo.includes(busca);
           const bateDigitos = buscaDigitos.length >= 4 && j.cnpj.replace(/\D/g, '').includes(buscaDigitos);
           if (!bateTexto && !bateDigitos) continue;
         }
+        const passaEquipe = !q.equipe || j.equipe === q.equipe;
+        const passaTipo = !q.tipo || j.tipo === q.tipo;
+        if (passaTipo && j.equipe) equipesDisp.add(j.equipe);
+        if (passaEquipe && j.tipo) tiposDisp.add(j.tipo);
+        if (!passaEquipe || !passaTipo) continue;
         const parcelas = parcelasDe(j, marcas.get(`${j.pedido}|${j.data_ref}`), hojeD);
         comSituacao.push({ j, dia, parcelas, situacao: situacaoDe(parcelas) });
       }
@@ -303,7 +311,9 @@ export default async function handler(req, res) {
       }));
       return res.status(200).json({
         hoje, resumo, pagina, por_pagina: POR_PAGINA, total_filtrado: filtradas.length,
-        contratos: fatia, equipes: uni.equipes, base_atualizada_em: new Date(uni.em).toISOString(),
+        contratos: fatia, base_atualizada_em: new Date(uni.em).toISOString(),
+        equipes: [...equipesDisp].sort((a, b) => a.localeCompare(b, 'pt-BR')),
+        tipos: [...tiposDisp].sort((a, b) => a.localeCompare(b, 'pt-BR')),
       });
     }
 
