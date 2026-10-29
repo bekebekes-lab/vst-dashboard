@@ -5141,8 +5141,9 @@ const PN = {
 // (ex.: gestor_macro2 com mais de uma gestão) — nesse caso os dados já vêm
 // travados no escopo do perfil (ver pnEscopo()).
 function pnPodeVer() { return ehAdminLike(USUARIO_ATUAL?.perfil) || (USUARIO_ATUAL?.acesso_extra_abas || []).includes('painel'); }
-// Comissão ainda está em desenvolvimento: só admin/admin_gestao enxergam.
-function pnPodeVerComissao() { return ehAdminLike(USUARIO_ATUAL?.perfil); }
+// Comissão ainda está em desenvolvimento: só o perfil 'admin' (admins master) enxerga —
+// nem admin_gestao, nem quem recebe o Painel por concessão individual.
+function pnPodeVerComissao() { return USUARIO_ATUAL?.perfil === 'admin'; }
 // Escopo do Painel: o travado do perfil (gestor/equipe/consultor) ou, no
 // admin_gestao, a gestão própria.
 function pnEscopo() { return getEscopoTravado() || getEscopoGestaoPropria(); }
