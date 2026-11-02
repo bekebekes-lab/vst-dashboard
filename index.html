@@ -1089,6 +1089,8 @@
   .aace-ll { font-size: 12px; color: var(--text-2); line-height: 1.25; }
   .aace-mais { margin-top: 8px; }
   .aace-mais summary { cursor: pointer; font-size: 11.5px; font-weight: 600; color: var(--brand); margin-bottom: 8px; }
+  .aace-esp-tag { font-size: 10px; font-weight: 600; text-transform: none; letter-spacing: 0; color: var(--text-3); margin-left: 6px; }
+  .aace-lado input:disabled, .aace-lado select:disabled { background: var(--surface-3, #ececec); color: var(--text-3); cursor: not-allowed; opacity: .85; }
   .aace-tab-wrap { overflow-x: auto; }
   .aace-tab { width: 100%; border-collapse: collapse; font-size: 12.5px; }
   .aace-tab th { text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-3); padding: 8px 10px; border-bottom: 2px solid var(--border-strong); }
@@ -2552,7 +2554,8 @@
     <div class="s2-secao">
       <div class="s2-secao-titulo">Simulador de AACE</div>
       <div class="s2-secao-desc">Compara o que a política de remuneração da Claro paga a um AACE que opera isolado (Lado A) com o que a mesma operação renderia inserida nos KPIs da VST (Lado B).
-        Nada vem preenchido nem presumido: informe produção, carteira, CNPJs, HCs e KPIs de cada lado, ou escolha direto cluster (P/M/G), categoria (Bronze a Diamante) e atingimento de meta (100%, 120% ou 140%) no Enquadramento.</div>
+        A produção e as metas lançadas no Lado A são copiadas sozinhas para o Lado B (campos 🔒 travados), para comparar a mesma produção sob enquadramentos diferentes.
+        Nada vem preenchido nem presumido: informe produção e metas no Lado A e, em cada lado, carteira, CNPJs, HCs e KPIs, ou escolha direto cluster (P/M/G), categoria (Bronze a Diamante) e atingimento de meta (100%, 120% ou 140%) no Enquadramento.</div>
       <div class="s2-params-bar">
         <div class="s2-field">
           <label for="aace-g-tabela">Tabela de CNPJ/HC</label>
@@ -2570,7 +2573,6 @@
         </div>
       </div>
       <div class="s2-actions">
-        <button class="s2-btn" onclick="aaceEspelharProducao()" title="Copia produção, indicadores e carteira do Lado A para o Lado B, sem mexer no enquadramento">⇢ Espelhar produção do A no B</button>
         <button class="s2-btn" onclick="aaceCarregarPadraoVst()" title="Lê o cluster e o CNPJ/HC da VST salvos no Simulador 2.0 e aplica ao Lado B">Carregar cluster e CNPJ/HC da VST</button>
         <button class="s2-btn" onclick="aaceLimpar()">Limpar tudo</button>
       </div>
@@ -8381,6 +8383,21 @@ const AACE_CAMPOS_LINHA = {
   renovTabela: { t: 'sel', op: [['1', 'Tabela 1 — fora da área cabeada / com BL / convergência'], ['2', 'Tabela 2 — área cabeada, sem convergência']], def: '1' },
 };
 
+// Produção (seções 2–4), metas (5) e % fora da área vêm SEMPRE do Lado A para o Lado B, travados: a comparação
+// isola o efeito do enquadramento (cluster, categoria, atingimento, KPIs) sobre a mesma produção.
+const AACE_SECOES_ESPELHADAS = ['movel', 'fixa', 'rec', 'meta'];
+let _aaceSecDoCampo = null;
+function aaceEspelhado(k) {
+  if (!_aaceSecDoCampo) { _aaceSecDoCampo = {}; aaceTodosCampos().forEach(c => { _aaceSecDoCampo[c.k] = c.sec; }); }
+  return k === 'foraPct' || AACE_SECOES_ESPELHADAS.includes(_aaceSecDoCampo[k]);
+}
+function aaceValor(lado, k) { return (lado === 'b' && aaceEspelhado(k)) ? AACE.a[k] : AACE[lado][k]; }
+function aaceEstadoEfetivo(lado) {
+  const e = { ...AACE[lado] };
+  if (lado === 'b') Object.keys(e).forEach(k => { if (aaceEspelhado(k)) e[k] = AACE.a[k]; });
+  return e;
+}
+
 function aaceTodosCampos() {
   const out = [];
   AACE_SECOES.forEach(s => {
@@ -8562,16 +8579,18 @@ function aaceFmtPct(v) { return (v || 0).toFixed(1).replace('.', ',') + '%'; }
 function aaceFmtNum(v) { return (v || 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 }); }
 
 function aaceInputHtml(lado, k, def) {
-  const id = `aace-${lado}-${k}`, v = AACE[lado][k];
+  const id = `aace-${lado}-${k}`, v = aaceValor(lado, k);
+  const trava = lado === 'b' && aaceEspelhado(k) ? ' disabled title="Espelhado do Lado A — altere lá"' : '';
   if (def && def.t === 'sel') {
-    return `<select id="${id}" onchange="aaceAlterou('${lado}','${k}',this.value)">${def.op.map(([val, lab]) => `<option value="${val}"${String(v) === String(val) ? ' selected' : ''}>${lab}</option>`).join('')}</select>`;
+    return `<select id="${id}"${trava} onchange="aaceAlterou('${lado}','${k}',this.value)">${def.op.map(([val, lab]) => `<option value="${val}"${String(v) === String(val) ? ' selected' : ''}>${lab}</option>`).join('')}</select>`;
   }
-  return `<input type="number" id="${id}" min="0" step="any" value="${v}" oninput="aaceAlterou('${lado}','${k}',this.value)">`;
+  return `<input type="number" id="${id}"${trava} min="0" step="any" value="${v}" oninput="aaceAlterou('${lado}','${k}',this.value)">`;
 }
 function aaceSecaoHtml(lado, s) {
   if (s.tipo === 'campos') {
-    return `<div class="aace-sec"><div class="aace-sec-t">${s.titulo}</div><div class="aace-grid">${s.campos.map(c =>
-      `<div class="s2-field"><label for="aace-${lado}-${c.k}">${c.l}</label>${aaceInputHtml(lado, c.k, c)}</div>`).join('')}</div></div>`;
+    const tagSec = lado === 'b' && AACE_SECOES_ESPELHADAS.includes(s.id) ? ' <span class="aace-esp-tag">🔒 espelhado do Lado A</span>' : '';
+    return `<div class="aace-sec"><div class="aace-sec-t">${s.titulo}${tagSec}</div><div class="aace-grid">${s.campos.map(c =>
+      `<div class="s2-field"><label for="aace-${lado}-${c.k}">${c.l}${lado === 'b' && aaceEspelhado(c.k) ? ' 🔒' : ''}</label>${aaceInputHtml(lado, c.k, c)}</div>`).join('')}</div></div>`;
   }
   const linhaHtml = r => `<div class="aace-ll">${r.l}</div>${[0, 1].map(i => {
     const k = r.cols[i];
@@ -8580,8 +8599,9 @@ function aaceSecaoHtml(lado, s) {
   const cabHtml = `<div class="aace-lh"></div>${s.cab.map(h => `<div class="aace-lh">${h}</div>`).join('')}`;
   const basicas = s.linhas.filter(r => !r.mais), mais = s.linhas.filter(r => r.mais);
   // bloco recolhido abre sozinho se algum campo dele já tem valor (nunca esconder dado digitado)
-  const preenchido = mais.some(r => r.cols.some(k => k && AACE[lado][k] !== '' && String(AACE[lado][k]) !== String((AACE_CAMPOS_LINHA[k] || {}).def ?? '')));
-  return `<div class="aace-sec"><div class="aace-sec-t">${s.titulo}</div><div class="aace-linhas">${cabHtml}${basicas.map(linhaHtml).join('')}</div>
+  const preenchido = mais.some(r => r.cols.some(k => k && aaceValor(lado, k) !== '' && String(aaceValor(lado, k)) !== String((AACE_CAMPOS_LINHA[k] || {}).def ?? '')));
+  const tagSec = lado === 'b' && AACE_SECOES_ESPELHADAS.includes(s.id) ? ' <span class="aace-esp-tag">🔒 espelhado do Lado A</span>' : '';
+  return `<div class="aace-sec"><div class="aace-sec-t">${s.titulo}${tagSec}</div><div class="aace-linhas">${cabHtml}${basicas.map(linhaHtml).join('')}</div>
     ${mais.length ? `<details class="aace-mais"${preenchido ? ' open' : ''}><summary>Outros tipos (${mais.length})</summary><div class="aace-linhas">${mais.map(linhaHtml).join('')}</div></details>` : ''}</div>`;
 }
 function aaceRenderForm() {
@@ -8606,7 +8626,12 @@ function aaceCarregarSalvo() {
     if (d.g) AACE.g = { ...AACE.g, ...d.g };
   } catch (e) { /* dado salvo inválido: ignora */ }
 }
-function aaceAlterou(lado, k, v) { AACE[lado][k] = v; aaceSalvar(); aaceRender(); }
+function aaceAlterou(lado, k, v) {
+  if (lado === 'b' && aaceEspelhado(k)) return; // travado: vem do Lado A
+  AACE[lado][k] = v;
+  if (lado === 'a' && aaceEspelhado(k)) { const el = document.getElementById('aace-b-' + k); if (el) el.value = v; }
+  aaceSalvar(); aaceRender();
+}
 function aaceAlterouGeral(k, v) { AACE.g[k] = v; aaceSalvar(); aaceRender(); }
 
 function aaceMsg(txt, erro) {
@@ -8614,12 +8639,6 @@ function aaceMsg(txt, erro) {
   if (!el) return;
   el.textContent = txt || '';
   el.style.color = erro ? 'var(--red-sem)' : 'var(--text-2)';
-}
-// Copia produção/carteira/indicadores do A para o B (não mexe em enquadramento, metas nem CNPJ/HC do grupo)
-function aaceEspelharProducao() {
-  aaceTodosCampos().filter(c => c.esp).forEach(c => { AACE.b[c.k] = AACE.a[c.k]; });
-  aaceSalvar(); aaceRenderForm(); aaceRender();
-  aaceMsg('Produção, indicadores e carteira do Lado A copiados para o Lado B. Enquadramento, metas e CNPJ/HC do grupo ficam como estavam.');
 }
 function aaceLimpar() {
   if (!confirm('Limpar todos os campos dos dois lados?')) return;
@@ -8665,7 +8684,7 @@ function aaceRotulosAuto(lado, r) {
 
 function aaceRender() {
   if (!document.getElementById('aace-resultado')) return;
-  const ra = aaceCalcular(AACE.a, AACE.g), rb = aaceCalcular(AACE.b, AACE.g);
+  const ra = aaceCalcular(AACE.a, AACE.g), rb = aaceCalcular(aaceEstadoEfetivo('b'), AACE.g);
   aaceRotulosAuto('a', ra); aaceRotulosAuto('b', rb);
   ['a', 'b'].forEach((l, i) => { const el = document.getElementById('aace-total-' + l); if (el) el.textContent = s2fmt([ra, rb][i].total); });
 
