@@ -8444,6 +8444,9 @@ function aaceCalcular(s, g) {
   const fx = { voz: faixaDe('voz', 'faixaMovel'), movelBl: faixaDe('movelBl', 'faixaMovel'),
     fixaBl: faixaDe('fixaBl', 'faixaFixa'), fixaTv: faixaDe('fixaTv', 'faixaFixa'), fixaFone: faixaDe('fixaFone', 'faixaFixa'),
     conect: faixaDe('conect', 'faixaConect') };
+  const fxAuto = {}, metaInf = {};
+  Object.keys(AACE_CNT_META).forEach(c => { fxAuto[c] = s2FaixaAdicionalIdx(pct[c]); metaInf[c] = n(AACE_CNT_META[c]) > 0; });
+  fxAuto.conect = s2FaixaAdicionalIdx(pct.conect); metaInf.conect = n('metaConect') > 0;
   Object.keys(AACE_CNT_META).forEach(c => {
     if (real[c] > 0 && n(AACE_CNT_META[c]) <= 0 && s[c === 'voz' || c === 'movelBl' ? 'faixaMovel' : 'faixaFixa'] === 'auto') {
       avisos.push('Meta de ' + { voz: 'Móvel Voz', movelBl: 'Móvel BL', fixaBl: 'Fixa BL', fixaTv: 'Fixa TV', fixaFone: 'Fixa Fone' }[c] + ' não informada: sem fator adicional.');
@@ -8497,12 +8500,13 @@ function aaceCalcular(s, g) {
 
   // ── Bônus Categoria (2.5) ──
   const mb = AACE_METAS_BONUS[regiao];
-  const forcaD = (campo, auto) => (s[campo] && s[campo] !== 'auto') ? Number(s[campo]) : auto;
-  const dv = forcaD('dvForca', aaceDesempenho(n('cnpjNovoVoz'), mb.voz)), db = forcaD('dbForca', aaceDesempenho(n('cnpjNovoBl'), mb.bl));
+  const dAuto = {};
+  const forcaD = (campo, auto, nome) => { dAuto[nome] = auto; return (s[campo] && s[campo] !== 'auto') ? Number(s[campo]) : auto; };
+  const dv = forcaD('dvForca', aaceDesempenho(n('cnpjNovoVoz'), mb.voz), 'dv'), db = forcaD('dbForca', aaceDesempenho(n('cnpjNovoBl'), mb.bl), 'db');
   const gross = n('gross'), canc = n('cancel');
   const netAdds = gross - canc;
   const pctNet = gross > 0 ? netAdds / gross * 100 : 0;
-  const dn = forcaD('dnForca', aaceDesempNetAdds(pctNet, gross > 0)), dc = forcaD('dcForca', aaceDesempChurn(n('churn')));
+  const dn = forcaD('dnForca', aaceDesempNetAdds(pctNet, gross > 0), 'dn'), dc = forcaD('dcForca', aaceDesempChurn(n('churn')), 'dc');
   const x100 = 35 * dv + 30 * db + 17.5 * dn + 17.5 * dc; // nota final × 100 (35%/30%/17,5%/17,5%)
   const nota100 = g.arred === 'cima' ? Math.round(x100) : Math.floor(x100);
   const catAuto = aaceCategoriaDaNota(nota100, dv, db);
@@ -8520,14 +8524,15 @@ function aaceCalcular(s, g) {
   const hcs = n('hcs'), cnpjs = n('cnpjs');
   const razao = n('razaoGrupo') > 0 ? n('razaoGrupo') : (hcs > 0 ? cnpjs / hcs : 0);
   const tab = g.tabela === 'transicao' ? FAIXAS_CNPJHC_TRANSICAO : FAIXAS_CNPJHC_DEFINITIVA;
-  const fxCh = (s.faixaCnpjHc && s.faixaCnpjHc !== 'auto') ? Number(s.faixaCnpjHc) - 1 : Math.max(0, tab.findIndex(f => razao <= f.max));
+  const fxChAuto = Math.max(0, tab.findIndex(f => razao <= f.max));
+  const fxCh = (s.faixaCnpjHc && s.faixaCnpjHc !== 'auto') ? Number(s.faixaCnpjHc) - 1 : fxChAuto;
   const negativo = netAdds < 0;
   let unit, lib;
   if (master) { unit = negativo ? 0.60 : 1.00; lib = 0.33; }          // 2.6.6
   else if (negativo) { unit = UNITARIO_NETADDS_NEGATIVO[cat]; lib = 0.33; } // 2.6.4-i
   else { unit = tab[fxCh].unitario; lib = TETO_LIBERACAO[cat][fxCh]; }      // 2.6.4-ii / 2.6.5-ii
   const bruto = n('linhasAtivas') * unit, teto = baseTeto * lib;
-  const manut = { razao, faixa: fxCh + 1, unit, lib, negativo, bruto, teto, base: baseTeto, pago: Math.min(bruto, teto), limitou: bruto > teto };
+  const manut = { razao, faixa: fxCh + 1, faixaAuto: fxChAuto + 1, unit, lib, negativo, bruto, teto, base: baseTeto, pago: Math.min(bruto, teto), limitou: bruto > teto };
   if (n('linhasAtivas') > 0 && razao <= 0 && s.faixaCnpjHc === 'auto') avisos.push('Carteira: informe CNPJs e HCs para enquadrar a faixa de CNPJ/HC.');
 
   // ── Bônus Produtividade (2.7) — só Elite, mínimo 4 vendedores ──
@@ -8548,7 +8553,7 @@ function aaceCalcular(s, g) {
 
   const total = comAtivacao + renov.comissao + conv.comissao + bonusCat.valor + manut.pago + prod.total;
   const fxForca = { voz: s.faixaMovel !== 'auto', movelBl: s.faixaMovel !== 'auto', fixaBl: s.faixaFixa !== 'auto', fixaTv: s.faixaFixa !== 'auto', fixaFone: s.faixaFixa !== 'auto', conect: s.faixaConect !== 'auto' };
-  return { master, masterSemAdic, regiao, C, sug, pct, fx, fxForca, real, itens, modulos, m2m, hotel, conect, conectRenov, sd, renov, conv,
+  return { master, masterSemAdic, regiao, C, sug, pct, fx, fxAuto, metaInf, dAuto, fxForca, real, itens, modulos, m2m, hotel, conect, conectRenov, sd, renov, conv,
     comMovel, comFixa, comAtivacao, baseBonusCat, baseTeto, bonusCat, manut, prod, total, avisos };
 }
 
@@ -8641,9 +8646,27 @@ async function aaceCarregarPadraoVst() {
   }
 }
 
+// Nas opções "Automático" mostra o valor que o cálculo escolheu (ex.: "Automático M (pela produção)")
+function aaceRotulosAuto(lado, r) {
+  const set = (k, txt) => { const op = document.querySelector(`#aace-${lado}-${k} option[value="auto"]`); if (op) op.textContent = txt; };
+  const cluster = c => r.master ? 'Automático P (Master)' : `Automático ${r.sug[c]} (pela produção)`;
+  set('clusterMovel', cluster('movel')); set('clusterFixa', cluster('fixa')); set('clusterConect', cluster('conect'));
+  const faixa = c => {
+    if (!r.metaInf[c]) return 'Automático — meta não informada';
+    const f = r.fxAuto[c], p = aaceFmtPct(r.pct[c]);
+    return f >= 0 ? `Automático Faixa ${f + 1} (${p} da meta)` : `Automático sem adicional (${p} da meta)`;
+  };
+  set('faixaMovel', faixa('voz')); set('faixaFixa', faixa('fixaBl')); set('faixaConect', faixa('conect'));
+  const cat = r.bonusCat.catAuto;
+  set('categoria', `Automático ${cat.charAt(0).toUpperCase() + cat.slice(1)} (4 indicadores)`);
+  [['dvForca', 'dv'], ['dbForca', 'db'], ['dnForca', 'dn'], ['dcForca', 'dc']].forEach(([k, d]) => set(k, `Automático ${r.dAuto[d]} (pelo valor informado)`));
+  set('faixaCnpjHc', `Automático Faixa ${r.manut.faixaAuto} (pela razão)`);
+}
+
 function aaceRender() {
   if (!document.getElementById('aace-resultado')) return;
   const ra = aaceCalcular(AACE.a, AACE.g), rb = aaceCalcular(AACE.b, AACE.g);
+  aaceRotulosAuto('a', ra); aaceRotulosAuto('b', rb);
   ['a', 'b'].forEach((l, i) => { const el = document.getElementById('aace-total-' + l); if (el) el.textContent = s2fmt([ra, rb][i].total); });
 
   const dif = (a, b) => {
