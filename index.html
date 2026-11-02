@@ -8314,6 +8314,7 @@ const AACE_OP_CATEGORIA = [['auto', 'Automático (4 indicadores)'], ['bronze', '
 const AACE_SECOES = [
   { id: 'enq', titulo: '1. Enquadramento', tipo: 'campos', campos: [
     { k: 'modalidade', l: 'Modalidade', t: 'sel', op: [['elite', 'Elite'], ['master', 'Master']], def: 'elite' },
+    { k: 'masterAdic', l: 'Master — fator adicional por meta', t: 'sel', op: [['sim', 'Recebe (coluna P da tabela)'], ['nao', 'Não recebe (só fator fixo)']], def: 'sim' },
     { k: 'regiao', l: 'Região (Anexos III e IV)', t: 'sel', op: [['A', 'Grupo A — SP1, RSUL, NE, DF, SP2, GO, MS, MT, RJ'], ['B', 'Grupo B — NO, MG, BA-SE, ES, AC, RO, TO']], def: 'A' },
     { k: 'clusterMovel', l: 'Cluster — Móvel', t: 'sel', op: AACE_OP_CLUSTER, def: 'auto' },
     { k: 'clusterFixa', l: 'Cluster — Fixa Básica', t: 'sel', op: AACE_OP_CLUSTER, def: 'auto' },
@@ -8449,6 +8450,9 @@ function aaceCalcular(s, g) {
     }
   });
 
+  // A política (2.3) não diz se o Master recebe o adicional por meta: por padrão vale a coluna P; o usuário pode tirar
+  const masterSemAdic = master && s.masterAdic === 'nao';
+  if (masterSemAdic) Object.keys(fx).forEach(c => { fx[c] = -1; });
   const fixoDe = (linha, cluster) => { const t = AACE_T1[linha]; return master ? { dentro: t.mDentro, fora: t.mFora } : { dentro: t[cluster], fora: t.eFora }; };
 
   // tipos de pedido com qtd × ticket (2.2-iv: receita contratada × fator)
@@ -8539,11 +8543,12 @@ function aaceCalcular(s, g) {
   const valorVend = FAIXAS_BONUS_PRODUTIVIDADE[fxP].valor;
   const prod = { elegivel, alM, alF, alS, faixa: fxP, retro, valorVend, total: elegivel ? hcs * valorVend : 0 };
   if (!master && hcs > 0 && hcs < AACE_MIN_VENDEDORES_ELITE) avisos.push('Bônus Produtividade: Elite precisa de no mínimo ' + AACE_MIN_VENDEDORES_ELITE + ' vendedores (HCs).');
-  if (master) avisos.push('Master: cluster sempre P, sem Bônus Produtividade, Manutenção de Carteira a R$ 1,00/R$ 0,60 com teto de 33% (item 2.6.6).');
+  if (master) avisos.push('Master: cluster sempre P (2.1-ix), sem Bônus Produtividade, Manutenção de Carteira a R$ 1,00/R$ 0,60 com teto de 33% (2.6.6).' +
+    (masterSemAdic ? ' Sem fator adicional por meta (escolhido).' : ' Fator adicional por meta pela coluna P — a política (2.3) não diz se o Master recebe; troque em "Master — fator adicional".'));
 
   const total = comAtivacao + renov.comissao + conv.comissao + bonusCat.valor + manut.pago + prod.total;
   const fxForca = { voz: s.faixaMovel !== 'auto', movelBl: s.faixaMovel !== 'auto', fixaBl: s.faixaFixa !== 'auto', fixaTv: s.faixaFixa !== 'auto', fixaFone: s.faixaFixa !== 'auto', conect: s.faixaConect !== 'auto' };
-  return { master, regiao, C, sug, pct, fx, fxForca, real, itens, modulos, m2m, hotel, conect, conectRenov, sd, renov, conv,
+  return { master, masterSemAdic, regiao, C, sug, pct, fx, fxForca, real, itens, modulos, m2m, hotel, conect, conectRenov, sd, renov, conv,
     comMovel, comFixa, comAtivacao, baseBonusCat, baseTeto, bonusCat, manut, prod, total, avisos };
 }
 
@@ -8650,6 +8655,7 @@ function aaceRender() {
   const din = (t, f, forte) => `<tr class="${forte ? 'aace-forte' : ''}"><td>${t}</td><td>${s2fmt(f(ra))}</td><td>${s2fmt(f(rb))}</td><td>${dif(f(ra), f(rb))}</td></tr>`;
   const cab = t => `<tr class="aace-grupo"><td colspan="4">${t}</td></tr>`;
   const faixaTxt = (r, c) => {
+    if (r.masterSemAdic) return 'Master — sem adicional (escolhido)';
     const f = r.fx[c], meta = ['100%', '120%', '140%'][f];
     if (f < 0) return r.fxForca[c] ? 'Abaixo de 100% (escolhido)' : `Sem adicional (${aaceFmtPct(r.pct[c])} da meta)`;
     return r.fxForca[c] ? `${meta} da meta — Faixa ${f + 1} (escolhido)` : `Faixa ${f + 1} (${aaceFmtPct(r.pct[c])} da meta)`;
