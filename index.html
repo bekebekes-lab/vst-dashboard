@@ -8435,6 +8435,7 @@ const AACE_SECOES = [
     { k: 'faixaMovel', l: 'Atingimento da meta — Móvel', t: 'sel', op: AACE_OP_FAIXA, def: 'auto' },
     { k: 'faixaFixa', l: 'Atingimento da meta — Fixa Básica', t: 'sel', op: AACE_OP_FAIXA, def: 'auto' },
     { k: 'faixaConect', l: 'Atingimento da meta — Conectividade', t: 'sel', op: AACE_OP_FAIXA, def: 'auto' },
+    { k: 'faixaProd', l: 'Faixa do Bônus Produtividade', t: 'sel', op: [['auto', 'Automático (meta × realizado)'], ['0', 'Faixa 0 — R$ 0'], ['1', 'Faixa 1 — R$ 1.200 por vendedor'], ['2', 'Faixa 2 — R$ 1.700 por vendedor'], ['3', 'Faixa 3 — R$ 2.300 por vendedor']], def: 'auto' },
     { k: 'foraPct', l: '% da produção fora da área de atuação', t: 'num', def: '0', esp: true },
   ] },
   { id: 'movel', titulo: '2. Produção do mês — Móvel (Voz)', tipo: 'linhas', cab: ['Linhas', 'Ticket (R$/linha)'],
@@ -8709,8 +8710,12 @@ function aaceCalcular(s, g) {
   if (alM < 60 || alF < 60) fxP = 0;                // dupla performance mínima
   const retro = fxP > 0 && alS < 100;                // SD < 100% retroage uma faixa (1 → 0)
   if (retro) fxP -= 1;
+  const fxProdAuto = fxP;
+  const prodForcada = !!(s.faixaProd && s.faixaProd !== 'auto');
+  if (prodForcada) fxP = Number(s.faixaProd);       // faixa escolhida = faixa final paga por vendedor
   const valorVend = FAIXAS_BONUS_PRODUTIVIDADE[fxP].valor;
-  const prod = { elegivel, alM, alF, alS, faixa: fxP, retro, valorVend, total: elegivel ? hcs * valorVend : 0 };
+  const prod = { elegivel, alM, alF, alS, faixa: fxP, faixaAuto: fxProdAuto, forcada: prodForcada, retro: retro && !prodForcada, valorVend, total: elegivel ? hcs * valorVend : 0 };
+  if (prodForcada && !elegivel) avisos.push('Faixa do Bônus Produtividade escolhida, mas o AACE não é elegível (Master ou menos de ' + AACE_MIN_VENDEDORES_ELITE + ' HCs): bônus zero.');
   if (!master && hcs > 0 && hcs < AACE_MIN_VENDEDORES_ELITE) avisos.push('Bônus Produtividade: Elite precisa de no mínimo ' + AACE_MIN_VENDEDORES_ELITE + ' vendedores (HCs).');
   if (master && modAuto) avisos.push('Modalidade automática: Master, porque há menos de ' + AACE_MIN_VENDEDORES_ELITE + ' HCs (Elite exige no mínimo ' + AACE_MIN_VENDEDORES_ELITE + ' vendedores, item 2.1-iii).');
   if (master) avisos.push('Master: cluster sempre P (2.1-ix), sem Bônus Produtividade, Manutenção de Carteira a R$ 1,00/R$ 0,60 com teto de 33% (2.6.6).' +
@@ -8850,6 +8855,7 @@ function aaceRotulosAuto(lado, r) {
   set('categoria', `Automático ${cat.charAt(0).toUpperCase() + cat.slice(1)} (4 indicadores)`);
   [['dvForca', 'dv'], ['dbForca', 'db'], ['dnForca', 'dn'], ['dcForca', 'dc']].forEach(([k, d]) => set(k, `Automático ${r.dAuto[d]} (pelo valor informado)`));
   set('faixaCnpjHc', `Automático Faixa ${r.manut.faixaAuto} (pela razão)`);
+  set('faixaProd', r.prod.elegivel ? `Automático Faixa ${r.prod.faixaAuto} (${s2fmt(FAIXAS_BONUS_PRODUTIVIDADE[r.prod.faixaAuto].valor)} por vendedor)` : 'Automático — não elegível (Master ou menos de 4 HCs)');
 }
 
 function aaceRender() {
@@ -8906,7 +8912,7 @@ function aaceRender() {
     ${txt('Manutenção: bruto × teto', `${s2fmt(ra.manut.bruto)} × ${s2fmt(ra.manut.teto)} (${aaceFmtPct(ra.manut.lib * 100)} de ${s2fmt(ra.manut.base)})${ra.manut.limitou ? ' — TETO APLICADO' : ''}`, `${s2fmt(rb.manut.bruto)} × ${s2fmt(rb.manut.teto)} (${aaceFmtPct(rb.manut.lib * 100)} de ${s2fmt(rb.manut.base)})${rb.manut.limitou ? ' — TETO APLICADO' : ''}`)}
     ${txt('Renovação: linhas × faixa de Delta (fator)', mixRenov(ra), mixRenov(rb))}
     ${redRow}
-    ${txt('Produtividade: Móvel · Fixa BL · SD', ra.prod.elegivel ? `${aaceFmtPct(ra.prod.alM)} · ${aaceFmtPct(ra.prod.alF)} · ${aaceFmtPct(ra.prod.alS)} → Faixa ${ra.prod.faixa}${ra.prod.retro ? ' (retroagiu por SD)' : ''} · ${s2fmt(ra.prod.valorVend)}/vendedor` : 'Não elegível', rb.prod.elegivel ? `${aaceFmtPct(rb.prod.alM)} · ${aaceFmtPct(rb.prod.alF)} · ${aaceFmtPct(rb.prod.alS)} → Faixa ${rb.prod.faixa}${rb.prod.retro ? ' (retroagiu por SD)' : ''} · ${s2fmt(rb.prod.valorVend)}/vendedor` : 'Não elegível')}
+    ${txt('Produtividade: Móvel · Fixa BL · SD', ra.prod.elegivel ? `${aaceFmtPct(ra.prod.alM)} · ${aaceFmtPct(ra.prod.alF)} · ${aaceFmtPct(ra.prod.alS)} → Faixa ${ra.prod.faixa}${ra.prod.forcada ? ' (escolhida)' : (ra.prod.retro ? ' (retroagiu por SD)' : '')} · ${s2fmt(ra.prod.valorVend)}/vendedor` : 'Não elegível', rb.prod.elegivel ? `${aaceFmtPct(rb.prod.alM)} · ${aaceFmtPct(rb.prod.alF)} · ${aaceFmtPct(rb.prod.alS)} → Faixa ${rb.prod.faixa}${rb.prod.forcada ? ' (escolhida)' : (rb.prod.retro ? ' (retroagiu por SD)' : '')} · ${s2fmt(rb.prod.valorVend)}/vendedor` : 'Não elegível')}
   </tbody></table>`;
   document.getElementById('aace-resultado').innerHTML = html;
 
@@ -9091,7 +9097,7 @@ function aaceAplicarResumo(est, txt) {
     if (fxCh && est.modalidade !== 'master') est.faixaCnpjHc = fxCh; // o valor por linha do extrato revela a faixa de CNPJ/HC
     notas.push(`Carteira: ${aaceFmtNum(num(m[1]))} → ${aaceFmtNum(num(m[2]))} linhas, ${s2fmt(un)} por linha` + (fxCh && est.modalidade !== 'master' ? ` (Faixa ${fxCh} de CNPJ/HC).` : '.'));
   }
-  if ((m = t.match(/VENDEDORES\s+(\d+)\s+(\d+)\s+FAIXA\s+(\d)/i))) { est.hcs = m[2]; notas.push(`${m[2]} vendedores bonificados (HCs).`); }
+  if ((m = t.match(/VENDEDORES\s+(\d+)\s+(\d+)\s+FAIXA\s+(\d)/i))) { est.hcs = m[2]; est.faixaProd = m[3]; notas.push(`${m[2]} vendedores bonificados (HCs), Bônus Produtividade na Faixa ${m[3]} (do extrato).`); }
 
   const adic = (re, campos) => {
     const x = t.match(re);
