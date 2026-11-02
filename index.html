@@ -1068,49 +1068,103 @@
     .s2-params-bar { flex-direction: column; align-items: stretch; }
   }
 
-  /* ─── SIMULADOR DE AACE ───────────────────────────────────── */
-  .aace-lados { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; align-items: start; }
-  .aace-lado { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px; border-top: 4px solid var(--border-strong); min-width: 0; }
-  .aace-lado-b { border-top-color: var(--brand); }
-  .aace-lado-cab { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 12px; }
-  .aace-lado-t { font-size: 14px; font-weight: 700; color: var(--text); }
-  .aace-lado-s { font-size: 11.5px; color: var(--text-3); margin-top: 2px; }
-  .aace-lado-total { font-family: 'DM Mono', monospace; font-size: 20px; font-weight: 700; color: var(--brand); white-space: nowrap; }
-  .aace-sec { border-top: 1px solid var(--border); padding-top: 10px; margin-top: 10px; }
-  .aace-sec-t { font-size: 11px; font-weight: 700; color: var(--text-2); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 8px; }
-  .aace-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-  .aace-grid .s2-field { min-width: 0; }
-  .aace-lado .s2-field select, .aace-lado .s2-field input, .aace-linhas input, .aace-linhas select {
-    width: 100%; box-sizing: border-box; font-size: 12.5px; padding: 6px 8px; border: 1px solid var(--border-strong);
-    border-radius: var(--radius-sm); background: var(--surface-2); font-family: 'DM Sans', sans-serif; min-width: 0;
+  /* ─── SIMULADOR DE AACE ─────────────────────────────────────
+     Mesmo visual do Painel Analítico (cartões, título em caixa alta, filtros em vermelho sólido,
+     botões de contorno) e tela cheia. Campos de A e B ficam lado a lado, alinhados por seção. */
+  #tab-aace, #tab-aace button, #tab-aace select, #tab-aace input {
+    font-family: 'Segoe UI', 'Segoe UI Variable Text', Tahoma, system-ui, sans-serif;
   }
-  .aace-linhas { display: grid; grid-template-columns: minmax(130px, 1.5fr) minmax(0, 1fr) minmax(0, 1fr); gap: 6px 8px; align-items: center; }
+  #tab-aace .pn-card { margin-bottom: 12px; }
+  #tab-aace .pn-topo .pn-card { margin-bottom: 0; }
+  .aace-filtros { grid-template-columns: repeat(auto-fit, minmax(210px, 270px)); }
+  .aace-intro { margin: 0 2px 4px; font-size: 12px; max-width: 1100px; }
+  .aace-kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 8px 0 12px; }
+  #tab-aace .aace-kpi { padding: 14px 18px; border-top: 4px solid var(--border-strong); margin-bottom: 0; }
+  .aace-kpi-b { border-top-color: var(--brand); }
+  .aace-kpi-d { border-top-color: #E2B100; }
+  .aace-kpi-l { font-size: 11px; color: var(--text-2); font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
+  .aace-kpi-v { font-size: 30px; font-weight: 700; margin-top: 4px; color: var(--text); font-variant-numeric: tabular-nums; }
+  .aace-kpi-b .aace-kpi-v { color: var(--brand); }
+  .aace-kpi-s { font-size: 11.5px; color: var(--text-3); margin-top: 2px; min-height: 15px; }
+  .aace-pos { color: var(--green); font-weight: 700; }
+  .aace-neg { color: var(--red-sem); font-weight: 700; }
+  .aace-pct { font-weight: 400; opacity: .8; }
+  .aace-leg-wrap { display: flex; gap: 14px; flex-wrap: wrap; }
+  .aace-leg { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: #666; }
+  /* barras comparativas */
+  .aace-bar-row { display: grid; grid-template-columns: minmax(140px, 210px) minmax(0, 1fr); gap: 10px; align-items: center; padding: 5px 0; border-bottom: 1px solid var(--border); font-size: 12px; }
+  .aace-bar-row:last-child { border-bottom: none; }
+  .aace-bar-lab { color: var(--text-2); }
+  .aace-bar-par { display: grid; gap: 3px; min-width: 0; }
+  .aace-bar-track { display: grid; grid-template-columns: minmax(0, 1fr) 104px; gap: 8px; align-items: center; }
+  .aace-bar-bg { height: 13px; background: var(--surface-2, #f3f3f3); border-radius: 2px; overflow: hidden; }
+  .aace-bar-fill { height: 100%; border-radius: 2px; min-width: 2px; }
+  .aace-bar-a { background: #444; }
+  .aace-bar-b { background: var(--brand); }
+  .aace-bar-track span { font-size: 11px; color: var(--text-2); text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  /* cartões de seção: A e B lado a lado */
+  .aace-sec-card summary { cursor: pointer; list-style: none; }
+  .aace-sec-card summary::-webkit-details-marker, .aace-resumo-sum::-webkit-details-marker { display: none; }
+  .aace-sec-card summary h3::before, .aace-resumo-sum h3::before { content: '▾'; display: inline-block; margin-right: 8px; color: var(--brand); font-size: 11px; }
+  .aace-sec-card details:not([open]) summary h3::before, details:not([open]) > .aace-resumo-sum h3::before { content: '▸'; }
+  .aace-resumo-sum { cursor: pointer; list-style: none; margin-bottom: 0; }
+  .aace-esp-tag { font-size: 11px; font-weight: 600; color: var(--text-3); }
+  .aace-par { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0; margin-top: 8px; }
+  .aace-meio { min-width: 0; padding: 4px 22px 6px 0; }
+  .aace-meio-b { border-left: 1px solid var(--border); padding: 4px 0 6px 22px; }
+  .aace-meio-t { font-size: 11px; font-weight: 700; color: var(--text-2); margin-bottom: 8px; display: flex; align-items: center; gap: 6px; text-transform: uppercase; letter-spacing: .05em; }
+  .aace-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px 12px; }
+  .aace-meio .s2-field { min-width: 0; gap: 3px; }
+  .aace-meio .s2-field label { font-size: 11.5px; color: #333; font-weight: 500; text-transform: none; letter-spacing: 0; }
+  .aace-meio input[type="number"] {
+    width: 100%; box-sizing: border-box; height: 30px; border: 1.5px solid var(--border-strong); border-radius: 4px;
+    background: var(--surface); padding: 0 8px; font-size: 12px; color: var(--text); min-width: 0;
+  }
+  .aace-meio input[type="number"]:focus { border-color: var(--brand); outline: none; }
+  /* seletores como os filtros do Painel: vermelho sólido, texto branco, chevron branco */
+  .aace-meio select, #tab-aace .pn-fg select {
+    width: 100%; box-sizing: border-box; height: 30px; min-width: 0; border: none; border-radius: 3px; font-size: 11.5px;
+    background-color: #B01E14; color: #fff; padding: 0 26px 0 8px; text-align: left; -webkit-appearance: none; appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.5'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 8px center; background-size: 12px;
+  }
+  .aace-meio select option, #tab-aace .pn-fg select option { background: #fff; color: #222; }
+  /* travado (espelhado do Lado A) */
+  .aace-meio input:disabled { background: #ececec; color: #666; cursor: not-allowed; }
+  .aace-meio select:disabled {
+    background-color: #d6d6d6; color: #555; cursor: not-allowed;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='2.5'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  }
+  .aace-linhas { display: grid; grid-template-columns: minmax(110px, 1.5fr) minmax(0, 1fr) minmax(0, 1fr); gap: 6px 8px; align-items: center; }
   .aace-linhas.aace-c3 { grid-template-columns: minmax(48px, .7fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.6fr); }
   .aace-lh { font-size: 10px; font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: .04em; }
   .aace-ll { font-size: 12px; color: var(--text-2); line-height: 1.25; }
   .aace-mais { margin-top: 8px; }
   .aace-mais summary { cursor: pointer; font-size: 11.5px; font-weight: 600; color: var(--brand); margin-bottom: 8px; }
-  .aace-esp-tag { font-size: 10px; font-weight: 600; text-transform: none; letter-spacing: 0; color: var(--text-3); margin-left: 6px; }
-  .aace-lado input:disabled, .aace-lado select:disabled { background: var(--surface-3, #ececec); color: var(--text-3); cursor: not-allowed; opacity: .85; }
+  /* tabelas */
   .aace-tab-wrap { overflow-x: auto; }
   .aace-tab { width: 100%; border-collapse: collapse; font-size: 12.5px; }
-  .aace-tab th { text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-3); padding: 8px 10px; border-bottom: 2px solid var(--border-strong); }
-  .aace-tab td { padding: 7px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
-  .aace-tab td:not(:first-child) { font-family: 'DM Mono', monospace; font-size: 12px; }
-  .aace-grupo td { background: var(--surface-2); font-family: 'DM Sans', sans-serif !important; font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--text-2); }
+  .aace-tab th { text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-3); padding: 7px 10px; border-bottom: 2px solid var(--border-strong); }
+  .aace-tab td { padding: 6px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .aace-tab td:not(:first-child) { font-variant-numeric: tabular-nums; }
+  .aace-tab-enq td:nth-child(4), .aace-tab-enq th:nth-child(4) { display: none; }
+  .aace-grupo td { background: var(--surface-2); font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--text-2); }
   .aace-forte td { font-weight: 700; font-size: 14px; border-top: 2px solid var(--border-strong); }
-  .aace-pos { color: var(--green); font-weight: 700; }
-  .aace-neg { color: var(--red-sem); font-weight: 700; }
-  .aace-pct { font-weight: 400; opacity: .8; }
-  .aace-premissas { margin: 0; padding-left: 18px; }
+  .aace-premissas { margin: 10px 0 0; padding-left: 18px; font-size: 12px; color: var(--text-2); }
   .aace-premissas li { margin-bottom: 4px; }
   #aace-avisos ul { margin: 0; padding-left: 18px; }
-  @media (max-width: 1000px) {
-    .aace-lados { grid-template-columns: 1fr; }
+  @media (max-width: 1100px) {
+    .aace-par { grid-template-columns: minmax(0, 1fr); }
+    .aace-meio { padding: 4px 0 6px; }
+    .aace-meio-b { border-left: none; border-top: 1px solid var(--border); padding: 10px 0 6px; margin-top: 6px; }
+  }
+  @media (max-width: 800px) {
+    .aace-kpis { grid-template-columns: minmax(0, 1fr); }
+    .aace-kpi-v { font-size: 26px; }
   }
   @media (max-width: 600px) {
-    .aace-grid { grid-template-columns: 1fr; }
-    .aace-linhas { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr); }
+    .aace-grid { grid-template-columns: minmax(0, 1fr); }
+    .aace-bar-row { grid-template-columns: minmax(0, 1fr); gap: 4px; }
   }
 
   /* ─── DISCADORA (nova aba) ───────────────────────────────── */
@@ -1517,13 +1571,13 @@
      mexer componente por componente. O Painel Analítico fica de fora (já é compacto e seus gráficos
      medem a própria largura). Cartões da mesma linha com a mesma altura (antes ficavam em degraus). */
   @media (min-width: 1500px) {
-    .tab-panel:not(#tab-painel) { zoom: .88; }
+    .tab-panel:not(#tab-painel):not(#tab-aace) { zoom: .88; }
   }
   .metrics-grid { align-items: stretch; }
   /* Ocupa a tela toda (antes limitado a 1440px, sobrava faixa vazia nas laterais em monitor
      largo). Abas de formulário continuam centralizadas com limite, senão os campos esticam. */
   .content { max-width: none; }
-  #tab-conectividade, #tab-simulador2, #tab-aace { max-width: 1440px; margin-left: auto; margin-right: auto; }
+  #tab-conectividade, #tab-simulador2 { max-width: 1440px; margin-left: auto; margin-right: auto; }
   /* filtros distribuídos pela linha inteira (antes: 5 colunas fixas, a 2ª linha ficava pela metade) */
   .filters-bar { grid-template-columns: repeat(auto-fit, minmax(165px, 1fr)); gap: 8px 14px; }
 
@@ -2552,57 +2606,88 @@
 
   <!-- TAB SIMULADOR DE AACE — comparativo "AACE isolado" (A) × "AACE dentro dos KPIs da VST" (B), pela política de remuneração da Claro -->
   <div class="tab-panel" id="tab-aace">
-    <div class="s2-secao">
-      <div class="s2-secao-titulo">Simulador de AACE</div>
-      <div class="s2-secao-desc">Compara o que a política de remuneração da Claro paga a um AACE que opera isolado (Lado A) com o que a mesma operação renderia inserida nos KPIs da VST (Lado B).
-        A produção e as metas lançadas no Lado A são copiadas sozinhas para o Lado B (campos 🔒 travados), para comparar a mesma produção sob enquadramentos diferentes.
-        Nada vem preenchido nem presumido: informe produção e metas no Lado A e, em cada lado, carteira, CNPJs, HCs e KPIs, ou escolha direto cluster (P/M/G), categoria (Bronze a Diamante) e atingimento de meta (100%, 120% ou 140%) no Enquadramento.</div>
-      <div class="s2-params-bar">
-        <div class="s2-field">
-          <label for="aace-g-tabela">Tabela de CNPJ/HC</label>
-          <select id="aace-g-tabela" onchange="aaceAlterouGeral('tabela', this.value)">
-            <option value="definitiva">Definitiva (a partir de set/26)</option>
-            <option value="transicao">Transição (jun a ago/26)</option>
-          </select>
-        </div>
-        <div class="s2-field">
-          <label for="aace-g-arred">Nota final com 3ª casa (ex.: 4,825)</label>
-          <select id="aace-g-arred" onchange="aaceAlterouGeral('arred', this.value)">
-            <option value="truncar">Cortar a casa extra (4,82)</option>
-            <option value="cima">Arredondar para cima (4,83)</option>
-          </select>
-        </div>
+    <div class="pn-hero">
+      <div class="pn-titulo">SIMULADOR DE AACE</div>
+      <div class="pn-hero-dir">
+        <button class="pn-btn-claro" onclick="aaceCarregarPadraoVst()" title="Lê o cluster e o CNPJ/HC da VST salvos no Simulador 2.0 e aplica ao Lado B">Cluster e CNPJ/HC da VST</button>
+        <button class="pn-btn-claro" onclick="aaceLimpar()" title="Limpa os campos dos dois lados">Limpar</button>
+        <div class="pn-pill">Política Claro · Lado A × Lado B</div>
       </div>
-      <div class="s2-actions">
-        <button class="s2-btn" onclick="aaceCarregarPadraoVst()" title="Lê o cluster e o CNPJ/HC da VST salvos no Simulador 2.0 e aplica ao Lado B">Carregar cluster e CNPJ/HC da VST</button>
-        <button class="s2-btn" onclick="aaceLimpar()">Limpar tudo</button>
+    </div>
+    <div class="pn-filtros aace-filtros">
+      <div class="pn-fg">
+        <label for="aace-g-tabela">Tabela de CNPJ/HC</label>
+        <select id="aace-g-tabela" onchange="aaceAlterouGeral('tabela', this.value)">
+          <option value="definitiva">Definitiva (a partir de set/26)</option>
+          <option value="transicao">Transição (jun a ago/26)</option>
+        </select>
       </div>
-      <div class="s2-hint" id="aace-msg" style="margin-top:10px"></div>
+      <div class="pn-fg">
+        <label for="aace-g-arred">Nota final com 3ª casa (ex.: 4,825)</label>
+        <select id="aace-g-arred" onchange="aaceAlterouGeral('arred', this.value)">
+          <option value="truncar">Cortar a casa extra (4,82)</option>
+          <option value="cima">Arredondar para cima (4,83)</option>
+        </select>
+      </div>
+    </div>
+    <div class="pn-nota aace-intro">A = o que a política paga ao AACE operando isolado. B = a mesma operação dentro dos KPIs da VST. A produção, as metas e as linhas de carteira lançadas no A são copiadas para o B (🔒). Nada vem preenchido: informe os números ou escolha cluster, categoria e atingimento direto nos seletores.</div>
+    <div class="pn-nota" id="aace-msg"></div>
+
+    <div class="aace-kpis">
+      <div class="pn-card aace-kpi aace-kpi-a">
+        <div class="aace-kpi-l">A — Condição atual do AACE</div>
+        <div class="aace-kpi-v" id="aace-total-a">—</div>
+        <div class="aace-kpi-s" id="aace-sub-a"></div>
+      </div>
+      <div class="pn-card aace-kpi aace-kpi-b">
+        <div class="aace-kpi-l">B — Condição com a VST</div>
+        <div class="aace-kpi-v" id="aace-total-b">—</div>
+        <div class="aace-kpi-s" id="aace-sub-b"></div>
+      </div>
+      <div class="pn-card aace-kpi aace-kpi-d">
+        <div class="aace-kpi-l">Diferença (B − A)</div>
+        <div class="aace-kpi-v" id="aace-dif">—</div>
+        <div class="aace-kpi-s" id="aace-sub-d"></div>
+      </div>
     </div>
 
-    <div class="aace-lados">
-      <div class="aace-lado aace-lado-a" id="aace-col-a"></div>
-      <div class="aace-lado aace-lado-b" id="aace-col-b"></div>
+    <div class="pn-topo">
+      <div class="pn-card">
+        <div class="pn-card-cab">
+          <h3>Remuneração por componente</h3>
+          <div class="aace-leg-wrap"><span class="aace-leg"><i class="pn-dot" style="background:#444"></i>A — AACE atual</span><span class="aace-leg"><i class="pn-dot" style="background:var(--brand)"></i>B — Com a VST</span></div>
+        </div>
+        <div id="aace-barras"></div>
+      </div>
+      <div class="pn-card">
+        <div class="pn-card-cab"><h3>Enquadramento</h3></div>
+        <div id="aace-enq" class="aace-tab-wrap"></div>
+      </div>
     </div>
 
-    <div class="s2-secao">
-      <div class="s2-secao-titulo">Comparativo</div>
+    <div id="aace-secoes"></div>
+
+    <div class="pn-card">
+      <div class="pn-card-cab"><h3>Comparativo detalhado</h3></div>
       <div id="aace-resultado" class="aace-tab-wrap"></div>
-      <div class="s2-secao-titulo" style="margin-top:18px;font-size:13px">Avisos</div>
-      <div id="aace-avisos" class="s2-hint"></div>
+      <div class="pn-card-cab" style="margin-top:14px"><h3>Avisos</h3></div>
+      <div id="aace-avisos" class="pn-nota"></div>
     </div>
 
-    <div class="s2-secao">
-      <div class="s2-secao-titulo">Premissas deste modelo</div>
-      <ul class="s2-hint aace-premissas">
-        <li>Fatores fixos e adicionais: Tabelas 1 dos itens 2.2 e 2.3 e Anexo I da política, tal como escritos — sem o mapeamento de negócio do Simulador 2.0.</li>
-        <li>Cluster automático usa a produção informada do mês (linhas de Voz, instalações de BL e receita de Conectividade) nos limites do Anexo III; a política não deixa claro se a volumetria é mensal ou de base ativa, por isso cada cluster pode ser escolhido na mão.</li>
-        <li>Atingimento de meta: informe a meta e o realizado, ou escolha 100%, 120% ou 140%. O fator adicional só vale a partir de 100% (item 2.3-xv); soluções digitais, M2M, módulos e renovação não recebem adicional.</li>
-        <li>Fora da área de atuação: usa os fatores "fora da área" da Tabela 1 e não recebe adicional (a política não detalha o adicional fora da área).</li>
-        <li>Net Adds = linhas ativadas − canceladas; zero conta como positivo. Teto de carteira e Bônus Categoria seguem as bases dos itens 2.6.5 e 2.5.5.</li>
-        <li>Bônus Produtividade: sem a rampa de vendedores novos (todos cobrados a 100% da meta) e só para Elite com 4 ou mais HCs.</li>
-        <li>Ainda não modelado: meta mínima de AACE novo, estornos, Programa Nacional (2.9), novos credenciamentos (2.10), órgãos públicos, produtos de alto valor, renovação de contratos (2.14), negociações especiais.</li>
-      </ul>
+    <div class="pn-card">
+      <details>
+        <summary class="pn-card-cab aace-resumo-sum"><h3>Premissas deste modelo</h3></summary>
+        <ul class="aace-premissas">
+          <li>Fatores fixos e adicionais: Tabelas 1 dos itens 2.2 e 2.3 e Anexo I da política, tal como escritos — sem o mapeamento de negócio do Simulador 2.0.</li>
+          <li>Cluster automático usa a produção informada do mês (linhas de Voz, instalações de BL e receita de Conectividade) nos limites do Anexo III; a política não deixa claro se a volumetria é mensal ou de base ativa, por isso cada cluster pode ser escolhido na mão.</li>
+          <li>Atingimento de meta: informe a meta e o realizado, ou escolha 100%, 120% ou 140%. O fator adicional só vale a partir de 100% (item 2.3-xv); soluções digitais, M2M, módulos e renovação não recebem adicional.</li>
+          <li>Master: cluster sempre P (2.1-ix), fatores fixos da coluna Master, sem Bônus Produtividade, carteira a R$ 1,00/R$ 0,60 com teto de 33%. O item 2.3 não exclui o Master do adicional por meta.</li>
+          <li>Fora da área de atuação: usa os fatores "fora da área" da Tabela 1 e não recebe adicional (a política não detalha o adicional fora da área).</li>
+          <li>Net Adds = linhas ativadas − canceladas; zero conta como positivo. Teto de carteira e Bônus Categoria seguem as bases dos itens 2.6.5 e 2.5.5.</li>
+          <li>Bônus Produtividade: sem a rampa de vendedores novos (todos cobrados a 100% da meta) e só para Elite com 4 ou mais HCs.</li>
+          <li>Ainda não modelado: meta mínima de AACE novo, estornos, Programa Nacional (2.9), novos credenciamentos (2.10), órgãos públicos, produtos de alto valor, renovação de contratos (2.14), negociações especiais.</li>
+        </ul>
+      </details>
     </div>
   </div>
 
@@ -8597,11 +8682,11 @@ function aaceInputHtml(lado, k, def) {
   }
   return `<input type="number" id="${id}"${trava} min="0" step="any" value="${v}" oninput="aaceAlterou('${lado}','${k}',this.value)">`;
 }
-function aaceSecaoHtml(lado, s) {
+// Corpo (só os campos) de uma seção, de um dos lados — o título e o cartão são montados em aaceRenderForm()
+function aaceCorpoHtml(lado, s) {
   if (s.tipo === 'campos') {
-    const tagSec = lado === 'b' && AACE_SECOES_ESPELHADAS.includes(s.id) ? ' <span class="aace-esp-tag">🔒 espelhado do Lado A</span>' : '';
-    return `<div class="aace-sec"><div class="aace-sec-t">${s.titulo}${tagSec}</div><div class="aace-grid">${s.campos.map(c =>
-      `<div class="s2-field"><label for="aace-${lado}-${c.k}">${c.l}${lado === 'b' && aaceEspelhado(c.k) ? ' 🔒' : ''}</label>${aaceInputHtml(lado, c.k, c)}</div>`).join('')}</div></div>`;
+    return `<div class="aace-grid">${s.campos.map(c =>
+      `<div class="s2-field"><label for="aace-${lado}-${c.k}">${c.l}${lado === 'b' && aaceEspelhado(c.k) ? ' 🔒' : ''}</label>${aaceInputHtml(lado, c.k, c)}</div>`).join('')}</div>`;
   }
   const nCols = s.cab.length;
   const linhaHtml = r => `<div class="aace-ll">${r.l}</div>${Array.from({ length: nCols }, (_, i) => {
@@ -8612,18 +8697,20 @@ function aaceSecaoHtml(lado, s) {
   const basicas = s.linhas.filter(r => !r.mais), mais = s.linhas.filter(r => r.mais);
   // bloco recolhido abre sozinho se algum campo dele já tem valor (nunca esconder dado digitado)
   const preenchido = mais.some(r => r.cols.some(k => k && aaceValor(lado, k) !== '' && String(aaceValor(lado, k)) !== String((AACE_CAMPOS_LINHA[k] || {}).def ?? '')));
-  const tagSec = lado === 'b' && AACE_SECOES_ESPELHADAS.includes(s.id) ? ' <span class="aace-esp-tag">🔒 espelhado do Lado A</span>' : '';
-  return `<div class="aace-sec"><div class="aace-sec-t">${s.titulo}${tagSec}</div><div class="aace-linhas aace-c${nCols}">${cabHtml}${basicas.map(linhaHtml).join('')}</div>
-    ${mais.length ? `<details class="aace-mais"${preenchido ? ' open' : ''}><summary>Outros tipos (${mais.length})</summary><div class="aace-linhas aace-c${nCols}">${mais.map(linhaHtml).join('')}</div></details>` : ''}</div>`;
+  return `<div class="aace-linhas aace-c${nCols}">${cabHtml}${basicas.map(linhaHtml).join('')}</div>
+    ${mais.length ? `<details class="aace-mais"${preenchido ? ' open' : ''}><summary>Outros tipos (${mais.length})</summary><div class="aace-linhas aace-c${nCols}">${mais.map(linhaHtml).join('')}</div></details>` : ''}`;
 }
+// Cada seção é um cartão (como no Painel) com o Lado A à esquerda e o Lado B à direita, campo a campo
 function aaceRenderForm() {
-  ['a', 'b'].forEach(lado => {
-    const el = document.getElementById('aace-col-' + lado);
-    if (!el) return;
-    el.innerHTML = `<div class="aace-lado-cab"><div><div class="aace-lado-t">${lado === 'a' ? 'A — Condição atual do AACE' : 'B — Condição com a VST'}</div>
-      <div class="aace-lado-s">${lado === 'a' ? 'O que o AACE recebe hoje, com a produção e o enquadramento dele.' : 'A mesma operação sob o enquadramento da VST.'}</div></div>
-      <div class="aace-lado-total" id="aace-total-${lado}">—</div></div>` + AACE_SECOES.map(s => aaceSecaoHtml(lado, s)).join('');
-  });
+  const el = document.getElementById('aace-secoes');
+  if (el) {
+    el.innerHTML = AACE_SECOES.map(s => {
+      const trava = AACE_SECOES_ESPELHADAS.includes(s.id);
+      const meio = (l, nome, cor) => `<div class="aace-meio aace-meio-${l}"><div class="aace-meio-t"><i class="pn-dot" style="background:${cor}"></i>${nome}</div>${aaceCorpoHtml(l, s)}</div>`;
+      return `<div class="pn-card aace-sec-card"><details open><summary class="pn-card-cab"><h3>${s.titulo}</h3>${trava ? '<span class="aace-esp-tag">🔒 o Lado B copia o Lado A</span>' : ''}</summary>
+        <div class="aace-par">${meio('a', 'A — AACE atual', '#444')}${meio('b', 'B — Com a VST', 'var(--brand)')}</div></details></div>`;
+    }).join('');
+  }
   document.getElementById('aace-g-tabela').value = AACE.g.tabela;
   document.getElementById('aace-g-arred').value = AACE.g.arred;
 }
@@ -8724,15 +8811,6 @@ function aaceRender() {
   const desemp = r => `${r.bonusCat.dv} · ${r.bonusCat.db} · ${r.bonusCat.dn} · ${r.bonusCat.dc}`;
 
   const html = `<table class="aace-tab"><thead><tr><th>Item</th><th>A — AACE atual</th><th>B — Com a VST</th><th>Diferença (B − A)</th></tr></thead><tbody>
-    ${cab('Enquadramento')}
-    ${txt('Modalidade', ra.master ? 'Master' : 'Elite', rb.master ? 'Master' : 'Elite')}
-    ${txt('Cluster — Móvel / Fixa / Conectividade', `${ra.C.movel} / ${ra.C.fixa} / ${ra.C.conect}`, `${rb.C.movel} / ${rb.C.fixa} / ${rb.C.conect}`)}
-    ${txt('Adicional — Móvel Voz', faixaTxt(ra, 'voz'), faixaTxt(rb, 'voz'))}
-    ${txt('Adicional — Fixa Básica BL', faixaTxt(ra, 'fixaBl'), faixaTxt(rb, 'fixaBl'))}
-    ${txt('Desempenho (CNPJ Novo Voz · BL · Net Adds · Churn)', desemp(ra), desemp(rb))}
-    ${txt('Categoria do Bônus', catTxt(ra), catTxt(rb))}
-    ${txt('Net Adds do mês', `${aaceFmtNum(ra.bonusCat.netAdds)} linhas (${aaceFmtPct(ra.bonusCat.pctNet)})`, `${aaceFmtNum(rb.bonusCat.netAdds)} linhas (${aaceFmtPct(rb.bonusCat.pctNet)})`)}
-    ${txt('CNPJ/HC — faixa e unitário', `${aaceFmtNum(ra.manut.razao)} → Faixa ${ra.manut.faixa} · ${s2fmt(ra.manut.unit)}/linha`, `${aaceFmtNum(rb.manut.razao)} → Faixa ${rb.manut.faixa} · ${s2fmt(rb.manut.unit)}/linha`)}
     ${cab('Remuneração de ativação (receita contratada × fator)')}
     ${din('Móvel — Voz e Banda Larga', r => r.comMovel)}
     ${din('Móvel — módulos e TT Pós', r => r.modulos.comissao)}
@@ -8755,6 +8833,40 @@ function aaceRender() {
     ${txt('Produtividade: Móvel · Fixa BL · SD', ra.prod.elegivel ? `${aaceFmtPct(ra.prod.alM)} · ${aaceFmtPct(ra.prod.alF)} · ${aaceFmtPct(ra.prod.alS)} → Faixa ${ra.prod.faixa}${ra.prod.retro ? ' (retroagiu por SD)' : ''} · ${s2fmt(ra.prod.valorVend)}/vendedor` : 'Não elegível', rb.prod.elegivel ? `${aaceFmtPct(rb.prod.alM)} · ${aaceFmtPct(rb.prod.alF)} · ${aaceFmtPct(rb.prod.alS)} → Faixa ${rb.prod.faixa}${rb.prod.retro ? ' (retroagiu por SD)' : ''} · ${s2fmt(rb.prod.valorVend)}/vendedor` : 'Não elegível')}
   </tbody></table>`;
   document.getElementById('aace-resultado').innerHTML = html;
+
+  // cartão de enquadramento (A × B)
+  document.getElementById('aace-enq').innerHTML = `<table class="aace-tab aace-tab-enq"><thead><tr><th>Item</th><th>A — AACE atual</th><th>B — Com a VST</th><th></th></tr></thead><tbody>
+    ${txt('Modalidade', ra.master ? 'Master' : 'Elite', rb.master ? 'Master' : 'Elite')}
+    ${txt('Cluster — Móvel / Fixa / Conectividade', `${ra.C.movel} / ${ra.C.fixa} / ${ra.C.conect}`, `${rb.C.movel} / ${rb.C.fixa} / ${rb.C.conect}`)}
+    ${txt('Adicional — Móvel Voz', faixaTxt(ra, 'voz'), faixaTxt(rb, 'voz'))}
+    ${txt('Adicional — Fixa Básica BL', faixaTxt(ra, 'fixaBl'), faixaTxt(rb, 'fixaBl'))}
+    ${txt('Desempenho (CNPJ Novo Voz · BL · Net Adds · Churn)', desemp(ra), desemp(rb))}
+    ${txt('Categoria do Bônus', catTxt(ra), catTxt(rb))}
+    ${txt('Net Adds do mês', `${aaceFmtNum(ra.bonusCat.netAdds)} linhas (${aaceFmtPct(ra.bonusCat.pctNet)})`, `${aaceFmtNum(rb.bonusCat.netAdds)} linhas (${aaceFmtPct(rb.bonusCat.pctNet)})`)}
+    ${txt('CNPJ/HC — faixa e unitário', `${aaceFmtNum(ra.manut.razao)} → Faixa ${ra.manut.faixa} · ${s2fmt(ra.manut.unit)}/linha`, `${aaceFmtNum(rb.manut.razao)} → Faixa ${rb.manut.faixa} · ${s2fmt(rb.manut.unit)}/linha`)}
+  </tbody></table>`;
+
+  // KPIs do topo
+  const d = rb.total - ra.total;
+  const kd = document.getElementById('aace-dif');
+  kd.innerHTML = `<span class="${d > 0.005 ? 'aace-pos' : d < -0.005 ? 'aace-neg' : ''}">${d > 0 ? '+' : ''}${s2fmt(d)}</span>`;
+  document.getElementById('aace-sub-d').textContent = ra.total > 0 ? `${d >= 0 ? '+' : ''}${aaceFmtPct(d / ra.total * 100)} sobre o Lado A` : 'Informe a produção no Lado A';
+  const subKpi = r => `${r.bonusCat.cat.charAt(0).toUpperCase() + r.bonusCat.cat.slice(1)} · Cluster ${r.C.movel}/${r.C.fixa}/${r.C.conect} · ${r.master ? 'Master' : 'Elite'}`;
+  document.getElementById('aace-sub-a').textContent = subKpi(ra);
+  document.getElementById('aace-sub-b').textContent = subKpi(rb);
+
+  // barras: A × B por componente da remuneração
+  const comps = [
+    ['Móvel — Voz e Banda Larga', r => r.comMovel], ['Móvel — módulos e TT Pós', r => r.modulos.comissao], ['Móvel — M2M', r => r.m2m.comissao],
+    ['Fixa Básica e Hotel/Hospital', r => r.comFixa], ['Conectividade Avançada', r => r.conect.comissao + r.conectRenov.comissao],
+    ['Soluções Digitais e SVA', r => r.sd.comissao], ['Renovação / Migração', r => r.renov.comissao], ['Plugin de Convergência', r => r.conv.comissao],
+    ['Bônus Categoria', r => r.bonusCat.valor], ['Manutenção de Carteira', r => r.manut.pago], ['Bônus Produtividade', r => r.prod.total],
+  ].map(([l, f]) => ({ l, a: f(ra), b: f(rb) })).filter(c => c.a > 0.005 || c.b > 0.005);
+  const maxV = Math.max(1, ...comps.flatMap(c => [c.a, c.b]));
+  const barra = (v, cls) => `<div class="aace-bar-track"><div class="aace-bar-bg"><div class="aace-bar-fill ${cls}" style="width:${v / maxV * 100}%"></div></div><span>${s2fmt(v)}</span></div>`;
+  document.getElementById('aace-barras').innerHTML = comps.length
+    ? comps.map(c => `<div class="aace-bar-row"><div class="aace-bar-lab">${c.l}</div><div class="aace-bar-par">${barra(c.a, 'aace-bar-a')}${barra(c.b, 'aace-bar-b')}</div></div>`).join('')
+    : '<div class="pn-vazio">Lance a produção no Lado A para ver o comparativo.</div>';
 
   const av = (r, l) => r.avisos.map(a => `<li><b>${l}:</b> ${a}</li>`).join('');
   document.getElementById('aace-avisos').innerHTML = (ra.avisos.length || rb.avisos.length) ? `<ul>${av(ra, 'A')}${av(rb, 'B')}</ul>` : '<span style="color:var(--text-3)">Sem avisos.</span>';
