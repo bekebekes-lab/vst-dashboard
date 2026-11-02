@@ -8704,7 +8704,8 @@ function aaceCalcular(s, g) {
   else if (negativo) { unit = UNITARIO_NETADDS_NEGATIVO[cat]; lib = 0.33; } // 2.6.4-i
   else { unit = tab[fxCh].unitario; lib = TETO_LIBERACAO[cat][fxCh]; }      // 2.6.4-ii / 2.6.5-ii
   const bruto = n('linhasAtivas') * unit, teto = baseTeto * lib;
-  const manut = { razao, faixa: fxCh + 1, faixaAuto: fxChAuto + 1, unit, lib, negativo, bruto, teto, base: baseTeto, pago: Math.min(bruto, teto), limitou: bruto > teto };
+  const manut = { razao, faixa: fxCh + 1, faixaAuto: fxChAuto + 1, unit, lib, negativo, bruto, teto, base: baseTeto, pago: Math.min(bruto, teto), limitou: bruto > teto,
+    linhas: n('linhasAtivas'), cat, master, tabela: g.tabela === 'transicao' ? 'transição' : 'definitiva', motivo: master ? 'master' : (negativo ? 'negativo' : 'faixa'), pctNet };
   if (n('linhasAtivas') > 0 && razao <= 0 && s.faixaCnpjHc === 'auto') avisos.push('Carteira: informe CNPJs e HCs para enquadrar a faixa de CNPJ/HC.');
 
   // ── Bônus Produtividade (2.7) — só Elite, mínimo 4 vendedores ──
@@ -8903,6 +8904,23 @@ function aaceRender() {
   };
   const renovRows = [0, 1, 2, 3, 4, 5, 6].filter(i => ra.renov.linhas[i].qtd > 0 || rb.renov.linhas[i].qtd > 0)
     .map(i => txt('Renovação — linha ' + (i + 1), linhaRenov(ra, i), linhaRenov(rb, i))).join('\n');
+  // Manutenção de carteira (a "recorrência"): por que esse unitário, quanto dá por linha e como o teto corta (2.6.4 e 2.6.5)
+  const manRegra = r => {
+    const m = r.manut, un = s2fmt(m.unit), cat = m.cat.toUpperCase();
+    const sinal = m.negativo ? `Net Adds negativo (${aaceFmtPct(m.pctNet)})` : `Net Adds positivo (${aaceFmtPct(m.pctNet)})`;
+    if (m.motivo === 'master') return `Master · ${sinal} → unitário fixo de ${un} por linha (item 2.6.6)`;
+    if (m.motivo === 'negativo') return `Elite · ${sinal} → unitário fixo da categoria ${cat}: ${un} por linha (item 2.6.4-i)`;
+    return `Elite · ${sinal} → razão CNPJ/HC ${aaceFmtNum(m.razao)} cai na Faixa ${m.faixa} (tabela ${m.tabela}): ${un} por linha (item 2.6.4-ii)`;
+  };
+  const manValor = r => r.manut.linhas > 0 ? `${aaceFmtNum(r.manut.linhas)} linhas × ${s2fmt(r.manut.unit)} por linha = ${s2fmt(r.manut.bruto)}` : '—';
+  const manTeto = r => {
+    const m = r.manut;
+    if (!(m.linhas > 0)) return '—';
+    const quem = m.motivo === 'faixa' ? `categoria ${m.cat.toUpperCase()} × Faixa ${m.faixa}, item 2.6.5-ii` : '33% fixo, itens 2.6.4-i e 2.6.6';
+    const res = m.limitou ? `TETO APLICADO: pago ${s2fmt(m.pago)}, cortou ${s2fmt(m.bruto - m.teto)}` : `abaixo do teto: paga os ${s2fmt(m.pago)} inteiros`;
+    return `base de ativação ${s2fmt(m.base)} × ${aaceFmtPct(m.lib * 100)} — ${quem} = teto de ${s2fmt(m.teto)} → ${res}`;
+  };
+  const manutBloco = [txt('Manutenção de carteira — regra aplicada', manRegra(ra), manRegra(rb)), txt('Manutenção de carteira — valor por linha', manValor(ra), manValor(rb)), txt('Manutenção de carteira — teto', manTeto(ra), manTeto(rb))].join('\n');
   const renovBloco = renovRows ? txt('Renovação — regra aplicada', regraRenov(ra), regraRenov(rb)) + '\n' + renovRows : '';
   const netTxt = r => r.bonusCat.direto ? `${aaceFmtPct(r.bonusCat.pctNet)} (informado)` : `${aaceFmtNum(r.bonusCat.netAdds)} linhas (${aaceFmtPct(r.bonusCat.pctNet)})`;
   const modTxt = r => (r.master ? 'Master' : 'Elite') + (r.modAuto ? ' (automático)' : '');
@@ -8928,7 +8946,7 @@ function aaceRender() {
     ${extRows}
     ${cab('Detalhes dos cálculos')}
     ${txt('Base do Bônus Categoria', `${s2fmt(ra.baseBonusCat)} × ${aaceFmtPct(ra.bonusCat.pct * 100)}`, `${s2fmt(rb.baseBonusCat)} × ${aaceFmtPct(rb.bonusCat.pct * 100)}`)}
-    ${txt('Manutenção: bruto × teto', `${s2fmt(ra.manut.bruto)} × ${s2fmt(ra.manut.teto)} (${aaceFmtPct(ra.manut.lib * 100)} de ${s2fmt(ra.manut.base)})${ra.manut.limitou ? ' — TETO APLICADO' : ''}`, `${s2fmt(rb.manut.bruto)} × ${s2fmt(rb.manut.teto)} (${aaceFmtPct(rb.manut.lib * 100)} de ${s2fmt(rb.manut.base)})${rb.manut.limitou ? ' — TETO APLICADO' : ''}`)}
+    ${manutBloco}
     ${renovBloco}
     ${redRow}
     ${txt('Produtividade: Móvel · Fixa BL · SD', ra.prod.elegivel ? `${aaceFmtPct(ra.prod.alM)} · ${aaceFmtPct(ra.prod.alF)} · ${aaceFmtPct(ra.prod.alS)} → Faixa ${ra.prod.faixa}${ra.prod.forcada ? ' (escolhida)' : (ra.prod.retro ? ' (retroagiu por SD)' : '')} · ${s2fmt(ra.prod.valorVend)}/vendedor` : 'Não elegível', rb.prod.elegivel ? `${aaceFmtPct(rb.prod.alM)} · ${aaceFmtPct(rb.prod.alF)} · ${aaceFmtPct(rb.prod.alS)} → Faixa ${rb.prod.faixa}${rb.prod.forcada ? ' (escolhida)' : (rb.prod.retro ? ' (retroagiu por SD)' : '')} · ${s2fmt(rb.prod.valorVend)}/vendedor` : 'Não elegível')}
