@@ -8383,13 +8383,13 @@ const AACE_CAMPOS_LINHA = {
   renovTabela: { t: 'sel', op: [['1', 'Tabela 1 — fora da área cabeada / com BL / convergência'], ['2', 'Tabela 2 — área cabeada, sem convergência']], def: '1' },
 };
 
-// Produção (seções 2–4), metas (5) e % fora da área vêm SEMPRE do Lado A para o Lado B, travados: a comparação
+// Produção (seções 2–4), metas (5), % fora da área e linhas ativas da carteira vêm SEMPRE do Lado A para o Lado B, travados: a comparação
 // isola o efeito do enquadramento (cluster, categoria, atingimento, KPIs) sobre a mesma produção.
 const AACE_SECOES_ESPELHADAS = ['movel', 'fixa', 'rec', 'meta'];
 let _aaceSecDoCampo = null;
 function aaceEspelhado(k) {
   if (!_aaceSecDoCampo) { _aaceSecDoCampo = {}; aaceTodosCampos().forEach(c => { _aaceSecDoCampo[c.k] = c.sec; }); }
-  return k === 'foraPct' || AACE_SECOES_ESPELHADAS.includes(_aaceSecDoCampo[k]);
+  return k === 'foraPct' || k === 'linhasAtivas' || AACE_SECOES_ESPELHADAS.includes(_aaceSecDoCampo[k]);
 }
 function aaceValor(lado, k) { return (lado === 'b' && aaceEspelhado(k)) ? AACE.a[k] : AACE[lado][k]; }
 function aaceEstadoEfetivo(lado) {
