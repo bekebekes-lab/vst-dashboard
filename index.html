@@ -8488,14 +8488,14 @@ const AACE_SECOES = [
   { id: 'ext', titulo: '9. Conferência com o extrato (opcional)', tipo: 'campos', campos: [
     { k: 'extratoTotal', l: 'Total pago no extrato do mês (R$)', t: 'num', def: '' },
   ] },
-  { id: 'ajustes', titulo: '10. Ajustes do extrato', tipo: 'campos', recolhida: true, campos: [
+  { id: 'ajustes', titulo: '10. Ajustes do extrato', tipo: 'campos', somenteImport: true, campos: [
     { k: 'reducaoPct', l: 'Redução MKT Nacional — % do fator pago', t: 'num', def: '60' },
     { k: 'ajusteSaldo', l: 'Estornos e recálculos — saldo do mês (R$; negativo = desconto)', t: 'num', def: '' },
   ] },
-  { id: 'reds', titulo: '11. Linhas com redução MKT Nacional', tipo: 'linhas', recolhida: true, cab: ['Linhas com redução'],
+  { id: 'reds', titulo: '11. Linhas com redução MKT Nacional', tipo: 'linhas', somenteImport: true, cab: ['Linhas com redução'],
     linhas: AACE_ITENS.filter(i => i.grupo === 'movel').map(i => ({ l: i.l, cols: [i.k + 'Red'] }))
       .concat([1, 2, 3, 4, 5, 6, 7].map(i => ({ l: 'Renovação / Migração — linha ' + i, cols: ['renov' + i + 'Red'] }))) },
-  { id: 'fora', titulo: '12. Linhas fora da área de atuação (por tipo)', tipo: 'linhas', recolhida: true, cab: ['Linhas fora da área'],
+  { id: 'fora', titulo: '12. Linhas fora da área de atuação (por tipo)', tipo: 'linhas', somenteImport: true, cab: ['Linhas fora da área'],
     linhas: AACE_ITENS.map(i => ({ l: i.l, cols: [i.k + 'Fora'] })) },
 ];
 // campos soltos usados pelas "linhas" (valor, receita etc.) com seus padrões
@@ -8514,6 +8514,12 @@ let _aaceSecDoCampo = null;
 function aaceEspelhado(k) {
   if (!_aaceSecDoCampo) { _aaceSecDoCampo = {}; aaceTodosCampos().forEach(c => { _aaceSecDoCampo[c.k] = c.sec; }); }
   return k === 'foraPct' || k === 'linhasAtivas' || AACE_SECOES_ESPELHADAS.includes(_aaceSecDoCampo[k]);
+}
+// Seções 10–12 não aceitam digitação: só aparecem (recolhidas e travadas) quando o extrato importado as preencheu
+const AACE_SECOES_SO_IMPORT = ['ajustes', 'reds', 'fora'];
+function aaceSomenteImport(k) {
+  aaceEspelhado(k); // garante o mapa campo → seção
+  return AACE_SECOES_SO_IMPORT.includes(_aaceSecDoCampo[k]);
 }
 function aaceValor(lado, k) { return (lado === 'b' && aaceEspelhado(k)) ? AACE.a[k] : AACE[lado][k]; }
 function aaceEstadoEfetivo(lado) {
@@ -8726,7 +8732,8 @@ function aaceFmtNum(v) { return (v || 0).toLocaleString('pt-BR', { maximumFracti
 
 function aaceInputHtml(lado, k, def) {
   const id = `aace-${lado}-${k}`, v = aaceValor(lado, k);
-  const trava = lado === 'b' && aaceEspelhado(k) ? ' disabled title="Espelhado do Lado A — altere lá"' : '';
+  const trava = aaceSomenteImport(k) ? ' disabled title="Vem do extrato importado — somente leitura"'
+    : (lado === 'b' && aaceEspelhado(k) ? ' disabled title="Espelhado do Lado A — altere lá"' : '');
   if (def && def.t === 'sel') {
     return `<select id="${id}"${trava} onchange="aaceAlterou('${lado}','${k}',this.value)">${def.op.map(([val, lab]) => `<option value="${val}"${String(v) === String(val) ? ' selected' : ''}>${lab}</option>`).join('')}</select>`;
   }
@@ -8761,10 +8768,11 @@ function aaceRenderForm() {
   const el = document.getElementById('aace-secoes');
   if (el) {
     el.innerHTML = AACE_SECOES.map(s => {
+      if (s.somenteImport && !aaceSecaoPreenchida(s)) return '';
       const trava = AACE_SECOES_ESPELHADAS.includes(s.id);
       const meio = (l, nome, cor) => `<div class="aace-meio aace-meio-${l}"><div class="aace-meio-t"><i class="pn-dot" style="background:${cor}"></i>${nome}</div>${aaceCorpoHtml(l, s)}</div>`;
-      const abrir = !s.recolhida || aaceSecaoPreenchida(s);
-      return `<div class="pn-card aace-sec-card"><details${abrir ? ' open' : ''}><summary class="pn-card-cab"><h3>${s.titulo}</h3>${s.recolhida ? '<span class="aace-esp-tag">opcional — preenchido ao importar o extrato · 🔒 o Lado B copia o Lado A</span>' : (trava ? '<span class="aace-esp-tag">🔒 o Lado B copia o Lado A</span>' : '')}</summary>
+      const abrir = !s.somenteImport;
+      return `<div class="pn-card aace-sec-card"><details${abrir ? ' open' : ''}><summary class="pn-card-cab"><h3>${s.titulo}</h3>${s.somenteImport ? '<span class="aace-esp-tag">🔒 vem do extrato importado — somente leitura</span>' : (trava ? '<span class="aace-esp-tag">🔒 o Lado B copia o Lado A</span>' : '')}</summary>
         <div class="aace-par">${meio('a', 'A — AACE atual', '#444')}${meio('b', 'B — Com a VST', 'var(--brand)')}</div></details></div>`;
     }).join('');
   }
@@ -8783,7 +8791,7 @@ function aaceCarregarSalvo() {
   } catch (e) { /* dado salvo inválido: ignora */ }
 }
 function aaceAlterou(lado, k, v) {
-  if (lado === 'b' && aaceEspelhado(k)) return; // travado: vem do Lado A
+  if (aaceSomenteImport(k) || (lado === 'b' && aaceEspelhado(k))) return; // travado: vem do extrato importado / do Lado A
   AACE[lado][k] = v;
   if (lado === 'a' && aaceEspelhado(k)) { const el = document.getElementById('aace-b-' + k); if (el) el.value = v; }
   aaceSalvar(); aaceRender();
