@@ -1068,6 +1068,48 @@
     .s2-params-bar { flex-direction: column; align-items: stretch; }
   }
 
+  /* ─── SIMULADOR DE AACE ───────────────────────────────────── */
+  .aace-lados { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; align-items: start; }
+  .aace-lado { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px; border-top: 4px solid var(--border-strong); min-width: 0; }
+  .aace-lado-b { border-top-color: var(--brand); }
+  .aace-lado-cab { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 12px; }
+  .aace-lado-t { font-size: 14px; font-weight: 700; color: var(--text); }
+  .aace-lado-s { font-size: 11.5px; color: var(--text-3); margin-top: 2px; }
+  .aace-lado-total { font-family: 'DM Mono', monospace; font-size: 20px; font-weight: 700; color: var(--brand); white-space: nowrap; }
+  .aace-sec { border-top: 1px solid var(--border); padding-top: 10px; margin-top: 10px; }
+  .aace-sec-t { font-size: 11px; font-weight: 700; color: var(--text-2); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 8px; }
+  .aace-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .aace-grid .s2-field { min-width: 0; }
+  .aace-lado .s2-field select, .aace-lado .s2-field input, .aace-linhas input, .aace-linhas select {
+    width: 100%; box-sizing: border-box; font-size: 12.5px; padding: 6px 8px; border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm); background: var(--surface-2); font-family: 'DM Sans', sans-serif; min-width: 0;
+  }
+  .aace-linhas { display: grid; grid-template-columns: minmax(130px, 1.5fr) minmax(0, 1fr) minmax(0, 1fr); gap: 6px 8px; align-items: center; }
+  .aace-lh { font-size: 10px; font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: .04em; }
+  .aace-ll { font-size: 12px; color: var(--text-2); line-height: 1.25; }
+  .aace-mais { margin-top: 8px; }
+  .aace-mais summary { cursor: pointer; font-size: 11.5px; font-weight: 600; color: var(--brand); margin-bottom: 8px; }
+  .aace-tab-wrap { overflow-x: auto; }
+  .aace-tab { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  .aace-tab th { text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-3); padding: 8px 10px; border-bottom: 2px solid var(--border-strong); }
+  .aace-tab td { padding: 7px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .aace-tab td:not(:first-child) { font-family: 'DM Mono', monospace; font-size: 12px; }
+  .aace-grupo td { background: var(--surface-2); font-family: 'DM Sans', sans-serif !important; font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--text-2); }
+  .aace-forte td { font-weight: 700; font-size: 14px; border-top: 2px solid var(--border-strong); }
+  .aace-pos { color: var(--green); font-weight: 700; }
+  .aace-neg { color: var(--red-sem); font-weight: 700; }
+  .aace-pct { font-weight: 400; opacity: .8; }
+  .aace-premissas { margin: 0; padding-left: 18px; }
+  .aace-premissas li { margin-bottom: 4px; }
+  #aace-avisos ul { margin: 0; padding-left: 18px; }
+  @media (max-width: 1000px) {
+    .aace-lados { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 600px) {
+    .aace-grid { grid-template-columns: 1fr; }
+    .aace-linhas { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr); }
+  }
+
   /* ─── DISCADORA (nova aba) ───────────────────────────────── */
   /* Filters */
   #tab-discadora .filters-bar {
@@ -1478,7 +1520,7 @@
   /* Ocupa a tela toda (antes limitado a 1440px, sobrava faixa vazia nas laterais em monitor
      largo). Abas de formulário continuam centralizadas com limite, senão os campos esticam. */
   .content { max-width: none; }
-  #tab-conectividade, #tab-simulador2 { max-width: 1440px; margin-left: auto; margin-right: auto; }
+  #tab-conectividade, #tab-simulador2, #tab-aace { max-width: 1440px; margin-left: auto; margin-right: auto; }
   /* filtros distribuídos pela linha inteira (antes: 5 colunas fixas, a 2ª linha ficava pela metade) */
   .filters-bar { grid-template-columns: repeat(auto-fit, minmax(165px, 1fr)); gap: 8px 14px; }
 
@@ -1626,6 +1668,7 @@
   <button class="tab-btn" id="tab-btn-producao" onclick="switchTab('producao', this)">Produção</button>
   <button class="tab-btn" id="tab-btn-discadora" onclick="switchTab('discadora', this)">Discadora</button>
   <button class="tab-btn active" id="tab-btn-simulador2" onclick="switchTab('simulador2', this)">Simulador 2.0</button>
+  <button class="tab-btn" id="tab-btn-aace" onclick="switchTab('aace', this)">Simulador de AACE</button>
   <button class="tab-btn" id="tab-btn-churn" onclick="switchTab('churn', this)">Churn</button>
   <button class="tab-btn" id="tab-btn-carteira" onclick="switchTab('carteira', this)">Carteira</button>
   <button class="tab-btn" id="tab-btn-qualidade" onclick="switchTab('qualidade', this)">Qualidade</button>
@@ -2501,6 +2544,62 @@
       <div id="disc-voip-status" style="font-size:12px;color:var(--text-2);margin-bottom:10px;"></div>
       <div id="disc-voip-resultado"></div>
       <div id="disc-voip-custo-usuarios"></div>
+    </div>
+  </div>
+
+  <!-- TAB SIMULADOR DE AACE — comparativo "AACE isolado" (A) × "AACE dentro dos KPIs da VST" (B), pela política de remuneração da Claro -->
+  <div class="tab-panel" id="tab-aace">
+    <div class="s2-secao">
+      <div class="s2-secao-titulo">Simulador de AACE</div>
+      <div class="s2-secao-desc">Compara o que a política de remuneração da Claro paga a um AACE que opera isolado (Lado A) com o que a mesma operação renderia inserida nos KPIs da VST (Lado B).
+        Nada vem preenchido nem presumido: informe produção, carteira, CNPJs, HCs e KPIs de cada lado, ou escolha direto cluster (P/M/G), categoria (Bronze a Diamante) e atingimento de meta (100%, 120% ou 140%) no Enquadramento.</div>
+      <div class="s2-params-bar">
+        <div class="s2-field">
+          <label for="aace-g-tabela">Tabela de CNPJ/HC</label>
+          <select id="aace-g-tabela" onchange="aaceAlterouGeral('tabela', this.value)">
+            <option value="definitiva">Definitiva (a partir de set/26)</option>
+            <option value="transicao">Transição (jun a ago/26)</option>
+          </select>
+        </div>
+        <div class="s2-field">
+          <label for="aace-g-arred">Nota final com 3ª casa (ex.: 4,825)</label>
+          <select id="aace-g-arred" onchange="aaceAlterouGeral('arred', this.value)">
+            <option value="truncar">Cortar a casa extra (4,82)</option>
+            <option value="cima">Arredondar para cima (4,83)</option>
+          </select>
+        </div>
+      </div>
+      <div class="s2-actions">
+        <button class="s2-btn" onclick="aaceEspelharProducao()" title="Copia produção, indicadores e carteira do Lado A para o Lado B, sem mexer no enquadramento">⇢ Espelhar produção do A no B</button>
+        <button class="s2-btn" onclick="aaceCarregarPadraoVst()" title="Lê o cluster e o CNPJ/HC da VST salvos no Simulador 2.0 e aplica ao Lado B">Carregar cluster e CNPJ/HC da VST</button>
+        <button class="s2-btn" onclick="aaceLimpar()">Limpar tudo</button>
+      </div>
+      <div class="s2-hint" id="aace-msg" style="margin-top:10px"></div>
+    </div>
+
+    <div class="aace-lados">
+      <div class="aace-lado aace-lado-a" id="aace-col-a"></div>
+      <div class="aace-lado aace-lado-b" id="aace-col-b"></div>
+    </div>
+
+    <div class="s2-secao">
+      <div class="s2-secao-titulo">Comparativo</div>
+      <div id="aace-resultado" class="aace-tab-wrap"></div>
+      <div class="s2-secao-titulo" style="margin-top:18px;font-size:13px">Avisos</div>
+      <div id="aace-avisos" class="s2-hint"></div>
+    </div>
+
+    <div class="s2-secao">
+      <div class="s2-secao-titulo">Premissas deste modelo</div>
+      <ul class="s2-hint aace-premissas">
+        <li>Fatores fixos e adicionais: Tabelas 1 dos itens 2.2 e 2.3 e Anexo I da política, tal como escritos — sem o mapeamento de negócio do Simulador 2.0.</li>
+        <li>Cluster automático usa a produção informada do mês (linhas de Voz, instalações de BL e receita de Conectividade) nos limites do Anexo III; a política não deixa claro se a volumetria é mensal ou de base ativa, por isso cada cluster pode ser escolhido na mão.</li>
+        <li>Atingimento de meta: informe a meta e o realizado, ou escolha 100%, 120% ou 140%. O fator adicional só vale a partir de 100% (item 2.3-xv); soluções digitais, M2M, módulos e renovação não recebem adicional.</li>
+        <li>Fora da área de atuação: usa os fatores "fora da área" da Tabela 1 e não recebe adicional (a política não detalha o adicional fora da área).</li>
+        <li>Net Adds = linhas ativadas − canceladas; zero conta como positivo. Teto de carteira e Bônus Categoria seguem as bases dos itens 2.6.5 e 2.5.5.</li>
+        <li>Bônus Produtividade: sem a rampa de vendedores novos (todos cobrados a 100% da meta) e só para Elite com 4 ou mais HCs.</li>
+        <li>Ainda não modelado: meta mínima de AACE novo, estornos, Programa Nacional (2.9), novos credenciamentos (2.10), órgãos públicos, produtos de alto valor, renovação de contratos (2.14), negociações especiais.</li>
+      </ul>
     </div>
   </div>
 
@@ -7538,6 +7637,7 @@ function switchTab(name, el) {
   if (name === 'producao') initProducao();
   if (name === 'discadora') initDiscadora();
   if (name === 'simulador2') initSimulador2();
+  if (name === 'aace') initAace();
   if (name === 'churn') initChurn();
   if (name === 'carteira') initCarteira();
   if (name === 'qualidade') initQualidade();
@@ -7573,7 +7673,7 @@ let USUARIO_ATUAL = null;
 // aplicarPermissoes() quanto pelo preenchimento da preferência "aba padrão
 // ao abrir" no drawer de conta e pelo redirecionamento pós-login.
 const ABAS_PERMITIDAS_POR_PERFIL = {
-  'admin':          ['gerencial', 'producao', 'discadora', 'simulador2', 'churn', 'carteira', 'qualidade', 'acessos', 'conectividade'],
+  'admin':          ['gerencial', 'producao', 'discadora', 'simulador2', 'aace', 'churn', 'carteira', 'qualidade', 'acessos', 'conectividade'],
   'admin_gestao':   ['gerencial', 'producao', 'discadora', 'churn', 'acessos', 'conectividade'], // sem Simulador 2.0, Carteira e Qualidade
   'admin_beta':     ['gerencial', 'producao', 'carteira', 'acessos', 'conectividade'],
   'gestor_macro':   ['gerencial', 'discadora', 'acessos', 'conectividade'],
@@ -7607,6 +7707,7 @@ const TAB_LABELS = {
   producao: '🏭 Produção',
   discadora: '📞 Discadora',
   simulador2: '🧮 Simulador 2.0',
+  aace: '🧩 Simulador de AACE',
   churn: '📉 Churn',
   carteira: '💼 Carteira',
   qualidade: '🛡️ Qualidade',
@@ -8135,6 +8236,477 @@ function s2AtualizarLabelCompetencia() {
 // Sub-abas dentro de Simulador 2.0 — Simulador 2.0 (padrão) e Simulador de
 // Carteira (clássico), lado a lado no mesmo painel em vez de brigar por
 // espaço no menu principal (mesmo padrão já usado em Conectividade/SD).
+// ═════════════════════════════════════════════════════════════════════════════
+// SIMULADOR DE AACE — comparativo "AACE hoje" (Lado A) × "AACE sob a VST" (Lado B)
+//
+// Segue a política de remuneração da Claro (Anexo III-A, PL-RCC-004) ao pé da
+// letra, SEM as adaptações de negócio do Simulador 2.0 (lá o "Novo" do BaseCRM
+// cai na linha de menor fator; aqui cada tipo de pedido usa a linha que a
+// política manda). As tabelas abaixo são cópia da política (item entre
+// parênteses). Faixas de CNPJ/HC, teto, bônus % e bônus produtividade
+// reaproveitam as constantes do Simulador 2.0, que já são cópia dos itens 2.5–2.7.
+// ═════════════════════════════════════════════════════════════════════════════
+const AACE_STORAGE_KEY = 'vst_aace_v1';
+
+// Item 2.2, Tabela 1 (PDF p.8) — fatores fixos. m* = Master; e* = Elite; P/M/G = Elite dentro da área
+const AACE_T1 = {
+  movelL1: { mFora: 1.80, mDentro: 4.30, eFora: 1.90, P: 5.00, M: 5.20, G: 5.60 }, // Novo Voz / Portab. Novo VOZ-BL / Portab. Increm. VOZ-BL / TT Pré PF-PJ VOZ-BL
+  movelL2: { mFora: 1.30, mDentro: 3.20, eFora: 1.40, P: 3.70, M: 3.90, G: 4.20 }, // Novo BL / Incremento linhas e receita VOZ-BL
+  movelL3: { mFora: 0.60, mDentro: 2.30, eFora: 0.70, P: 2.50, M: 2.50, G: 2.50 }, // Incremento módulo VOZ-BL / TT Pós PF-PJ VOZ-BL
+  m2m:     { mFora: 1.20, mDentro: 1.90, eFora: 1.30, P: 2.20, M: 2.20, G: 2.20 },
+  fixa:    { mFora: 1.80, mDentro: 2.40, eFora: 2.00, P: 2.90, M: 3.10, G: 3.40 }, // Fixa Básica TV / Fone / Banda Larga
+  hotel:   { mFora: 1.00, mDentro: 1.00, eFora: 1.00, P: 1.00, M: 1.00, G: 1.00 }, // Hotel e Hospital
+};
+const AACE_PLUGIN_PORT_VOZ = 1.50;  // Plugin Portabilidade Voz (item 2.2-v), vale p/ Voz, não p/ BL móvel
+const AACE_CONECT_ATIVACAO = 3.00;  // Conectividade Avançada — ativação (igual em Master/Elite/cluster/fora)
+const AACE_CONECT_RENOV = 2.00;     // Renovação Conecta (após 36 meses)
+
+// Item 2.3, Tabela 1 — fator adicional por faixa (1 = 100–119,99%; 2 = 120–139,99%; 3 = ≥140%) e cluster
+const AACE_ADIC = {
+  G1: [{ P: .50, M: .60, G: .75 }, { P: .60, M: .70, G: .85 }, { P: .70, M: .80, G: .95 }],   // Móvel Novo VOZ/BL + TT Pré
+  G2: [{ P: .50, M: .65, G: .90 }, { P: .60, M: .85, G: 1.10 }, { P: .70, M: 1.05, G: 1.40 }], // Portabilidade Voz (Novo e Increm.)
+  G3: [{ P: .50, M: .60, G: .75 }, { P: .60, M: .70, G: .85 }, { P: .70, M: .80, G: .95 }],   // Portabilidade BL (Novo e Increm.) + Incremento Voz/BL
+  FBL: [{ P: .95, M: 1.15, G: 1.55 }, { P: 1.15, M: 1.35, G: 1.75 }, { P: 1.45, M: 1.65, G: 2.05 }], // Fixa Básica: Banda Larga e TV
+  FFONE: [{ P: .70, M: .90, G: 1.10 }, { P: .80, M: 1.00, G: 1.20 }, { P: 1.00, M: 1.20, G: 1.40 }], // Fixa Básica: Fone
+  CONECT: [{ P: .30, M: .40, G: .50 }, { P: .50, M: .60, G: .70 }, { P: .80, M: .90, G: 1.00 }],     // Conectividade Avançada
+};
+
+// Item 2.4-ii-b, Tabela 2 — Renovação para CNPJ em área cabeada sem convergência (a Tabela 1 é GF_RENOVACAO_TABELA1)
+const AACE_RENOV_T2 = [
+  { P: 1.15, M: 1.35, G: 1.55 }, { P: 1.13, M: 1.33, G: 1.53 }, { P: 1.08, M: 1.28, G: 1.48 },
+  { P: 0.85, M: 1.05, G: 1.25 }, { P: 0.65, M: 0.85, G: 1.05 }, { P: 0.45, M: 0.65, G: 0.85 }, { P: 0.35, M: 0.55, G: 0.75 },
+];
+const AACE_PLUGIN_CONVERGENCIA = 0.70; // item 2.8
+
+// Anexo III — clusterização (Móvel Voz em linhas, Fixa BL em UGR, Conectividade em R$ de receita): [máx. P, máx. M]
+const AACE_CLUSTER = {
+  A: { voz: [199, 699], bl: [49, 119], av: [1999.99, 3999.99] },
+  B: { voz: [99, 299], bl: [19, 59], av: [1499.99, 3499.99] },
+};
+// Anexo IV — limites mínimos de cada desempenho 1..5 (CNPJ Novo Voz / Fixa Básica)
+const AACE_METAS_BONUS = {
+  A: { voz: [15, 35, 100, 210, 350], bl: [15, 40, 110, 190, 290] },
+  B: { voz: [10, 25, 45, 70, 100], bl: [10, 20, 40, 65, 95] },
+};
+const AACE_MIN_VENDEDORES_ELITE = 4; // item 2.1-iii-b-1 / 2.7-i-c
+
+// Tipos de pedido com qtd × ticket. linha = linha da Tabela 1; adic = tabela de adicional; cnt = realizado que mede a meta
+const AACE_ITENS = [
+  { k: 'novoVoz', l: 'Novo — Voz', grupo: 'movel', linha: 'movelL1', adic: 'G1', cnt: 'voz' },
+  { k: 'ttPre', l: 'TT Pré PF/PJ — Voz', grupo: 'movel', linha: 'movelL1', adic: 'G1', cnt: 'voz' },
+  { k: 'portVoz', l: 'Portabilidade (Novo e Increm.) — Voz', grupo: 'movel', linha: 'movelL1', adic: 'G2', cnt: 'voz', plug: true },
+  { k: 'incrVoz', l: 'Incremento — Voz', grupo: 'movel', linha: 'movelL2', adic: 'G3', cnt: 'voz' },
+  { k: 'novoBl', l: 'Novo — Banda Larga móvel', grupo: 'movel', linha: 'movelL2', adic: 'G1', cnt: 'movelBl' },
+  { k: 'portBl', l: 'Portabilidade (Novo e Increm.) — BL móvel', grupo: 'movel', linha: 'movelL1', adic: 'G3', cnt: 'movelBl' },
+  { k: 'incrBl', l: 'Incremento — BL móvel', grupo: 'movel', linha: 'movelL2', adic: 'G3', cnt: 'movelBl' },
+  { k: 'blFixa', l: 'Fixa Básica — Banda Larga', grupo: 'fixa', linha: 'fixa', adic: 'FBL', cnt: 'fixaBl' },
+  { k: 'tvFixa', l: 'Fixa Básica — TV', grupo: 'fixa', linha: 'fixa', adic: 'FBL', cnt: 'fixaTv' },
+  { k: 'foneFixa', l: 'Fixa Básica — Fone', grupo: 'fixa', linha: 'fixa', adic: 'FFONE', cnt: 'fixaFone' },
+];
+const AACE_CNT_META = { voz: 'metaVoz', movelBl: 'metaMovelBl', fixaBl: 'metaFixaBl', fixaTv: 'metaFixaTv', fixaFone: 'metaFixaFone' };
+
+const AACE_OP_FAIXA = [['auto', 'Automático (meta × realizado informados)'], ['0', 'Abaixo de 100% — sem adicional'], ['1', '100% da meta — Faixa 1'], ['2', '120% da meta — Faixa 2'], ['3', '140% da meta — Faixa 3']];
+const AACE_OP_CLUSTER = [['auto', 'Automático (pela produção)'], ['P', 'P'], ['M', 'M'], ['G', 'G']];
+const AACE_OP_DESEMP = [['auto', 'Automático (pelo valor informado)'], ['0', 'Desempenho 0'], ['1', 'Desempenho 1'], ['2', 'Desempenho 2'], ['3', 'Desempenho 3'], ['4', 'Desempenho 4'], ['5', 'Desempenho 5']];
+const AACE_OP_CATEGORIA = [['auto', 'Automático (4 indicadores)'], ['bronze', 'Bronze'], ['prata', 'Prata'], ['ouro', 'Ouro'], ['safira', 'Safira'], ['diamante', 'Diamante']];
+
+// Formulário: cada seção é uma lista de linhas; `esp` = campo copiado pelo botão "Espelhar produção no Lado B"
+const AACE_SECOES = [
+  { id: 'enq', titulo: '1. Enquadramento', tipo: 'campos', campos: [
+    { k: 'modalidade', l: 'Modalidade', t: 'sel', op: [['elite', 'Elite'], ['master', 'Master']], def: 'elite' },
+    { k: 'regiao', l: 'Região (Anexos III e IV)', t: 'sel', op: [['A', 'Grupo A — SP1, RSUL, NE, DF, SP2, GO, MS, MT, RJ'], ['B', 'Grupo B — NO, MG, BA-SE, ES, AC, RO, TO']], def: 'A' },
+    { k: 'clusterMovel', l: 'Cluster — Móvel', t: 'sel', op: AACE_OP_CLUSTER, def: 'auto' },
+    { k: 'clusterFixa', l: 'Cluster — Fixa Básica', t: 'sel', op: AACE_OP_CLUSTER, def: 'auto' },
+    { k: 'clusterConect', l: 'Cluster — Conectividade', t: 'sel', op: AACE_OP_CLUSTER, def: 'auto' },
+    { k: 'categoria', l: 'Categoria do Bônus', t: 'sel', op: AACE_OP_CATEGORIA, def: 'auto' },
+    { k: 'faixaMovel', l: 'Atingimento da meta — Móvel', t: 'sel', op: AACE_OP_FAIXA, def: 'auto' },
+    { k: 'faixaFixa', l: 'Atingimento da meta — Fixa Básica', t: 'sel', op: AACE_OP_FAIXA, def: 'auto' },
+    { k: 'faixaConect', l: 'Atingimento da meta — Conectividade', t: 'sel', op: AACE_OP_FAIXA, def: 'auto' },
+    { k: 'foraPct', l: '% da produção fora da área de atuação', t: 'num', def: '0', esp: true },
+  ] },
+  { id: 'movel', titulo: '2. Produção do mês — Móvel (Voz)', tipo: 'linhas', cab: ['Linhas', 'Ticket (R$/linha)'],
+    linhas: AACE_ITENS.filter(i => i.grupo === 'movel').map(i => ({ l: i.l, cols: [i.k + 'Qtd', i.k + 'Ticket'], mais: !['novoVoz', 'portVoz', 'incrVoz'].includes(i.k) })) },
+  { id: 'fixa', titulo: '3. Produção do mês — Fixa Básica', tipo: 'linhas', cab: ['Instalações', 'Ticket (R$/mês)'],
+    linhas: AACE_ITENS.filter(i => i.grupo === 'fixa').map(i => ({ l: i.l, cols: [i.k + 'Qtd', i.k + 'Ticket'] })) },
+  { id: 'rec', titulo: '4. Receitas do mês', tipo: 'linhas', cab: ['Receita contratada (R$)', 'Fator / parâmetro'],
+    linhas: [
+      { l: 'Conectividade Avançada — ativação', cols: ['conectRec'] },
+      { l: 'Soluções Digitais e SVA  |  fator do Anexo I (%)', cols: ['sdRec', 'sdFator'] },
+      { l: 'Renovação/Migração Móvel  |  Faixa de Delta Ticket', cols: ['renovRec', 'renovFaixa'] },
+      { l: 'Renovação — tabela (cabeada/convergência)', cols: [null, 'renovTabela'] },
+      { l: 'Plugin de Convergência  |  fator', cols: ['convRec', 'convFator'] },
+      { l: 'Incremento de módulo e TT Pós PF/PJ (Voz/BL)', cols: ['modulosRec'], mais: true },
+      { l: 'M2M (Rastreamento e Telemetria)', cols: ['m2mRec'], mais: true },
+      { l: 'Hotel e Hospital (TV/Fone/BL)', cols: ['hotelRec'], mais: true },
+      { l: 'Conectividade — Renovação Conecta (36 meses)', cols: ['conectRenovRec'], mais: true },
+    ] },
+  { id: 'meta', titulo: '5. Metas do mês (carta meta da Claro)', tipo: 'campos', campos: [
+    { k: 'metaVoz', l: 'Móvel Voz (linhas)', t: 'num', def: '' },
+    { k: 'metaMovelBl', l: 'Móvel Banda Larga (linhas)', t: 'num', def: '' },
+    { k: 'metaFixaBl', l: 'Fixa Básica — Banda Larga', t: 'num', def: '' },
+    { k: 'metaFixaTv', l: 'Fixa Básica — TV', t: 'num', def: '' },
+    { k: 'metaFixaFone', l: 'Fixa Básica — Fone', t: 'num', def: '' },
+    { k: 'metaConect', l: 'Conectividade Avançada (R$)', t: 'num', def: '' },
+  ] },
+  { id: 'ind', titulo: '6. Indicadores do Bônus Categoria (item 2.5)', tipo: 'campos', campos: [
+    { k: 'cnpjNovoVoz', l: 'CNPJs novos — Móvel Voz', t: 'num', def: '', esp: true },
+    { k: 'cnpjNovoBl', l: 'CNPJs novos — Fixa Básica BL', t: 'num', def: '', esp: true },
+    { k: 'gross', l: 'Linhas de Voz ativadas no mês (gross)', t: 'num', def: '', esp: true },
+    { k: 'cancel', l: 'Linhas de Voz canceladas no mês', t: 'num', def: '', esp: true },
+    { k: 'churn', l: 'Churn Safra 180 dias Móvel (%)', t: 'num', def: '', esp: true },
+    { k: 'dvForca', l: 'Desempenho — CNPJ Novo Voz', t: 'sel', op: AACE_OP_DESEMP, def: 'auto' },
+    { k: 'dbForca', l: 'Desempenho — CNPJ Novo Fixa BL', t: 'sel', op: AACE_OP_DESEMP, def: 'auto' },
+    { k: 'dnForca', l: 'Desempenho — Net Adds', t: 'sel', op: AACE_OP_DESEMP, def: 'auto' },
+    { k: 'dcForca', l: 'Desempenho — Churn Safra', t: 'sel', op: AACE_OP_DESEMP, def: 'auto' },
+  ] },
+  { id: 'cart', titulo: '7. Carteira e equipe (itens 2.6 e 2.7)', tipo: 'campos', campos: [
+    { k: 'linhasAtivas', l: 'Linhas ativas na carteira (foto do fim do mês)', t: 'num', def: '', esp: true },
+    { k: 'cnpjs', l: 'CNPJs na carteira', t: 'num', def: '', esp: true },
+    { k: 'hcs', l: 'Vendedores / HCs ativos declarados', t: 'num', def: '', esp: true },
+    { k: 'razaoGrupo', l: 'CNPJ/HC do grupo (vazio = CNPJs ÷ HCs)', t: 'num', def: '' },
+    { k: 'faixaCnpjHc', l: 'Faixa de CNPJ/HC', t: 'sel', op: [['auto', 'Automático (pela razão)'], ['1', 'Faixa 1'], ['2', 'Faixa 2'], ['3', 'Faixa 3'], ['4', 'Faixa 4']], def: 'auto' },
+    { k: 'metaVendVoz', l: 'Meta por vendedor — Móvel Voz (linhas)', t: 'num', def: '18' },
+    { k: 'metaVendBl', l: 'Meta por vendedor — Fixa BL', t: 'num', def: '6' },
+    { k: 'metaVendSd', l: 'Meta por vendedor — Solução Digital (R$)', t: 'num', def: '50' },
+  ] },
+  { id: 'ext', titulo: '8. Conferência com o extrato (opcional)', tipo: 'campos', campos: [
+    { k: 'extratoTotal', l: 'Total pago no extrato do mês (R$)', t: 'num', def: '' },
+  ] },
+];
+// campos soltos usados pelas "linhas" (valor, receita etc.) com seus padrões
+const AACE_CAMPOS_LINHA = {
+  sdFator: { def: '100' }, convFator: { def: String(AACE_PLUGIN_CONVERGENCIA) },
+  renovFaixa: { t: 'sel', op: [1, 2, 3, 4, 5, 6, 7].map(i => [String(i), 'Faixa ' + i + ' — ' + GF_RENOVACAO_TABELA1[i - 1].delta]), def: '3' },
+  renovTabela: { t: 'sel', op: [['1', 'Tabela 1 — fora da área cabeada / com BL / convergência'], ['2', 'Tabela 2 — área cabeada, sem convergência']], def: '1' },
+};
+
+function aaceTodosCampos() {
+  const out = [];
+  AACE_SECOES.forEach(s => {
+    if (s.tipo === 'campos') s.campos.forEach(c => out.push({ ...c, sec: s.id }));
+    else s.linhas.forEach(r => r.cols.forEach(k => { if (k) out.push({ k, sec: s.id, esp: true, ...(AACE_CAMPOS_LINHA[k] || {}) }); }));
+  });
+  return out;
+}
+function aaceEstadoPadrao(lado) {
+  const e = {};
+  aaceTodosCampos().forEach(c => { e[c.k] = c.def !== undefined ? c.def : ''; });
+  return e;
+}
+let AACE = { a: aaceEstadoPadrao('a'), b: aaceEstadoPadrao('b'), g: { tabela: 'definitiva', arred: 'truncar' } };
+let _aaceIniciou = false;
+
+// ─── Funções puras de cálculo ────────────────────────────────────────────────
+function aaceNum(v) { const n = parseFloat(String(v ?? '').replace(',', '.')); return isFinite(n) ? n : 0; }
+function aaceClusterPor(v, [maxP, maxM]) { return v <= maxP ? 'P' : (v <= maxM ? 'M' : 'G'); }
+function aaceDesempenho(v, limites) { return limites.filter(l => v >= l).length; }
+// Net Adds % = (gross − cancelamentos) ÷ gross — faixas do Anexo IV (sem arredondar)
+function aaceDesempNetAdds(pct, temGross) {
+  if (!temGross || pct <= 0) return 0;
+  return pct < 20 ? 1 : pct < 50 ? 2 : pct < 80 ? 3 : pct < 90 ? 4 : 5;
+}
+// Churn Safra 180 dias — menor é melhor (Anexo IV)
+function aaceDesempChurn(v) { return v >= 11.01 ? 0 : v >= 9.5 ? 1 : v >= 5.5 ? 2 : v >= 3.5 ? 3 : v >= 2.5 ? 4 : 5; }
+const AACE_ORDEM_CAT = ['bronze', 'prata', 'ouro', 'safira', 'diamante'];
+const AACE_MIN_CAT = { ouro: 3, safira: 4, diamante: 5 }; // desempenho mínimo em CNPJ Novo Voz E Fixa BL (2.5.4-v)
+function aaceCategoriaDaNota(nota100, dv, db) {
+  let i = nota100 <= 222 ? 0 : nota100 <= 282 ? 1 : nota100 <= 382 ? 2 : nota100 <= 482 ? 3 : 4;
+  while (i > 1 && (dv < AACE_MIN_CAT[AACE_ORDEM_CAT[i]] || db < AACE_MIN_CAT[AACE_ORDEM_CAT[i]])) i--;
+  return AACE_ORDEM_CAT[i];
+}
+
+// s = campos de um lado; g = parâmetros gerais. Devolve tudo que a tela mostra.
+function aaceCalcular(s, g) {
+  const n = k => aaceNum(s[k]);
+  const master = s.modalidade === 'master';
+  const regiao = s.regiao === 'B' ? 'B' : 'A';
+  const reg = AACE_CLUSTER[regiao];
+  const avisos = [];
+  const pf = Math.min(Math.max(n('foraPct'), 0), 100) / 100; // parcela fora da área
+
+  // realizado por tipo de meta (linhas) e receita de Conectividade
+  const real = { voz: 0, movelBl: 0, fixaBl: 0, fixaTv: 0, fixaFone: 0 };
+  AACE_ITENS.forEach(it => { real[it.cnt] += n(it.k + 'Qtd'); });
+  const conectRec = n('conectRec');
+
+  // cluster por segmento (2.1-vi/viii): Master é sempre P
+  const sug = { movel: aaceClusterPor(real.voz, reg.voz), fixa: aaceClusterPor(real.fixaBl, reg.bl), conect: aaceClusterPor(conectRec, reg.av) };
+  const forca = { movel: s.clusterMovel, fixa: s.clusterFixa, conect: s.clusterConect };
+  const cl = seg => master ? 'P' : ((forca[seg] && forca[seg] !== 'auto') ? forca[seg] : sug[seg]);
+  const C = { movel: cl('movel'), fixa: cl('fixa'), conect: cl('conect') };
+
+  // % de atingimento e faixa do fator adicional (2.3) — Master também recebe (coluna P)
+  const pct = {};
+  Object.keys(AACE_CNT_META).forEach(c => { pct[c] = n(AACE_CNT_META[c]) > 0 ? real[c] / n(AACE_CNT_META[c]) * 100 : 0; });
+  pct.conect = n('metaConect') > 0 ? conectRec / n('metaConect') * 100 : 0;
+  const faixaDe = (cnt, campo) => (s[campo] && s[campo] !== 'auto') ? Number(s[campo]) - 1 : s2FaixaAdicionalIdx(pct[cnt]);
+  const fx = { voz: faixaDe('voz', 'faixaMovel'), movelBl: faixaDe('movelBl', 'faixaMovel'),
+    fixaBl: faixaDe('fixaBl', 'faixaFixa'), fixaTv: faixaDe('fixaTv', 'faixaFixa'), fixaFone: faixaDe('fixaFone', 'faixaFixa'),
+    conect: faixaDe('conect', 'faixaConect') };
+  Object.keys(AACE_CNT_META).forEach(c => {
+    if (real[c] > 0 && n(AACE_CNT_META[c]) <= 0 && s[c === 'voz' || c === 'movelBl' ? 'faixaMovel' : 'faixaFixa'] === 'auto') {
+      avisos.push('Meta de ' + { voz: 'Móvel Voz', movelBl: 'Móvel BL', fixaBl: 'Fixa BL', fixaTv: 'Fixa TV', fixaFone: 'Fixa Fone' }[c] + ' não informada: sem fator adicional.');
+    }
+  });
+
+  const fixoDe = (linha, cluster) => { const t = AACE_T1[linha]; return master ? { dentro: t.mDentro, fora: t.mFora } : { dentro: t[cluster], fora: t.eFora }; };
+
+  // tipos de pedido com qtd × ticket (2.2-iv: receita contratada × fator)
+  const itens = AACE_ITENS.map(it => {
+    const seg = it.grupo === 'movel' ? 'movel' : 'fixa';
+    const c = C[seg];
+    const f = fixoDe(it.linha, c);
+    const plug = it.plug ? AACE_PLUGIN_PORT_VOZ : 0;
+    const f_ = fx[it.cnt];
+    const adic = f_ >= 0 ? AACE_ADIC[it.adic][f_][c] : 0;
+    const fator = (1 - pf) * (f.dentro + adic + plug) + pf * (f.fora + plug);
+    const qtd = n(it.k + 'Qtd'), receita = qtd * n(it.k + 'Ticket');
+    return { ...it, cluster: c, qtd, receita, fixo: f.dentro, adic, plug, fator, comissao: receita * fator };
+  });
+  const so = (linha, receita, cluster) => { const f = fixoDe(linha, cluster); const fator = (1 - pf) * f.dentro + pf * f.fora; return { receita, fator, comissao: receita * fator }; };
+  const modulos = so('movelL3', n('modulosRec'), C.movel);
+  const m2m = so('m2m', n('m2mRec'), C.movel);
+  const hotel = so('hotel', n('hotelRec'), C.fixa);
+  const adicConect = fx.conect >= 0 ? AACE_ADIC.CONECT[fx.conect][C.conect] : 0;
+  const conect = { receita: conectRec, fator: (1 - pf) * (AACE_CONECT_ATIVACAO + adicConect) + pf * AACE_CONECT_ATIVACAO, adic: adicConect };
+  conect.comissao = conectRec * conect.fator;
+  const conectRenov = { receita: n('conectRenovRec'), fator: AACE_CONECT_RENOV };
+  conectRenov.comissao = conectRenov.receita * conectRenov.fator;
+  const sdFator = s.sdFator === '' ? 1 : n('sdFator') / 100;
+  const sd = { receita: n('sdRec'), fator: sdFator, comissao: n('sdRec') * sdFator };
+  const tabRenov = s.renovTabela === '2' ? AACE_RENOV_T2 : GF_RENOVACAO_TABELA1;
+  const renovFator = Math.round(tabRenov[Math.min(Math.max(Number(s.renovFaixa || 3) - 1, 0), 6)][C.movel] * 100) / 100; // 2.4-vi-b: 2 casas
+  const renov = { receita: n('renovRec'), fator: renovFator, comissao: n('renovRec') * renovFator };
+  const conv = { receita: n('convRec'), fator: s.convFator === '' ? AACE_PLUGIN_CONVERGENCIA : n('convFator') };
+  conv.comissao = conv.receita * conv.fator;
+
+  const soma = a => a.reduce((x, y) => x + y, 0);
+  const ehMovel = i => i.grupo === 'movel';
+  const comMovel = soma(itens.filter(ehMovel).map(i => i.comissao));
+  const comTtPre = itens.find(i => i.k === 'ttPre').comissao;
+  const comFixa = soma(itens.filter(i => !ehMovel(i)).map(i => i.comissao)) + hotel.comissao;
+  const comAtivacao = comMovel + modulos.comissao + m2m.comissao + comFixa + conect.comissao + conectRenov.comissao + sd.comissao;
+  // 2.5.5-ii: Ativação Móvel (Novo, Increm., Portab., TT Pré) + Fixa + Conectividade + SD — sem M2M/módulos/renovação
+  const baseBonusCat = comMovel + comFixa + conect.comissao + sd.comissao;
+  // 2.6.5-v/vi: ativações (Móvel, R&T, SD, Fixa, Conectividade) — sem renovação/migração nem TT Pré/Pós
+  const baseTeto = (comMovel - comTtPre) + m2m.comissao + comFixa + conect.comissao + sd.comissao;
+
+  // ── Bônus Categoria (2.5) ──
+  const mb = AACE_METAS_BONUS[regiao];
+  const forcaD = (campo, auto) => (s[campo] && s[campo] !== 'auto') ? Number(s[campo]) : auto;
+  const dv = forcaD('dvForca', aaceDesempenho(n('cnpjNovoVoz'), mb.voz)), db = forcaD('dbForca', aaceDesempenho(n('cnpjNovoBl'), mb.bl));
+  const gross = n('gross'), canc = n('cancel');
+  const netAdds = gross - canc;
+  const pctNet = gross > 0 ? netAdds / gross * 100 : 0;
+  const dn = forcaD('dnForca', aaceDesempNetAdds(pctNet, gross > 0)), dc = forcaD('dcForca', aaceDesempChurn(n('churn')));
+  const x100 = 35 * dv + 30 * db + 17.5 * dn + 17.5 * dc; // nota final × 100 (35%/30%/17,5%/17,5%)
+  const nota100 = g.arred === 'cima' ? Math.round(x100) : Math.floor(x100);
+  const catAuto = aaceCategoriaDaNota(nota100, dv, db);
+  if (x100 % 1 !== 0) {
+    const cF = aaceCategoriaDaNota(Math.floor(x100), dv, db), cC = aaceCategoriaDaNota(Math.round(x100), dv, db);
+    if (cF !== cC) avisos.push('Nota ' + (x100 / 100).toFixed(3).replace('.', ',') + ' é caso limite: vira ' + cC.toUpperCase() + ' se a Claro arredondar e ' + cF.toUpperCase() + ' se cortar as casas (item 2.5.3-iii não define).');
+  }
+  if (gross <= 0 && s.dnForca === 'auto') avisos.push('Net Adds: informe as linhas de Voz ativadas (gross) — sem isso o desempenho é 0.');
+  if (s.churn === '' && s.dcForca === 'auto') avisos.push('Churn Safra não informado: considerado 0% (desempenho 5).');
+  const cat = s.categoria && s.categoria !== 'auto' ? s.categoria : catAuto;
+  const bonusCat = { dv, db, dn, dc, pctNet, netAdds, nota: nota100 / 100, catAuto, cat, pct: BONUS_CATEGORIA_PCT[cat], base: baseBonusCat };
+  bonusCat.valor = bonusCat.pct * baseBonusCat;
+
+  // ── Manutenção de base (2.6) ──
+  const hcs = n('hcs'), cnpjs = n('cnpjs');
+  const razao = n('razaoGrupo') > 0 ? n('razaoGrupo') : (hcs > 0 ? cnpjs / hcs : 0);
+  const tab = g.tabela === 'transicao' ? FAIXAS_CNPJHC_TRANSICAO : FAIXAS_CNPJHC_DEFINITIVA;
+  const fxCh = (s.faixaCnpjHc && s.faixaCnpjHc !== 'auto') ? Number(s.faixaCnpjHc) - 1 : Math.max(0, tab.findIndex(f => razao <= f.max));
+  const negativo = netAdds < 0;
+  let unit, lib;
+  if (master) { unit = negativo ? 0.60 : 1.00; lib = 0.33; }          // 2.6.6
+  else if (negativo) { unit = UNITARIO_NETADDS_NEGATIVO[cat]; lib = 0.33; } // 2.6.4-i
+  else { unit = tab[fxCh].unitario; lib = TETO_LIBERACAO[cat][fxCh]; }      // 2.6.4-ii / 2.6.5-ii
+  const bruto = n('linhasAtivas') * unit, teto = baseTeto * lib;
+  const manut = { razao, faixa: fxCh + 1, unit, lib, negativo, bruto, teto, base: baseTeto, pago: Math.min(bruto, teto), limitou: bruto > teto };
+  if (n('linhasAtivas') > 0 && razao <= 0 && s.faixaCnpjHc === 'auto') avisos.push('Carteira: informe CNPJs e HCs para enquadrar a faixa de CNPJ/HC.');
+
+  // ── Bônus Produtividade (2.7) — só Elite, mínimo 4 vendedores ──
+  const elegivel = !master && hcs >= AACE_MIN_VENDEDORES_ELITE;
+  const realMovel = real.voz - itens.find(i => i.k === 'ttPre').qtd; // 2.7-ii-a: Novo, Increm., Portab. Novo e Increm. de Voz (sem TT Pré)
+  const metaM = hcs * n('metaVendVoz'), metaF = hcs * n('metaVendBl'), metaS = hcs * n('metaVendSd');
+  const alM = metaM > 0 ? realMovel / metaM * 100 : 0, alF = metaF > 0 ? real.fixaBl / metaF * 100 : 0, alS = metaS > 0 ? sd.receita / metaS * 100 : 0;
+  const menor = Math.min(alM, alF);
+  let fxP = menor >= 100 ? 3 : menor >= 80 ? 2 : menor >= 60 ? 1 : 0;
+  if (alM < 60 || alF < 60) fxP = 0;                // dupla performance mínima
+  const retro = fxP > 0 && alS < 100;                // SD < 100% retroage uma faixa (1 → 0)
+  if (retro) fxP -= 1;
+  const valorVend = FAIXAS_BONUS_PRODUTIVIDADE[fxP].valor;
+  const prod = { elegivel, alM, alF, alS, faixa: fxP, retro, valorVend, total: elegivel ? hcs * valorVend : 0 };
+  if (!master && hcs > 0 && hcs < AACE_MIN_VENDEDORES_ELITE) avisos.push('Bônus Produtividade: Elite precisa de no mínimo ' + AACE_MIN_VENDEDORES_ELITE + ' vendedores (HCs).');
+  if (master) avisos.push('Master: cluster sempre P, sem Bônus Produtividade, Manutenção de Carteira a R$ 1,00/R$ 0,60 com teto de 33% (item 2.6.6).');
+
+  const total = comAtivacao + renov.comissao + conv.comissao + bonusCat.valor + manut.pago + prod.total;
+  const fxForca = { voz: s.faixaMovel !== 'auto', movelBl: s.faixaMovel !== 'auto', fixaBl: s.faixaFixa !== 'auto', fixaTv: s.faixaFixa !== 'auto', fixaFone: s.faixaFixa !== 'auto', conect: s.faixaConect !== 'auto' };
+  return { master, regiao, C, sug, pct, fx, fxForca, real, itens, modulos, m2m, hotel, conect, conectRenov, sd, renov, conv,
+    comMovel, comFixa, comAtivacao, baseBonusCat, baseTeto, bonusCat, manut, prod, total, avisos };
+}
+
+// ─── Interface ───────────────────────────────────────────────────────────────
+function aaceFmtPct(v) { return (v || 0).toFixed(1).replace('.', ',') + '%'; }
+function aaceFmtNum(v) { return (v || 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 }); }
+
+function aaceInputHtml(lado, k, def) {
+  const id = `aace-${lado}-${k}`, v = AACE[lado][k];
+  if (def && def.t === 'sel') {
+    return `<select id="${id}" onchange="aaceAlterou('${lado}','${k}',this.value)">${def.op.map(([val, lab]) => `<option value="${val}"${String(v) === String(val) ? ' selected' : ''}>${lab}</option>`).join('')}</select>`;
+  }
+  return `<input type="number" id="${id}" min="0" step="any" value="${v}" oninput="aaceAlterou('${lado}','${k}',this.value)">`;
+}
+function aaceSecaoHtml(lado, s) {
+  if (s.tipo === 'campos') {
+    return `<div class="aace-sec"><div class="aace-sec-t">${s.titulo}</div><div class="aace-grid">${s.campos.map(c =>
+      `<div class="s2-field"><label for="aace-${lado}-${c.k}">${c.l}</label>${aaceInputHtml(lado, c.k, c)}</div>`).join('')}</div></div>`;
+  }
+  const linhaHtml = r => `<div class="aace-ll">${r.l}</div>${[0, 1].map(i => {
+    const k = r.cols[i];
+    return k ? `<div>${aaceInputHtml(lado, k, AACE_CAMPOS_LINHA[k])}</div>` : '<div></div>';
+  }).join('')}`;
+  const cabHtml = `<div class="aace-lh"></div>${s.cab.map(h => `<div class="aace-lh">${h}</div>`).join('')}`;
+  const basicas = s.linhas.filter(r => !r.mais), mais = s.linhas.filter(r => r.mais);
+  // bloco recolhido abre sozinho se algum campo dele já tem valor (nunca esconder dado digitado)
+  const preenchido = mais.some(r => r.cols.some(k => k && AACE[lado][k] !== '' && String(AACE[lado][k]) !== String((AACE_CAMPOS_LINHA[k] || {}).def ?? '')));
+  return `<div class="aace-sec"><div class="aace-sec-t">${s.titulo}</div><div class="aace-linhas">${cabHtml}${basicas.map(linhaHtml).join('')}</div>
+    ${mais.length ? `<details class="aace-mais"${preenchido ? ' open' : ''}><summary>Outros tipos (${mais.length})</summary><div class="aace-linhas">${mais.map(linhaHtml).join('')}</div></details>` : ''}</div>`;
+}
+function aaceRenderForm() {
+  ['a', 'b'].forEach(lado => {
+    const el = document.getElementById('aace-col-' + lado);
+    if (!el) return;
+    el.innerHTML = `<div class="aace-lado-cab"><div><div class="aace-lado-t">${lado === 'a' ? 'A — Condição atual do AACE' : 'B — Condição com a VST'}</div>
+      <div class="aace-lado-s">${lado === 'a' ? 'O que o AACE recebe hoje, com a produção e o enquadramento dele.' : 'A mesma operação sob o enquadramento da VST.'}</div></div>
+      <div class="aace-lado-total" id="aace-total-${lado}">—</div></div>` + AACE_SECOES.map(s => aaceSecaoHtml(lado, s)).join('');
+  });
+  document.getElementById('aace-g-tabela').value = AACE.g.tabela;
+  document.getElementById('aace-g-arred').value = AACE.g.arred;
+}
+
+function aaceSalvar() { try { localStorage.setItem(AACE_STORAGE_KEY, JSON.stringify(AACE)); } catch (e) { /* sem storage: segue sem lembrar */ } }
+function aaceCarregarSalvo() {
+  try {
+    const bruto = localStorage.getItem(AACE_STORAGE_KEY);
+    if (!bruto) return;
+    const d = JSON.parse(bruto);
+    ['a', 'b'].forEach(l => { if (d[l]) AACE[l] = { ...AACE[l], ...d[l] }; });
+    if (d.g) AACE.g = { ...AACE.g, ...d.g };
+  } catch (e) { /* dado salvo inválido: ignora */ }
+}
+function aaceAlterou(lado, k, v) { AACE[lado][k] = v; aaceSalvar(); aaceRender(); }
+function aaceAlterouGeral(k, v) { AACE.g[k] = v; aaceSalvar(); aaceRender(); }
+
+function aaceMsg(txt, erro) {
+  const el = document.getElementById('aace-msg');
+  if (!el) return;
+  el.textContent = txt || '';
+  el.style.color = erro ? 'var(--red-sem)' : 'var(--text-2)';
+}
+// Copia produção/carteira/indicadores do A para o B (não mexe em enquadramento, metas nem CNPJ/HC do grupo)
+function aaceEspelharProducao() {
+  aaceTodosCampos().filter(c => c.esp).forEach(c => { AACE.b[c.k] = AACE.a[c.k]; });
+  aaceSalvar(); aaceRenderForm(); aaceRender();
+  aaceMsg('Produção, indicadores e carteira do Lado A copiados para o Lado B. Enquadramento, metas e CNPJ/HC do grupo ficam como estavam.');
+}
+function aaceLimpar() {
+  if (!confirm('Limpar todos os campos dos dois lados?')) return;
+  AACE.a = aaceEstadoPadrao('a'); AACE.b = aaceEstadoPadrao('b'); AACE.g = { tabela: 'definitiva', arred: 'truncar' };
+  aaceSalvar(); aaceRenderForm(); aaceRender(); aaceMsg('');
+}
+// Preenche o enquadramento do Lado B com o padrão VST do Simulador 2.0 (competência do seletor de Período)
+async function aaceCarregarPadraoVst() {
+  const periodo = s2PeriodoDoSeletorAtivo();
+  aaceMsg('Buscando o padrão VST de ' + periodo + '…');
+  try {
+    const { data, error } = await supa.from('config_simulador2').select('*').eq('periodo', periodo);
+    if (error) throw new Error(error.message);
+    const v = ch => (data || []).find(d => d.chave === ch)?.valor;
+    const partes = [];
+    if (v('cluster')) { AACE.b.clusterMovel = AACE.b.clusterFixa = AACE.b.clusterConect = String(v('cluster')); partes.push('cluster ' + v('cluster')); }
+    const cn = aaceNum(v('total-cnpjs')), hc = aaceNum(v('total-hcs'));
+    if (cn > 0 && hc > 0) { AACE.b.razaoGrupo = (cn / hc).toFixed(1); partes.push('CNPJ/HC do grupo ' + aaceFmtNum(cn / hc)); }
+    if (!partes.length) { aaceMsg('Não há padrão VST salvo no Simulador 2.0 para ' + periodo + '.', true); return; }
+    aaceSalvar(); aaceRenderForm(); aaceRender();
+    aaceMsg('Padrão VST de ' + periodo + ' aplicado ao Lado B: ' + partes.join(' · ') + '. A faixa de adicional e a categoria da VST você ajusta no Enquadramento do Lado B.');
+  } catch (e) {
+    aaceMsg('Não consegui ler o Simulador 2.0: ' + e.message, true);
+  }
+}
+
+function aaceRender() {
+  if (!document.getElementById('aace-resultado')) return;
+  const ra = aaceCalcular(AACE.a, AACE.g), rb = aaceCalcular(AACE.b, AACE.g);
+  ['a', 'b'].forEach((l, i) => { const el = document.getElementById('aace-total-' + l); if (el) el.textContent = s2fmt([ra, rb][i].total); });
+
+  const dif = (a, b) => {
+    const d = b - a;
+    const p = a > 0 ? ` <span class="aace-pct">(${d >= 0 ? '+' : ''}${aaceFmtPct(d / a * 100)})</span>` : '';
+    return `<span class="${d > 0.005 ? 'aace-pos' : d < -0.005 ? 'aace-neg' : ''}">${d > 0 ? '+' : ''}${s2fmt(d)}${p}</span>`;
+  };
+  const txt = (t, a, b) => `<tr><td>${t}</td><td>${a}</td><td>${b}</td><td></td></tr>`;
+  const din = (t, f, forte) => `<tr class="${forte ? 'aace-forte' : ''}"><td>${t}</td><td>${s2fmt(f(ra))}</td><td>${s2fmt(f(rb))}</td><td>${dif(f(ra), f(rb))}</td></tr>`;
+  const cab = t => `<tr class="aace-grupo"><td colspan="4">${t}</td></tr>`;
+  const faixaTxt = (r, c) => {
+    const f = r.fx[c], meta = ['100%', '120%', '140%'][f];
+    if (f < 0) return r.fxForca[c] ? 'Abaixo de 100% (escolhido)' : `Sem adicional (${aaceFmtPct(r.pct[c])} da meta)`;
+    return r.fxForca[c] ? `${meta} da meta — Faixa ${f + 1} (escolhido)` : `Faixa ${f + 1} (${aaceFmtPct(r.pct[c])} da meta)`;
+  };
+  const exInf = l => AACE[l].extratoTotal === '' ? null : aaceNum(AACE[l].extratoTotal);
+  const exA = exInf('a'), exB = exInf('b');
+  const extRows = (exA !== null || exB !== null) ? `${cab('Conferência com o extrato')}
+    <tr><td>Total pago no extrato (informado)</td><td>${exA !== null ? s2fmt(exA) : '—'}</td><td>${exB !== null ? s2fmt(exB) : '—'}</td><td></td></tr>
+    <tr><td>Simulado − extrato</td><td>${exA !== null ? dif(exA, ra.total) : '—'}</td><td>${exB !== null ? dif(exB, rb.total) : '—'}</td><td></td></tr>` : '';
+  const catTxt = r => `${r.bonusCat.cat.toUpperCase()} · nota ${r.bonusCat.nota.toFixed(2).replace('.', ',')}${r.bonusCat.cat !== r.bonusCat.catAuto ? ' (forçada)' : ''}`;
+  const desemp = r => `${r.bonusCat.dv} · ${r.bonusCat.db} · ${r.bonusCat.dn} · ${r.bonusCat.dc}`;
+
+  const html = `<table class="aace-tab"><thead><tr><th>Item</th><th>A — AACE atual</th><th>B — Com a VST</th><th>Diferença (B − A)</th></tr></thead><tbody>
+    ${cab('Enquadramento')}
+    ${txt('Modalidade', ra.master ? 'Master' : 'Elite', rb.master ? 'Master' : 'Elite')}
+    ${txt('Cluster — Móvel / Fixa / Conectividade', `${ra.C.movel} / ${ra.C.fixa} / ${ra.C.conect}`, `${rb.C.movel} / ${rb.C.fixa} / ${rb.C.conect}`)}
+    ${txt('Adicional — Móvel Voz', faixaTxt(ra, 'voz'), faixaTxt(rb, 'voz'))}
+    ${txt('Adicional — Fixa Básica BL', faixaTxt(ra, 'fixaBl'), faixaTxt(rb, 'fixaBl'))}
+    ${txt('Desempenho (CNPJ Novo Voz · BL · Net Adds · Churn)', desemp(ra), desemp(rb))}
+    ${txt('Categoria do Bônus', catTxt(ra), catTxt(rb))}
+    ${txt('Net Adds do mês', `${aaceFmtNum(ra.bonusCat.netAdds)} linhas (${aaceFmtPct(ra.bonusCat.pctNet)})`, `${aaceFmtNum(rb.bonusCat.netAdds)} linhas (${aaceFmtPct(rb.bonusCat.pctNet)})`)}
+    ${txt('CNPJ/HC — faixa e unitário', `${aaceFmtNum(ra.manut.razao)} → Faixa ${ra.manut.faixa} · ${s2fmt(ra.manut.unit)}/linha`, `${aaceFmtNum(rb.manut.razao)} → Faixa ${rb.manut.faixa} · ${s2fmt(rb.manut.unit)}/linha`)}
+    ${cab('Remuneração de ativação (receita contratada × fator)')}
+    ${din('Móvel — Voz e Banda Larga', r => r.comMovel)}
+    ${din('Móvel — módulos e TT Pós', r => r.modulos.comissao)}
+    ${din('Móvel — M2M', r => r.m2m.comissao)}
+    ${din('Fixa Básica (BL, TV, Fone) e Hotel/Hospital', r => r.comFixa)}
+    ${din('Conectividade Avançada (ativação e Conecta)', r => r.conect.comissao + r.conectRenov.comissao)}
+    ${din('Soluções Digitais e SVA', r => r.sd.comissao)}
+    ${din('Renovação / Migração Móvel', r => r.renov.comissao)}
+    ${din('Plugin de Convergência', r => r.conv.comissao)}
+    ${cab('Bônus e carteira')}
+    ${din('Bônus Categoria (% sobre a base de ativação)', r => r.bonusCat.valor)}
+    ${din('Manutenção de Carteira (já com o teto)', r => r.manut.pago)}
+    ${din('Bônus Produtividade', r => r.prod.total)}
+    ${din('TOTAL DO MÊS', r => r.total, true)}
+    ${extRows}
+    ${cab('Detalhes dos cálculos')}
+    ${txt('Base do Bônus Categoria', `${s2fmt(ra.baseBonusCat)} × ${aaceFmtPct(ra.bonusCat.pct * 100)}`, `${s2fmt(rb.baseBonusCat)} × ${aaceFmtPct(rb.bonusCat.pct * 100)}`)}
+    ${txt('Manutenção: bruto × teto', `${s2fmt(ra.manut.bruto)} × ${s2fmt(ra.manut.teto)} (${aaceFmtPct(ra.manut.lib * 100)} de ${s2fmt(ra.manut.base)})${ra.manut.limitou ? ' — TETO APLICADO' : ''}`, `${s2fmt(rb.manut.bruto)} × ${s2fmt(rb.manut.teto)} (${aaceFmtPct(rb.manut.lib * 100)} de ${s2fmt(rb.manut.base)})${rb.manut.limitou ? ' — TETO APLICADO' : ''}`)}
+    ${txt('Produtividade: Móvel · Fixa BL · SD', ra.prod.elegivel ? `${aaceFmtPct(ra.prod.alM)} · ${aaceFmtPct(ra.prod.alF)} · ${aaceFmtPct(ra.prod.alS)} → Faixa ${ra.prod.faixa}${ra.prod.retro ? ' (retroagiu por SD)' : ''} · ${s2fmt(ra.prod.valorVend)}/vendedor` : 'Não elegível', rb.prod.elegivel ? `${aaceFmtPct(rb.prod.alM)} · ${aaceFmtPct(rb.prod.alF)} · ${aaceFmtPct(rb.prod.alS)} → Faixa ${rb.prod.faixa}${rb.prod.retro ? ' (retroagiu por SD)' : ''} · ${s2fmt(rb.prod.valorVend)}/vendedor` : 'Não elegível')}
+  </tbody></table>`;
+  document.getElementById('aace-resultado').innerHTML = html;
+
+  const av = (r, l) => r.avisos.map(a => `<li><b>${l}:</b> ${a}</li>`).join('');
+  document.getElementById('aace-avisos').innerHTML = (ra.avisos.length || rb.avisos.length) ? `<ul>${av(ra, 'A')}${av(rb, 'B')}</ul>` : '<span style="color:var(--text-3)">Sem avisos.</span>';
+}
+
+function initAace() {
+  if (!_aaceIniciou) {
+    aaceCarregarSalvo();
+    aaceRenderForm();
+    _aaceIniciou = true;
+  }
+  aaceRender();
+}
+
 function simulador2SwitchSubTab(nome) {
   document.getElementById('sim2-subtab-btn-novo').classList.toggle('active', nome === 'novo');
   document.getElementById('sim2-subtab-btn-classico').classList.toggle('active', nome === 'classico');
