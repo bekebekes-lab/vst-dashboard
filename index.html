@@ -1170,6 +1170,10 @@
   .aace-forte td { font-weight: 700; font-size: 14px; border-top: 2px solid var(--border-strong); }
   .aace-linhas.aace-c1 { grid-template-columns: minmax(150px, 2fr) minmax(0, 1fr); }
   .aace-imp-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 16px; margin: 6px 0 10px; }
+  .aace-sim-form { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; margin: 6px 0 8px; }
+  .aace-sim-form .pn-fg { flex: 1 1 280px; max-width: 460px; }
+  #aace-simulacoes input[type="text"] { width: 100%; box-sizing: border-box; height: 30px; border: 1.5px solid var(--border-strong); border-radius: 4px; padding: 0 8px; font-size: 12px; font-family: inherit; }
+  #aace-simulacoes input[type="text"]:focus { border-color: var(--brand); outline: none; }
   .aace-imp-acoes { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
   #aace-importador input[type="file"] { width: 100%; font-size: 12px; }
   #aace-importador textarea { width: 100%; box-sizing: border-box; border: 1.5px solid var(--border-strong); border-radius: 4px; padding: 8px; font-size: 12px; font-family: inherit; resize: vertical; }
@@ -2634,10 +2638,11 @@
     <div class="pn-hero">
       <div class="pn-titulo">SIMULADOR DE AACE</div>
       <div class="pn-hero-dir">
+        <button class="pn-btn-claro" onclick="aaceSimAbrirPainel()" title="Salva a simulação com um nome e abre as dos outros admins">Simulações salvas</button>
         <button class="pn-btn-claro" onclick="aaceAbrirImportador()" title="Preenche o Lado A com o analítico de comissão (CSV) e o extrato resumido do AACE">Importar extrato</button>
         <button class="pn-btn-claro" onclick="aaceCarregarPadraoVst()" title="Lê o cluster e o CNPJ/HC da VST salvos no Simulador 2.0 e aplica ao Lado B">Cluster e CNPJ/HC da VST</button>
         <button class="pn-btn-claro" onclick="aaceLimpar()" title="Limpa os campos dos dois lados">Limpar</button>
-        <div class="pn-pill">Política Claro · Lado A × Lado B</div>
+        <div class="pn-pill" id="aace-pill">Política Claro · Lado A × Lado B</div>
       </div>
     </div>
     <div class="pn-filtros aace-filtros">
@@ -2651,6 +2656,21 @@
     </div>
     <div class="pn-nota aace-intro">A = o que a política paga ao AACE operando isolado. B = a mesma operação dentro dos KPIs da VST. A produção, as metas e as linhas de carteira lançadas no A são copiadas para o B (🔒). Nada vem preenchido: informe os números ou escolha cluster, categoria e atingimento direto nos seletores.</div>
     <div class="pn-nota" id="aace-msg"></div>
+
+    <div class="pn-card" id="aace-simulacoes" style="display:none">
+      <div class="pn-card-cab"><h3>Simulações salvas — visíveis a todos os admins</h3><button class="pn-btn-claro" onclick="aaceSimAbrirPainel()">Fechar</button></div>
+      <div class="aace-sim-form">
+        <div class="pn-fg">
+          <label for="aace-sim-nome">Nome da simulação</label>
+          <input type="text" id="aace-sim-nome" maxlength="120" placeholder="Ex.: AACE Cascavel — extrato set/26">
+        </div>
+        <button class="pn-btn-claro" onclick="aaceSimSalvar(false)">Salvar como nova</button>
+        <button class="pn-btn-claro" id="aace-sim-btn-atualizar" style="display:none" onclick="aaceSimSalvar(true)">Atualizar a simulação aberta</button>
+        <button class="pn-btn-claro" onclick="aaceSimListar()">↻ Atualizar lista</button>
+      </div>
+      <div class="pn-nota" id="aace-sim-msg"></div>
+      <div id="aace-sim-lista" class="aace-tab-wrap"></div>
+    </div>
 
     <div class="pn-card" id="aace-importador" style="display:none">
       <div class="pn-card-cab"><h3>Importar extrato do AACE para o Lado A</h3><button class="pn-btn-claro" onclick="aaceAbrirImportador()">Fechar</button></div>
@@ -8832,6 +8852,7 @@ function aaceLimpar() {
   aaceSalvar(); aaceRenderForm(); aaceRender(); aaceMsg('');
   const imp = document.getElementById('aace-importador'), res = document.getElementById('aace-imp-res');
   if (imp) imp.style.display = 'none';
+  _aaceSim = null; const nomeSim = document.getElementById('aace-sim-nome'); if (nomeSim) nomeSim.value = ''; aaceSimAtualizarUi();
   if (res) res.textContent = '';
   aaceMinimizarTudo();
 }
@@ -9258,6 +9279,111 @@ async function aaceImportar() {
     aaceMsg('Lado A preenchido pelo extrato importado. O Lado B copiou a produção; ajuste o enquadramento e os KPIs dele.');
   } catch (e) {
     res.textContent = 'Não consegui importar: ' + e.message;
+  }
+}
+
+// ─── Simulações salvas (compartilhadas entre os admins) ─────────────────────────────────────────────────────────
+// Tabela public.simulacoes_aace (migração 20261102000001): todos os admins leem; só quem salvou atualiza ou apaga.
+// O que vai para o banco são só os números da simulação (produção, KPIs, enquadramento) — nenhum dado de cliente.
+let _aaceSim = null; // simulação aberta: { id, nome, dono, donoNome }
+
+function aaceSimMsg(txt, erro) {
+  const el = document.getElementById('aace-sim-msg');
+  if (!el) return;
+  el.textContent = txt || '';
+  el.style.color = erro ? 'var(--red-sem)' : 'var(--text-2)';
+}
+function aaceSimErro(e) {
+  const m = String((e && (e.message || e.details)) || e || '');
+  if (/does not exist|schema cache|42P01|PGRST205/i.test(m)) return 'O recurso ainda não foi ativado no banco: falta criar a tabela simulacoes_aace (migração 20261102000001_simulacoes_aace.sql).';
+  if (/row-level security|permission denied|42501/i.test(m)) return 'Sem permissão: as simulações são só dos admins, e só quem salvou pode alterar ou apagar a sua.';
+  return 'Não consegui completar: ' + m;
+}
+function aaceSimAtualizarUi() {
+  const dono = _aaceSim && USUARIO_ATUAL && _aaceSim.dono === USUARIO_ATUAL.id;
+  const pill = document.getElementById('aace-pill');
+  if (pill) pill.textContent = _aaceSim ? 'Simulação: ' + _aaceSim.nome : 'Política Claro · Lado A × Lado B';
+  const btn = document.getElementById('aace-sim-btn-atualizar');
+  if (btn) btn.style.display = dono ? '' : 'none';
+}
+function aaceSimAbrirPainel() {
+  const el = document.getElementById('aace-simulacoes');
+  if (!el) return;
+  const abrir = el.style.display === 'none';
+  el.style.display = abrir ? '' : 'none';
+  if (abrir) aaceSimListar();
+}
+async function aaceSimListar() {
+  const box = document.getElementById('aace-sim-lista');
+  if (!box) return;
+  box.innerHTML = '<div class="pn-vazio">Carregando…</div>';
+  try {
+    const { data, error } = await supa.from('simulacoes_aace').select('id,nome,criado_por,criado_por_nome,atualizado_em').order('atualizado_em', { ascending: false });
+    if (error) throw error;
+    if (!data.length) { box.innerHTML = '<div class="pn-vazio">Nenhuma simulação salva ainda.</div>'; return; }
+    const meu = USUARIO_ATUAL && USUARIO_ATUAL.id;
+    const quando = d => new Date(d).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+    box.innerHTML = `<table class="aace-tab"><thead><tr><th>Nome</th><th>Salva por</th><th>Atualizada em</th><th></th></tr></thead><tbody>${data.map(r => `<tr>
+      <td>${escapeHtml(r.nome)}${_aaceSim && _aaceSim.id === r.id ? ' <span class="aace-demo-x">(aberta)</span>' : ''}</td><td>${escapeHtml(r.criado_por_nome || '—')}</td><td>${quando(r.atualizado_em)}</td>
+      <td style="white-space:nowrap"><button class="pn-btn-claro" onclick="aaceSimAbrir('${r.id}')">Abrir</button>${r.criado_por === meu ? ` <button class="pn-btn-claro" onclick="aaceSimExcluir('${r.id}')">Excluir</button>` : ''}</td></tr>`).join('')}</tbody></table>`;
+  } catch (e) {
+    box.innerHTML = '';
+    aaceSimMsg(aaceSimErro(e), true);
+  }
+}
+async function aaceSimSalvar(atualizar) {
+  const nome = (document.getElementById('aace-sim-nome').value || '').trim();
+  if (!nome) { aaceSimMsg('Dê um nome à simulação antes de salvar.', true); return; }
+  if (!USUARIO_ATUAL) { aaceSimMsg('Faça login para salvar.', true); return; }
+  const dados = { v: 1, a: AACE.a, b: AACE.b, g: AACE.g };
+  try {
+    if (atualizar && _aaceSim) {
+      const { data, error } = await supa.from('simulacoes_aace').update({ nome, dados, atualizado_em: new Date().toISOString() }).eq('id', _aaceSim.id).select('id');
+      if (error) throw error;
+      if (!data || !data.length) { aaceSimMsg('Só quem salvou a simulação pode atualizá-la. Use "Salvar como nova" para guardar a sua cópia.', true); return; }
+      _aaceSim.nome = nome;
+      aaceSimMsg('Simulação "' + nome + '" atualizada.');
+    } else {
+      const { data, error } = await supa.from('simulacoes_aace').insert({ nome, dados, criado_por: USUARIO_ATUAL.id, criado_por_nome: USUARIO_ATUAL.nome || USUARIO_ATUAL.email || null }).select('id').single();
+      if (error) throw error;
+      _aaceSim = { id: data.id, nome, dono: USUARIO_ATUAL.id, donoNome: USUARIO_ATUAL.nome || '' };
+      aaceSimMsg('Simulação "' + nome + '" salva. Os outros admins já conseguem abri-la.');
+    }
+    aaceSimAtualizarUi();
+    aaceSimListar();
+  } catch (e) {
+    aaceSimMsg(aaceSimErro(e), true);
+  }
+}
+async function aaceSimAbrir(id) {
+  try {
+    const { data, error } = await supa.from('simulacoes_aace').select('id,nome,dados,criado_por,criado_por_nome').eq('id', id).single();
+    if (error) throw error;
+    const d = data.dados || {};
+    AACE.a = { ...aaceEstadoPadrao('a'), ...(d.a || {}) };
+    AACE.b = { ...aaceEstadoPadrao('b'), ...(d.b || {}) };
+    AACE.g = { tabela: 'definitiva', ...(d.g || {}) };
+    _aaceSim = { id: data.id, nome: data.nome, dono: data.criado_por, donoNome: data.criado_por_nome || '' };
+    const meu = USUARIO_ATUAL && USUARIO_ATUAL.id === data.criado_por;
+    document.getElementById('aace-sim-nome').value = meu ? data.nome : data.nome + ' (cópia)';
+    aaceSalvar(); aaceRenderForm(); aaceRender(); aaceSimAtualizarUi();
+    aaceSimMsg('Simulação "' + data.nome + '" aberta' + (data.criado_por_nome ? ' (salva por ' + data.criado_por_nome + ')' : '') + '.' + (meu ? '' : ' Para guardar alterações, use "Salvar como nova".'));
+    aaceSimListar();
+  } catch (e) {
+    aaceSimMsg(aaceSimErro(e), true);
+  }
+}
+async function aaceSimExcluir(id) {
+  if (!confirm('Excluir esta simulação para todos os admins?')) return;
+  try {
+    const { data, error } = await supa.from('simulacoes_aace').delete().eq('id', id).select('id');
+    if (error) throw error;
+    if (!data || !data.length) { aaceSimMsg('Só quem salvou a simulação pode excluí-la.', true); return; }
+    if (_aaceSim && _aaceSim.id === id) { _aaceSim = null; aaceSimAtualizarUi(); }
+    aaceSimMsg('Simulação excluída.');
+    aaceSimListar();
+  } catch (e) {
+    aaceSimMsg(aaceSimErro(e), true);
   }
 }
 
