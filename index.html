@@ -1108,6 +1108,12 @@
   .aace-sec-card summary h3::before, .aace-resumo-sum h3::before { content: '▾'; display: inline-block; margin-right: 8px; color: var(--brand); font-size: 11px; }
   .aace-sec-card details:not([open]) summary h3::before, details:not([open]) > .aace-resumo-sum h3::before { content: '▸'; }
   .aace-resumo-sum { cursor: pointer; list-style: none; margin-bottom: 0; }
+  .aace-cartao > summary { cursor: pointer; list-style: none; margin-bottom: 0; }
+  .aace-cartao[open] > summary { margin-bottom: 8px; }
+  .aace-cartao > summary::-webkit-details-marker { display: none; }
+  .aace-cartao > summary h3::before { content: '▾'; display: inline-block; margin-right: 8px; color: var(--brand); font-size: 11px; }
+  .aace-cartao:not([open]) > summary h3::before { content: '▸'; }
+  #tab-aace .pn-topo { align-items: start; }
   .aace-esp-tag { font-size: 11px; font-weight: 600; color: var(--text-3); }
   .aace-par { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0; margin-top: 8px; }
   .aace-meio { min-width: 0; padding: 4px 22px 6px 0; }
@@ -2630,13 +2636,6 @@
           <option value="transicao">Transição (jun a ago/26)</option>
         </select>
       </div>
-      <div class="pn-fg">
-        <label for="aace-g-arred">Nota final com 3ª casa (ex.: 4,825)</label>
-        <select id="aace-g-arred" onchange="aaceAlterouGeral('arred', this.value)">
-          <option value="truncar">Cortar a casa extra (4,82)</option>
-          <option value="cima">Arredondar para cima (4,83)</option>
-        </select>
-      </div>
     </div>
     <div class="pn-nota aace-intro">A = o que a política paga ao AACE operando isolado. B = a mesma operação dentro dos KPIs da VST. A produção, as metas e as linhas de carteira lançadas no A são copiadas para o B (🔒). Nada vem preenchido: informe os números ou escolha cluster, categoria e atingimento direto nos seletores.</div>
     <div class="pn-nota" id="aace-msg"></div>
@@ -2677,27 +2676,27 @@
     </div>
 
     <div class="pn-topo">
-      <div class="pn-card">
-        <div class="pn-card-cab">
+      <details class="pn-card aace-cartao">
+        <summary class="pn-card-cab">
           <h3>Remuneração por componente</h3>
           <div class="aace-leg-wrap"><span class="aace-leg"><i class="pn-dot" style="background:#444"></i>A — AACE atual</span><span class="aace-leg"><i class="pn-dot" style="background:var(--brand)"></i>B — Com a VST</span></div>
-        </div>
+        </summary>
         <div id="aace-barras"></div>
-      </div>
-      <div class="pn-card">
-        <div class="pn-card-cab"><h3>Enquadramento</h3></div>
+      </details>
+      <details class="pn-card aace-cartao">
+        <summary class="pn-card-cab"><h3>Enquadramento</h3></summary>
         <div id="aace-enq" class="aace-tab-wrap"></div>
-      </div>
+      </details>
     </div>
 
     <div id="aace-secoes"></div>
 
-    <div class="pn-card">
-      <div class="pn-card-cab"><h3>Comparativo detalhado</h3></div>
+    <details class="pn-card aace-cartao">
+      <summary class="pn-card-cab"><h3>Comparativo detalhado e avisos</h3></summary>
       <div id="aace-resultado" class="aace-tab-wrap"></div>
       <div class="pn-card-cab" style="margin-top:14px"><h3>Avisos</h3></div>
       <div id="aace-avisos" class="pn-nota"></div>
-    </div>
+    </details>
 
     <div class="pn-card">
       <details>
@@ -2708,6 +2707,7 @@
           <li>Atingimento de meta: informe a meta e o realizado, ou escolha 100%, 120% ou 140%. O fator adicional só vale a partir de 100% (item 2.3-xv); soluções digitais, M2M, módulos e renovação não recebem adicional.</li>
           <li>Master: cluster sempre P (2.1-ix), fatores fixos da coluna Master, sem Bônus Produtividade, carteira a R$ 1,00/R$ 0,60 com teto de 33%. O item 2.3 não exclui o Master do adicional por meta.</li>
           <li>Fora da área de atuação: usa os fatores "fora da área" da Tabela 1 e não recebe adicional (a política não detalha o adicional fora da área).</li>
+          <li>Nota final do Bônus Categoria: duas casas decimais, arredondando para cima na 3ª casa (0,875 vira 0,88), como mostram os extratos reais; o item 2.5.3-iii da política só diz "duas casas decimais".</li>
           <li>Net Adds = linhas ativadas − canceladas; zero conta como positivo. Teto de carteira e Bônus Categoria seguem as bases dos itens 2.6.5 e 2.5.5.</li>
           <li>Bônus Produtividade: sem a rampa de vendedores novos (todos cobrados a 100% da meta) e só para Elite com 4 ou mais HCs.</li>
           <li>Ainda não modelado: meta mínima de AACE novo, estornos, Programa Nacional (2.9), novos credenciamentos (2.10), órgãos públicos, produtos de alto valor, renovação de contratos (2.14), negociações especiais.</li>
@@ -8541,7 +8541,7 @@ function aaceEstadoPadrao(lado) {
   aaceTodosCampos().forEach(c => { e[c.k] = c.def !== undefined ? c.def : ''; });
   return e;
 }
-let AACE = { a: aaceEstadoPadrao('a'), b: aaceEstadoPadrao('b'), g: { tabela: 'definitiva', arred: 'cima' } };
+let AACE = { a: aaceEstadoPadrao('a'), b: aaceEstadoPadrao('b'), g: { tabela: 'definitiva' } };
 let _aaceIniciou = false;
 
 // ─── Funções puras de cálculo ────────────────────────────────────────────────
@@ -8676,12 +8676,8 @@ function aaceCalcular(s, g) {
   const pctNet = pctDireto ? n('netAddsPct') : (gross > 0 ? netAdds / gross * 100 : 0);
   const dn = forcaD('dnForca', aaceDesempNetAdds(pctNet, pctDireto || gross > 0), 'dn'), dc = forcaD('dcForca', aaceDesempChurn(n('churn')), 'dc');
   const x100 = 35 * dv + 30 * db + 17.5 * dn + 17.5 * dc; // nota final × 100 (35%/30%/17,5%/17,5%)
-  const nota100 = g.arred === 'cima' ? Math.round(x100) : Math.floor(x100);
+  const nota100 = Math.round(x100); // 2 casas, meio para cima: o extrato real mostra 0,875 → 0,88 e 1,575 → 1,58
   const catAuto = aaceCategoriaDaNota(nota100, dv, db);
-  if (x100 % 1 !== 0) {
-    const cF = aaceCategoriaDaNota(Math.floor(x100), dv, db), cC = aaceCategoriaDaNota(Math.round(x100), dv, db);
-    if (cF !== cC) avisos.push('Nota ' + (x100 / 100).toFixed(3).replace('.', ',') + ' é caso limite: vira ' + cC.toUpperCase() + ' se a Claro arredondar e ' + cF.toUpperCase() + ' se cortar as casas (item 2.5.3-iii não define).');
-  }
   if (gross <= 0 && !pctDireto && s.dnForca === 'auto') avisos.push('Net Adds: informe as linhas de Voz ativadas (gross) — sem isso o desempenho é 0.');
   if (s.churn === '' && s.dcForca === 'auto') avisos.push('Churn Safra não informado: considerado 0% (desempenho 5).');
   const cat = s.categoria && s.categoria !== 'auto' ? s.categoria : catAuto;
@@ -8764,20 +8760,24 @@ function aaceSecaoPreenchida(s) {
   const pad = aaceEstadoPadrao('a');
   return ks.some(k => ['a', 'b'].some(l => { const v = aaceValor(l, k); return v !== '' && String(v) !== String(pad[k]); }));
 }
+// Recolhe todos os cartões (seções, resultados, "Outros tipos", premissas) — ao entrar na aba e ao limpar
+function aaceMinimizarTudo() {
+  document.querySelectorAll('#tab-aace details').forEach(d => { d.open = false; });
+}
 function aaceRenderForm() {
   const el = document.getElementById('aace-secoes');
+  // reconstruir o formulário (importar, padrão VST…) não pode fechar o que o usuário abriu
+  const abertas = new Set([...document.querySelectorAll('#aace-secoes details[data-sec]')].filter(d => d.open).map(d => d.dataset.sec));
   if (el) {
     el.innerHTML = AACE_SECOES.map(s => {
       if (s.somenteImport && !aaceSecaoPreenchida(s)) return '';
       const trava = AACE_SECOES_ESPELHADAS.includes(s.id);
       const meio = (l, nome, cor) => `<div class="aace-meio aace-meio-${l}"><div class="aace-meio-t"><i class="pn-dot" style="background:${cor}"></i>${nome}</div>${aaceCorpoHtml(l, s)}</div>`;
-      const abrir = !s.somenteImport;
-      return `<div class="pn-card aace-sec-card"><details${abrir ? ' open' : ''}><summary class="pn-card-cab"><h3>${s.titulo}</h3>${s.somenteImport ? '<span class="aace-esp-tag">🔒 vem do extrato importado — somente leitura</span>' : (trava ? '<span class="aace-esp-tag">🔒 o Lado B copia o Lado A</span>' : '')}</summary>
+      return `<div class="pn-card aace-sec-card"><details data-sec="${s.id}"${abertas.has(s.id) ? ' open' : ''}><summary class="pn-card-cab"><h3>${s.titulo}</h3>${s.somenteImport ? '<span class="aace-esp-tag">🔒 vem do extrato importado — somente leitura</span>' : (trava ? '<span class="aace-esp-tag">🔒 o Lado B copia o Lado A</span>' : '')}</summary>
         <div class="aace-par">${meio('a', 'A — AACE atual', '#444')}${meio('b', 'B — Com a VST', 'var(--brand)')}</div></details></div>`;
     }).join('');
   }
   document.getElementById('aace-g-tabela').value = AACE.g.tabela;
-  document.getElementById('aace-g-arred').value = AACE.g.arred;
 }
 
 function aaceSalvar() { try { localStorage.setItem(AACE_STORAGE_KEY, JSON.stringify(AACE)); } catch (e) { /* sem storage: segue sem lembrar */ } }
@@ -8806,8 +8806,12 @@ function aaceMsg(txt, erro) {
 }
 function aaceLimpar() {
   if (!confirm('Limpar todos os campos dos dois lados?')) return;
-  AACE.a = aaceEstadoPadrao('a'); AACE.b = aaceEstadoPadrao('b'); AACE.g = { tabela: 'definitiva', arred: 'cima' };
+  AACE.a = aaceEstadoPadrao('a'); AACE.b = aaceEstadoPadrao('b'); AACE.g = { tabela: 'definitiva' };
   aaceSalvar(); aaceRenderForm(); aaceRender(); aaceMsg('');
+  const imp = document.getElementById('aace-importador'), res = document.getElementById('aace-imp-res');
+  if (imp) imp.style.display = 'none';
+  if (res) res.textContent = '';
+  aaceMinimizarTudo();
 }
 // Preenche o enquadramento do Lado B com o padrão VST do Simulador 2.0 (competência do seletor de Período)
 async function aaceCarregarPadraoVst() {
@@ -9150,6 +9154,7 @@ function initAace() {
     _aaceIniciou = true;
   }
   aaceRender();
+  aaceMinimizarTudo(); // toda vez que a aba é aberta, tudo começa minimizado
 }
 
 function simulador2SwitchSubTab(nome) {
