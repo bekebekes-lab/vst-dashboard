@@ -1114,6 +1114,11 @@
   .aace-cartao > summary h3::before { content: '▾'; display: inline-block; margin-right: 8px; color: var(--brand); font-size: 11px; }
   .aace-cartao:not([open]) > summary h3::before { content: '▸'; }
   #tab-aace .pn-topo { align-items: start; }
+  @media (min-width: 1250px) { #tab-aace .pn-topo { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  .aace-demo-x { color: var(--text-3); font-size: 11px; }
+  .aace-demo-tab td:not(:first-child), .aace-demo-tab th:not(:first-child) { text-align: right; white-space: nowrap; }
+  .aace-demo-tab .aace-tot td { font-weight: 700; border-top: 2px solid var(--border-strong); }
+  .aace-demo-sub { margin: 14px 0 6px; font-size: 11px; font-weight: 700; color: var(--text-2); text-transform: uppercase; letter-spacing: .05em; }
   .aace-esp-tag { font-size: 11px; font-weight: 600; color: var(--text-3); }
   .aace-par { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0; margin-top: 8px; }
   .aace-meio { min-width: 0; padding: 4px 22px 6px 0; }
@@ -2683,6 +2688,10 @@
     </div>
 
     <div class="pn-topo">
+      <details class="pn-card aace-cartao">
+        <summary class="pn-card-cab"><h3>Produção lançada — demonstrativo</h3></summary>
+        <div id="aace-demo" class="aace-tab-wrap"></div>
+      </details>
       <details class="pn-card aace-cartao">
         <summary class="pn-card-cab">
           <h3>Remuneração por componente</h3>
@@ -8866,6 +8875,67 @@ function aaceRotulosAuto(lado, r) {
   set('faixaProd', r.prod.elegivel ? `Automático Faixa ${r.prod.faixaAuto} (${s2fmt(FAIXAS_BONUS_PRODUTIVIDADE[r.prod.faixaAuto].valor)} por vendedor)` : 'Automático — não elegível (Master ou menos de 4 HCs)');
 }
 
+// Demonstrativo do que foi lançado: produção por tipo (a mesma nos dois lados) e carteira/KPIs de cada lado
+function aaceDemonstrativo(ra, rb) {
+  const el = document.getElementById('aace-demo');
+  if (!el) return;
+  const A = AACE.a, B = aaceEstadoEfetivo('b');
+  const n = aaceNum;
+  const grupo = t => `<tr class="aace-grupo"><td colspan="4">${t}</td></tr>`;
+  const lin = (nome, qtd, ticket, rec, extra) => `<tr><td>${nome}${extra ? ` <span class="aace-demo-x">${extra}</span>` : ''}</td><td>${qtd === null ? '' : aaceFmtNum(qtd)}</td><td>${ticket === null ? '' : s2fmt(ticket)}</td><td>${s2fmt(rec)}</td></tr>`;
+  let totLinhas = 0, totRec = 0;
+  const partes = [];
+  const bloco = (titulo, linhas) => { if (linhas.length) partes.push(grupo(titulo) + linhas.join('')); };
+
+  const itensDe = g => ra.itens.filter(i => i.grupo === g && (i.qtd > 0 || i.receita > 0)).map(i => {
+    const ex = [n(A[i.k + 'Red']) > 0 ? `${aaceFmtNum(n(A[i.k + 'Red']))} c/ redução` : '', n(A[i.k + 'Fora']) > 0 ? `${aaceFmtNum(n(A[i.k + 'Fora']))} fora da área` : ''].filter(Boolean).join(' · ');
+    totLinhas += i.qtd; totRec += i.receita;
+    return lin(i.l, i.qtd, i.qtd > 0 ? i.receita / i.qtd : 0, i.receita, ex);
+  });
+  bloco('Móvel — ativação', itensDe('movel'));
+  bloco('Fixa Básica — instalações', itensDe('fixa'));
+
+  const renov = ra.renov.linhas.filter(l => l.qtd > 0 || l.receita > 0).map(l => {
+    totRec += l.receita;
+    return lin(`Faixa ${l.faixa} <span class="aace-demo-x">(Delta ${l.delta})</span>`, l.qtd, l.ticket, l.receita, l.red > 0 ? `${aaceFmtNum(Math.min(l.red, l.qtd))} c/ redução` : '');
+  });
+  bloco(`Renovação / Migração — Tabela ${ra.renov.tabela}`, renov);
+
+  const outras = [];
+  const so = (nome, rec, extra) => { if (rec > 0) { totRec += rec; outras.push(lin(nome, null, null, rec, extra)); } };
+  so('Incremento de módulo e TT Pós', ra.modulos.receita);
+  so('M2M', ra.m2m.receita);
+  so('Hotel e Hospital', ra.hotel.receita);
+  so('Conectividade Avançada — ativação', ra.conect.receita);
+  so('Conectividade — Renovação Conecta', ra.conectRenov.receita);
+  so('Soluções Digitais e SVA', ra.sd.receita, `fator ${aaceFmtNum(ra.sd.fator * 100)}%`);
+  so('Plugin de Convergência', ra.conv.receita, `fator ${aaceFmtNum(ra.conv.fator)}`);
+  bloco('Demais receitas', outras);
+
+  const resumo = totLinhas + totRec > 0
+    ? `<table class="aace-tab aace-demo-tab"><thead><tr><th>Item</th><th>Linhas</th><th>Ticket</th><th>Receita</th></tr></thead><tbody>${partes.join('')}
+        <tr class="aace-tot"><td>Total lançado (nos dois lados)</td><td>${aaceFmtNum(totLinhas)}</td><td></td><td>${s2fmt(totRec)}</td></tr></tbody></table>`
+    : '<div class="pn-vazio">Nada lançado ainda: informe a produção do Lado A.</div>';
+
+  const v = (x, fmt) => (x === '' || x === undefined) ? '—' : fmt(n(x));
+  const pct = x => (x === '' || x === undefined) ? '—' : aaceFmtPct(n(x));
+  const fi = (nome, a, b) => `<tr><td>${nome}</td><td>${a}</td><td>${b}</td></tr>`;
+  const num = x => v(x, aaceFmtNum);
+  const carteira = `<div class="aace-demo-sub">Carteira, equipe e indicadores</div>
+    <table class="aace-tab aace-demo-tab"><thead><tr><th>Item</th><th>A</th><th>B</th></tr></thead><tbody>
+      ${fi('Linhas ativas na carteira', num(A.linhasAtivas), num(B.linhasAtivas) + ' <span class="aace-demo-x">(do A)</span>')}
+      ${fi('CNPJs na carteira', num(A.cnpjs), num(B.cnpjs))}
+      ${fi('Vendedores / HCs', num(A.hcs), num(B.hcs))}
+      ${fi('CNPJ/HC (razão usada)', ra.manut.razao > 0 ? aaceFmtNum(ra.manut.razao) : '—', rb.manut.razao > 0 ? aaceFmtNum(rb.manut.razao) : '—')}
+      ${fi('CNPJs novos — Voz / Fixa BL', `${num(A.cnpjNovoVoz)} / ${num(A.cnpjNovoBl)}`, `${num(B.cnpjNovoVoz)} / ${num(B.cnpjNovoBl)}`)}
+      ${fi('Net Adds', ra.bonusCat.direto ? pct(A.netAddsPct) : (n(A.gross) > 0 ? aaceFmtPct(ra.bonusCat.pctNet) : '—'), rb.bonusCat.direto ? pct(B.netAddsPct) : (n(B.gross) > 0 ? aaceFmtPct(rb.bonusCat.pctNet) : '—'))}
+      ${fi('Churn Safra 180 dias', pct(A.churn), pct(B.churn))}
+      ${fi('Metas do mês — Móvel Voz / Fixa BL', `${num(A.metaVoz)} / ${num(A.metaFixaBl)}`, '<span class="aace-demo-x">(do A)</span>')}
+      ${fi('Estornos e recálculos (saldo)', n(A.ajusteSaldo) !== 0 ? s2fmt(n(A.ajusteSaldo)) : '—', n(B.ajusteSaldo) !== 0 ? s2fmt(n(B.ajusteSaldo)) + ' <span class="aace-demo-x">(do A)</span>' : '—')}
+    </tbody></table>`;
+  el.innerHTML = resumo + carteira;
+}
+
 function aaceRender() {
   if (!document.getElementById('aace-resultado')) return;
   const ra = aaceCalcular(AACE.a, AACE.g), rb = aaceCalcular(aaceEstadoEfetivo('b'), AACE.g);
@@ -8986,6 +9056,7 @@ function aaceRender() {
   document.getElementById('aace-barras').innerHTML = comps.length
     ? comps.map(c => `<div class="aace-bar-row"><div class="aace-bar-lab">${c.l}</div><div class="aace-bar-par">${barra(c.a, 'aace-bar-a')}${barra(c.b, 'aace-bar-b')}</div></div>`).join('')
     : '<div class="pn-vazio">Lance a produção no Lado A para ver o comparativo.</div>';
+  aaceDemonstrativo(ra, rb);
 
   const av = (r, l) => r.avisos.map(a => `<li><b>${l}:</b> ${a}</li>`).join('');
   document.getElementById('aace-avisos').innerHTML = (ra.avisos.length || rb.avisos.length) ? `<ul>${av(ra, 'A')}${av(rb, 'B')}</ul>` : '<span style="color:var(--text-3)">Sem avisos.</span>';
