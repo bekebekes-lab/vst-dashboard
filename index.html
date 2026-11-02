@@ -1135,6 +1135,13 @@
     background-repeat: no-repeat; background-position: right 8px center; background-size: 12px;
   }
   .aace-meio select option, #tab-aace .pn-fg select option { background: #fff; color: #222; }
+  /* o estilo geral de campo (.s2-field select:focus) pinta o foco de branco e, com o texto branco, o seletor
+     parecia sumir ao clicar/escolher: aqui ele continua vermelho e o foco aparece como contorno */
+  .aace-meio .s2-field select:focus, .aace-meio .s2-field select:active {
+    background-color: #B01E14; color: #fff; border-color: transparent; outline: 2px solid #1a1a1a; outline-offset: 1px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.5'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 8px center; background-size: 12px;
+  }
   /* travado (espelhado do Lado A) */
   .aace-meio input:disabled { background: #ececec; color: #666; cursor: not-allowed; }
   .aace-meio select:disabled {
