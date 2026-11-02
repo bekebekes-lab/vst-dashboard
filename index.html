@@ -8472,6 +8472,7 @@ const AACE_SECOES = [
     { k: 'faixaFixa', l: 'Atingimento da meta — Fixa Básica', t: 'sel', op: AACE_OP_FAIXA, def: 'auto' },
     { k: 'faixaConect', l: 'Atingimento da meta — Conectividade', t: 'sel', op: AACE_OP_FAIXA, def: 'auto' },
     { k: 'faixaProd', l: 'Faixa do Bônus Produtividade', t: 'sel', op: [['auto', 'Automático (meta × realizado)'], ['0', 'Faixa 0 — R$ 0'], ['1', 'Faixa 1 — R$ 1.200 por vendedor'], ['2', 'Faixa 2 — R$ 1.700 por vendedor'], ['3', 'Faixa 3 — R$ 2.300 por vendedor']], def: 'auto' },
+    { k: 'tetoCarteira', l: 'Teto da recorrência de carteira', t: 'sel', op: [['auto', 'Automático (aplica o teto da política)'], ['sem', 'Sem teto — paga 100% das linhas']], def: 'auto' },
     { k: 'foraPct', l: '% da produção fora da área de atuação', t: 'num', def: '0', esp: true },
   ] },
   { id: 'movel', titulo: '2. Produção do mês — Móvel (Voz)', tipo: 'linhas', cab: ['Linhas', 'Ticket (R$/linha)'],
@@ -8733,7 +8734,8 @@ function aaceCalcular(s, g) {
   else if (negativo) { unit = UNITARIO_NETADDS_NEGATIVO[cat]; lib = 0.33; } // 2.6.4-i
   else { unit = tab[fxCh].unitario; lib = TETO_LIBERACAO[cat][fxCh]; }      // 2.6.4-ii / 2.6.5-ii
   const bruto = n('linhasAtivas') * unit, teto = baseTeto * lib;
-  const manut = { razao, faixa: fxCh + 1, faixaAuto: fxChAuto + 1, unit, lib, negativo, bruto, teto, base: baseTeto, pago: Math.min(bruto, teto), limitou: bruto > teto,
+  const semTeto = s.tetoCarteira === 'sem';  // escolhido: ignora o teto e paga 100% das linhas
+  const manut = { razao, faixa: fxCh + 1, faixaAuto: fxChAuto + 1, unit, lib, negativo, bruto, teto, base: baseTeto, pago: semTeto ? bruto : Math.min(bruto, teto), limitou: !semTeto && bruto > teto, semTeto,
     linhas: n('linhasAtivas'), cat, master, tabela: g.tabela === 'transicao' ? 'transição' : 'definitiva', motivo: master ? 'master' : (negativo ? 'negativo' : 'faixa'), pctNet };
   if (n('linhasAtivas') > 0 && razao <= 0 && s.faixaCnpjHc === 'auto') avisos.push('Carteira: informe CNPJs e HCs para enquadrar a faixa de CNPJ/HC.');
 
@@ -8893,6 +8895,7 @@ function aaceRotulosAuto(lado, r) {
   set('categoria', `Automático ${cat.charAt(0).toUpperCase() + cat.slice(1)} (4 indicadores)`);
   [['dvForca', 'dv'], ['dbForca', 'db'], ['dnForca', 'dn'], ['dcForca', 'dc']].forEach(([k, d]) => set(k, `Automático ${r.dAuto[d]} (pelo valor informado)`));
   set('faixaCnpjHc', `Automático Faixa ${r.manut.faixaAuto} (pela razão)`);
+  set('tetoCarteira', `Automático (teto de ${aaceFmtPct(r.manut.lib * 100)} da base de ativação)`);
   set('faixaProd', r.prod.elegivel ? `Automático Faixa ${r.prod.faixaAuto} (${s2fmt(FAIXAS_BONUS_PRODUTIVIDADE[r.prod.faixaAuto].valor)} por vendedor)` : 'Automático — não elegível (Master ou menos de 4 HCs)');
 }
 
@@ -9007,6 +9010,7 @@ function aaceRender() {
   const manTeto = r => {
     const m = r.manut;
     if (!(m.linhas > 0)) return '—';
+    if (m.semTeto) return `teto ignorado (escolhido): paga 100% das linhas, ${s2fmt(m.bruto)}. Pela política o teto seria ${s2fmt(m.teto)} (${aaceFmtPct(m.lib * 100)} de ${s2fmt(m.base)})` + (m.bruto > m.teto ? `, que cortaria ${s2fmt(m.bruto - m.teto)}` : ', sem cortar nada');
     const quem = m.motivo === 'faixa' ? `categoria ${m.cat.toUpperCase()} × Faixa ${m.faixa}, item 2.6.5-ii` : '33% fixo, itens 2.6.4-i e 2.6.6';
     const res = m.limitou ? `TETO APLICADO: pago ${s2fmt(m.pago)}, cortou ${s2fmt(m.bruto - m.teto)}` : `abaixo do teto: paga os ${s2fmt(m.pago)} inteiros`;
     return `base de ativação ${s2fmt(m.base)} × ${aaceFmtPct(m.lib * 100)} — ${quem} = teto de ${s2fmt(m.teto)} → ${res}`;
