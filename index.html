@@ -8468,6 +8468,7 @@ const AACE_SECOES = [
     { k: 'cnpjNovoBl', l: 'CNPJs novos — Fixa Básica BL', t: 'num', def: '', esp: true },
     { k: 'gross', l: 'Linhas de Voz ativadas no mês (gross)', t: 'num', def: '', esp: true },
     { k: 'cancel', l: 'Linhas de Voz canceladas no mês', t: 'num', def: '', esp: true },
+    { k: 'netAddsPct', l: 'Net Adds % (direto; vale no lugar de gross/cancelamentos)', t: 'num', def: '', esp: true },
     { k: 'churn', l: 'Churn Safra 180 dias Móvel (%)', t: 'num', def: '', esp: true },
     { k: 'dvForca', l: 'Desempenho — CNPJ Novo Voz', t: 'sel', op: AACE_OP_DESEMP, def: 'auto' },
     { k: 'dbForca', l: 'Desempenho — CNPJ Novo Fixa BL', t: 'sel', op: AACE_OP_DESEMP, def: 'auto' },
@@ -8663,9 +8664,11 @@ function aaceCalcular(s, g) {
   const forcaD = (campo, auto, nome) => { dAuto[nome] = auto; return (s[campo] && s[campo] !== 'auto') ? Number(s[campo]) : auto; };
   const dv = forcaD('dvForca', aaceDesempenho(n('cnpjNovoVoz'), mb.voz), 'dv'), db = forcaD('dbForca', aaceDesempenho(n('cnpjNovoBl'), mb.bl), 'db');
   const gross = n('gross'), canc = n('cancel');
-  const netAdds = gross - canc;
-  const pctNet = gross > 0 ? netAdds / gross * 100 : 0;
-  const dn = forcaD('dnForca', aaceDesempNetAdds(pctNet, gross > 0), 'dn'), dc = forcaD('dcForca', aaceDesempChurn(n('churn')), 'dc');
+  // Net Adds em % informado direto (como vem no extrato) vale no lugar de gross/cancelamentos; o sinal indica carteira negativa
+  const pctDireto = s.netAddsPct !== '' && s.netAddsPct !== undefined;
+  const netAdds = pctDireto ? n('netAddsPct') : gross - canc;
+  const pctNet = pctDireto ? n('netAddsPct') : (gross > 0 ? netAdds / gross * 100 : 0);
+  const dn = forcaD('dnForca', aaceDesempNetAdds(pctNet, pctDireto || gross > 0), 'dn'), dc = forcaD('dcForca', aaceDesempChurn(n('churn')), 'dc');
   const x100 = 35 * dv + 30 * db + 17.5 * dn + 17.5 * dc; // nota final × 100 (35%/30%/17,5%/17,5%)
   const nota100 = g.arred === 'cima' ? Math.round(x100) : Math.floor(x100);
   const catAuto = aaceCategoriaDaNota(nota100, dv, db);
@@ -8673,10 +8676,10 @@ function aaceCalcular(s, g) {
     const cF = aaceCategoriaDaNota(Math.floor(x100), dv, db), cC = aaceCategoriaDaNota(Math.round(x100), dv, db);
     if (cF !== cC) avisos.push('Nota ' + (x100 / 100).toFixed(3).replace('.', ',') + ' é caso limite: vira ' + cC.toUpperCase() + ' se a Claro arredondar e ' + cF.toUpperCase() + ' se cortar as casas (item 2.5.3-iii não define).');
   }
-  if (gross <= 0 && s.dnForca === 'auto') avisos.push('Net Adds: informe as linhas de Voz ativadas (gross) — sem isso o desempenho é 0.');
+  if (gross <= 0 && !pctDireto && s.dnForca === 'auto') avisos.push('Net Adds: informe as linhas de Voz ativadas (gross) — sem isso o desempenho é 0.');
   if (s.churn === '' && s.dcForca === 'auto') avisos.push('Churn Safra não informado: considerado 0% (desempenho 5).');
   const cat = s.categoria && s.categoria !== 'auto' ? s.categoria : catAuto;
-  const bonusCat = { dv, db, dn, dc, pctNet, netAdds, nota: nota100 / 100, catAuto, cat, pct: BONUS_CATEGORIA_PCT[cat], base: baseBonusCat };
+  const bonusCat = { dv, db, dn, dc, pctNet, netAdds, direto: pctDireto, nota: nota100 / 100, catAuto, cat, pct: BONUS_CATEGORIA_PCT[cat], base: baseBonusCat };
   bonusCat.valor = bonusCat.pct * baseBonusCat;
 
   // ── Manutenção de base (2.6) ──
@@ -8864,6 +8867,7 @@ function aaceRender() {
   const ajRow = (ra.ajustes !== 0 || rb.ajustes !== 0) ? din('Estornos e recálculos (saldo do extrato)', r => r.ajustes) : '';
   const redRow = (ra.reducaoTotal > 0.005 || rb.reducaoTotal > 0.005) ? txt('Redução MKT Nacional (R$ não recebidos)', s2fmt(ra.reducaoTotal), s2fmt(rb.reducaoTotal)) : '';
   const mixRenov = r => r.renov.linhas.filter(l => l.qtd > 0).map(l => `${aaceFmtNum(l.qtd)} × Faixa ${l.faixa} (${l.fator.toFixed(2).replace('.', ',')})`).join(' · ') || '—';
+  const netTxt = r => r.bonusCat.direto ? `${aaceFmtPct(r.bonusCat.pctNet)} (informado)` : `${aaceFmtNum(r.bonusCat.netAdds)} linhas (${aaceFmtPct(r.bonusCat.pctNet)})`;
   const modTxt = r => (r.master ? 'Master' : 'Elite') + (r.modAuto ? ' (automático)' : '');
   const catTxt = r => `${r.bonusCat.cat.toUpperCase()} · nota ${r.bonusCat.nota.toFixed(2).replace('.', ',')}${r.bonusCat.cat !== r.bonusCat.catAuto ? ' (forçada)' : ''}`;
   const desemp = r => `${r.bonusCat.dv} · ${r.bonusCat.db} · ${r.bonusCat.dn} · ${r.bonusCat.dc}`;
@@ -8902,7 +8906,7 @@ function aaceRender() {
     ${txt('Adicional — Fixa Básica BL', faixaTxt(ra, 'fixaBl'), faixaTxt(rb, 'fixaBl'))}
     ${txt('Desempenho (CNPJ Novo Voz · BL · Net Adds · Churn)', desemp(ra), desemp(rb))}
     ${txt('Categoria do Bônus', catTxt(ra), catTxt(rb))}
-    ${txt('Net Adds do mês', `${aaceFmtNum(ra.bonusCat.netAdds)} linhas (${aaceFmtPct(ra.bonusCat.pctNet)})`, `${aaceFmtNum(rb.bonusCat.netAdds)} linhas (${aaceFmtPct(rb.bonusCat.pctNet)})`)}
+    ${txt('Net Adds do mês', netTxt(ra), netTxt(rb))}
     ${txt('CNPJ/HC — faixa e unitário', `${aaceFmtNum(ra.manut.razao)} → Faixa ${ra.manut.faixa} · ${s2fmt(ra.manut.unit)}/linha`, `${aaceFmtNum(rb.manut.razao)} → Faixa ${rb.manut.faixa} · ${s2fmt(rb.manut.unit)}/linha`)}
   </tbody></table>`;
 
@@ -9065,8 +9069,8 @@ function aaceAplicarResumo(est, txt) {
   if ((m = t.match(/CNPJ NOVO\s*-\s*FIXA B.SICA\s+(\d+)\s+DESEMPENHO\s+(\d)/i))) { est.cnpjNovoBl = m[1]; des.db = +m[2]; }
   if ((m = t.match(/NET ADDS[^%]*?([\d.,]+)%\s+DESEMPENHO\s+(\d)/i))) {
     const pct = aaceNum(m[1]); des.dn = +m[2];
-    est.gross = '10000'; est.cancel = String(Math.round(10000 * (1 - pct / 100))); // Net Adds representado em base de 10.000 linhas
-    notas.push(`Net Adds ${aaceFmtPct(pct)} lançado como gross 10.000 / cancelamentos ${est.cancel}.`);
+    est.netAddsPct = String(pct);                  // o extrato só traz o percentual: entra direto, sem gross/cancelamentos inventados
+    notas.push(`Net Adds ${aaceFmtPct(pct)} lançado direto em %.`);
   }
   if ((m = t.match(/CHURN SAFRA M.VEL\s+([\d.,]+)%\s+DESEMPENHO\s+(\d)/i))) { est.churn = String(aaceNum(m[1])); des.dc = +m[2]; }
   if ((m = t.match(/Linhas\s+([\d.]+)\s+([\d.]+)\s+R\$\s*([\d.,]+)/))) {
@@ -9077,18 +9081,18 @@ function aaceAplicarResumo(est, txt) {
   }
   if ((m = t.match(/VENDEDORES\s+(\d+)\s+(\d+)\s+FAIXA\s+(\d)/i))) { est.hcs = m[2]; notas.push(`${m[2]} vendedores bonificados (HCs).`); }
 
-  const qv = ['novoVoz', 'ttPre', 'portVoz', 'incrVoz'].reduce((s, k) => s + aaceNum(est[k + 'Qtd']), 0);
   const adic = (re, campos) => {
     const x = t.match(re);
     if (!x) return;
     const pct = aaceNum(x[1]), seg = x[2].toUpperCase(), faixa = x[3];
     if (campos.cluster) est[campos.cluster] = seg;
     est[campos.faixa] = faixa;                       // atingimento do extrato: faixa 0 (<100%) a 3 (≥140%)
-    if (campos.meta && campos.real > 0 && pct > 0) est[campos.meta] = (campos.real / (pct / 100)).toFixed(1);
+    // o extrato traz só o atingimento, não a meta: a faixa e o segmento entram nos seletores e as metas ficam em branco
+    notas.push(`${campos.nome}: atingimento ${aaceFmtPct(pct)}, segmento ${seg}, faixa ${faixa} (do extrato).`);
   };
-  adic(/\(PLANO DE VOZ\)\s+([\d.,]+)%\s+([PMG])\s+(\d)/i, { cluster: 'clusterMovel', faixa: 'faixaMovel', meta: 'metaVoz', real: qv });
-  adic(/FIXA B.SICA \(BANDA LARGA\)\s+([\d.,]+)%\s+([PMG])\s+(\d)/i, { cluster: 'clusterFixa', faixa: 'faixaFixa', meta: 'metaFixaBl', real: aaceNum(est.blFixaQtd) });
-  adic(/RECEITA FIXA AVAN.ADA\s+([\d.,]+)%\s+([PMG])\s+(\d)/i, { cluster: 'clusterConect', faixa: 'faixaConect' });
+  adic(/\(PLANO DE VOZ\)\s+([\d.,]+)%\s+([PMG])\s+(\d)/i, { nome: 'Móvel Voz', cluster: 'clusterMovel', faixa: 'faixaMovel' });
+  adic(/FIXA B.SICA \(BANDA LARGA\)\s+([\d.,]+)%\s+([PMG])\s+(\d)/i, { nome: 'Fixa Básica BL', cluster: 'clusterFixa', faixa: 'faixaFixa' });
+  adic(/RECEITA FIXA AVAN.ADA\s+([\d.,]+)%\s+([PMG])\s+(\d)/i, { nome: 'Conectividade', cluster: 'clusterConect', faixa: 'faixaConect' });
   if ((m = t.match(/Categoria\s+([A-Za-zÀ-ú]+)\s+Notal?\s+Final\s+([\d,]+)/i))) notas.push(`Extrato: categoria ${m[1].toUpperCase()}, nota final ${m[2]}.`);
   if (!Object.keys(des).length && !est.hcs) notas.push('Não reconheci o texto do extrato resumido: cole o texto do PDF como está.');
   return { notas, des };
