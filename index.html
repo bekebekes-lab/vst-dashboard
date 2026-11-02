@@ -8500,7 +8500,7 @@ function aaceEstadoPadrao(lado) {
   aaceTodosCampos().forEach(c => { e[c.k] = c.def !== undefined ? c.def : ''; });
   return e;
 }
-let AACE = { a: aaceEstadoPadrao('a'), b: aaceEstadoPadrao('b'), g: { tabela: 'definitiva', arred: 'truncar' } };
+let AACE = { a: aaceEstadoPadrao('a'), b: aaceEstadoPadrao('b'), g: { tabela: 'definitiva', arred: 'cima' } };
 let _aaceIniciou = false;
 
 // ─── Funções puras de cálculo ────────────────────────────────────────────────
@@ -8741,7 +8741,7 @@ function aaceMsg(txt, erro) {
 }
 function aaceLimpar() {
   if (!confirm('Limpar todos os campos dos dois lados?')) return;
-  AACE.a = aaceEstadoPadrao('a'); AACE.b = aaceEstadoPadrao('b'); AACE.g = { tabela: 'definitiva', arred: 'truncar' };
+  AACE.a = aaceEstadoPadrao('a'); AACE.b = aaceEstadoPadrao('b'); AACE.g = { tabela: 'definitiva', arred: 'cima' };
   aaceSalvar(); aaceRenderForm(); aaceRender(); aaceMsg('');
 }
 // Preenche o enquadramento do Lado B com o padrão VST do Simulador 2.0 (competência do seletor de Período)
