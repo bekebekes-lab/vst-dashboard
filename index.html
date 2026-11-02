@@ -8651,9 +8651,9 @@ function aaceCalcular(s, g) {
     const fator = Math.round(tabRenov[faixa - 1][C.movel] * 100) / 100;
     const qtd = n('renov' + i + 'Qtd'), receita = qtd * n('renov' + i + 'Ticket');
     const mult = aaceMultReducao(qtd, n('renov' + i + 'Red'), redPct);
-    return { qtd, faixa, fator, mult, receita, comissao: receita * fator * mult };
+    return { qtd, faixa, fator, mult, receita, ticket: n('renov' + i + 'Ticket'), red: n('renov' + i + 'Red'), delta: GF_RENOVACAO_TABELA1[faixa - 1].delta, comissao: receita * fator * mult };
   });
-  const renov = { linhas: renovLinhas, receita: renovLinhas.reduce((a, l) => a + l.receita, 0), comissao: renovLinhas.reduce((a, l) => a + l.comissao, 0) };
+  const renov = { linhas: renovLinhas, cluster: C.movel, tabela: s.renovTabela === '2' ? '2' : '1', redPct, receita: renovLinhas.reduce((a, l) => a + l.receita, 0), comissao: renovLinhas.reduce((a, l) => a + l.comissao, 0) };
   renov.fator = renov.receita > 0 ? renov.comissao / renov.receita : 0;
   // quanto a redução MKT Nacional tirou (itens de ativação + renovação)
   const reducaoTotal = itens.reduce((a, i) => a + i.receita * i.fator * (1 - i.mult), 0) + renovLinhas.reduce((a, l) => a + l.receita * l.fator * (1 - l.mult), 0);
@@ -8891,7 +8891,19 @@ function aaceRender() {
     <tr><td>Simulado − extrato</td><td>${exA !== null ? dif(exA, ra.total) : '—'}</td><td>${exB !== null ? dif(exB, rb.total) : '—'}</td><td></td></tr>` : '';
   const ajRow = (ra.ajustes !== 0 || rb.ajustes !== 0) ? din('Estornos e recálculos (saldo do extrato)', r => r.ajustes) : '';
   const redRow = (ra.reducaoTotal > 0.005 || rb.reducaoTotal > 0.005) ? txt('Redução MKT Nacional (R$ não recebidos)', s2fmt(ra.reducaoTotal), s2fmt(rb.reducaoTotal)) : '';
-  const mixRenov = r => r.renov.linhas.filter(l => l.qtd > 0).map(l => `${aaceFmtNum(l.qtd)} × Faixa ${l.faixa} (${l.fator.toFixed(2).replace('.', ',')})`).join(' · ') || '—';
+  const fatorTxt = f => f.toFixed(2).replace('.', ',');
+  // por que o valor é esse: tabela (2.4-ii), cluster do Móvel (2.4-i-e) e Delta Ticket da linha
+  const regraRenov = r => `Tabela ${r.renov.tabela} (${r.renov.tabela === '1' ? 'fora da área cabeada, com BL ou convergência' : 'área cabeada, sem convergência'}) · cluster do Móvel ${r.renov.cluster}${r.master ? ' (Master)' : ''} — o fator vem do Delta Ticket da linha × cluster`;
+  const linhaRenov = (r, i) => {
+    const l = r.renov.linhas[i];
+    if (!l || l.qtd <= 0) return '—';
+    const porLinha = l.ticket * l.fator * l.mult;
+    const red = l.mult < 1 ? ` · redução MKT Nacional em ${aaceFmtNum(Math.min(l.red, l.qtd))} das ${aaceFmtNum(l.qtd)} linhas (paga ${aaceFmtNum(r.renov.redPct)}% do fator)` : '';
+    return `${aaceFmtNum(l.qtd)} linhas · Faixa ${l.faixa} (Delta ${l.delta}) · fator ${fatorTxt(l.fator)} × ticket ${s2fmt(l.ticket)} = ${s2fmt(porLinha)} por linha${red} → ${s2fmt(l.comissao)}`;
+  };
+  const renovRows = [0, 1, 2, 3, 4, 5, 6].filter(i => ra.renov.linhas[i].qtd > 0 || rb.renov.linhas[i].qtd > 0)
+    .map(i => txt('Renovação — linha ' + (i + 1), linhaRenov(ra, i), linhaRenov(rb, i))).join('\n');
+  const renovBloco = renovRows ? txt('Renovação — regra aplicada', regraRenov(ra), regraRenov(rb)) + '\n' + renovRows : '';
   const netTxt = r => r.bonusCat.direto ? `${aaceFmtPct(r.bonusCat.pctNet)} (informado)` : `${aaceFmtNum(r.bonusCat.netAdds)} linhas (${aaceFmtPct(r.bonusCat.pctNet)})`;
   const modTxt = r => (r.master ? 'Master' : 'Elite') + (r.modAuto ? ' (automático)' : '');
   const catTxt = r => `${r.bonusCat.cat.toUpperCase()} · nota ${r.bonusCat.nota.toFixed(2).replace('.', ',')}${r.bonusCat.cat !== r.bonusCat.catAuto ? ' (forçada)' : ''}`;
@@ -8917,7 +8929,7 @@ function aaceRender() {
     ${cab('Detalhes dos cálculos')}
     ${txt('Base do Bônus Categoria', `${s2fmt(ra.baseBonusCat)} × ${aaceFmtPct(ra.bonusCat.pct * 100)}`, `${s2fmt(rb.baseBonusCat)} × ${aaceFmtPct(rb.bonusCat.pct * 100)}`)}
     ${txt('Manutenção: bruto × teto', `${s2fmt(ra.manut.bruto)} × ${s2fmt(ra.manut.teto)} (${aaceFmtPct(ra.manut.lib * 100)} de ${s2fmt(ra.manut.base)})${ra.manut.limitou ? ' — TETO APLICADO' : ''}`, `${s2fmt(rb.manut.bruto)} × ${s2fmt(rb.manut.teto)} (${aaceFmtPct(rb.manut.lib * 100)} de ${s2fmt(rb.manut.base)})${rb.manut.limitou ? ' — TETO APLICADO' : ''}`)}
-    ${txt('Renovação: linhas × faixa de Delta (fator)', mixRenov(ra), mixRenov(rb))}
+    ${renovBloco}
     ${redRow}
     ${txt('Produtividade: Móvel · Fixa BL · SD', ra.prod.elegivel ? `${aaceFmtPct(ra.prod.alM)} · ${aaceFmtPct(ra.prod.alF)} · ${aaceFmtPct(ra.prod.alS)} → Faixa ${ra.prod.faixa}${ra.prod.forcada ? ' (escolhida)' : (ra.prod.retro ? ' (retroagiu por SD)' : '')} · ${s2fmt(ra.prod.valorVend)}/vendedor` : 'Não elegível', rb.prod.elegivel ? `${aaceFmtPct(rb.prod.alM)} · ${aaceFmtPct(rb.prod.alF)} · ${aaceFmtPct(rb.prod.alS)} → Faixa ${rb.prod.faixa}${rb.prod.forcada ? ' (escolhida)' : (rb.prod.retro ? ' (retroagiu por SD)' : '')} · ${s2fmt(rb.prod.valorVend)}/vendedor` : 'Não elegível')}
   </tbody></table>`;
