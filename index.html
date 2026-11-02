@@ -8314,7 +8314,7 @@ const AACE_OP_CATEGORIA = [['auto', 'Automático (4 indicadores)'], ['bronze', '
 const AACE_SECOES = [
   { id: 'enq', titulo: '1. Enquadramento', tipo: 'campos', campos: [
     { k: 'modalidade', l: 'Modalidade', t: 'sel', op: [['elite', 'Elite'], ['master', 'Master']], def: 'elite' },
-    { k: 'masterAdic', l: 'Master — fator adicional por meta', t: 'sel', op: [['sim', 'Recebe (coluna P da tabela)'], ['nao', 'Não recebe (só fator fixo)']], def: 'sim' },
+    { k: 'masterAdic', l: 'Master — fator adicional por meta', t: 'sel', op: [['sim', 'Recebe, pela coluna P (política)'], ['nao', 'Não recebe (só fator fixo)']], def: 'sim' },
     { k: 'regiao', l: 'Região (Anexos III e IV)', t: 'sel', op: [['A', 'Grupo A — SP1, RSUL, NE, DF, SP2, GO, MS, MT, RJ'], ['B', 'Grupo B — NO, MG, BA-SE, ES, AC, RO, TO']], def: 'A' },
     { k: 'clusterMovel', l: 'Cluster — Móvel', t: 'sel', op: AACE_OP_CLUSTER, def: 'auto' },
     { k: 'clusterFixa', l: 'Cluster — Fixa Básica', t: 'sel', op: AACE_OP_CLUSTER, def: 'auto' },
@@ -8544,7 +8544,7 @@ function aaceCalcular(s, g) {
   const prod = { elegivel, alM, alF, alS, faixa: fxP, retro, valorVend, total: elegivel ? hcs * valorVend : 0 };
   if (!master && hcs > 0 && hcs < AACE_MIN_VENDEDORES_ELITE) avisos.push('Bônus Produtividade: Elite precisa de no mínimo ' + AACE_MIN_VENDEDORES_ELITE + ' vendedores (HCs).');
   if (master) avisos.push('Master: cluster sempre P (2.1-ix), sem Bônus Produtividade, Manutenção de Carteira a R$ 1,00/R$ 0,60 com teto de 33% (2.6.6).' +
-    (masterSemAdic ? ' Sem fator adicional por meta (escolhido).' : ' Fator adicional por meta pela coluna P — a política (2.3) não diz se o Master recebe; troque em "Master — fator adicional".'));
+    (masterSemAdic ? ' Sem fator adicional por meta (escolhido).' : ' Fator adicional por meta pela coluna P: o item 2.3 não exclui o Master.'));
 
   const total = comAtivacao + renov.comissao + conv.comissao + bonusCat.valor + manut.pago + prod.total;
   const fxForca = { voz: s.faixaMovel !== 'auto', movelBl: s.faixaMovel !== 'auto', fixaBl: s.faixaFixa !== 'auto', fixaTv: s.faixaFixa !== 'auto', fixaFone: s.faixaFixa !== 'auto', conect: s.faixaConect !== 'auto' };
