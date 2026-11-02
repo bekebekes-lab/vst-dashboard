@@ -8401,7 +8401,7 @@ const AACE_OP_CATEGORIA = [['auto', 'Automático (4 indicadores)'], ['bronze', '
 // Formulário: cada seção é uma lista de linhas; `esp` = campo copiado pelo botão "Espelhar produção no Lado B"
 const AACE_SECOES = [
   { id: 'enq', titulo: '1. Enquadramento', tipo: 'campos', campos: [
-    { k: 'modalidade', l: 'Modalidade', t: 'sel', op: [['elite', 'Elite'], ['master', 'Master']], def: 'elite' },
+    { k: 'modalidade', l: 'Modalidade', t: 'sel', op: [['auto', 'Automático (4 ou mais HCs = Elite)'], ['elite', 'Elite'], ['master', 'Master']], def: 'auto' },
     { k: 'regiao', l: 'Região (Anexos III e IV)', t: 'sel', op: [['A', 'Grupo A — SP1, RSUL, NE, DF, SP2, GO, MS, MT, RJ'], ['B', 'Grupo B — NO, MG, BA-SE, ES, AC, RO, TO']], def: 'A' },
     { k: 'clusterMovel', l: 'Cluster — Móvel', t: 'sel', op: AACE_OP_CLUSTER, def: 'auto' },
     { k: 'clusterFixa', l: 'Cluster — Fixa Básica', t: 'sel', op: AACE_OP_CLUSTER, def: 'auto' },
@@ -8524,7 +8524,9 @@ function aaceCategoriaDaNota(nota100, dv, db) {
 // s = campos de um lado; g = parâmetros gerais. Devolve tudo que a tela mostra.
 function aaceCalcular(s, g) {
   const n = k => aaceNum(s[k]);
-  const master = s.modalidade === 'master';
+  // Automático: Elite exige no mínimo 4 vendedores (2.1-iii); com menos de 4 HCs informados o AACE é Master
+  const modAuto = !s.modalidade || s.modalidade === 'auto';
+  const master = s.modalidade === 'master' || (modAuto && aaceNum(s.hcs) > 0 && aaceNum(s.hcs) < AACE_MIN_VENDEDORES_ELITE);
   const regiao = s.regiao === 'B' ? 'B' : 'A';
   const reg = AACE_CLUSTER[regiao];
   const avisos = [];
@@ -8657,12 +8659,13 @@ function aaceCalcular(s, g) {
   const valorVend = FAIXAS_BONUS_PRODUTIVIDADE[fxP].valor;
   const prod = { elegivel, alM, alF, alS, faixa: fxP, retro, valorVend, total: elegivel ? hcs * valorVend : 0 };
   if (!master && hcs > 0 && hcs < AACE_MIN_VENDEDORES_ELITE) avisos.push('Bônus Produtividade: Elite precisa de no mínimo ' + AACE_MIN_VENDEDORES_ELITE + ' vendedores (HCs).');
+  if (master && modAuto) avisos.push('Modalidade automática: Master, porque há menos de ' + AACE_MIN_VENDEDORES_ELITE + ' HCs (Elite exige no mínimo ' + AACE_MIN_VENDEDORES_ELITE + ' vendedores, item 2.1-iii).');
   if (master) avisos.push('Master: cluster sempre P (2.1-ix), sem Bônus Produtividade, Manutenção de Carteira a R$ 1,00/R$ 0,60 com teto de 33% (2.6.6).' +
     ' Fator adicional por meta pela coluna P: o item 2.3 não exclui o Master.');
 
   const total = comAtivacao + renov.comissao + conv.comissao + bonusCat.valor + manut.pago + prod.total;
   const fxForca = { voz: s.faixaMovel !== 'auto', movelBl: s.faixaMovel !== 'auto', fixaBl: s.faixaFixa !== 'auto', fixaTv: s.faixaFixa !== 'auto', fixaFone: s.faixaFixa !== 'auto', conect: s.faixaConect !== 'auto' };
-  return { master, regiao, C, sug, pct, fx, fxAuto, metaInf, dAuto, fxForca, real, itens, modulos, m2m, hotel, conect, conectRenov, sd, renov, conv,
+  return { master, modAuto, regiao, C, sug, pct, fx, fxAuto, metaInf, dAuto, fxForca, real, itens, modulos, m2m, hotel, conect, conectRenov, sd, renov, conv,
     comMovel, comFixa, comAtivacao, baseBonusCat, baseTeto, bonusCat, manut, prod, total, avisos };
 }
 
@@ -8763,6 +8766,8 @@ async function aaceCarregarPadraoVst() {
 // Nas opções "Automático" mostra o valor que o cálculo escolheu (ex.: "Automático M (pela produção)")
 function aaceRotulosAuto(lado, r) {
   const set = (k, txt) => { const op = document.querySelector(`#aace-${lado}-${k} option[value="auto"]`); if (op) op.textContent = txt; };
+  const hc = aaceNum(AACE[lado === 'b' ? 'b' : 'a'].hcs);
+  set('modalidade', `Automático ${r.master ? 'Master' : 'Elite'} (${hc > 0 ? hc + (hc === 1 ? ' HC' : ' HCs') : 'HCs não informados'})`);
   const cluster = c => r.master ? 'Automático P (Master)' : `Automático ${r.sug[c]} (pela produção)`;
   set('clusterMovel', cluster('movel')); set('clusterFixa', cluster('fixa')); set('clusterConect', cluster('conect'));
   const faixa = c => {
@@ -8802,6 +8807,7 @@ function aaceRender() {
     <tr><td>Total pago no extrato (informado)</td><td>${exA !== null ? s2fmt(exA) : '—'}</td><td>${exB !== null ? s2fmt(exB) : '—'}</td><td></td></tr>
     <tr><td>Simulado − extrato</td><td>${exA !== null ? dif(exA, ra.total) : '—'}</td><td>${exB !== null ? dif(exB, rb.total) : '—'}</td><td></td></tr>` : '';
   const mixRenov = r => r.renov.linhas.filter(l => l.qtd > 0).map(l => `${aaceFmtNum(l.qtd)} × Faixa ${l.faixa} (${l.fator.toFixed(2).replace('.', ',')})`).join(' · ') || '—';
+  const modTxt = r => (r.master ? 'Master' : 'Elite') + (r.modAuto ? ' (automático)' : '');
   const catTxt = r => `${r.bonusCat.cat.toUpperCase()} · nota ${r.bonusCat.nota.toFixed(2).replace('.', ',')}${r.bonusCat.cat !== r.bonusCat.catAuto ? ' (forçada)' : ''}`;
   const desemp = r => `${r.bonusCat.dv} · ${r.bonusCat.db} · ${r.bonusCat.dn} · ${r.bonusCat.dc}`;
 
@@ -8831,7 +8837,7 @@ function aaceRender() {
 
   // cartão de enquadramento (A × B)
   document.getElementById('aace-enq').innerHTML = `<table class="aace-tab aace-tab-enq"><thead><tr><th>Item</th><th>A — AACE atual</th><th>B — Com a VST</th><th></th></tr></thead><tbody>
-    ${txt('Modalidade', ra.master ? 'Master' : 'Elite', rb.master ? 'Master' : 'Elite')}
+    ${txt('Modalidade', modTxt(ra), modTxt(rb))}
     ${txt('Cluster — Móvel / Fixa / Conectividade', `${ra.C.movel} / ${ra.C.fixa} / ${ra.C.conect}`, `${rb.C.movel} / ${rb.C.fixa} / ${rb.C.conect}`)}
     ${txt('Adicional — Móvel Voz', faixaTxt(ra, 'voz'), faixaTxt(rb, 'voz'))}
     ${txt('Adicional — Fixa Básica BL', faixaTxt(ra, 'fixaBl'), faixaTxt(rb, 'fixaBl'))}
