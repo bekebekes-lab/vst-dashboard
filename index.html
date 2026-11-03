@@ -1196,6 +1196,62 @@
     .aace-bar-row { grid-template-columns: minmax(0, 1fr); gap: 4px; }
   }
 
+  /* ─── PEDIDOS (fase de teste) — mesmo visual do Painel ─────── */
+  #tab-pedidos, #tab-pedidos button, #tab-pedidos select, #tab-pedidos input, #tab-pedidos textarea {
+    font-family: 'Segoe UI', 'Segoe UI Variable Text', Tahoma, system-ui, sans-serif;
+  }
+  .ped-subtabs { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 2px; }
+  .ped-subtabs .pn-btn-claro.ativo { background: var(--brand); color: #fff; }
+  #tab-pedidos .pn-card { margin-bottom: 12px; }
+  .ped-form-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px 14px; margin-top: 6px; }
+  .ped-form-grid .full { grid-column: 1 / -1; }
+  .ped-filtros { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 10px; }
+  .ped-filtros .pn-fg { min-width: 200px; }
+  .ped-check { font-size: 12px; color: #333; padding-bottom: 6px; display: flex; gap: 6px; align-items: center; }
+  #tab-pedidos .pn-fg label { display: block; font-size: 12px; color: #333; margin-bottom: 3px; }
+  #tab-pedidos .pn-fg input[type="text"], #tab-pedidos .pn-fg input[type="number"], #tab-pedidos textarea {
+    width: 100%; box-sizing: border-box; border: 1.5px solid var(--border-strong); border-radius: 4px; background: var(--surface);
+    padding: 6px 8px; font-size: 12.5px; color: var(--text);
+  }
+  #tab-pedidos .pn-fg input[type="text"], #tab-pedidos .pn-fg input[type="number"] { height: 32px; }
+  #tab-pedidos textarea { resize: vertical; }
+  #tab-pedidos .pn-fg input:focus, #tab-pedidos textarea:focus { border-color: var(--brand); outline: none; }
+  #tab-pedidos select {
+    width: 100%; box-sizing: border-box; height: 32px; border: none; border-radius: 3px; font-size: 12px; padding: 0 26px 0 8px;
+    background-color: #B01E14; color: #fff; -webkit-appearance: none; appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.5'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 8px center; background-size: 12px;
+  }
+  #tab-pedidos select:focus { background-color: #B01E14; color: #fff; outline: 2px solid #1a1a1a; outline-offset: 1px; }
+  #tab-pedidos select option { background: #fff; color: #222; }
+  .ped-acoes { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 10px 0; }
+  .ped-acoes select { width: auto; min-width: 150px; }
+  .ped-enviar { background: var(--brand); color: #fff; }
+  .ped-arq { font-size: 12px; margin: 4px 0; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .ped-chip { display: inline-block; border-radius: 999px; padding: 2px 10px; color: #fff; font-size: 11px; font-weight: 600; white-space: nowrap; }
+  .ped-linha { cursor: pointer; }
+  .ped-linha:hover td { background: var(--brand-light, #fbeaea); }
+  .ped-board { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; align-items: start; }
+  .ped-col { background: var(--surface-2, #f3f3f3); border-radius: 10px; padding: 8px; min-height: 90px; min-width: 0; }
+  .ped-col-t { display: flex; justify-content: space-between; font-weight: 700; font-size: 12px; border-top: 4px solid; padding: 6px 4px 2px; text-transform: uppercase; letter-spacing: .04em; }
+  .ped-card { background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; margin-top: 8px; cursor: pointer; font-size: 12px; box-shadow: var(--shadow-xs); }
+  .ped-card:hover { border-color: var(--brand); }
+  .ped-card-rod { display: flex; justify-content: space-between; gap: 8px; margin-top: 4px; font-size: 11px; color: var(--text-3); }
+  .ped-modal { position: fixed; inset: 0; background: rgba(0, 0, 0, .45); z-index: 3000; overflow: auto; padding: 24px 12px; }
+  .ped-modal-box { position: relative; background: var(--surface); max-width: 980px; margin: 0 auto; border-radius: 12px; padding: 18px 22px 22px; }
+  .ped-fechar { position: absolute; right: 14px; top: 12px; }
+  .ped-det-cab { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; margin-bottom: 12px; padding-right: 90px; }
+  .ped-det-t { font-size: 17px; font-weight: 700; }
+  .ped-det-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 22px; }
+  .ped-kv { display: flex; gap: 10px; font-size: 12.5px; padding: 4px 0; border-bottom: 1px solid var(--border); }
+  .ped-kv span { flex: 0 0 150px; color: var(--text-3); }
+  .ped-kv b { font-weight: 500; word-break: break-word; }
+  .ped-obs { white-space: pre-wrap; }
+  .ped-hist { display: grid; gap: 8px; margin-top: 6px; }
+  .ped-ev { display: flex; gap: 10px; font-size: 12.5px; border-left: 3px solid var(--border-strong); padding-left: 10px; }
+  @media (max-width: 1100px) { .ped-board { grid-template-columns: repeat(2, minmax(0, 1fr)); } .ped-det-grid { grid-template-columns: minmax(0, 1fr); } }
+  @media (max-width: 600px) { .ped-board { grid-template-columns: minmax(0, 1fr); } .ped-kv span { flex-basis: 110px; } .ped-det-cab { padding-right: 0; flex-direction: column; } .ped-fechar { position: static; margin-bottom: 8px; } }
+
   /* ─── DISCADORA (nova aba) ───────────────────────────────── */
   /* Filters */
   #tab-discadora .filters-bar {
@@ -1755,6 +1811,7 @@
   <button class="tab-btn" id="tab-btn-discadora" onclick="switchTab('discadora', this)">Discadora</button>
   <button class="tab-btn active" id="tab-btn-simulador2" onclick="switchTab('simulador2', this)">Simulador 2.0</button>
   <button class="tab-btn" id="tab-btn-aace" onclick="switchTab('aace', this)">Simulador de AACE</button>
+  <button class="tab-btn" id="tab-btn-pedidos" onclick="switchTab('pedidos', this)" style="display:none">Pedidos (teste)</button>
   <button class="tab-btn" id="tab-btn-churn" onclick="switchTab('churn', this)">Churn</button>
   <button class="tab-btn" id="tab-btn-carteira" onclick="switchTab('carteira', this)">Carteira</button>
   <button class="tab-btn" id="tab-btn-qualidade" onclick="switchTab('qualidade', this)">Qualidade</button>
@@ -2749,6 +2806,73 @@
           <li>Ainda não modelado: meta mínima de AACE novo, estornos, Programa Nacional (2.9), novos credenciamentos (2.10), órgãos públicos, produtos de alto valor, renovação de contratos (2.14), negociações especiais.</li>
         </ul>
       </details>
+    </div>
+  </div>
+
+  <!-- TAB PEDIDOS (fase de teste) — consultores sobem pedidos e o BKO trata no painel. Visível só para e-mails da lista PEDIDOS_EMAILS_PERMITIDOS -->
+  <div class="tab-panel" id="tab-pedidos">
+    <div class="pn-hero">
+      <div class="pn-titulo">PEDIDOS</div>
+      <div class="pn-hero-dir">
+        <button class="pn-btn-claro" onclick="pedCarregar()" title="Busca de novo os pedidos no banco">↻ Atualizar</button>
+        <div class="pn-pill">Fase de teste · só você vê esta aba</div>
+      </div>
+    </div>
+    <div class="ped-subtabs">
+      <button class="pn-btn-claro ativo" id="ped-btn-novo" onclick="pedSub('novo')">Novo pedido</button>
+      <button class="pn-btn-claro" id="ped-btn-meus" onclick="pedSub('meus')">Meus pedidos</button>
+      <button class="pn-btn-claro" id="ped-btn-bko" onclick="pedSub('bko')">Painel BKO</button>
+    </div>
+    <div class="pn-nota" id="ped-msg-lista"></div>
+
+    <!-- 1) consultor: novo pedido -->
+    <div id="ped-novo" class="pn-card">
+      <div class="pn-card-cab"><h3>Enviar um pedido ao BKO</h3></div>
+      <div class="ped-form-grid">
+        <div class="pn-fg"><label for="ped-tipo">Tipo de pedido</label><select id="ped-tipo"></select></div>
+        <div class="pn-fg"><label for="ped-cliente">Razão social do cliente *</label><input type="text" id="ped-cliente" maxlength="160" autocomplete="off"></div>
+        <div class="pn-fg"><label for="ped-cnpj">CNPJ *</label><input type="text" id="ped-cnpj" maxlength="18" inputmode="numeric" placeholder="00.000.000/0000-00" oninput="pedMascaraCnpj(this)" autocomplete="off"></div>
+        <div class="pn-fg"><label for="ped-linhas">Quantidade de linhas</label><input type="number" id="ped-linhas" min="0" max="100000" step="1"></div>
+        <div class="pn-fg"><label for="ped-contato">Representante / contato</label><input type="text" id="ped-contato" maxlength="120" autocomplete="off"></div>
+        <div class="pn-fg"><label for="ped-fone">Telefone / celular</label><input type="text" id="ped-fone" maxlength="30" inputmode="tel" autocomplete="off"></div>
+        <div class="pn-fg"><label for="ped-email">E-mail do contato</label><input type="text" id="ped-email" maxlength="160" autocomplete="off"></div>
+        <div class="pn-fg full"><label for="ped-obs">Observações para o BKO</label><textarea id="ped-obs" rows="3" maxlength="4000" placeholder="Condições negociadas, urgência, pontos de atenção…"></textarea></div>
+        <div class="pn-fg full">
+          <label for="ped-arq">Anexos (checklist em Excel, comprovantes, documentos) — até 10 arquivos de 10 MB: PDF, Excel, Word, imagem ou CSV</label>
+          <input type="file" id="ped-arq" multiple accept=".pdf,.xlsx,.xls,.docx,.doc,.png,.jpg,.jpeg,.csv" onchange="pedAdicionarArquivos(this)">
+          <div id="ped-arq-lista"></div>
+        </div>
+      </div>
+      <div class="ped-acoes"><button class="pn-btn-claro ped-enviar" id="ped-btn-enviar" onclick="pedEnviar()">Enviar pedido</button><button class="pn-btn-claro" onclick="pedLimparForm()">Limpar</button></div>
+      <div class="pn-nota" id="ped-msg-novo"></div>
+    </div>
+
+    <!-- 2) consultor: acompanhar -->
+    <div id="ped-meus" class="pn-card" style="display:none">
+      <div class="pn-card-cab"><h3>Pedidos que eu enviei</h3></div>
+      <div class="ped-filtros">
+        <div class="pn-fg"><label for="ped-meus-busca">Buscar</label><input type="text" id="ped-meus-busca" placeholder="cliente, CNPJ ou protocolo" oninput="pedRenderMeus()"></div>
+        <div class="pn-fg"><label for="ped-meus-status">Status</label><select id="ped-meus-status" onchange="pedRenderMeus()"><option value="">Todos</option><option value="novo">Novo</option><option value="em_analise">Em análise</option><option value="pendencia">Pendência</option><option value="concluido">Concluído</option><option value="cancelado">Cancelado</option></select></div>
+      </div>
+      <div id="ped-meus-lista" class="aace-tab-wrap"></div>
+    </div>
+
+    <!-- 3) BKO: painel de demandas -->
+    <div id="ped-bko" style="display:none">
+      <div class="pn-card">
+        <div class="ped-filtros">
+          <div class="pn-fg"><label for="ped-bko-busca">Buscar</label><input type="text" id="ped-bko-busca" placeholder="cliente, CNPJ, protocolo ou consultor" oninput="pedRenderBko()"></div>
+          <div class="pn-fg"><label for="ped-bko-tipo">Tipo</label><select id="ped-bko-tipo" onchange="pedRenderBko()"><option value="">Todos os tipos</option></select></div>
+          <label class="ped-check"><input type="checkbox" id="ped-bko-meus" onchange="pedRenderBko()"> só os que assumi</label>
+        </div>
+      </div>
+      <div id="ped-bko-quadro" class="ped-board"></div>
+      <div class="pn-nota" id="ped-bko-canc"></div>
+    </div>
+
+    <!-- detalhe do pedido -->
+    <div class="ped-modal" id="ped-modal" style="display:none" onclick="if (event.target === this) pedFecharModal()">
+      <div class="ped-modal-box"><button class="pn-btn-claro ped-fechar" onclick="pedFecharModal()">Fechar ✕</button><div id="ped-modal-corpo"></div></div>
     </div>
   </div>
 
@@ -7787,6 +7911,7 @@ function switchTab(name, el) {
   if (name === 'discadora') initDiscadora();
   if (name === 'simulador2') initSimulador2();
   if (name === 'aace') initAace();
+  if (name === 'pedidos') initPedidos();
   if (name === 'churn') initChurn();
   if (name === 'carteira') initCarteira();
   if (name === 'qualidade') initQualidade();
@@ -7847,7 +7972,9 @@ function getAbasPermitidas(usuario) {
   // Gerencial Financeiro (piloto): lista fechada de e-mails, não vale pra todo admin.
   // Painel Analítico: todo admin.
   const comGerfin = gfPodeVer(usuario) ? [...new Set([...todas, 'gerfin'])] : todas.filter(a => a !== 'gerfin');
-  return ehAdminLike(usuario?.perfil) || extras.includes('painel') ? [...new Set([...comGerfin, 'painel'])] : comGerfin.filter(a => a !== 'painel');
+  const comPainel = ehAdminLike(usuario?.perfil) || extras.includes('painel') ? [...new Set([...comGerfin, 'painel'])] : comGerfin.filter(a => a !== 'painel');
+  // Pedidos (fase de teste): lista fechada de e-mails (PEDIDOS_EMAILS_PERMITIDOS); o banco também exige estar em public.pedidos_acesso
+  return pedidosPodeVer(usuario) ? [...new Set([...comPainel, 'pedidos'])] : comPainel.filter(a => a !== 'pedidos');
 }
 const TAB_LABELS = {
   gerencial: '📊 Gerencial',
@@ -7857,6 +7984,7 @@ const TAB_LABELS = {
   discadora: '📞 Discadora',
   simulador2: '🧮 Simulador 2.0',
   aace: '🧩 Simulador de AACE',
+  pedidos: '📥 Pedidos (teste)',
   churn: '📉 Churn',
   carteira: '💼 Carteira',
   qualidade: '🛡️ Qualidade',
@@ -9400,6 +9528,304 @@ function initAace() {
   aaceRender();
   aaceMinimizarTudo(); // toda vez que a aba é aberta, tudo começa minimizado
 }
+
+// ═════════════════════════════════════════════════════════════════════════════
+// PEDIDOS (fase de teste) — consultores sobem pedidos, o BKO trata no painel.
+// Acesso: lista fechada de e-mails (aqui) + lista public.pedidos_acesso (banco, migração 20261103000001).
+// Tabelas: pedidos, pedidos_eventos (histórico), pedidos_anexos; arquivos no bucket privado "pedidos".
+// ═════════════════════════════════════════════════════════════════════════════
+const PEDIDOS_EMAILS_PERMITIDOS = ['raphael@vstgroup.com.br'];
+function pedidosPodeVer(usuario) {
+  const u = usuario === undefined ? USUARIO_ATUAL : usuario;
+  return u?.perfil === 'admin' && PEDIDOS_EMAILS_PERMITIDOS.includes((u.email || '').trim().toLowerCase());
+}
+
+const PED_STATUS = {
+  novo: { t: 'Novo', c: '#1d6fd1' },
+  em_analise: { t: 'Em análise', c: '#b8860b' },
+  pendencia: { t: 'Pendência', c: '#d9480f' },
+  concluido: { t: 'Concluído', c: '#2b8a3e' },
+  cancelado: { t: 'Cancelado', c: '#868e96' },
+};
+const PED_TIPOS = ['Móvel PJ — Linha nova', 'Móvel PJ — Portabilidade', 'Móvel PJ — Renovação / Migração', 'Móvel PJ — Transferência de titularidade (TT)', 'Fixa Básica', 'Conectividade / SD', 'Outro'];
+const PED_MAX_ARQUIVOS = 10, PED_MAX_MB = 10, PED_EXT_OK = ['pdf', 'xlsx', 'xls', 'docx', 'doc', 'png', 'jpg', 'jpeg', 'csv'];
+let _pedIniciou = false, _pedSub = 'novo', _pedLista = [], _pedArqNovos = [], _pedDet = null, _pedTimer = null, _pedEnviando = false;
+
+const pedEl = id => document.getElementById(id);
+function pedMsg(id, txt, erro) {
+  const el = pedEl(id);
+  if (!el) return;
+  el.textContent = txt || '';
+  el.style.color = erro ? 'var(--red-sem)' : 'var(--text-2)';
+}
+function pedErro(e) {
+  const m = String((e && (e.message || e.details || e.error)) || e || '');
+  if (/does not exist|schema cache|42P01|PGRST205|Bucket not found/i.test(m)) return 'O módulo de pedidos ainda não foi ativado no banco (falta rodar a migração 20261103000001_pedidos_teste.sql).';
+  if (/row-level security|permission denied|42501|not authorized|Unauthorized/i.test(m)) return 'Sem permissão: seu usuário não está na lista de acesso de pedidos.';
+  if (/mime type|not supported|exceeded the maximum|too large|Payload too large/i.test(m)) return 'Arquivo recusado (tipo não aceito ou maior que ' + PED_MAX_MB + ' MB).';
+  return 'Não consegui completar: ' + m;
+}
+function pedCnpjValido(v) {
+  const c = String(v || '').replace(/\D/g, '');
+  if (c.length !== 14 || /^(\d)\1+$/.test(c)) return false;
+  const dv = n => { let s = 0, p = n - 7; for (let i = 0; i < n; i++) { s += +c[i] * p--; if (p < 2) p = 9; } const r = s % 11; return r < 2 ? 0 : 11 - r; };
+  return dv(12) === +c[12] && dv(13) === +c[13];
+}
+function pedMascaraCnpj(el) {
+  const d = el.value.replace(/\D/g, '').slice(0, 14);
+  el.value = d.replace(/^(\d{2})(\d)/, '$1.$2').replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3').replace(/\.(\d{3})(\d)/, '.$1/$2').replace(/(\d{4})(\d)/, '$1-$2');
+}
+function pedQuando(d) {
+  const s = (Date.now() - new Date(d).getTime()) / 1000;
+  if (s < 90) return 'agora';
+  if (s < 3600) return 'há ' + Math.round(s / 60) + ' min';
+  if (s < 86400) return 'há ' + Math.round(s / 3600) + ' h';
+  return 'há ' + Math.round(s / 86400) + ' d';
+}
+const pedData = d => new Date(d).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+const pedChip = st => `<span class="ped-chip" style="background:${(PED_STATUS[st] || PED_STATUS.novo).c}">${(PED_STATUS[st] || { t: st }).t}</span>`;
+const pedProto = n => '#' + String(n).padStart(4, '0');
+const pedNomeArquivo = nome => String(nome || 'arquivo').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w.\-]+/g, '_').slice(-80);
+const pedExt = nome => (String(nome).split('.').pop() || '').toLowerCase();
+
+function pedSub(nome) {
+  _pedSub = nome;
+  ['novo', 'meus', 'bko'].forEach(n => {
+    pedEl('ped-' + n).style.display = n === nome ? '' : 'none';
+    pedEl('ped-btn-' + n).classList.toggle('ativo', n === nome);
+  });
+  if (nome !== 'novo') pedCarregar();
+}
+async function pedCarregar() {
+  try {
+    const { data, error } = await supa.from('pedidos')
+      .select('id,numero,tipo,cliente_nome,cliente_cnpj,qtd_linhas,status,consultor_id,consultor_nome,equipe,responsavel_id,responsavel_nome,criado_em,atualizado_em')
+      .order('atualizado_em', { ascending: false }).limit(500);
+    if (error) throw error;
+    _pedLista = data || [];
+    pedMsg('ped-msg-lista', '');
+    pedRenderMeus(); pedRenderBko();
+  } catch (e) {
+    _pedLista = [];
+    pedRenderMeus(); pedRenderBko();
+    pedMsg('ped-msg-lista', pedErro(e), true);
+  }
+}
+function pedContadores() {
+  const meu = USUARIO_ATUAL?.id;
+  const meus = _pedLista.filter(p => p.consultor_id === meu).length;
+  const abertos = _pedLista.filter(p => ['novo', 'em_analise', 'pendencia'].includes(p.status)).length;
+  pedEl('ped-btn-meus').textContent = `Meus pedidos (${meus})`;
+  pedEl('ped-btn-bko').textContent = `Painel BKO (${abertos} em aberto)`;
+}
+
+// ── Novo pedido ──
+function pedRenderArquivosNovos() {
+  const box = pedEl('ped-arq-lista');
+  box.innerHTML = _pedArqNovos.length ? _pedArqNovos.map((f, i) => `<div class="ped-arq">📎 ${escapeHtml(f.name)} <span class="aace-demo-x">(${(f.size / 1048576).toFixed(1).replace('.', ',')} MB)</span> <button type="button" class="pn-btn-claro" onclick="pedRemoverArquivoNovo(${i})">remover</button></div>`).join('') : '<div class="aace-demo-x">Nenhum arquivo anexado.</div>';
+}
+function pedAdicionarArquivos(inputEl) {
+  const erros = [];
+  [...inputEl.files].forEach(f => {
+    if (!PED_EXT_OK.includes(pedExt(f.name))) erros.push(`${f.name}: tipo não aceito (use ${PED_EXT_OK.join(', ')})`);
+    else if (f.size > PED_MAX_MB * 1048576) erros.push(`${f.name}: maior que ${PED_MAX_MB} MB`);
+    else if (_pedArqNovos.length >= PED_MAX_ARQUIVOS) erros.push(`${f.name}: limite de ${PED_MAX_ARQUIVOS} arquivos por pedido`);
+    else _pedArqNovos.push(f);
+  });
+  inputEl.value = '';
+  pedRenderArquivosNovos();
+  pedMsg('ped-msg-novo', erros.join(' · '), erros.length > 0);
+}
+function pedRemoverArquivoNovo(i) { _pedArqNovos.splice(i, 1); pedRenderArquivosNovos(); }
+function pedLimparForm() {
+  ['ped-tipo', 'ped-cliente', 'ped-cnpj', 'ped-contato', 'ped-fone', 'ped-email', 'ped-linhas', 'ped-obs'].forEach(id => { pedEl(id).value = id === 'ped-tipo' ? PED_TIPOS[0] : ''; });
+  _pedArqNovos = []; pedRenderArquivosNovos();
+}
+async function pedUploadArquivo(pedidoId, f) {
+  const caminho = `${pedidoId}/${Date.now()}-${pedNomeArquivo(f.name)}`;
+  const up = await supa.storage.from('pedidos').upload(caminho, f, { contentType: f.type || undefined, upsert: false });
+  if (up.error) throw up.error;
+  const ins = await supa.from('pedidos_anexos').insert({ pedido_id: pedidoId, nome: f.name.slice(0, 200), caminho, tamanho: f.size, mime: f.type || null, enviado_por: USUARIO_ATUAL.id, enviado_por_nome: USUARIO_ATUAL.nome || null });
+  if (ins.error) throw ins.error;
+}
+async function pedEnviar() {
+  if (_pedEnviando) return;
+  const v = id => pedEl(id).value.trim();
+  const cnpj = v('ped-cnpj');
+  if (v('ped-cliente').length < 2) return pedMsg('ped-msg-novo', 'Informe a razão social do cliente.', true);
+  if (!pedCnpjValido(cnpj)) return pedMsg('ped-msg-novo', 'CNPJ inválido: confira os 14 dígitos.', true);
+  if (v('ped-email') && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v('ped-email'))) return pedMsg('ped-msg-novo', 'E-mail do contato inválido.', true);
+  const linhas = v('ped-linhas') === '' ? null : Math.max(0, Math.round(Number(v('ped-linhas'))));
+  _pedEnviando = true; pedEl('ped-btn-enviar').disabled = true;
+  pedMsg('ped-msg-novo', 'Enviando…');
+  try {
+    const { data, error } = await supa.from('pedidos').insert({
+      tipo: v('ped-tipo'), cliente_nome: v('ped-cliente'), cliente_cnpj: cnpj, contato_nome: v('ped-contato') || null, contato_telefone: v('ped-fone') || null,
+      contato_email: v('ped-email') || null, qtd_linhas: linhas, observacao: v('ped-obs') || null, consultor_id: USUARIO_ATUAL.id,
+      consultor_nome: USUARIO_ATUAL.nome || USUARIO_ATUAL.email || null, equipe: USUARIO_ATUAL.equipe_ref || null, gestor: USUARIO_ATUAL.gestor_ref || null,
+    }).select('id,numero').single();
+    if (error) throw error;
+    await supa.from('pedidos_eventos').insert({ pedido_id: data.id, tipo: 'criado', texto: 'Pedido enviado', autor_id: USUARIO_ATUAL.id, autor_nome: USUARIO_ATUAL.nome || null });
+    const falhas = [];
+    for (const f of _pedArqNovos) { try { await pedUploadArquivo(data.id, f); } catch (e) { falhas.push(`${f.name} (${pedErro(e)})`); } }
+    pedLimparForm();
+    pedMsg('ped-msg-novo', `Pedido ${pedProto(data.numero)} enviado.` + (falhas.length ? ` Atenção: ${falhas.length} anexo(s) não subiram: ${falhas.join('; ')}. Anexe de novo abrindo o pedido.` : ''), falhas.length > 0);
+    await pedCarregar();
+  } catch (e) {
+    pedMsg('ped-msg-novo', pedErro(e), true);
+  } finally {
+    _pedEnviando = false; pedEl('ped-btn-enviar').disabled = false;
+  }
+}
+
+// ── Meus pedidos ──
+function pedRenderMeus() {
+  pedContadores();
+  const meu = USUARIO_ATUAL?.id, st = pedEl('ped-meus-status')?.value || '', q = (pedEl('ped-meus-busca')?.value || '').trim().toLowerCase();
+  const l = _pedLista.filter(p => p.consultor_id === meu && (!st || p.status === st) && (!q || `${p.cliente_nome} ${p.cliente_cnpj || ''} ${pedProto(p.numero)}`.toLowerCase().includes(q)));
+  pedEl('ped-meus-lista').innerHTML = l.length ? `<table class="aace-tab"><thead><tr><th>Protocolo</th><th>Enviado</th><th>Tipo</th><th>Cliente</th><th>Linhas</th><th>Status</th><th>Responsável (BKO)</th><th>Atualizado</th></tr></thead><tbody>${l.map(p => `<tr class="ped-linha" onclick="pedAbrir('${p.id}')">
+    <td><b>${pedProto(p.numero)}</b></td><td>${pedData(p.criado_em)}</td><td>${escapeHtml(p.tipo)}</td><td>${escapeHtml(p.cliente_nome)}</td><td>${p.qtd_linhas ?? '—'}</td><td>${pedChip(p.status)}</td><td>${escapeHtml(p.responsavel_nome || '—')}</td><td>${pedQuando(p.atualizado_em)}</td></tr>`).join('')}</tbody></table>`
+    : '<div class="pn-vazio">Nenhum pedido encontrado.</div>';
+}
+
+// ── Painel BKO ──
+function pedRenderBko() {
+  pedContadores();
+  const q = (pedEl('ped-bko-busca')?.value || '').trim().toLowerCase(), tipo = pedEl('ped-bko-tipo')?.value || '', so = pedEl('ped-bko-meus')?.checked, meu = USUARIO_ATUAL?.id;
+  const tipos = [...new Set(_pedLista.map(p => p.tipo))].sort();
+  const selTipo = pedEl('ped-bko-tipo');
+  if (selTipo && selTipo.options.length - 1 !== tipos.length) selTipo.innerHTML = '<option value="">Todos os tipos</option>' + tipos.map(t => `<option value="${escapeHtml(t)}"${t === tipo ? ' selected' : ''}>${escapeHtml(t)}</option>`).join('');
+  const l = _pedLista.filter(p => (!tipo || p.tipo === tipo) && (!so || p.responsavel_id === meu) && (!q || `${p.cliente_nome} ${p.cliente_cnpj || ''} ${pedProto(p.numero)} ${p.consultor_nome || ''}`.toLowerCase().includes(q)));
+  const cols = ['novo', 'em_analise', 'pendencia', 'concluido'];
+  pedEl('ped-bko-quadro').innerHTML = cols.map(st => {
+    const itens = l.filter(p => p.status === st);
+    return `<div class="ped-col"><div class="ped-col-t" style="border-top-color:${PED_STATUS[st].c}"><span>${PED_STATUS[st].t}</span><span>${itens.length}</span></div>${itens.length ? itens.map(p => `<div class="ped-card" onclick="pedAbrir('${p.id}')">
+      <div><b>${pedProto(p.numero)}</b> · ${escapeHtml(p.cliente_nome)}</div><div class="aace-demo-x">${escapeHtml(p.tipo)}${p.qtd_linhas ? ' · ' + p.qtd_linhas + ' linhas' : ''}</div>
+      <div class="aace-demo-x">${escapeHtml(p.consultor_nome || '—')}${p.equipe ? ' · ' + escapeHtml(p.equipe) : ''}</div>
+      <div class="ped-card-rod"><span>${pedQuando(p.atualizado_em)}</span><span>${p.responsavel_nome ? '👤 ' + escapeHtml(p.responsavel_nome) : 'sem responsável'}</span></div></div>`).join('') : '<div class="aace-demo-x" style="padding:8px 4px">Nenhum pedido.</div>'}</div>`;
+  }).join('');
+  const canc = l.filter(p => p.status === 'cancelado').length;
+  pedEl('ped-bko-canc').textContent = canc ? `${canc} pedido(s) cancelado(s) ocultos` : '';
+}
+
+// ── Detalhe do pedido ──
+async function pedAbrir(id) {
+  const modal = pedEl('ped-modal');
+  modal.style.display = '';
+  pedEl('ped-modal-corpo').innerHTML = '<div class="pn-vazio">Carregando…</div>';
+  try {
+    const [p, ev, an] = await Promise.all([
+      supa.from('pedidos').select('*').eq('id', id).single(),
+      supa.from('pedidos_eventos').select('*').eq('pedido_id', id).order('criado_em', { ascending: true }),
+      supa.from('pedidos_anexos').select('*').eq('pedido_id', id).order('criado_em', { ascending: true }),
+    ]);
+    if (p.error) throw p.error;
+    _pedDet = { p: p.data, ev: ev.data || [], an: an.data || [] };
+    pedRenderDetalhe();
+  } catch (e) {
+    pedEl('ped-modal-corpo').innerHTML = `<div class="pn-vazio" style="color:var(--red-sem)">${escapeHtml(pedErro(e))}</div>`;
+  }
+}
+function pedFecharModal() { pedEl('ped-modal').style.display = 'none'; _pedDet = null; }
+function pedRenderDetalhe() {
+  const { p, ev, an } = _pedDet;
+  const linha = (r, v) => `<div class="ped-kv"><span>${r}</span><b>${v ? escapeHtml(String(v)) : '—'}</b></div>`;
+  const sou = USUARIO_ATUAL?.id === p.responsavel_id;
+  const tipoEv = { criado: '🆕', comentario: '💬', status: '🔁', atribuicao: '👤', anexo: '📎' };
+  pedEl('ped-modal-corpo').innerHTML = `
+    <div class="ped-det-cab"><div><div class="ped-det-t">${pedProto(p.numero)} — ${escapeHtml(p.cliente_nome)}</div><div class="aace-demo-x">${escapeHtml(p.tipo)} · enviado ${pedData(p.criado_em)} por ${escapeHtml(p.consultor_nome || '—')}</div></div>${pedChip(p.status)}</div>
+    <div class="ped-det-grid">
+      <div>${linha('CNPJ', p.cliente_cnpj)}${linha('Contato', p.contato_nome)}${linha('Telefone', p.contato_telefone)}${linha('E-mail', p.contato_email)}${linha('Quantidade de linhas', p.qtd_linhas)}${linha('Equipe / gestor', [p.equipe, p.gestor].filter(Boolean).join(' / '))}${linha('Responsável (BKO)', p.responsavel_nome)}
+        <div class="ped-kv"><span>Observação</span><b class="ped-obs">${p.observacao ? escapeHtml(p.observacao) : '—'}</b></div></div>
+      <div>
+        <div class="aace-demo-sub">Tratar o pedido</div>
+        <div class="ped-acoes">
+          ${sou ? '' : '<button class="pn-btn-claro" onclick="pedAssumir()">Assumir pedido</button>'}
+          <select id="ped-det-status">${Object.entries(PED_STATUS).map(([k, s]) => `<option value="${k}"${k === p.status ? ' selected' : ''}>${s.t}</option>`).join('')}</select>
+          <button class="pn-btn-claro" onclick="pedMudarStatus()">Aplicar status</button>
+        </div>
+        <textarea id="ped-det-texto" rows="3" maxlength="4000" placeholder="Comentário ou motivo (obrigatório para Pendência e Cancelado)"></textarea>
+        <div class="ped-acoes"><button class="pn-btn-claro" onclick="pedComentar()">Adicionar comentário</button></div>
+        <div class="aace-demo-sub">Anexos</div>
+        ${an.length ? an.map(a => `<div class="ped-arq">📎 <a href="#" onclick="pedBaixar('${a.id}');return false">${escapeHtml(a.nome)}</a> <span class="aace-demo-x">${a.tamanho ? (a.tamanho / 1048576).toFixed(1).replace('.', ',') + ' MB · ' : ''}${escapeHtml(a.enviado_por_nome || '')} · ${pedData(a.criado_em)}</span></div>`).join('') : '<div class="aace-demo-x">Nenhum anexo.</div>'}
+        <div class="ped-acoes"><input type="file" id="ped-det-arq" multiple accept=".${PED_EXT_OK.join(',.')}"><button class="pn-btn-claro" onclick="pedAnexarDetalhe()">Anexar</button></div>
+      </div>
+    </div>
+    <div class="pn-nota" id="ped-msg-det"></div>
+    <div class="aace-demo-sub">Histórico</div>
+    <div class="ped-hist">${ev.map(e => `<div class="ped-ev"><span>${tipoEv[e.tipo] || '•'}</span><div><b>${escapeHtml(e.autor_nome || '—')}</b> <span class="aace-demo-x">${pedData(e.criado_em)}</span><div>${e.tipo === 'status' ? `${pedChip(e.de_status)} → ${pedChip(e.para_status)} ` : ''}${e.texto ? escapeHtml(e.texto) : ''}</div></div></div>`).join('')}</div>`;
+}
+async function pedRegistrarEvento(tipo, texto, de, para) {
+  const { error } = await supa.from('pedidos_eventos').insert({ pedido_id: _pedDet.p.id, tipo, texto: texto || null, de_status: de || null, para_status: para || null, autor_id: USUARIO_ATUAL.id, autor_nome: USUARIO_ATUAL.nome || null });
+  if (error) throw error;
+}
+async function pedAtualizar(campos) {
+  const { data, error } = await supa.from('pedidos').update(campos).eq('id', _pedDet.p.id).select('id');
+  if (error) throw error;
+  if (!data || !data.length) throw new Error('Sem permissão para alterar este pedido.');
+}
+async function pedRecarregarDetalhe() { const id = _pedDet.p.id; await pedAbrir(id); pedCarregar(); }
+async function pedAssumir() {
+  try {
+    const antes = _pedDet.p.status, novoStatus = antes === 'novo' ? 'em_analise' : antes;
+    await pedAtualizar({ responsavel_id: USUARIO_ATUAL.id, responsavel_nome: USUARIO_ATUAL.nome || USUARIO_ATUAL.email, status: novoStatus });
+    await pedRegistrarEvento('atribuicao', 'Pedido assumido por ' + (USUARIO_ATUAL.nome || USUARIO_ATUAL.email));
+    if (novoStatus !== antes) await pedRegistrarEvento('status', null, antes, novoStatus);
+    await pedRecarregarDetalhe();
+  } catch (e) { pedMsg('ped-msg-det', pedErro(e), true); }
+}
+async function pedMudarStatus() {
+  const de = _pedDet.p.status, para = pedEl('ped-det-status').value, texto = pedEl('ped-det-texto').value.trim();
+  if (para === de) return pedMsg('ped-msg-det', 'O pedido já está nesse status.', true);
+  if ((para === 'pendencia' || para === 'cancelado') && !texto) return pedMsg('ped-msg-det', 'Explique o motivo no campo de comentário antes de marcar como ' + PED_STATUS[para].t + '.', true);
+  try {
+    await pedAtualizar({ status: para });
+    await pedRegistrarEvento('status', texto, de, para);
+    await pedRecarregarDetalhe();
+  } catch (e) { pedMsg('ped-msg-det', pedErro(e), true); }
+}
+async function pedComentar() {
+  const texto = pedEl('ped-det-texto').value.trim();
+  if (!texto) return pedMsg('ped-msg-det', 'Escreva o comentário.', true);
+  try {
+    await pedRegistrarEvento('comentario', texto);
+    await pedAtualizar({ status: _pedDet.p.status }); // só para "tocar" a data de atualização do pedido
+    await pedRecarregarDetalhe();
+  } catch (e) { pedMsg('ped-msg-det', pedErro(e), true); }
+}
+async function pedAnexarDetalhe() {
+  const arqs = [...pedEl('ped-det-arq').files];
+  if (!arqs.length) return pedMsg('ped-msg-det', 'Escolha o(s) arquivo(s).', true);
+  const erros = [];
+  for (const f of arqs) {
+    if (!PED_EXT_OK.includes(pedExt(f.name)) || f.size > PED_MAX_MB * 1048576) { erros.push(f.name + ': tipo não aceito ou maior que ' + PED_MAX_MB + ' MB'); continue; }
+    try { await pedUploadArquivo(_pedDet.p.id, f); await pedRegistrarEvento('anexo', f.name); } catch (e) { erros.push(f.name + ': ' + pedErro(e)); }
+  }
+  await pedRecarregarDetalhe();
+  if (erros.length) pedMsg('ped-msg-det', erros.join(' · '), true);
+}
+async function pedBaixar(idAnexo) {
+  const a = _pedDet.an.find(x => x.id === idAnexo);
+  if (!a) return;
+  try {
+    const { data, error } = await supa.storage.from('pedidos').createSignedUrl(a.caminho, 60, { download: a.nome });
+    if (error) throw error;
+    const l = document.createElement('a'); l.href = data.signedUrl; l.target = '_blank'; l.rel = 'noopener'; document.body.appendChild(l); l.click(); l.remove();
+  } catch (e) { pedMsg('ped-msg-det', pedErro(e), true); }
+}
+
+function initPedidos() {
+  if (!_pedIniciou) {
+    pedEl('ped-tipo').innerHTML = PED_TIPOS.map(t => `<option>${t}</option>`).join('');
+    pedRenderArquivosNovos();
+    _pedIniciou = true;
+  }
+  pedSub(_pedSub);
+  // enquanto a aba está aberta, o painel se atualiza sozinho a cada minuto
+  clearInterval(_pedTimer);
+  _pedTimer = setInterval(() => { if (pedEl('tab-pedidos')?.classList.contains('active') && _pedSub !== 'novo' && pedEl('ped-modal').style.display === 'none') pedCarregar(); }, 60000);
+}
+
 
 function simulador2SwitchSubTab(nome) {
   document.getElementById('sim2-subtab-btn-novo').classList.toggle('active', nome === 'novo');
