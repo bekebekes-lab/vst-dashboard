@@ -1247,6 +1247,14 @@
   .ped-kv span { flex: 0 0 150px; color: var(--text-3); }
   .ped-kv b { font-weight: 500; word-break: break-word; }
   .ped-obs { white-space: pre-wrap; }
+  .ped-sub { font-size: 12px; font-weight: 600; color: var(--text-2); border-bottom: 1px solid var(--border); padding-bottom: 2px; margin-top: 4px; }
+  .ped-linhas-wrap { overflow-x: auto; margin: 8px 0; max-width: 100%; }
+  table.ped-linhas { width: max-content; min-width: 100%; }
+  table.ped-linhas td { padding: 3px 4px; vertical-align: middle; white-space: nowrap; }
+  table.ped-linhas td input[type="text"], table.ped-linhas td input[type="number"] { height: 28px; box-sizing: border-box; border: 1.5px solid var(--border-strong); border-radius: 4px; padding: 0 6px; font-size: 12px; background: var(--surface); color: var(--text); }
+  table.ped-linhas td input:focus { border-color: var(--brand); outline: none; }
+  #tab-pedidos table.ped-linhas td select { height: 28px; font-size: 11.5px; }
+  table.ped-linhas td.ped-calc { text-align: right; font-variant-numeric: tabular-nums; color: var(--text-2); }
   .ped-hist { display: grid; gap: 8px; margin-top: 6px; }
   .ped-ev { display: flex; gap: 10px; font-size: 12.5px; border-left: 3px solid var(--border-strong); padding-left: 10px; }
   @media (max-width: 1100px) { .ped-board { grid-template-columns: repeat(2, minmax(0, 1fr)); } .ped-det-grid { grid-template-columns: minmax(0, 1fr); } }
@@ -2826,25 +2834,27 @@
     <div class="pn-nota" id="ped-msg-lista"></div>
 
     <!-- 1) consultor: novo pedido -->
-    <div id="ped-novo" class="pn-card">
-      <div class="pn-card-cab"><h3>Enviar um pedido ao BKO</h3></div>
-      <div class="ped-form-grid">
-        <div class="pn-fg"><label for="ped-tipo">Tipo de pedido</label><select id="ped-tipo"></select></div>
-        <div class="pn-fg"><label for="ped-cliente">Razão social do cliente *</label><input type="text" id="ped-cliente" maxlength="160" autocomplete="off"></div>
-        <div class="pn-fg"><label for="ped-cnpj">CNPJ *</label><input type="text" id="ped-cnpj" maxlength="18" inputmode="numeric" placeholder="00.000.000/0000-00" oninput="pedMascaraCnpj(this)" autocomplete="off"></div>
-        <div class="pn-fg"><label for="ped-linhas">Quantidade de linhas</label><input type="number" id="ped-linhas" min="0" max="100000" step="1"></div>
-        <div class="pn-fg"><label for="ped-contato">Representante / contato</label><input type="text" id="ped-contato" maxlength="120" autocomplete="off"></div>
-        <div class="pn-fg"><label for="ped-fone">Telefone / celular</label><input type="text" id="ped-fone" maxlength="30" inputmode="tel" autocomplete="off"></div>
-        <div class="pn-fg"><label for="ped-email">E-mail do contato</label><input type="text" id="ped-email" maxlength="160" autocomplete="off"></div>
-        <div class="pn-fg full"><label for="ped-obs">Observações para o BKO</label><textarea id="ped-obs" rows="3" maxlength="4000" placeholder="Condições negociadas, urgência, pontos de atenção…"></textarea></div>
-        <div class="pn-fg full">
-          <label for="ped-arq">Anexos (checklist em Excel, comprovantes, documentos) — até 10 arquivos de 10 MB: PDF, Excel, Word, imagem ou CSV</label>
-          <input type="file" id="ped-arq" multiple accept=".pdf,.xlsx,.xls,.docx,.doc,.png,.jpg,.jpeg,.csv" onchange="pedAdicionarArquivos(this)">
-          <div id="ped-arq-lista"></div>
+    <div id="ped-novo">
+      <div class="pn-card">
+        <div class="pn-card-cab"><h3>Enviar um pedido ao BKO</h3></div>
+        <div class="ped-form-grid">
+          <div class="pn-fg"><label for="ped-tipo">Tipo de pedido</label><select id="ped-tipo" onchange="pedMudouTipo()"></select></div>
         </div>
+        <div class="pn-nota" style="margin-top:8px">Escolha o tipo e preencha o formulário. Os campos mudam conforme o tipo; o checklist em Excel pode ir como anexo, se quiser.</div>
       </div>
-      <div class="ped-acoes"><button class="pn-btn-claro ped-enviar" id="ped-btn-enviar" onclick="pedEnviar()">Enviar pedido</button><button class="pn-btn-claro" onclick="pedLimparForm()">Limpar</button></div>
-      <div class="pn-nota" id="ped-msg-novo"></div>
+      <div id="ped-form-dinamico"></div>
+      <div class="pn-card">
+        <div class="ped-form-grid">
+          <div class="pn-fg full"><label for="ped-obs">Observações para o BKO</label><textarea id="ped-obs" rows="3" maxlength="4000" placeholder="Condições negociadas, urgência, pontos de atenção…"></textarea></div>
+          <div class="pn-fg full">
+            <label for="ped-arq">Anexos (checklist em Excel, comprovantes, documentos) — até 10 arquivos de 10 MB: PDF, Excel, Word, imagem ou CSV</label>
+            <input type="file" id="ped-arq" multiple accept=".pdf,.xlsx,.xls,.docx,.doc,.png,.jpg,.jpeg,.csv" onchange="pedAdicionarArquivos(this)">
+            <div id="ped-arq-lista"></div>
+          </div>
+        </div>
+        <div class="ped-acoes"><button class="pn-btn-claro ped-enviar" id="ped-btn-enviar" onclick="pedEnviar()">Enviar pedido</button><button class="pn-btn-claro" onclick="pedLimparForm()">Limpar</button></div>
+        <div class="pn-nota" id="ped-msg-novo"></div>
+      </div>
     </div>
 
     <!-- 2) consultor: acompanhar -->
@@ -9547,7 +9557,14 @@ const PED_STATUS = {
   concluido: { t: 'Concluído', c: '#2b8a3e' },
   cancelado: { t: 'Cancelado', c: '#868e96' },
 };
-const PED_TIPOS = ['Móvel PJ — Linha nova', 'Móvel PJ — Portabilidade', 'Móvel PJ — Renovação / Migração', 'Móvel PJ — Transferência de titularidade (TT)', 'Fixa Básica', 'Conectividade / SD', 'Outro'];
+// Catálogos do Checklist VST 2026 (aba DADOS) — gerados da planilha; valores em R$ por linha/mês
+const PED_FRANQUIAS = [["BLACK 30GB (15GB + 15GB Bônus)",44.99],["BLACK 70GB (25GB + 45GB Bônus)",54.99],["Pós 10GB + 11GB Bônus = 21GB",39.99],["Pós 10GB + 2GB Bônus = 12GB",39.99],["Pós 150GB",149.99],["Pós 15GB",44.99],["Pós 15GB + 10GB Bônus = 25GB",44.99],["Pós 15GB + 15GB Bônus = 30GB",44.99],["Pós 1GB + 5GB Bônus = 6GB",29.99],["Pós 20GB",49.99],["Pós 25GB + 15GB Bônus = 40GB",54.99],["Pós 25GB + 35GB Bônus = 60GB",54.99],["Pós 28GB",59.99],["Pós 30GB",64.99],["Pós 40GB",69.99],["Pós 50GB + 20GB Bônus = 70GB",74.99],["Pós 60GB",79.99],["Pós 70GB",84.99],["Pós 80GB + 20GB Bônus = 100GB",89.99],["Pós 100MB - CUSTOMIZADO",24.99],["Pós 2GB - CUSTOMIZADO",34.99],["Pós 100GB",99.99],["BL MOVEL INDIVIDUAL 200GB-5G",129.9],["BL MOVEL INDIVIDUAL 400GB-5G",229.9],["COMPARTILHADO 60GB",174.99],["COMPARTILHADO 70GB",189.99],["COMPARTILHADO 80GB",199.99],["COMPARTILHADO 90GB",209.99],["COMPARTILHADO 100GB",249.99],["COMPARTILHADO 150GB",289.99],["COMPARTILHADO 200GB",399.99],["COMPARTILHADO 300GB",459.99],["COMPARTILHADO 400GB",499.99],["COMPARTILHADO 500GB",649.99],["COMPARTILHADO 600GB",669.99],["COMPARTILHADO 700GB",699.99],["COMPARTILHADO 800GB",709.99],["COMPARTILHADO 900GB",749.99],["1 TB COMPARTILHADO",1199.99],["2 TB COMPARTILHADO",1899.99],["3 TB COMPARTILHADO",2799.99],["4 TB COMPARTILHADO",3699.99],["5 TB COMPARTILHADO",4599.99],["10 TB COMPARTILHADO",7399.99],["BANDA LARGA 10GB",44.99],["BANDA LARGA 50GB",69.99],["BANDA LARGA 100GB",89.99],["BANDA LARGA 150GB",119.99],["BANDA LARGA 200GB 5G",129.9],["BANDA LARGA 400GB 5G",229.9],["M2M - 10MB com bloqueio",3.99],["M2M - 100GB com bloqueio",79.99],["M2M - 100GB sem bloqueio",79.99],["M2M - 100MB com bloqueio",7.99],["M2M - 100MB sem bloqueio",7.99],["M2M - 10GB com bloqueio",39.99],["M2M - 10GB sem bloqueio",39.99],["M2M - 10MB sem bloqueio",3.99],["M2M - 1GB com bloqueio",19.99],["M2M - 1GB sem bloqueio",19.99],["M2M - 20MB com bloqueio",4.99],["M2M - 20MB sem bloqueio",4.99],["M2M - 2GB com bloqueio",24.99],["M2M - 2GB sem bloqueio",24.99],["M2M - 500MB com bloqueio",14.99],["M2M - 500MB sem bloqueio",14.99],["M2M - 50GB com bloqueio",59.99],["M2M - 50GB sem bloqueio",59.99],["M2M - 50MB com bloqueio",5.99],["M2M - 50MB sem bloqueio",5.99],["M2M - 5GB com bloqueio",29.99],["M2M - 5GB sem bloqueio",29.99],["M2M - 5MB com bloqueio",2.99]];
+const PED_SVAS = [["Claro monitor - avançado",5.0],["Site Pronto + Domínio",39.9],["Telemedicina - STARBEM BASIC",9.9],["Telemedicina - STARBEM BRONZE",14.9],["Telemedicina - STARBEM SILVER",19.9],["Blip GO - Básico",179.9],["Blip GO - Intermediário",239.9],["Blip GO - Avançado",399.9],["Cons. de Sites Pessoal",19.9],["Cons. de Sites Profis.",39.9],["Hosped. Sites P. Pessoal",19.9],["Hosped. Sites P. Profis.",39.9],["Hosped. Sites P. Emp.",69.9],["Reg. de Domínio .com.br",6.7],["Reg. de Domínio .com",4.67],["Reg. de Domínio .net",8.33],["M. 365 Business Basic",31.23],["M. 365 Business Standard",78.18],["M. 365 Apps for Business",51.55],["M. 365 Business Premium",137.59],["Office 365 Enterprise E1",46.18],["M. 365 Apps for Enterpr.",76.4],["Office 365 E3",123.55],["Power BI Pro",59.59],["One Drive Bus. (Plan1)",29.74],["Sharepoint (Plan1)",31.23],["Exchange Online Kiosk",12.56],["Exchange Online (Plan1)",25.01],["Exchange Online (Plan2)",47.63],["Project Online Ess.",41.7],["Project Plan 1",59.59],["Teams Essentials",25.01],["Wind. Def. Of. 365 (Pl1)",12.56],["Micr. Def. Endpoint P1",18.79],["Micr. Def. for identidy",32.76],["G. W. Business Starter",40.0],["G. W. Business Standard",74.46],["G. W. Business Plus",124.77],["G. W. Enterprise Plus",198.51],["G. W. EnterpriseStandard",151.79],["Gestão de negócios",19.9],["Mototalk básico",14.99],["Mototalk business",29.99],["Mototalk enterprise",49.99],["Be digital 20 licenças",19.99],["Be digital 50 licenças",34.99],["Mcafee avançado",9.9]];
+const PED_PASSAPORTES = [["AM. 5GB",14.99],["AM. 10GB",29.99],["AM. 15GB",49.99],["AM. 20GB",59.99],["AM. 30GB",79.99],["AM. 40GB",89.99],["EU. 5GB",24.99],["EU. 10GB",39.99],["EU. 15GB",59.99],["EU. 20GB",69.99],["EU. 30GB",89.99],["EU. 40GB",99.99],["MU. 5GB",34.99],["MU. 10GB",49.99],["MU. 15GB",79.99],["MU. 20GB",89.99],["MU. 30GB",149.99],["MU. 40GB",189.99]];
+const PED_PLUGINS = [19.99,14.99,29.99];
+const PED_OPERADORAS = ["VIVO PJ","VIVO PF","TIM PJ","TIM PF","CLARO PJ","CLARO PF","OUTRAS"];
+const PED_REVENDAS = ["HG72 - NOVO HAMBURGO","1FK6 - PELOTAS","5Q8X - CAXIAS","E928 - CAMPO MOURÃO","1EWV - CASCAVEL","MW0K - BELTRÃO","6OV1 - CRICIÚMA","YI8F - CURITIBA","EKQG - LONDRINA"];
+const PED_VENCIMENTOS = ["01","03","05","08","17","22","28"];
 const PED_MAX_ARQUIVOS = 10, PED_MAX_MB = 10, PED_EXT_OK = ['pdf', 'xlsx', 'xls', 'docx', 'doc', 'png', 'jpg', 'jpeg', 'csv'];
 let _pedIniciou = false, _pedSub = 'novo', _pedLista = [], _pedArqNovos = [], _pedDet = null, _pedTimer = null, _pedEnviando = false;
 
@@ -9637,33 +9654,267 @@ function pedAdicionarArquivos(inputEl) {
   pedMsg('ped-msg-novo', erros.join(' · '), erros.length > 0);
 }
 function pedRemoverArquivoNovo(i) { _pedArqNovos.splice(i, 1); pedRenderArquivosNovos(); }
-function pedLimparForm() {
-  ['ped-tipo', 'ped-cliente', 'ped-cnpj', 'ped-contato', 'ped-fone', 'ped-email', 'ped-linhas', 'ped-obs'].forEach(id => { pedEl(id).value = id === 'ped-tipo' ? PED_TIPOS[0] : ''; });
-  _pedArqNovos = []; pedRenderArquivosNovos();
+// ── Formulário por tipo de pedido ────────────────────────────────────────────────────────────────────────────────
+// Móvel PJ segue o "Checklist VST 2026 – Simulador – oferta Black" (listas e valores vêm da aba DADOS da planilha).
+// O que o consultor preenche vai no jsonb `dados` (v2) do pedido; as colunas do pedido (cliente, CNPJ, contato, nº de linhas)
+// são preenchidas a partir do formulário para o painel do BKO continuar simples.
+const PED_TIPOS = [
+  { r: 'Móvel PJ — Linha Nova (Cliente novo)', f: 'movel', nova: true },
+  { r: 'Móvel PJ — Portabilidade (Cliente novo)', f: 'movel', portab: true },
+  { r: 'Móvel PJ — Incremento (Cliente base)', f: 'movel', incr: true },
+  { r: 'Móvel PJ — Nova + Portabilidade (Cliente novo)', f: 'movel', nova: true, portab: true },
+  { r: 'Móvel PJ — Renovação Total (Cliente base)', f: 'movel', renov: true },
+  { r: 'Móvel PJ — Renovação Parcial (Cliente base)', f: 'movel', renov: true },
+  { r: 'Móvel PJ — Renovação Total + Incremento (Cliente base)', f: 'movel', renov: true, incr: true },
+  { r: 'Móvel PJ — Renovação Parcial + Incremento (Cliente base)', f: 'movel', renov: true, incr: true },
+  { r: 'Móvel PJ — Transferência Claro PF/PJ', f: 'movel', tt: true },
+  { r: 'Móvel PJ — Transferência Claro PJ/PJ', f: 'movel', tt: true, doadorPJ: true },
+  { r: 'Fixa Básica', f: 'generico' },
+  { r: 'Conectividade / SD', f: 'generico' },
+  { r: 'Outro', f: 'generico' },
+];
+const pedTipoInfo = r => PED_TIPOS.find(t => t.r === r) || PED_TIPOS[0];
+const PED_CHIPS = ['e-SIM digital', 'Físico', 'e-SIM físico'];
+let _pedTipo = PED_TIPOS[0].r, _pedV = {}, _pedL = [];
+
+const pedLinhaVazia = () => ({ ddd: '', numero: '', operadora: '', franquia: '', plugin: '', sva: '', passaporte: '', doa_nome: '', doa_cpf: '', ticket: '', aparelho: '', chip: '' });
+function pedValoresPadrao() {
+  return { consultor: (typeof USUARIO_ATUAL !== 'undefined' && USUARIO_ATUAL && USUARIO_ATUAL.nome) || '', revenda: '', razao: '', cnpj: '',
+    doa_razao: '', doa_cnpj: '', doa_rep: '', doa_email: '', doa_tel: '', doa_cel: '',
+    conv: 'NÃO', conv_info: '', entrega: 'NÃO', entrega_end: '',
+    rep_nome: '', rep_cpf: '', rep_email: '', rep_cel: '', adm1_nome: '', adm1_cpf: '', adm1_email: '', adm1_cel: '', adm2_nome: '', adm2_cpf: '', adm2_email: '', adm2_cel: '',
+    aut1_nome: '', aut1_doc: '', aut1_cel: '', aut2_nome: '', aut2_doc: '', aut2_cel: '',
+    tab: '1', cluster: 'M', venc: '', desc: '', qtd: '', obs: '' };
 }
-async function pedUploadArquivo(pedidoId, f) {
-  const caminho = `${pedidoId}/${Date.now()}-${pedNomeArquivo(f.name)}`;
-  const up = await supa.storage.from('pedidos').upload(caminho, f, { contentType: f.type || undefined, upsert: false });
-  if (up.error) throw up.error;
-  const ins = await supa.from('pedidos_anexos').insert({ pedido_id: pedidoId, nome: f.name.slice(0, 200), caminho, tamanho: f.size, mime: f.type || null, enviado_por: USUARIO_ATUAL.id, enviado_por_nome: USUARIO_ATUAL.nome || null });
-  if (ins.error) throw ins.error;
+
+// ── validações e máscaras ──
+function pedCpfValido(v) {
+  const c = String(v || '').replace(/\D/g, '');
+  if (c.length !== 11 || /^(\d)\1+$/.test(c)) return false;
+  const dv = n => { let s = 0; for (let i = 0; i < n; i++) s += +c[i] * (n + 1 - i); const r = (s * 10) % 11; return r === 10 ? 0 : r; };
+  return dv(9) === +c[9] && dv(10) === +c[10];
+}
+const pedEmailOk = v => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v || '').trim());
+const pedFoneOk = v => { const d = String(v || '').replace(/\D/g, ''); return d.length === 10 || d.length === 11; };
+function pedMascara(valor, tipo) {
+  const d = String(valor || '').replace(/\D/g, '');
+  if (tipo === 'cnpj') return d.slice(0, 14).replace(/^(\d{2})(\d)/, '$1.$2').replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3').replace(/\.(\d{3})(\d)/, '.$1/$2').replace(/(\d{4})(\d)/, '$1-$2');
+  if (tipo === 'cpf') return d.slice(0, 11).replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+  if (tipo === 'fone') return d.length <= 2 ? d : d.length <= 10 ? d.replace(/^(\d{2})(\d{0,4})(\d{0,4}).*/, (m, a, b, c) => `(${a}) ${b}${c ? '-' + c : ''}`) : d.slice(0, 11).replace(/^(\d{2})(\d{5})(\d{0,4}).*/, '($1) $2-$3');
+  if (tipo === 'ddd') return d.slice(0, 2);
+  if (tipo === 'num') return d.slice(0, 9);
+  return valor;
+}
+const pedNum = v => { const n = parseFloat(String(v ?? '').replace(',', '.')); return isFinite(n) ? n : 0; };
+
+// ── cálculo de uma linha (valores vêm dos catálogos; renovação usa a mesma regra de Delta do Simulador de AACE) ──
+function pedCalcLinha(l) {
+  const fr = PED_FRANQUIAS.find(x => x[0] === l.franquia), sv = PED_SVAS.find(x => x[0] === l.sva), pa = PED_PASSAPORTES.find(x => x[0] === l.passaporte);
+  const valor = fr ? fr[1] : 0, valorSva = sv ? sv[1] : 0, valorPass = pa ? pa[1] : 0, plugin = pedNum(l.plugin), ticket = pedNum(l.ticket);
+  let delta = null, faixa = null, fator = null;
+  if (ticket > 0 && valor > 0) {
+    delta = (valor / ticket - 1) * 100;
+    faixa = aaceFaixaDelta(delta);
+    const tabela = _pedV.tab === '2' ? AACE_RENOV_T2 : GF_RENOVACAO_TABELA1;
+    fator = tabela[faixa - 1][_pedV.cluster || 'M'];
+  }
+  return { valor, valorSva, valorPass, plugin, ticket, delta, faixa, fator, subtotal: valor + plugin + valorSva + valorPass };
+}
+function pedTotais() {
+  const base = _pedL.reduce((s, l) => s + pedCalcLinha(l).subtotal, 0);
+  const d = Math.min(Math.max(pedNum(_pedV.desc), 0), 100);
+  return { base, desc: d, final: base * (1 - d / 100) };
+}
+const pedMoeda = v => v > 0 ? s2fmt(v) : '—';
+
+// ── montagem do formulário ──
+function pedCampo(id, rot, o = {}) {
+  const v = _pedV[id] ?? '', ident = 'ped-v-' + id;
+  let ctl;
+  if (o.sel) {
+    ctl = `<select id="${ident}" onchange="pedSetV('${id}', this.value)${o.re ? '; pedRenderForm()' : ''}">${o.sel.map(x => { const [val, lab] = Array.isArray(x) ? x : [x, x]; return `<option value="${escapeHtml(val)}"${String(v) === String(val) ? ' selected' : ''}>${escapeHtml(lab)}</option>`; }).join('')}</select>`;
+  } else {
+    ctl = `<input type="${o.num ? 'number' : 'text'}" id="${ident}" value="${escapeHtml(v)}" ${o.max ? `maxlength="${o.max}"` : ''} ${o.ph ? `placeholder="${o.ph}"` : ''} ${o.num ? 'min="0" step="any"' : ''} autocomplete="off" oninput="pedSetV('${id}', this.value${o.mask ? `, '${o.mask}'` : ''})">`;
+  }
+  return `<div class="pn-fg${o.cheio ? ' full' : ''}"><label for="${ident}">${rot}${o.req ? ' *' : ''}</label>${ctl}</div>`;
+}
+function pedSetV(id, valor, mask) {
+  const v = mask ? pedMascara(valor, mask) : valor;
+  _pedV[id] = v;
+  const el = document.getElementById('ped-v-' + id);
+  if (mask && el && el.value !== v) el.value = v;
+  if (id === 'desc' || id === 'tab' || id === 'cluster') pedAtualizarCalculos();
+}
+const PED_SIMNAO = ['NÃO', 'SIM'];
+const pedCartao = (titulo, corpo, dica) => `<div class="pn-card"><div class="pn-card-cab"><h3>${titulo}</h3></div>${dica ? `<div class="pn-nota">${dica}</div>` : ''}<div class="ped-form-grid">${corpo}</div></div>`;
+const pedPessoa = (p, rot, req, docRot = 'CPF') => pedCampo(p + '_nome', rot + ' — nome', { req, max: 120 }) + pedCampo(p + '_cpf', docRot, { mask: 'cpf', max: 14, req }) + pedCampo(p + '_email', 'E-mail', { max: 160, req }) + pedCampo(p + '_cel', 'Celular', { mask: 'fone', max: 15, req });
+
+function pedColunas(info) {
+  const c = [{ k: 'ddd', t: 'DDD', w: 52, mask: 'ddd' }, { k: 'numero', t: 'Nº da linha', w: 108, mask: 'num' }];
+  if (info.portab || info.tt) c.push({ k: 'operadora', t: 'Operadora (doadora)', sel: PED_OPERADORAS, w: 118 });
+  c.push({ k: 'franquia', t: 'Franquia', sel: PED_FRANQUIAS.map(f => f[0]), w: 250 }, { k: 'valor', t: 'Valor', calc: true },
+    { k: 'plugin', t: 'Plugin', sel: PED_PLUGINS.map(p => [String(p), 'R$ ' + String(p).replace('.', ',')]), w: 92 },
+    { k: 'sva', t: 'SVA', sel: PED_SVAS.map(f => f[0]), w: 200 }, { k: 'valorSva', t: 'Valor SVA', calc: true },
+    { k: 'passaporte', t: 'Passaporte', sel: PED_PASSAPORTES.map(f => f[0]), w: 100 }, { k: 'valorPass', t: 'Valor pass.', calc: true });
+  if (info.portab || info.tt) c.push({ k: 'doa_nome', t: 'Doador PF — nome', w: 150 }, { k: 'doa_cpf', t: 'CPF doador', w: 118, mask: 'cpf' });
+  if (info.renov) c.push({ k: 'ticket', t: 'Ticket atual (R$)', w: 96, num: true }, { k: 'delta', t: 'Delta', calc: true }, { k: 'faixa', t: 'Faixa', calc: true }, { k: 'fator', t: 'Fator', calc: true });
+  c.push({ k: 'aparelho', t: 'Aparelho (modelo / cor / valor)', w: 190 }, { k: 'chip', t: 'Chip', sel: PED_CHIPS, w: 104 });
+  return c;
+}
+function pedRenderLinhas() {
+  const box = document.getElementById('ped-linhas-wrap');
+  if (!box) return;
+  const info = pedTipoInfo(_pedTipo), cols = pedColunas(info);
+  const cel = (c, l, i) => {
+    if (c.calc) return `<td class="ped-calc" id="ped-l-${i}-${c.k}">—</td>`;
+    const id = `ped-l-${i}-${c.k}`, st = `style="width:${c.w}px;min-width:${c.w}px"`;
+    if (c.sel) return `<td><select id="${id}" ${st} onchange="pedSetL(${i}, '${c.k}', this.value)"><option value="">—</option>${c.sel.map(x => { const [val, lab] = Array.isArray(x) ? x : [x, x]; return `<option value="${escapeHtml(val)}"${String(l[c.k]) === String(val) ? ' selected' : ''}>${escapeHtml(lab)}</option>`; }).join('')}</select></td>`;
+    return `<td><input type="${c.num ? 'number' : 'text'}" id="${id}" ${st} value="${escapeHtml(l[c.k])}" ${c.num ? 'min="0" step="any"' : ''} autocomplete="off" oninput="pedSetL(${i}, '${c.k}', this.value${c.mask ? `, '${c.mask}'` : ''})"></td>`;
+  };
+  box.innerHTML = `<table class="aace-tab ped-linhas"><thead><tr><th>#</th>${cols.map(c => `<th>${c.t}</th>`).join('')}<th></th></tr></thead><tbody>${_pedL.map((l, i) => `<tr><td class="ped-calc">${i + 1}</td>${cols.map(c => cel(c, l, i)).join('')}<td><button type="button" class="pn-btn-claro" title="Remover esta linha" onclick="pedRemoverLinha(${i})">✕</button></td></tr>`).join('')}</tbody></table>`;
+  pedAtualizarCalculos();
+}
+function pedSetL(i, k, valor, mask) {
+  const v = mask ? pedMascara(valor, mask) : valor;
+  _pedL[i][k] = v;
+  const el = document.getElementById(`ped-l-${i}-${k}`);
+  if (mask && el && el.value !== v) el.value = v;
+  pedAtualizarCalculos();
+}
+function pedAddLinhas(n) { for (let j = 0; j < n; j++) _pedL.push(pedLinhaVazia()); pedRenderLinhas(); }
+function pedDuplicarUltima(n) {
+  const u = _pedL[_pedL.length - 1] || pedLinhaVazia();
+  for (let j = 0; j < n; j++) _pedL.push({ ...u, numero: '', doa_nome: '', doa_cpf: '', aparelho: '' });
+  pedRenderLinhas();
+}
+function pedRemoverLinha(i) { _pedL.splice(i, 1); if (!_pedL.length) _pedL.push(pedLinhaVazia()); pedRenderLinhas(); }
+function pedAtualizarCalculos() {
+  if (pedTipoInfo(_pedTipo).f !== 'movel') return;
+  const set = (id, txt) => { const e = document.getElementById(id); if (e) e.textContent = txt; };
+  _pedL.forEach((l, i) => {
+    const c = pedCalcLinha(l);
+    set(`ped-l-${i}-valor`, pedMoeda(c.valor)); set(`ped-l-${i}-valorSva`, pedMoeda(c.valorSva)); set(`ped-l-${i}-valorPass`, pedMoeda(c.valorPass));
+    set(`ped-l-${i}-delta`, c.delta === null ? '—' : aaceFmtPct(c.delta)); set(`ped-l-${i}-faixa`, c.faixa === null ? '—' : 'Faixa ' + c.faixa); set(`ped-l-${i}-fator`, c.fator === null ? '—' : c.fator.toFixed(2).replace('.', ','));
+  });
+  const t = pedTotais();
+  set('ped-totais', `${_pedL.length} linha(s) · oferta base ${s2fmt(t.base)} · desconto MKT ${aaceFmtNum(t.desc)}% · TOTAL FINAL ${s2fmt(t.final)}`);
+}
+
+function pedMudouTipo() {
+  _pedTipo = pedEl('ped-tipo').value;
+  pedRenderForm();
+}
+function pedRenderForm() {
+  const info = pedTipoInfo(_pedTipo), box = pedEl('ped-form-dinamico');
+  if (!box) return;
+  const V = _pedV;
+  if (info.f === 'generico') {
+    box.innerHTML = pedCartao('Dados do pedido', pedCampo('razao', 'Razão social do cliente', { req: true, max: 160 }) + pedCampo('cnpj', 'CNPJ', { req: true, mask: 'cnpj', max: 18, ph: '00.000.000/0000-00' })
+      + pedCampo('rep_nome', 'Representante / contato', { max: 120 }) + pedCampo('rep_cel', 'Telefone / celular', { mask: 'fone', max: 15 }) + pedCampo('rep_email', 'E-mail do contato', { max: 160 }) + pedCampo('qtd', 'Quantidade de linhas / itens', { num: true }),
+      'Este tipo de pedido ainda não tem formulário próprio: preencha o essencial e anexe os documentos.');
+    return;
+  }
+  const secoes = [];
+  secoes.push(pedCartao('Dados do pedido', pedCampo('consultor', 'Consultor (nome conforme NEO)', { req: true, max: 120 }) + pedCampo('revenda', 'Revenda', { req: true, sel: [['', 'Selecione…'], ...PED_REVENDAS] })));
+  secoes.push(pedCartao('Dados do cliente', pedCampo('razao', 'Razão social', { req: true, max: 160 }) + pedCampo('cnpj', 'CNPJ', { req: true, mask: 'cnpj', max: 18, ph: '00.000.000/0000-00' })));
+  if (info.doadorPJ) secoes.push(pedCartao('Dados do doador — transferência Claro PJ → Claro PJ',
+    pedCampo('doa_razao', 'Razão social do doador', { req: true, max: 160 }) + pedCampo('doa_cnpj', 'CNPJ do doador', { req: true, mask: 'cnpj', max: 18 }) + pedCampo('doa_rep', 'Representante doador', { max: 120 })
+    + pedCampo('doa_email', 'E-mail do doador', { max: 160 }) + pedCampo('doa_tel', 'Telefone', { mask: 'fone', max: 15 }) + pedCampo('doa_cel', 'Celular', { mask: 'fone', max: 15 })));
+  secoes.push(pedCartao('Informações adicionais',
+    pedCampo('conv', 'Possui convergência?', { sel: PED_SIMNAO, re: true }) + (V.conv === 'SIM' ? pedCampo('conv_info', 'Nº do contrato da fixa ou cidade da instalação', { req: true, max: 120 }) : '')
+    + pedCampo('entrega', 'Possui entrega em endereço alternativo?', { sel: PED_SIMNAO, re: true }) + (V.entrega === 'SIM' ? pedCampo('entrega_end', 'Endereço de entrega (anexe o comprovante)', { req: true, max: 240, cheio: true }) : '')));
+  secoes.push(pedCartao('Representante legal e administradores',
+    pedPessoa('rep', 'Representante legal', true) + '<div class="full ped-sub">1º administrador</div>' + pedPessoa('adm1', '1º administrador', false) + '<div class="full ped-sub">2º administrador (se houver)</div>' + pedPessoa('adm2', '2º administrador', false),
+    'Informe CPF, e-mail e celular de quem assina e de quem administra a conta.'));
+  secoes.push(pedCartao('Autorizados a receber equipamentos',
+    pedCampo('aut1_nome', 'Nome', { max: 120 }) + pedCampo('aut1_doc', 'CPF / RG', { max: 20 }) + pedCampo('aut1_cel', 'Celular', { mask: 'fone', max: 15 })
+    + pedCampo('aut2_nome', 'Nome (2º autorizado)', { max: 120 }) + pedCampo('aut2_doc', 'CPF / RG', { max: 20 }) + pedCampo('aut2_cel', 'Celular', { mask: 'fone', max: 15 })));
+  if (info.renov) secoes.push(pedCartao('Simulação de renovação',
+    pedCampo('tab', 'Tabela', { sel: [['1', 'Tabela 1 (Fora Cabeada / Com BL / Conv.)'], ['2', 'Tabela 2 (Dentro Cabeada / Sem BL / Sem Conv.)']] }) + pedCampo('cluster', 'Cluster (porte)', { sel: [['P', 'Fator P'], ['M', 'Fator M'], ['G', 'Fator G']] }),
+    'O Delta é calculado por linha: valor da nova franquia ÷ ticket atual − 1. A faixa e o fator saem da mesma tabela do Simulador de AACE.'));
+  secoes.push(`<div class="pn-card"><div class="pn-card-cab"><h3>Negociação e linhas</h3></div>
+    <div class="ped-form-grid">${pedCampo('venc', 'Vencimento da fatura', { req: true, sel: [['', 'Selecione…'], ...PED_VENCIMENTOS.map(x => [x, 'Dia ' + x])] }) + pedCampo('desc', 'Desconto MKT (%)', { num: true })}</div>
+    <div class="pn-nota" style="margin-top:10px">Uma linha por número. Valor, SVA e passaporte vêm da tabela oficial da planilha; o total é calculado sozinho.</div>
+    <div id="ped-linhas-wrap" class="ped-linhas-wrap"></div>
+    <div class="ped-acoes"><button type="button" class="pn-btn-claro" onclick="pedAddLinhas(1)">+ 1 linha</button><button type="button" class="pn-btn-claro" onclick="pedAddLinhas(5)">+ 5 linhas</button>
+      <button type="button" class="pn-btn-claro" onclick="pedDuplicarUltima(1)" title="Copia franquia, SVA, passaporte e chip da última linha">Duplicar a última</button>
+      <button type="button" class="pn-btn-claro" onclick="pedDuplicarUltima(5)">Duplicar ×5</button><span class="pn-pill" id="ped-totais"></span></div></div>`);
+  box.innerHTML = secoes.join('');
+  pedRenderLinhas();
+}
+
+// ── validação e montagem do pedido ──
+function pedValidar(info) {
+  const e = [], V = _pedV;
+  if ((V.razao || '').trim().length < 2) e.push('Informe a razão social do cliente.');
+  if (!pedCnpjValido(V.cnpj)) e.push('CNPJ do cliente inválido: confira os 14 dígitos.');
+  if (info.f === 'generico') {
+    if (V.rep_email && !pedEmailOk(V.rep_email)) e.push('E-mail do contato inválido.');
+    return e;
+  }
+  if (!(V.consultor || '').trim()) e.push('Informe o consultor (nome conforme NEO).');
+  if (!V.revenda) e.push('Selecione a revenda.');
+  if (!V.venc) e.push('Selecione o vencimento da fatura.');
+  if (info.doadorPJ) { if (!(V.doa_razao || '').trim()) e.push('Informe a razão social do doador.'); if (!pedCnpjValido(V.doa_cnpj)) e.push('CNPJ do doador inválido.'); }
+  if (V.conv === 'SIM' && !(V.conv_info || '').trim()) e.push('Convergência: informe o nº do contrato da fixa ou a cidade da instalação.');
+  if (V.entrega === 'SIM' && !(V.entrega_end || '').trim()) e.push('Informe o endereço de entrega (e anexe o comprovante).');
+  if (!(V.rep_nome || '').trim()) e.push('Informe o nome do representante legal.');
+  if (!pedCpfValido(V.rep_cpf)) e.push('CPF do representante legal inválido.');
+  if (!pedEmailOk(V.rep_email)) e.push('E-mail do representante legal inválido.');
+  if (!pedFoneOk(V.rep_cel)) e.push('Celular do representante legal inválido (DDD + número).');
+  ['adm1', 'adm2'].forEach((p, i) => {
+    if ((V[p + '_nome'] || V[p + '_cpf'] || V[p + '_email'] || V[p + '_cel'])) {
+      if (!(V[p + '_nome'] || '').trim()) e.push(`${i + 1}º administrador: informe o nome.`);
+      if (V[p + '_cpf'] && !pedCpfValido(V[p + '_cpf'])) e.push(`${i + 1}º administrador: CPF inválido.`);
+      if (V[p + '_email'] && !pedEmailOk(V[p + '_email'])) e.push(`${i + 1}º administrador: e-mail inválido.`);
+    }
+  });
+  const linhas = [];
+  _pedL.forEach((l, i) => {
+    const n = i + 1, p = [];
+    if (!l.franquia) p.push('escolha a franquia');
+    const exigeNum = (info.portab && !info.nova) || (info.renov && !info.incr) || info.tt || l.operadora || l.ticket;
+    if (exigeNum && !(String(l.numero).length >= 8)) p.push('informe o DDD e o número');
+    else if (l.numero && String(l.ddd).length !== 2) p.push('DDD com 2 dígitos');
+    if ((info.portab || info.tt) && l.numero && !l.operadora) p.push('informe a operadora doadora');
+    if (l.doa_cpf && !pedCpfValido(l.doa_cpf)) p.push('CPF do doador inválido');
+    if (p.length) linhas.push(`Linha ${n}: ${p.join(', ')}.`);
+  });
+  if (linhas.length) e.push(...linhas.slice(0, 6), ...(linhas.length > 6 ? [`…e mais ${linhas.length - 6} linha(s) com pendência.`] : []));
+  return e;
+}
+function pedMontarPayload(info) {
+  const V = _pedV, obs = pedEl('ped-obs').value.trim() || null;
+  const base = { tipo: _pedTipo, cliente_nome: V.razao.trim(), cliente_cnpj: V.cnpj, contato_nome: (V.rep_nome || '').trim() || null, contato_telefone: V.rep_cel || null, contato_email: (V.rep_email || '').trim() || null, observacao: obs };
+  if (info.f === 'generico') return { ...base, qtd_linhas: V.qtd === '' ? null : Math.max(0, Math.round(pedNum(V.qtd))), dados: { v: 2, familia: 'generico' } };
+  const t = pedTotais();
+  const pessoa = p => (V[p + '_nome'] || V[p + '_cpf']) ? { nome: V[p + '_nome'], cpf: V[p + '_cpf'], email: V[p + '_email'], celular: V[p + '_cel'] } : null;
+  return { ...base, qtd_linhas: _pedL.length, dados: {
+    v: 2, familia: 'movel', cabecalho: { consultor: V.consultor.trim(), revenda: V.revenda },
+    cliente: { razao: V.razao.trim(), cnpj: V.cnpj },
+    doador: info.doadorPJ ? { razao: V.doa_razao, cnpj: V.doa_cnpj, representante: V.doa_rep, email: V.doa_email, telefone: V.doa_tel, celular: V.doa_cel } : null,
+    adicionais: { convergencia: V.conv, contrato_ou_cidade: V.conv === 'SIM' ? V.conv_info : null, entrega_alternativa: V.entrega, endereco_entrega: V.entrega === 'SIM' ? V.entrega_end : null },
+    representante: pessoa('rep'), administradores: [pessoa('adm1'), pessoa('adm2')].filter(Boolean),
+    autorizados: [{ nome: V.aut1_nome, doc: V.aut1_doc, celular: V.aut1_cel }, { nome: V.aut2_nome, doc: V.aut2_doc, celular: V.aut2_cel }].filter(a => a.nome || a.doc),
+    renovacao: info.renov ? { tabela: V.tab, cluster: V.cluster } : null,
+    negociacao: { vencimento: V.venc, desconto_mkt: t.desc, total_base: Math.round(t.base * 100) / 100, total_final: Math.round(t.final * 100) / 100 },
+    linhas: _pedL.map(l => { const c = pedCalcLinha(l), pt = info.portab || info.tt; return { ddd: l.ddd, numero: l.numero, operadora: pt ? (l.operadora || null) : null, franquia: l.franquia, valor: c.valor, plugin: c.plugin || null, sva: l.sva || null, valor_sva: c.valorSva || null, passaporte: l.passaporte || null, valor_passaporte: c.valorPass || null,
+      doador_nome: pt ? (l.doa_nome || null) : null, doador_cpf: pt ? (l.doa_cpf || null) : null, ticket_atual: info.renov ? (c.ticket || null) : null, delta_pct: info.renov && c.delta !== null ? Math.round(c.delta * 100) / 100 : null, faixa: info.renov ? c.faixa : null, fator: info.renov ? c.fator : null, aparelho: l.aparelho || null, chip: l.chip || null }; }),
+  } };
+}
+function pedLimparForm() {
+  _pedV = pedValoresPadrao(); _pedL = [pedLinhaVazia()];
+  const o = pedEl('ped-obs'); if (o) o.value = '';
+  _pedArqNovos = []; pedRenderArquivosNovos(); pedRenderForm();
 }
 async function pedEnviar() {
   if (_pedEnviando) return;
-  const v = id => pedEl(id).value.trim();
-  const cnpj = v('ped-cnpj');
-  if (v('ped-cliente').length < 2) return pedMsg('ped-msg-novo', 'Informe a razão social do cliente.', true);
-  if (!pedCnpjValido(cnpj)) return pedMsg('ped-msg-novo', 'CNPJ inválido: confira os 14 dígitos.', true);
-  if (v('ped-email') && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v('ped-email'))) return pedMsg('ped-msg-novo', 'E-mail do contato inválido.', true);
-  const linhas = v('ped-linhas') === '' ? null : Math.max(0, Math.round(Number(v('ped-linhas'))));
+  const info = pedTipoInfo(_pedTipo), erros = pedValidar(info);
+  if (erros.length) { pedMsg('ped-msg-novo', 'Confira antes de enviar: ' + erros.join(' · '), true); return; }
   _pedEnviando = true; pedEl('ped-btn-enviar').disabled = true;
   pedMsg('ped-msg-novo', 'Enviando…');
   try {
-    const { data, error } = await supa.from('pedidos').insert({
-      tipo: v('ped-tipo'), cliente_nome: v('ped-cliente'), cliente_cnpj: cnpj, contato_nome: v('ped-contato') || null, contato_telefone: v('ped-fone') || null,
-      contato_email: v('ped-email') || null, qtd_linhas: linhas, observacao: v('ped-obs') || null, consultor_id: USUARIO_ATUAL.id,
-      consultor_nome: USUARIO_ATUAL.nome || USUARIO_ATUAL.email || null, equipe: USUARIO_ATUAL.equipe_ref || null, gestor: USUARIO_ATUAL.gestor_ref || null,
-    }).select('id,numero').single();
+    const { data, error } = await supa.from('pedidos').insert({ ...pedMontarPayload(info), consultor_id: USUARIO_ATUAL.id, consultor_nome: USUARIO_ATUAL.nome || USUARIO_ATUAL.email || null, equipe: USUARIO_ATUAL.equipe_ref || null, gestor: USUARIO_ATUAL.gestor_ref || null }).select('id,numero').single();
     if (error) throw error;
     await supa.from('pedidos_eventos').insert({ pedido_id: data.id, tipo: 'criado', texto: 'Pedido enviado', autor_id: USUARIO_ATUAL.id, autor_nome: USUARIO_ATUAL.nome || null });
     const falhas = [];
@@ -9678,6 +9929,48 @@ async function pedEnviar() {
   }
 }
 
+// ── formulário preenchido, visto pelo BKO ──
+function pedDadosHtml(p) {
+  const d = p.dados;
+  if (!d || d.v !== 2 || d.familia !== 'movel') return '';
+  const kv = (r, v) => `<div class="ped-kv"><span>${r}</span><b>${v ? escapeHtml(String(v)) : '—'}</b></div>`;
+  const pessoa = (r, x) => x ? kv(r, [x.nome, x.cpf, x.email, x.celular].filter(Boolean).join(' · ')) : '';
+  const a = d.adicionais || {}, n = d.negociacao || {};
+  const esq = [kv('Consultor (NEO)', d.cabecalho?.consultor), kv('Revenda', d.cabecalho?.revenda),
+    d.doador ? kv('Doador (PJ)', [d.doador.razao, d.doador.cnpj, d.doador.representante, d.doador.email, d.doador.telefone, d.doador.celular].filter(Boolean).join(' · ')) : '',
+    kv('Convergência', a.convergencia + (a.contrato_ou_cidade ? ' — ' + a.contrato_ou_cidade : '')), kv('Entrega alternativa', a.entrega_alternativa + (a.endereco_entrega ? ' — ' + a.endereco_entrega : ''))].join('');
+  const dir = [pessoa('Representante legal', d.representante), ...(d.administradores || []).map((x, i) => pessoa((i + 1) + 'º administrador', x)),
+    ...(d.autorizados || []).map((x, i) => kv('Autorizado ' + (i + 1), [x.nome, x.doc, x.celular].filter(Boolean).join(' · '))),
+    d.renovacao ? kv('Renovação', `Tabela ${d.renovacao.tabela} · cluster ${d.renovacao.cluster}`) : '',
+    kv('Vencimento da fatura', n.vencimento ? 'dia ' + n.vencimento : ''), kv('Total oferta base', s2fmt(n.total_base || 0)), kv('Desconto MKT', aaceFmtNum(n.desconto_mkt || 0) + '%'), kv('TOTAL FINAL', s2fmt(n.total_final || 0))].join('');
+  const ls = d.linhas || [], ren = !!d.renovacao, pt = ls.some(l => l.operadora || l.doador_nome);
+  const f = v => v === null || v === undefined || v === '' ? '—' : escapeHtml(String(v));
+  const m = v => v ? s2fmt(v) : '—';
+  const tabela = ls.length ? `<div class="ped-linhas-wrap"><table class="aace-tab ped-linhas"><thead><tr><th>#</th><th>Linha</th>${pt ? '<th>Operadora</th>' : ''}<th>Franquia</th><th>Valor</th><th>Plugin</th><th>SVA</th><th>Valor SVA</th><th>Passaporte</th><th>Valor pass.</th>${pt ? '<th>Doador PF</th>' : ''}${ren ? '<th>Ticket atual</th><th>Delta</th><th>Faixa</th><th>Fator</th>' : ''}<th>Aparelho</th><th>Chip</th></tr></thead><tbody>${ls.map((l, i) => `<tr><td>${i + 1}</td><td>${f((l.ddd ? '(' + l.ddd + ') ' : '') + (l.numero || ''))}</td>${pt ? `<td>${f(l.operadora)}</td>` : ''}<td>${f(l.franquia)}</td><td>${m(l.valor)}</td><td>${m(l.plugin)}</td><td>${f(l.sva)}</td><td>${m(l.valor_sva)}</td><td>${f(l.passaporte)}</td><td>${m(l.valor_passaporte)}</td>${pt ? `<td>${f([l.doador_nome, l.doador_cpf].filter(Boolean).join(' · '))}</td>` : ''}${ren ? `<td>${m(l.ticket_atual)}</td><td>${l.delta_pct === null || l.delta_pct === undefined ? '—' : aaceFmtPct(l.delta_pct)}</td><td>${f(l.faixa)}</td><td>${l.fator === null || l.fator === undefined ? '—' : String(l.fator.toFixed(2)).replace('.', ',')}</td>` : ''}<td>${f(l.aparelho)}</td><td>${f(l.chip)}</td></tr>`).join('')}</tbody></table></div>
+    <div class="ped-acoes"><button class="pn-btn-claro" onclick="pedBaixarLinhasCsv()">Baixar linhas em CSV</button></div>` : '';
+  return `<div class="aace-demo-sub">Formulário preenchido pelo consultor</div><div class="ped-det-grid"><div>${esq}</div><div>${dir}</div></div>
+    <div class="aace-demo-sub">Linhas do pedido (${ls.length})</div>${tabela}`;
+}
+function pedBaixarLinhasCsv() {
+  const d = _pedDet && _pedDet.p.dados;
+  if (!d || !d.linhas) return;
+  const num = v => v === null || v === undefined || v === '' ? '' : String(v).replace('.', ',');
+  const cab = ['DDD', 'Nº Linha', 'Operadora', 'Franquia', 'Valor', 'Plugin', 'SVA', 'Valor SVA', 'Passaporte', 'Valor Passaporte', 'Doador nome', 'Doador CPF', 'Ticket atual', 'Delta %', 'Faixa', 'Fator', 'Aparelho', 'Chip'];
+  const lin = d.linhas.map(l => [l.ddd, l.numero, l.operadora, l.franquia, num(l.valor), num(l.plugin), l.sva, num(l.valor_sva), l.passaporte, num(l.valor_passaporte), l.doador_nome, l.doador_cpf, num(l.ticket_atual), num(l.delta_pct), l.faixa, num(l.fator), l.aparelho, l.chip]);
+  const csv = '﻿' + [cab, ...lin].map(r => r.map(c => '"' + String(c ?? '').replace(/"/g, '""') + '"').join(';')).join('\r\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  a.download = `pedido_${pedProto(_pedDet.p.numero).slice(1)}_linhas.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+}
+
+async function pedUploadArquivo(pedidoId, f) {
+  const caminho = `${pedidoId}/${Date.now()}-${pedNomeArquivo(f.name)}`;
+  const up = await supa.storage.from('pedidos').upload(caminho, f, { contentType: f.type || undefined, upsert: false });
+  if (up.error) throw up.error;
+  const ins = await supa.from('pedidos_anexos').insert({ pedido_id: pedidoId, nome: f.name.slice(0, 200), caminho, tamanho: f.size, mime: f.type || null, enviado_por: USUARIO_ATUAL.id, enviado_por_nome: USUARIO_ATUAL.nome || null });
+  if (ins.error) throw ins.error;
+}
 // ── Meus pedidos ──
 function pedRenderMeus() {
   pedContadores();
@@ -9751,6 +10044,7 @@ function pedRenderDetalhe() {
         <div class="ped-acoes"><input type="file" id="ped-det-arq" multiple accept=".${PED_EXT_OK.join(',.')}"><button class="pn-btn-claro" onclick="pedAnexarDetalhe()">Anexar</button></div>
       </div>
     </div>
+    ${pedDadosHtml(p)}
     <div class="pn-nota" id="ped-msg-det"></div>
     <div class="aace-demo-sub">Histórico</div>
     <div class="ped-hist">${ev.map(e => `<div class="ped-ev"><span>${tipoEv[e.tipo] || '•'}</span><div><b>${escapeHtml(e.autor_nome || '—')}</b> <span class="aace-demo-x">${pedData(e.criado_em)}</span><div>${e.tipo === 'status' ? `${pedChip(e.de_status)} → ${pedChip(e.para_status)} ` : ''}${e.texto ? escapeHtml(e.texto) : ''}</div></div></div>`).join('')}</div>`;
@@ -9816,8 +10110,9 @@ async function pedBaixar(idAnexo) {
 
 function initPedidos() {
   if (!_pedIniciou) {
-    pedEl('ped-tipo').innerHTML = PED_TIPOS.map(t => `<option>${t}</option>`).join('');
-    pedRenderArquivosNovos();
+    pedEl('ped-tipo').innerHTML = PED_TIPOS.map(t => `<option>${t.r}</option>`).join('');
+    _pedTipo = pedEl('ped-tipo').value;
+    pedLimparForm();
     _pedIniciou = true;
   }
   pedSub(_pedSub);
