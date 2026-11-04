@@ -9714,17 +9714,21 @@ function pedMascara(valor, tipo) {
 const pedNum = v => { const n = parseFloat(String(v ?? '').replace(',', '.')); return isFinite(n) ? n : 0; };
 
 // ── cálculo de uma linha (valores vêm dos catálogos; renovação usa a mesma regra de Delta do Simulador de AACE) ──
+// Política 2.4: convergência no ato da renovação enquadra o CNPJ na Tabela 1 (a Tabela 2 exige dentro da área cabeada E sem convergência)
+const pedTabelaEfetiva = () => _pedV.conv === 'SIM' ? '1' : (_pedV.tab === '2' ? '2' : '1');
 function pedCalcLinha(l) {
   const fr = PED_FRANQUIAS.find(x => x[0] === l.franquia), sv = PED_SVAS.find(x => x[0] === l.sva), pa = PED_PASSAPORTES.find(x => x[0] === l.passaporte);
   const valor = fr ? fr[1] : 0, valorSva = sv ? sv[1] : 0, valorPass = pa ? pa[1] : 0, plugin = pedNum(l.plugin), ticket = pedNum(l.ticket);
-  let delta = null, faixa = null, fator = null;
+  let delta = null, faixa = null, fator = null, fatorFinal = null;
   if (ticket > 0 && valor > 0) {
     delta = ((valor + valorSva + valorPass) / ticket - 1) * 100;   // receita da linha contratada = franquia + SVA + passaporte (plugin fora)
     faixa = aaceFaixaDelta(delta);
-    const tabela = _pedV.tab === '2' ? AACE_RENOV_T2 : GF_RENOVACAO_TABELA1;
-    fator = tabela[faixa - 1][_pedV.cluster || 'M'];
+    const tabela = pedTabelaEfetiva() === '2' ? AACE_RENOV_T2 : GF_RENOVACAO_TABELA1, cl = _pedV.cluster || 'M';
+    fator = tabela[faixa - 1][cl];
+    const base = pedNum(_pedV.fator_base);
+    if (base > 0) fatorFinal = Math.round(base * fator / tabela[0][cl] * 100) / 100;   // política 2.4 vi-b: duas casas decimais
   }
-  return { valor, valorSva, valorPass, plugin, ticket, delta, faixa, fator, receita: valor + valorSva + valorPass, subtotal: valor + plugin + valorSva + valorPass };
+  return { valor, valorSva, valorPass, plugin, ticket, delta, faixa, fator, fatorFinal, receita: valor + valorSva + valorPass, subtotal: valor + plugin + valorSva + valorPass };
 }
 function pedTotais() {
   const base = _pedL.reduce((s, l) => s + pedCalcLinha(l).subtotal, 0);
@@ -9799,6 +9803,8 @@ function pedSetV(id, valor, mask) {
   const el = document.getElementById('ped-v-' + id);
   if (mask && el && el.value !== v) el.value = v;
   if (PED_RAZAO_DO_CNPJ[id]) pedBuscarCnpj(id, PED_RAZAO_DO_CNPJ[id]);
+  if (id === 'conv' && valor === 'SIM') _pedV.tab = '1';
+  if (id === 'fator_base') pedAtualizarCalculos();
   if (id === 'desc' || id === 'tab' || id === 'cluster') pedAtualizarCalculos();
   if (id === 'fx_cep') pedBuscarCep();
   if (/^fx_(net|fone|tv)_valor$/.test(id)) pedFixaTotal();
@@ -9815,7 +9821,7 @@ function pedColunas(info) {
     { k: 'sva', t: 'SVA', sel: PED_SVAS.map(f => f[0]), w: 200 }, { k: 'valorSva', t: 'Valor SVA', calc: true },
     { k: 'passaporte', t: 'Passaporte', sel: PED_PASSAPORTES.map(f => f[0]), w: 100 }, { k: 'valorPass', t: 'Valor pass.', calc: true });
   if (info.portab || info.tt) c.push({ k: 'doa_nome', t: 'Doador PF — nome', w: 150 }, { k: 'doa_cpf', t: 'CPF doador', w: 118, mask: 'cpf' });
-  if (info.renov) c.push({ k: 'ticket', t: 'Ticket atual (R$)', w: 96, num: true }, { k: 'delta', t: 'Delta', calc: true }, { k: 'faixa', t: 'Faixa', calc: true }, { k: 'fator', t: 'Fator', calc: true });
+  if (info.renov) c.push({ k: 'ticket', t: 'Ticket atual (R$)', w: 96, num: true }, { k: 'delta', t: 'Delta', calc: true }, { k: 'faixa', t: 'Faixa', calc: true }, { k: 'fator', t: 'Fator tabela', calc: true }, { k: 'fatorFinal', t: 'Fator final', calc: true });
   c.push({ k: 'aparelho', t: 'Aparelho (modelo / cor / valor)', w: 190 }, { k: 'chip', t: 'Chip', sel: PED_CHIPS, w: 104 });
   return c;
 }
@@ -9853,7 +9859,7 @@ function pedAtualizarCalculos() {
   _pedL.forEach((l, i) => {
     const c = pedCalcLinha(l);
     set(`ped-l-${i}-valor`, pedMoeda(c.valor)); set(`ped-l-${i}-valorSva`, pedMoeda(c.valorSva)); set(`ped-l-${i}-valorPass`, pedMoeda(c.valorPass));
-    set(`ped-l-${i}-delta`, c.delta === null ? '—' : aaceFmtPct(c.delta)); set(`ped-l-${i}-faixa`, c.faixa === null ? '—' : 'Faixa ' + c.faixa); set(`ped-l-${i}-fator`, c.fator === null ? '—' : c.fator.toFixed(2).replace('.', ','));
+    set(`ped-l-${i}-delta`, c.delta === null ? '—' : aaceFmtPct(c.delta)); set(`ped-l-${i}-faixa`, c.faixa === null ? '—' : 'Faixa ' + c.faixa); set(`ped-l-${i}-fator`, c.fator === null ? '—' : c.fator.toFixed(2).replace('.', ',')); set(`ped-l-${i}-fatorFinal`, c.fatorFinal === null ? '—' : c.fatorFinal.toFixed(2).replace('.', ','));
   });
   const t = pedTotais();
   set('ped-totais', `${_pedL.length} linha(s) · oferta base ${s2fmt(t.base)} · desconto MKT ${aaceFmtNum(t.desc)}% · TOTAL FINAL ${s2fmt(t.final)}`);
@@ -9890,8 +9896,10 @@ function pedRenderForm() {
     pedCampo('aut1_nome', 'Nome', { max: 120 }) + pedCampo('aut1_doc', 'CPF / RG', { max: 20 }) + pedCampo('aut1_cel', 'Celular', { mask: 'fone', max: 15 })
     + pedCampo('aut2_nome', 'Nome (2º autorizado)', { max: 120 }) + pedCampo('aut2_doc', 'CPF / RG', { max: 20 }) + pedCampo('aut2_cel', 'Celular', { mask: 'fone', max: 15 })));
   if (info.renov) secoes.push(pedCartao('Simulação de renovação',
-    pedCampo('tab', 'Tabela', { sel: [['1', 'Tabela 1 (Fora Cabeada / Com BL / Conv.)'], ['2', 'Tabela 2 (Dentro Cabeada / Sem BL / Sem Conv.)']] }) + pedCampo('cluster', 'Cluster (porte)', { sel: [['P', 'Fator P'], ['M', 'Fator M'], ['G', 'Fator G']] }),
-    'O Delta é calculado por linha: (franquia + SVA + passaporte da linha contratada) ÷ ticket atual − 1. O plugin não entra. A faixa e o fator saem da mesma tabela do Simulador de AACE.'));
+    pedCampo('tab', 'Tabela', { sel: [['1', 'Tabela 1 (Fora Cabeada / Com BL / Conv.)'], ['2', 'Tabela 2 (Dentro Cabeada / Sem BL / Sem Conv.)']] }) + pedCampo('cluster', 'Cluster (porte)', { sel: [['P', 'Fator P'], ['M', 'Fator M'], ['G', 'Fator G']] }) + pedCampo('fator_base', 'Fator base do consultor (seu fator de renovação)', { num: true, ph: 'ex.: 2,70' }),
+    'O Delta é calculado por linha: (franquia + SVA + passaporte da linha contratada) ÷ ticket atual − 1. O plugin não entra. A faixa e o fator da tabela saem da política (Anexo III-A, item 2.4). '
+    + 'O fator final aplicável = fator base × (fator da faixa ÷ fator da Faixa 1), com duas casas decimais; sem fator base, só o fator da tabela aparece.'
+    + (V.conv === 'SIM' ? ' <b>Convergência = SIM: enquadrado na Tabela 1, conforme a política.</b>' : '')));
   secoes.push(`<div class="pn-card"><div class="pn-card-cab"><h3>Negociação e linhas</h3></div>
     <div class="ped-form-grid">${pedCampo('venc', 'Vencimento da fatura', { req: true, sel: [['', 'Selecione…'], ...PED_VENCIMENTOS.map(x => [x, 'Dia ' + x])] }) + pedCampo('desc', 'Desconto MKT (%)', { num: true })}</div>
     <div class="pn-nota" style="margin-top:10px">Uma linha por número. Valor, SVA e passaporte vêm da tabela oficial da planilha; o total é calculado sozinho.</div>
@@ -10081,10 +10089,10 @@ function pedMontarPayload(info) {
     adicionais: { convergencia: V.conv, contrato_ou_cidade: V.conv === 'SIM' ? V.conv_info : null, entrega_alternativa: V.entrega, endereco_entrega: V.entrega === 'SIM' ? V.entrega_end : null },
     representante: pessoa('rep'), administradores: [pessoa('adm1'), pessoa('adm2')].filter(Boolean),
     autorizados: [{ nome: V.aut1_nome, doc: V.aut1_doc, celular: V.aut1_cel }, { nome: V.aut2_nome, doc: V.aut2_doc, celular: V.aut2_cel }].filter(a => a.nome || a.doc),
-    renovacao: info.renov ? { tabela: V.tab, cluster: V.cluster } : null,
+    renovacao: info.renov ? { tabela: pedTabelaEfetiva(), cluster: V.cluster, fator_base: pedNum(V.fator_base) || null } : null,
     negociacao: { vencimento: V.venc, desconto_mkt: t.desc, total_base: Math.round(t.base * 100) / 100, total_final: Math.round(t.final * 100) / 100 },
     linhas: _pedL.map(l => { const c = pedCalcLinha(l), pt = info.portab || info.tt; return { ddd: l.ddd, numero: l.numero, operadora: pt ? (l.operadora || null) : null, franquia: l.franquia, valor: c.valor, plugin: c.plugin || null, sva: l.sva || null, valor_sva: c.valorSva || null, passaporte: l.passaporte || null, valor_passaporte: c.valorPass || null, receita_nova: info.renov ? Math.round(c.receita * 100) / 100 : null,
-      doador_nome: pt ? (l.doa_nome || null) : null, doador_cpf: pt ? (l.doa_cpf || null) : null, ticket_atual: info.renov ? (c.ticket || null) : null, delta_pct: info.renov && c.delta !== null ? Math.round(c.delta * 100) / 100 : null, faixa: info.renov ? c.faixa : null, fator: info.renov ? c.fator : null, aparelho: l.aparelho || null, chip: l.chip || null }; }),
+      doador_nome: pt ? (l.doa_nome || null) : null, doador_cpf: pt ? (l.doa_cpf || null) : null, ticket_atual: info.renov ? (c.ticket || null) : null, delta_pct: info.renov && c.delta !== null ? Math.round(c.delta * 100) / 100 : null, faixa: info.renov ? c.faixa : null, fator: info.renov ? c.fator : null, fator_final: info.renov ? c.fatorFinal : null, aparelho: l.aparelho || null, chip: l.chip || null }; }),
   } };
 }
 function pedLimparForm() {
@@ -10129,12 +10137,12 @@ function pedDadosHtml(p) {
     kv('Convergência', a.convergencia + (a.contrato_ou_cidade ? ' — ' + a.contrato_ou_cidade : '')), kv('Entrega alternativa', a.entrega_alternativa + (a.endereco_entrega ? ' — ' + a.endereco_entrega : ''))].join('');
   const dir = [pessoa('Representante legal', d.representante), ...(d.administradores || []).map((x, i) => pessoa((i + 1) + 'º administrador', x)),
     ...(d.autorizados || []).map((x, i) => kv('Autorizado ' + (i + 1), [x.nome, x.doc, x.celular].filter(Boolean).join(' · '))),
-    d.renovacao ? kv('Renovação', `Tabela ${d.renovacao.tabela} · cluster ${d.renovacao.cluster}`) : '',
+    d.renovacao ? kv('Renovação', `Tabela ${d.renovacao.tabela} · cluster ${d.renovacao.cluster}` + (d.renovacao.fator_base ? ` · fator base ${String(d.renovacao.fator_base).replace('.', ',')}` : '')) : '',
     kv('Vencimento da fatura', n.vencimento ? 'dia ' + n.vencimento : ''), kv('Total oferta base', s2fmt(n.total_base || 0)), kv('Desconto MKT', aaceFmtNum(n.desconto_mkt || 0) + '%'), kv('TOTAL FINAL', s2fmt(n.total_final || 0))].join('');
   const ls = d.linhas || [], ren = !!d.renovacao, pt = ls.some(l => l.operadora || l.doador_nome);
   const f = v => v === null || v === undefined || v === '' ? '—' : escapeHtml(String(v));
   const m = v => v ? s2fmt(v) : '—';
-  const tabela = ls.length ? `<div class="ped-linhas-wrap"><table class="aace-tab ped-linhas"><thead><tr><th>#</th><th>Linha</th>${pt ? '<th>Operadora</th>' : ''}<th>Franquia</th><th>Valor</th><th>Plugin</th><th>SVA</th><th>Valor SVA</th><th>Passaporte</th><th>Valor pass.</th>${pt ? '<th>Doador PF</th>' : ''}${ren ? '<th>Ticket atual</th><th>Delta</th><th>Faixa</th><th>Fator</th>' : ''}<th>Aparelho</th><th>Chip</th></tr></thead><tbody>${ls.map((l, i) => `<tr><td>${i + 1}</td><td>${f((l.ddd ? '(' + l.ddd + ') ' : '') + (l.numero || ''))}</td>${pt ? `<td>${f(l.operadora)}</td>` : ''}<td>${f(l.franquia)}</td><td>${m(l.valor)}</td><td>${m(l.plugin)}</td><td>${f(l.sva)}</td><td>${m(l.valor_sva)}</td><td>${f(l.passaporte)}</td><td>${m(l.valor_passaporte)}</td>${pt ? `<td>${f([l.doador_nome, l.doador_cpf].filter(Boolean).join(' · '))}</td>` : ''}${ren ? `<td>${m(l.ticket_atual)}</td><td>${l.delta_pct === null || l.delta_pct === undefined ? '—' : aaceFmtPct(l.delta_pct)}</td><td>${f(l.faixa)}</td><td>${l.fator === null || l.fator === undefined ? '—' : String(l.fator.toFixed(2)).replace('.', ',')}</td>` : ''}<td>${f(l.aparelho)}</td><td>${f(l.chip)}</td></tr>`).join('')}</tbody></table></div>
+  const tabela = ls.length ? `<div class="ped-linhas-wrap"><table class="aace-tab ped-linhas"><thead><tr><th>#</th><th>Linha</th>${pt ? '<th>Operadora</th>' : ''}<th>Franquia</th><th>Valor</th><th>Plugin</th><th>SVA</th><th>Valor SVA</th><th>Passaporte</th><th>Valor pass.</th>${pt ? '<th>Doador PF</th>' : ''}${ren ? '<th>Ticket atual</th><th>Delta</th><th>Faixa</th><th>Fator tabela</th><th>Fator final</th>' : ''}<th>Aparelho</th><th>Chip</th></tr></thead><tbody>${ls.map((l, i) => `<tr><td>${i + 1}</td><td>${f((l.ddd ? '(' + l.ddd + ') ' : '') + (l.numero || ''))}</td>${pt ? `<td>${f(l.operadora)}</td>` : ''}<td>${f(l.franquia)}</td><td>${m(l.valor)}</td><td>${m(l.plugin)}</td><td>${f(l.sva)}</td><td>${m(l.valor_sva)}</td><td>${f(l.passaporte)}</td><td>${m(l.valor_passaporte)}</td>${pt ? `<td>${f([l.doador_nome, l.doador_cpf].filter(Boolean).join(' · '))}</td>` : ''}${ren ? `<td>${m(l.ticket_atual)}</td><td>${l.delta_pct === null || l.delta_pct === undefined ? '—' : aaceFmtPct(l.delta_pct)}</td><td>${f(l.faixa)}</td><td>${l.fator === null || l.fator === undefined ? '—' : String(l.fator.toFixed(2)).replace('.', ',')}</td><td>${l.fator_final === null || l.fator_final === undefined ? '—' : String(l.fator_final.toFixed(2)).replace('.', ',')}</td>` : ''}<td>${f(l.aparelho)}</td><td>${f(l.chip)}</td></tr>`).join('')}</tbody></table></div>
     <div class="ped-acoes"><button class="pn-btn-claro" onclick="pedBaixarLinhasCsv()">Baixar linhas em CSV</button></div>` : '';
   return `<div class="aace-demo-sub">Formulário preenchido pelo consultor</div><div class="ped-det-grid"><div>${esq}</div><div>${dir}</div></div>
     <div class="aace-demo-sub">Linhas do pedido (${ls.length})</div>${tabela}`;
@@ -10143,8 +10151,8 @@ function pedBaixarLinhasCsv() {
   const d = _pedDet && _pedDet.p.dados;
   if (!d || !d.linhas) return;
   const num = v => v === null || v === undefined || v === '' ? '' : String(v).replace('.', ',');
-  const cab = ['DDD', 'Nº Linha', 'Operadora', 'Franquia', 'Valor', 'Plugin', 'SVA', 'Valor SVA', 'Passaporte', 'Valor Passaporte', 'Doador nome', 'Doador CPF', 'Ticket atual', 'Delta %', 'Faixa', 'Fator', 'Aparelho', 'Chip'];
-  const lin = d.linhas.map(l => [l.ddd, l.numero, l.operadora, l.franquia, num(l.valor), num(l.plugin), l.sva, num(l.valor_sva), l.passaporte, num(l.valor_passaporte), l.doador_nome, l.doador_cpf, num(l.ticket_atual), num(l.delta_pct), l.faixa, num(l.fator), l.aparelho, l.chip]);
+  const cab = ['DDD', 'Nº Linha', 'Operadora', 'Franquia', 'Valor', 'Plugin', 'SVA', 'Valor SVA', 'Passaporte', 'Valor Passaporte', 'Doador nome', 'Doador CPF', 'Ticket atual', 'Delta %', 'Faixa', 'Fator tabela', 'Fator final', 'Aparelho', 'Chip'];
+  const lin = d.linhas.map(l => [l.ddd, l.numero, l.operadora, l.franquia, num(l.valor), num(l.plugin), l.sva, num(l.valor_sva), l.passaporte, num(l.valor_passaporte), l.doador_nome, l.doador_cpf, num(l.ticket_atual), num(l.delta_pct), l.faixa, num(l.fator), num(l.fator_final), l.aparelho, l.chip]);
   const csv = '﻿' + [cab, ...lin].map(r => r.map(c => '"' + String(c ?? '').replace(/"/g, '""') + '"').join(';')).join('\r\n');
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
