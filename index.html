@@ -1247,6 +1247,11 @@
   .ped-kv span { flex: 0 0 150px; color: var(--text-3); }
   .ped-kv b { font-weight: 500; word-break: break-word; }
   .ped-obs { white-space: pre-wrap; }
+  #tab-pedidos .pn-fg input.ped-ro { background: var(--surface-2, #f3f3f3); color: var(--text); cursor: default; }
+  .ped-st { font-size: 11px; margin-top: 3px; min-height: 14px; color: var(--text-3); }
+  .ped-st.ok { color: #2b8a3e; }
+  .ped-st.erro { color: var(--red-sem, #c92a2a); }
+  .ped-st.aviso { color: #b9770e; }
   .ped-sub { font-size: 12px; font-weight: 600; color: var(--text-2); border-bottom: 1px solid var(--border); padding-bottom: 2px; margin-top: 4px; }
   .ped-linhas-wrap { overflow-x: auto; margin: 8px 0; max-width: 100%; }
   table.ped-linhas { width: max-content; min-width: 100%; }
@@ -9734,15 +9739,65 @@ function pedCampo(id, rot, o = {}) {
   if (o.sel) {
     ctl = `<select id="${ident}" onchange="pedSetV('${id}', this.value)${o.re ? '; pedRenderForm()' : ''}">${o.sel.map(x => { const [val, lab] = Array.isArray(x) ? x : [x, x]; return `<option value="${escapeHtml(val)}"${String(v) === String(val) ? ' selected' : ''}>${escapeHtml(lab)}</option>`; }).join('')}</select>`;
   } else {
-    ctl = `<input type="${o.num ? 'number' : 'text'}" id="${ident}" value="${escapeHtml(v)}" ${o.max ? `maxlength="${o.max}"` : ''} ${o.ph ? `placeholder="${o.ph}"` : ''} ${o.num ? 'min="0" step="any"' : ''} autocomplete="off" oninput="pedSetV('${id}', this.value${o.mask ? `, '${o.mask}'` : ''})">`;
+    ctl = `<input type="${o.num ? 'number' : 'text'}" id="${ident}" value="${escapeHtml(v)}" ${o.max ? `maxlength="${o.max}"` : ''} ${o.ph ? `placeholder="${o.ph}"` : ''} ${o.ro && !_pedManual[id] ? 'readonly tabindex="-1" class="ped-ro"' : ''} ${o.num ? 'min="0" step="any"' : ''} autocomplete="off" oninput="pedSetV('${id}', this.value${o.mask ? `, '${o.mask}'` : ''})">`;
   }
-  return `<div class="pn-fg${o.cheio ? ' full' : ''}"><label for="${ident}">${rot}${o.req ? ' *' : ''}</label>${ctl}</div>`;
+  return `<div class="pn-fg${o.cheio ? ' full' : ''}"><label for="${ident}">${rot}${o.req ? ' *' : ''}</label>${ctl}${o.ro ? `<div class="ped-st ${(_pedSt[id] || {}).t || ''}" id="ped-st-${id}">${(_pedSt[id] || {}).m || ''}</div>` : ''}</div>`;
+}
+
+// ── Razão social automática pelo CNPJ (BrasilAPI: dados públicos da Receita; já liberada no CSP) ──
+const _pedCnpjCache = {}, _pedSt = {}, _pedManual = {};
+const PED_RAZAO_DO_CNPJ = { cnpj: 'razao', doa_cnpj: 'doa_razao' };
+function pedStSet(rid, t, m) {
+  _pedSt[rid] = { t, m };
+  const e = document.getElementById('ped-st-' + rid);
+  if (e) { e.className = 'ped-st ' + (t || ''); e.innerHTML = m || ''; }
+}
+function pedRazaoSet(rid, v) {
+  _pedV[rid] = v;
+  const e = document.getElementById('ped-v-' + rid);
+  if (e) e.value = v;
+}
+const PED_LINK_MANUAL = rid => ` <a href="#" onclick="pedLiberarManual('${rid}');return false">digitar manualmente</a>`;
+function pedLiberarManual(rid) {
+  _pedManual[rid] = true;
+  const e = document.getElementById('ped-v-' + rid);
+  if (e) { e.removeAttribute('readonly'); e.removeAttribute('tabindex'); e.classList.remove('ped-ro'); e.focus(); }
+  pedStSet(rid, '', 'Digite a razão social exatamente como está no contrato social.');
+}
+function pedAplicarCnpj(rid, d) {
+  pedRazaoSet(rid, d.razao || '');
+  const sit = String(d.situacao || '').toUpperCase();
+  if (!sit || sit === 'ATIVA') pedStSet(rid, 'ok', '✔ Encontrado na Receita' + (sit ? ' · situação cadastral ATIVA' : ''));
+  else pedStSet(rid, 'aviso', `⚠ Encontrado, mas a situação cadastral é ${escapeHtml(sit)} — confirme com o cliente antes de enviar.`);
+}
+async function pedBuscarCnpj(cid, rid) {
+  const cnpj = String(_pedV[cid] || '').replace(/\D/g, '');
+  const mudou = () => String(_pedV[cid] || '').replace(/\D/g, '') !== cnpj;
+  if (cnpj.length !== 14) { if (!_pedManual[rid]) pedRazaoSet(rid, ''); pedStSet(rid, '', ''); return; }
+  if (!pedCnpjValido(cnpj)) { if (!_pedManual[rid]) pedRazaoSet(rid, ''); pedStSet(rid, 'erro', 'CNPJ inválido: confira os dígitos.'); return; }
+  if (_pedCnpjCache[cnpj]) return pedAplicarCnpj(rid, _pedCnpjCache[cnpj]);
+  pedStSet(rid, '', 'Consultando a Receita…');
+  try {
+    const res = await fetch('https://brasilapi.com.br/api/cnpj/v1/' + cnpj);
+    if (mudou()) return;
+    if (res.status === 404) { if (!_pedManual[rid]) pedRazaoSet(rid, ''); pedStSet(rid, 'erro', 'CNPJ não encontrado na Receita. Confira o número.'); return; }
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const j = await res.json();
+    if (mudou()) return;
+    if (!j.razao_social) throw new Error('sem razão social');
+    _pedCnpjCache[cnpj] = { razao: j.razao_social, situacao: j.descricao_situacao_cadastral || '' };
+    pedAplicarCnpj(rid, _pedCnpjCache[cnpj]);
+  } catch (e) {
+    if (mudou()) return;
+    pedStSet(rid, 'erro', 'Não consegui consultar a Receita agora.' + PED_LINK_MANUAL(rid));
+  }
 }
 function pedSetV(id, valor, mask) {
   const v = mask ? pedMascara(valor, mask) : valor;
   _pedV[id] = v;
   const el = document.getElementById('ped-v-' + id);
   if (mask && el && el.value !== v) el.value = v;
+  if (PED_RAZAO_DO_CNPJ[id]) pedBuscarCnpj(id, PED_RAZAO_DO_CNPJ[id]);
   if (id === 'desc' || id === 'tab' || id === 'cluster') pedAtualizarCalculos();
 }
 const PED_SIMNAO = ['NÃO', 'SIM'];
@@ -9809,16 +9864,16 @@ function pedRenderForm() {
   if (!box) return;
   const V = _pedV;
   if (info.f === 'generico') {
-    box.innerHTML = pedCartao('Dados do pedido', pedCampo('razao', 'Razão social do cliente', { req: true, max: 160 }) + pedCampo('cnpj', 'CNPJ', { req: true, mask: 'cnpj', max: 18, ph: '00.000.000/0000-00' })
+    box.innerHTML = pedCartao('Dados do pedido', pedCampo('cnpj', 'CNPJ', { req: true, mask: 'cnpj', max: 18, ph: '00.000.000/0000-00' }) + pedCampo('razao', 'Razão social do cliente', { req: true, ro: true, max: 160, ph: 'Preenchida automaticamente pelo CNPJ' })
       + pedCampo('rep_nome', 'Representante / contato', { max: 120 }) + pedCampo('rep_cel', 'Telefone / celular', { mask: 'fone', max: 15 }) + pedCampo('rep_email', 'E-mail do contato', { max: 160 }) + pedCampo('qtd', 'Quantidade de linhas / itens', { num: true }),
       'Este tipo de pedido ainda não tem formulário próprio: preencha o essencial e anexe os documentos.');
     return;
   }
   const secoes = [];
   secoes.push(pedCartao('Dados do pedido', pedCampo('consultor', 'Consultor (nome conforme NEO)', { req: true, max: 120 }) + pedCampo('revenda', 'Revenda', { req: true, sel: [['', 'Selecione…'], ...PED_REVENDAS] })));
-  secoes.push(pedCartao('Dados do cliente', pedCampo('razao', 'Razão social', { req: true, max: 160 }) + pedCampo('cnpj', 'CNPJ', { req: true, mask: 'cnpj', max: 18, ph: '00.000.000/0000-00' })));
+  secoes.push(pedCartao('Dados do cliente', pedCampo('cnpj', 'CNPJ', { req: true, mask: 'cnpj', max: 18, ph: '00.000.000/0000-00' }) + pedCampo('razao', 'Razão social', { req: true, ro: true, max: 160, ph: 'Preenchida automaticamente pelo CNPJ' })));
   if (info.doadorPJ) secoes.push(pedCartao('Dados do doador — transferência Claro PJ → Claro PJ',
-    pedCampo('doa_razao', 'Razão social do doador', { req: true, max: 160 }) + pedCampo('doa_cnpj', 'CNPJ do doador', { req: true, mask: 'cnpj', max: 18 }) + pedCampo('doa_rep', 'Representante doador', { max: 120 })
+    pedCampo('doa_cnpj', 'CNPJ do doador', { req: true, mask: 'cnpj', max: 18 }) + pedCampo('doa_razao', 'Razão social do doador', { req: true, ro: true, max: 160, ph: 'Preenchida automaticamente pelo CNPJ' }) + pedCampo('doa_rep', 'Representante doador', { max: 120 })
     + pedCampo('doa_email', 'E-mail do doador', { max: 160 }) + pedCampo('doa_tel', 'Telefone', { mask: 'fone', max: 15 }) + pedCampo('doa_cel', 'Celular', { mask: 'fone', max: 15 })));
   secoes.push(pedCartao('Informações adicionais',
     pedCampo('conv', 'Possui convergência?', { sel: PED_SIMNAO, re: true }) + (V.conv === 'SIM' ? pedCampo('conv_info', 'Nº do contrato da fixa ou cidade da instalação', { req: true, max: 120 }) : '')
@@ -9846,7 +9901,7 @@ function pedRenderForm() {
 // ── validação e montagem do pedido ──
 function pedValidar(info) {
   const e = [], V = _pedV;
-  if ((V.razao || '').trim().length < 2) e.push('Informe a razão social do cliente.');
+  if ((V.razao || '').trim().length < 2) e.push('Razão social não carregada: confira o CNPJ do cliente e aguarde a consulta.');
   if (!pedCnpjValido(V.cnpj)) e.push('CNPJ do cliente inválido: confira os 14 dígitos.');
   if (info.f === 'generico') {
     if (V.rep_email && !pedEmailOk(V.rep_email)) e.push('E-mail do contato inválido.');
@@ -9891,7 +9946,7 @@ function pedMontarPayload(info) {
   const pessoa = p => (V[p + '_nome'] || V[p + '_cpf']) ? { nome: V[p + '_nome'], cpf: V[p + '_cpf'], email: V[p + '_email'], celular: V[p + '_cel'] } : null;
   return { ...base, qtd_linhas: _pedL.length, dados: {
     v: 2, familia: 'movel', cabecalho: { consultor: V.consultor.trim(), revenda: V.revenda },
-    cliente: { razao: V.razao.trim(), cnpj: V.cnpj },
+    cliente: { razao: V.razao.trim(), cnpj: V.cnpj, situacao_cadastral: (_pedCnpjCache[String(V.cnpj).replace(/\D/g, '')] || {}).situacao || null, razao_manual: !!_pedManual.razao },
     doador: info.doadorPJ ? { razao: V.doa_razao, cnpj: V.doa_cnpj, representante: V.doa_rep, email: V.doa_email, telefone: V.doa_tel, celular: V.doa_cel } : null,
     adicionais: { convergencia: V.conv, contrato_ou_cidade: V.conv === 'SIM' ? V.conv_info : null, entrega_alternativa: V.entrega, endereco_entrega: V.entrega === 'SIM' ? V.entrega_end : null },
     representante: pessoa('rep'), administradores: [pessoa('adm1'), pessoa('adm2')].filter(Boolean),
@@ -9904,6 +9959,8 @@ function pedMontarPayload(info) {
 }
 function pedLimparForm() {
   _pedV = pedValoresPadrao(); _pedL = [pedLinhaVazia()];
+  for (const k of Object.keys(_pedSt)) delete _pedSt[k];
+  for (const k of Object.keys(_pedManual)) delete _pedManual[k];
   const o = pedEl('ped-obs'); if (o) o.value = '';
   _pedArqNovos = []; pedRenderArquivosNovos(); pedRenderForm();
 }
