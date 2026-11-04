@@ -9719,12 +9719,12 @@ function pedCalcLinha(l) {
   const valor = fr ? fr[1] : 0, valorSva = sv ? sv[1] : 0, valorPass = pa ? pa[1] : 0, plugin = pedNum(l.plugin), ticket = pedNum(l.ticket);
   let delta = null, faixa = null, fator = null;
   if (ticket > 0 && valor > 0) {
-    delta = (valor / ticket - 1) * 100;
+    delta = ((valor + valorSva + valorPass) / ticket - 1) * 100;   // receita da linha contratada = franquia + SVA + passaporte (plugin fora)
     faixa = aaceFaixaDelta(delta);
     const tabela = _pedV.tab === '2' ? AACE_RENOV_T2 : GF_RENOVACAO_TABELA1;
     fator = tabela[faixa - 1][_pedV.cluster || 'M'];
   }
-  return { valor, valorSva, valorPass, plugin, ticket, delta, faixa, fator, subtotal: valor + plugin + valorSva + valorPass };
+  return { valor, valorSva, valorPass, plugin, ticket, delta, faixa, fator, receita: valor + valorSva + valorPass, subtotal: valor + plugin + valorSva + valorPass };
 }
 function pedTotais() {
   const base = _pedL.reduce((s, l) => s + pedCalcLinha(l).subtotal, 0);
@@ -9891,7 +9891,7 @@ function pedRenderForm() {
     + pedCampo('aut2_nome', 'Nome (2º autorizado)', { max: 120 }) + pedCampo('aut2_doc', 'CPF / RG', { max: 20 }) + pedCampo('aut2_cel', 'Celular', { mask: 'fone', max: 15 })));
   if (info.renov) secoes.push(pedCartao('Simulação de renovação',
     pedCampo('tab', 'Tabela', { sel: [['1', 'Tabela 1 (Fora Cabeada / Com BL / Conv.)'], ['2', 'Tabela 2 (Dentro Cabeada / Sem BL / Sem Conv.)']] }) + pedCampo('cluster', 'Cluster (porte)', { sel: [['P', 'Fator P'], ['M', 'Fator M'], ['G', 'Fator G']] }),
-    'O Delta é calculado por linha: valor da nova franquia ÷ ticket atual − 1. A faixa e o fator saem da mesma tabela do Simulador de AACE.'));
+    'O Delta é calculado por linha: (franquia + SVA + passaporte da linha contratada) ÷ ticket atual − 1. O plugin não entra. A faixa e o fator saem da mesma tabela do Simulador de AACE.'));
   secoes.push(`<div class="pn-card"><div class="pn-card-cab"><h3>Negociação e linhas</h3></div>
     <div class="ped-form-grid">${pedCampo('venc', 'Vencimento da fatura', { req: true, sel: [['', 'Selecione…'], ...PED_VENCIMENTOS.map(x => [x, 'Dia ' + x])] }) + pedCampo('desc', 'Desconto MKT (%)', { num: true })}</div>
     <div class="pn-nota" style="margin-top:10px">Uma linha por número. Valor, SVA e passaporte vêm da tabela oficial da planilha; o total é calculado sozinho.</div>
@@ -10083,7 +10083,7 @@ function pedMontarPayload(info) {
     autorizados: [{ nome: V.aut1_nome, doc: V.aut1_doc, celular: V.aut1_cel }, { nome: V.aut2_nome, doc: V.aut2_doc, celular: V.aut2_cel }].filter(a => a.nome || a.doc),
     renovacao: info.renov ? { tabela: V.tab, cluster: V.cluster } : null,
     negociacao: { vencimento: V.venc, desconto_mkt: t.desc, total_base: Math.round(t.base * 100) / 100, total_final: Math.round(t.final * 100) / 100 },
-    linhas: _pedL.map(l => { const c = pedCalcLinha(l), pt = info.portab || info.tt; return { ddd: l.ddd, numero: l.numero, operadora: pt ? (l.operadora || null) : null, franquia: l.franquia, valor: c.valor, plugin: c.plugin || null, sva: l.sva || null, valor_sva: c.valorSva || null, passaporte: l.passaporte || null, valor_passaporte: c.valorPass || null,
+    linhas: _pedL.map(l => { const c = pedCalcLinha(l), pt = info.portab || info.tt; return { ddd: l.ddd, numero: l.numero, operadora: pt ? (l.operadora || null) : null, franquia: l.franquia, valor: c.valor, plugin: c.plugin || null, sva: l.sva || null, valor_sva: c.valorSva || null, passaporte: l.passaporte || null, valor_passaporte: c.valorPass || null, receita_nova: info.renov ? Math.round(c.receita * 100) / 100 : null,
       doador_nome: pt ? (l.doa_nome || null) : null, doador_cpf: pt ? (l.doa_cpf || null) : null, ticket_atual: info.renov ? (c.ticket || null) : null, delta_pct: info.renov && c.delta !== null ? Math.round(c.delta * 100) / 100 : null, faixa: info.renov ? c.faixa : null, fator: info.renov ? c.fator : null, aparelho: l.aparelho || null, chip: l.chip || null }; }),
   } };
 }
