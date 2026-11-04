@@ -9674,7 +9674,7 @@ const PED_TIPOS = [
   { r: 'Móvel PJ — Renovação Parcial + Incremento (Cliente base)', f: 'movel', renov: true, incr: true },
   { r: 'Móvel PJ — Transferência Claro PF/PJ', f: 'movel', tt: true },
   { r: 'Móvel PJ — Transferência Claro PJ/PJ', f: 'movel', tt: true, doadorPJ: true },
-  { r: 'Fixa Básica', f: 'generico' },
+  { r: 'Fixa PJ — NET (Internet / Fone / TV)', f: 'fixa' },
   { r: 'Conectividade / SD', f: 'generico' },
   { r: 'Outro', f: 'generico' },
 ];
@@ -9707,6 +9707,7 @@ function pedMascara(valor, tipo) {
   if (tipo === 'cpf') return d.slice(0, 11).replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d{1,2})$/, '$1-$2');
   if (tipo === 'fone') return d.length <= 2 ? d : d.length <= 10 ? d.replace(/^(\d{2})(\d{0,4})(\d{0,4}).*/, (m, a, b, c) => `(${a}) ${b}${c ? '-' + c : ''}`) : d.slice(0, 11).replace(/^(\d{2})(\d{5})(\d{0,4}).*/, '($1) $2-$3');
   if (tipo === 'ddd') return d.slice(0, 2);
+  if (tipo === 'cep') return d.slice(0, 8).replace(/^(\d{5})(\d)/, '$1-$2');
   if (tipo === 'num') return d.slice(0, 9);
   return valor;
 }
@@ -9739,9 +9740,9 @@ function pedCampo(id, rot, o = {}) {
   if (o.sel) {
     ctl = `<select id="${ident}" onchange="pedSetV('${id}', this.value)${o.re ? '; pedRenderForm()' : ''}">${o.sel.map(x => { const [val, lab] = Array.isArray(x) ? x : [x, x]; return `<option value="${escapeHtml(val)}"${String(v) === String(val) ? ' selected' : ''}>${escapeHtml(lab)}</option>`; }).join('')}</select>`;
   } else {
-    ctl = `<input type="${o.num ? 'number' : 'text'}" id="${ident}" value="${escapeHtml(v)}" ${o.max ? `maxlength="${o.max}"` : ''} ${o.ph ? `placeholder="${o.ph}"` : ''} ${o.ro && !_pedManual[id] ? 'readonly tabindex="-1" class="ped-ro"' : ''} ${o.num ? 'min="0" step="any"' : ''} autocomplete="off" oninput="pedSetV('${id}', this.value${o.mask ? `, '${o.mask}'` : ''})">`;
+    ctl = `<input type="${o.date ? 'date' : o.num ? 'number' : 'text'}" id="${ident}" value="${escapeHtml(v)}" ${o.max ? `maxlength="${o.max}"` : ''} ${o.ph ? `placeholder="${o.ph}"` : ''} ${o.ro && !_pedManual[id] ? 'readonly tabindex="-1" class="ped-ro"' : ''} ${o.num ? 'min="0" step="any"' : ''} autocomplete="off" oninput="pedSetV('${id}', this.value${o.mask ? `, '${o.mask}'` : ''})">`;
   }
-  return `<div class="pn-fg${o.cheio ? ' full' : ''}"><label for="${ident}">${rot}${o.req ? ' *' : ''}</label>${ctl}${o.ro ? `<div class="ped-st ${(_pedSt[id] || {}).t || ''}" id="ped-st-${id}">${(_pedSt[id] || {}).m || ''}</div>` : ''}</div>`;
+  return `<div class="pn-fg${o.cheio ? ' full' : ''}"><label for="${ident}">${rot}${o.req ? ' *' : ''}</label>${ctl}${o.ro || o.st ? `<div class="ped-st ${(_pedSt[id] || {}).t || ''}" id="ped-st-${id}">${(_pedSt[id] || {}).m || ''}</div>` : ''}</div>`;
 }
 
 // ── Razão social automática pelo CNPJ (BrasilAPI: dados públicos da Receita; já liberada no CSP) ──
@@ -9799,6 +9800,8 @@ function pedSetV(id, valor, mask) {
   if (mask && el && el.value !== v) el.value = v;
   if (PED_RAZAO_DO_CNPJ[id]) pedBuscarCnpj(id, PED_RAZAO_DO_CNPJ[id]);
   if (id === 'desc' || id === 'tab' || id === 'cluster') pedAtualizarCalculos();
+  if (id === 'fx_cep') pedBuscarCep();
+  if (/^fx_(net|fone|tv)_valor$/.test(id)) pedFixaTotal();
 }
 const PED_SIMNAO = ['NÃO', 'SIM'];
 const pedCartao = (titulo, corpo, dica) => `<div class="pn-card"><div class="pn-card-cab"><h3>${titulo}</h3></div>${dica ? `<div class="pn-nota">${dica}</div>` : ''}<div class="ped-form-grid">${corpo}</div></div>`;
@@ -9844,6 +9847,7 @@ function pedDuplicarUltima(n) {
 }
 function pedRemoverLinha(i) { _pedL.splice(i, 1); if (!_pedL.length) _pedL.push(pedLinhaVazia()); pedRenderLinhas(); }
 function pedAtualizarCalculos() {
+  if (pedTipoInfo(_pedTipo).f === 'fixa') return pedFixaTotal();
   if (pedTipoInfo(_pedTipo).f !== 'movel') return;
   const set = (id, txt) => { const e = document.getElementById(id); if (e) e.textContent = txt; };
   _pedL.forEach((l, i) => {
@@ -9863,6 +9867,7 @@ function pedRenderForm() {
   const info = pedTipoInfo(_pedTipo), box = pedEl('ped-form-dinamico');
   if (!box) return;
   const V = _pedV;
+  if (info.f === 'fixa') return pedFixaRender(box);
   if (info.f === 'generico') {
     box.innerHTML = pedCartao('Dados do pedido', pedCampo('cnpj', 'CNPJ', { req: true, mask: 'cnpj', max: 18, ph: '00.000.000/0000-00' }) + pedCampo('razao', 'Razão social do cliente', { req: true, ro: true, max: 160, ph: 'Preenchida automaticamente pelo CNPJ' })
       + pedCampo('rep_nome', 'Representante / contato', { max: 120 }) + pedCampo('rep_cel', 'Telefone / celular', { mask: 'fone', max: 15 }) + pedCampo('rep_email', 'E-mail do contato', { max: 160 }) + pedCampo('qtd', 'Quantidade de linhas / itens', { num: true }),
@@ -9898,11 +9903,135 @@ function pedRenderForm() {
   pedRenderLinhas();
 }
 
+// ── Fixa PJ (Checklist NET PJ): internet (Virtua), fone, TV, portabilidade de fixo, opcionais ─────────────────────
+// Listas copiadas da aba oculta "Planilha3" da ficha CHECKLIST PJ - FIXA. A ficha não traz tabela de preços: o valor é digitado pelo consultor.
+const PED_FX_VELOC = ['50 MEGA', '60 MEGA', '150 MEGA', '150 MEGA IP FIXO', '250 MEGA', '300 MEGA', '300 MEGA + M.SOFT', '500 MEGA', '600 MEGA'];
+const PED_FX_EQUIP = ['PONTO ULTRA', 'MESH'];
+const PED_FX_SERV = ['SITE PRONTO', 'DOMINIO.COM.BR', 'DOMINIO.NET', 'DOMINIO.COM', 'OFFICE BUSINESS', 'OFFICE BUSINESS PREM', 'OFFICE BUSINESS ESSE'];
+const PED_FX_CANAIS = ['CAMPEONATO CARIOCA', 'COPA NORDESTE', 'CONMEBOL TV'];
+const PED_FX_FONE = ['ILIMITADO BRASIL', 'ILIMITADO TOTAL', 'ILIMITADO MUNDO TOTAL'];
+const PED_FX_QTD = ['1', '2', '4', '8'];
+const PED_FX_TV = ['COMPACTO TURBO HD', 'PLUS HD', 'CORP HD', 'CORP 4K'];
+const PED_FX_OPERADORAS = ['VIVO FIXO', 'OI FIXO', 'TIM FIXO'];
+const PED_FX_OPC = ['NET ASS. SUPORTE', 'NET ASS. EQUIPAMENTO', 'NET ASS. COMBINADO'];
+const PED_UFS = ['AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'];
+const PED_FX_NPORT = 8;
+
+async function pedBuscarCep() {
+  const cep = String(_pedV.fx_cep || '').replace(/\D/g, '');
+  if (cep.length !== 8) { pedStSet('fx_cep', '', ''); return; }
+  pedStSet('fx_cep', '', 'Consultando o CEP…');
+  try {
+    const res = await fetch('https://viacep.com.br/ws/' + cep + '/json/');
+    if (String(_pedV.fx_cep || '').replace(/\D/g, '') !== cep) return;
+    const j = await res.json();
+    if (!res.ok || j.erro) { pedStSet('fx_cep', 'erro', 'CEP não encontrado. Preencha o endereço manualmente.'); return; }
+    const put = (k, v) => { if (v) { _pedV[k] = v; const e = document.getElementById('ped-v-' + k); if (e) e.value = v; } };
+    put('fx_rua', j.logradouro); put('fx_bairro', j.bairro); put('fx_cidade', j.localidade); put('fx_uf', j.uf);
+    pedStSet('fx_cep', 'ok', '✔ Endereço preenchido pelo CEP — confira o número e o complemento.');
+  } catch (e) {
+    if (String(_pedV.fx_cep || '').replace(/\D/g, '') === cep) pedStSet('fx_cep', 'erro', 'Não consegui consultar o CEP agora. Preencha o endereço.');
+  }
+}
+function pedFixaTotalNum() { return pedNum(_pedV.fx_net_valor) + pedNum(_pedV.fx_fone_valor) + pedNum(_pedV.fx_tv_valor); }
+function pedFixaTotal() {
+  const e = document.getElementById('ped-fx-total');
+  if (e) e.textContent = 'Total do plano (internet + fone + TV): ' + s2fmt(pedFixaTotalNum());
+}
+function pedFixaMaisPort() { _pedV.fx_pmais = '1'; pedRenderForm(); }
+
+function pedFixaRender(box) {
+  const S = a => [['', 'Selecione…'], ...a.map(x => Array.isArray(x) ? x : [x, x])];
+  const V = _pedV, sec = [];
+  sec.push(pedCartao('Dados do pedido', pedCampo('consultor', 'Consultor', { req: true, max: 120 })));
+  sec.push(pedCartao('Dados do cliente', pedCampo('cnpj', 'CNPJ', { req: true, mask: 'cnpj', max: 18, ph: '00.000.000/0000-00' }) + pedCampo('razao', 'Razão social', { req: true, ro: true, max: 160, ph: 'Preenchida automaticamente pelo CNPJ' })
+    + pedCampo('fx_email', 'E-mail', { req: true, max: 160 }) + pedCampo('fx_cel1', 'Nº celular 1', { req: true, mask: 'fone', max: 15 }) + pedCampo('fx_cel2', 'Nº celular 2', { mask: 'fone', max: 15 }) + pedCampo('fx_fixo', 'Nº fixo', { mask: 'fone', max: 15 })));
+  sec.push(pedCartao('Endereço de instalação', pedCampo('fx_cep', 'CEP', { req: true, mask: 'cep', max: 9, st: true, ph: '00000-000' }) + pedCampo('fx_rua', 'Rua', { req: true, max: 160 }) + pedCampo('fx_num', 'Nº', { req: true, max: 12 })
+    + pedCampo('fx_comp', 'Complemento', { max: 80 }) + pedCampo('fx_bairro', 'Bairro', { req: true, max: 80 }) + pedCampo('fx_cidade', 'Cidade', { req: true, max: 80 }) + pedCampo('fx_uf', 'Estado', { req: true, sel: S(PED_UFS) })
+    + '<div class="full ped-sub">Data de instalação</div>' + pedCampo('fx_data1', 'Data 1', { req: true, date: true }) + pedCampo('fx_data2', 'Data 2 (alternativa)', { date: true }),
+    'Digite o CEP: rua, bairro, cidade e estado vêm sozinhos.'));
+  sec.push(pedCartao('Produtos — Internet (Virtua)', pedCampo('fx_net_plano', 'Plano', { sel: S(PED_FX_VELOC) }) + pedCampo('fx_net_valor', 'Valor (R$/mês)', { num: true })
+    + pedCampo('fx_net_equip', 'Equipamento', { sel: S(PED_FX_EQUIP) }) + pedCampo('fx_net_serv', 'Serviço', { sel: S(PED_FX_SERV) }) + pedCampo('fx_net_canal', 'Canal / campeonato', { sel: S(PED_FX_CANAIS) }),
+    'Deixe o plano em branco se o pedido não tiver internet.'));
+  sec.push(pedCartao('Produtos — Fone', pedCampo('fx_fone_plano', 'Plano', { sel: S(PED_FX_FONE) }) + pedCampo('fx_fone_valor', 'Valor (R$/mês)', { num: true }) + pedCampo('fx_fone_qtd', 'Quantidade', { sel: S(PED_FX_QTD) })));
+  let port = '';
+  for (let i = 1; i <= (V.fx_pmais ? PED_FX_NPORT : PED_FX_NPORT / 2); i++) port += pedCampo(`fx_p${i}_op`, `Portabilidade ${i} — operadora`, { sel: S(PED_FX_OPERADORAS) }) + pedCampo(`fx_p${i}_num`, `Número a portar ${i}`, { mask: 'fone', max: 15 });
+  if (!V.fx_pmais) port += '<div class="full"><button type="button" class="pn-btn-claro" onclick="pedFixaMaisPort()">+ mais 4 números</button></div>';
+  sec.push(pedCartao('Linhas — Portabilidade', port, 'Só preencha se o cliente vai trazer números de outra operadora.'));
+  sec.push(pedCartao('Produtos — TV', pedCampo('fx_tv_plano', 'Plano', { sel: S(PED_FX_TV) }) + pedCampo('fx_tv_valor', 'Valor (R$/mês)', { num: true }) + pedCampo('fx_tv_pontos', 'Pontos adicionais', { num: true })));
+  sec.push(pedCartao('Produtos — Opcionais', [1, 2, 3, 4].map(i => pedCampo('fx_opc' + i, 'Opcional ' + i, { sel: S(PED_FX_OPC) })).join('')));
+  sec.push(`<div class="pn-card"><div class="pn-card-cab"><h3>Total e recebimento técnico</h3></div><div class="ped-form-grid">${pedCampo('fx_tec_nome', 'Responsável por receber o técnico', { max: 120 }) + pedCampo('fx_tec_tel', 'Telefone do responsável', { mask: 'fone', max: 15 })}</div>
+    <div class="ped-acoes"><span class="pn-pill" id="ped-fx-total"></span></div><div class="pn-nota">A ficha não tem tabela de preços: informe o valor de cada produto. Opcionais não entram no total. Use o campo de observações para o que não couber aqui.</div></div>`);
+  box.innerHTML = sec.join('');
+  pedFixaTotal();
+}
+
+function pedValidarFixa(e) {
+  const V = _pedV;
+  if (!(V.consultor || '').trim()) e.push('Informe o consultor.');
+  if (!pedEmailOk(V.fx_email)) e.push('E-mail do cliente inválido.');
+  if (!pedFoneOk(V.fx_cel1)) e.push('Celular 1 inválido (DDD + número).');
+  if (V.fx_cel2 && !pedFoneOk(V.fx_cel2)) e.push('Celular 2 inválido.');
+  if (V.fx_fixo && !pedFoneOk(V.fx_fixo)) e.push('Nº fixo inválido.');
+  if (String(V.fx_cep || '').replace(/\D/g, '').length !== 8) e.push('CEP de instalação inválido.');
+  if (!(V.fx_rua || '').trim()) e.push('Informe a rua da instalação.');
+  if (!(V.fx_num || '').trim()) e.push('Informe o número do endereço.');
+  if (!(V.fx_bairro || '').trim()) e.push('Informe o bairro.');
+  if (!(V.fx_cidade || '').trim()) e.push('Informe a cidade.');
+  if (!V.fx_uf) e.push('Selecione o estado.');
+  if (!V.fx_data1) e.push('Informe a data 1 de instalação.');
+  const net = !!V.fx_net_plano, fone = !!V.fx_fone_plano, tv = !!V.fx_tv_plano;
+  if (!(net || fone || tv)) e.push('Selecione ao menos um produto: internet, fone ou TV.');
+  if (net && pedNum(V.fx_net_valor) <= 0) e.push('Internet: informe o valor.');
+  if (fone && pedNum(V.fx_fone_valor) <= 0) e.push('Fone: informe o valor.');
+  if (fone && !V.fx_fone_qtd) e.push('Fone: selecione a quantidade.');
+  if (tv && pedNum(V.fx_tv_valor) <= 0) e.push('TV: informe o valor.');
+  for (let i = 1; i <= PED_FX_NPORT; i++) {
+    const op = V[`fx_p${i}_op`], num = V[`fx_p${i}_num`];
+    if (num && !op) e.push(`Portabilidade ${i}: escolha a operadora.`);
+    else if (op && !num) e.push(`Portabilidade ${i}: informe o número.`);
+    else if (num && !pedFoneOk(num)) e.push(`Portabilidade ${i}: número inválido (DDD + número).`);
+  }
+  if (V.fx_tec_tel && !pedFoneOk(V.fx_tec_tel)) e.push('Telefone do responsável técnico inválido.');
+  return e;
+}
+function pedPayloadFixa(base) {
+  const V = _pedV, ports = [];
+  for (let i = 1; i <= PED_FX_NPORT; i++) if (V[`fx_p${i}_num`]) ports.push({ operadora: V[`fx_p${i}_op`], numero: V[`fx_p${i}_num`] });
+  return { ...base, contato_nome: null, contato_telefone: V.fx_cel1, contato_email: V.fx_email.trim(), qtd_linhas: null, dados: {
+    v: 2, familia: 'fixa', cabecalho: { consultor: V.consultor.trim() },
+    cliente: { razao: V.razao.trim(), cnpj: V.cnpj, situacao_cadastral: (_pedCnpjCache[String(V.cnpj).replace(/\D/g, '')] || {}).situacao || null, razao_manual: !!_pedManual.razao, email: V.fx_email.trim(), celular1: V.fx_cel1, celular2: V.fx_cel2 || null, fixo: V.fx_fixo || null },
+    instalacao: { cep: V.fx_cep, rua: V.fx_rua.trim(), numero: V.fx_num.trim(), complemento: V.fx_comp || null, bairro: V.fx_bairro.trim(), cidade: V.fx_cidade.trim(), uf: V.fx_uf, data1: V.fx_data1, data2: V.fx_data2 || null },
+    internet: V.fx_net_plano ? { plano: V.fx_net_plano, valor: pedNum(V.fx_net_valor), equipamento: V.fx_net_equip || null, servico: V.fx_net_serv || null, canal: V.fx_net_canal || null } : null,
+    fone: V.fx_fone_plano ? { plano: V.fx_fone_plano, valor: pedNum(V.fx_fone_valor), quantidade: V.fx_fone_qtd } : null,
+    portabilidades: ports,
+    tv: V.fx_tv_plano ? { plano: V.fx_tv_plano, valor: pedNum(V.fx_tv_valor), pontos_adicionais: V.fx_tv_pontos === '' || V.fx_tv_pontos === undefined ? null : pedNum(V.fx_tv_pontos) } : null,
+    opcionais: [1, 2, 3, 4].map(i => V['fx_opc' + i]).filter(Boolean),
+    total_mensal: Math.round(pedFixaTotalNum() * 100) / 100,
+    responsavel_tecnico: (V.fx_tec_nome || V.fx_tec_tel) ? { nome: V.fx_tec_nome || null, telefone: V.fx_tec_tel || null } : null,
+  } };
+}
+function pedDadosFixaHtml(d) {
+  const kv = (r, v) => `<div class="ped-kv"><span>${r}</span><b>${v ? escapeHtml(String(v)) : '—'}</b></div>`;
+  const c = d.cliente || {}, i = d.instalacao || {}, rt = d.responsavel_tecnico || {};
+  const dataBr = s => s ? s.split('-').reverse().join('/') : '';
+  const prod = (r, x, extra) => x ? kv(r, [x.plano, s2fmt(x.valor || 0), ...(extra || [])].filter(Boolean).join(' · ')) : '';
+  const esq = [kv('Consultor', d.cabecalho?.consultor), kv('E-mail', c.email), kv('Celular 1 / 2', [c.celular1, c.celular2].filter(Boolean).join(' / ')), kv('Nº fixo', c.fixo),
+    kv('Endereço', [`${i.rua || ''}, ${i.numero || ''}`, i.complemento, i.bairro, `${i.cidade || ''}/${i.uf || ''}`, i.cep].filter(Boolean).join(' · ')),
+    kv('Instalação', [dataBr(i.data1), i.data2 ? 'ou ' + dataBr(i.data2) : ''].filter(Boolean).join(' '))].join('');
+  const dir = [prod('Internet (Virtua)', d.internet, d.internet ? [d.internet.equipamento, d.internet.servico, d.internet.canal] : []),
+    prod('Fone', d.fone, d.fone ? ['qtd ' + d.fone.quantidade] : []), prod('TV', d.tv, d.tv && d.tv.pontos_adicionais !== null ? ['pontos adic. ' + d.tv.pontos_adicionais] : []),
+    kv('Portabilidade', (d.portabilidades || []).map(p => `${p.operadora}: ${p.numero}`).join(' | ')), kv('Opcionais', (d.opcionais || []).join(', ')),
+    kv('TOTAL DO PLANO', s2fmt(d.total_mensal || 0)), kv('Recebe o técnico', [rt.nome, rt.telefone].filter(Boolean).join(' · '))].join('');
+  return `<div class="aace-demo-sub">Ficha preenchida pelo consultor</div><div class="ped-det-grid"><div>${esq}</div><div>${dir}</div></div>`;
+}
+
 // ── validação e montagem do pedido ──
 function pedValidar(info) {
   const e = [], V = _pedV;
   if ((V.razao || '').trim().length < 2) e.push('Razão social não carregada: confira o CNPJ do cliente e aguarde a consulta.');
   if (!pedCnpjValido(V.cnpj)) e.push('CNPJ do cliente inválido: confira os 14 dígitos.');
+  if (info.f === 'fixa') return pedValidarFixa(e);
   if (info.f === 'generico') {
     if (V.rep_email && !pedEmailOk(V.rep_email)) e.push('E-mail do contato inválido.');
     return e;
@@ -9941,6 +10070,7 @@ function pedValidar(info) {
 function pedMontarPayload(info) {
   const V = _pedV, obs = pedEl('ped-obs').value.trim() || null;
   const base = { tipo: _pedTipo, cliente_nome: V.razao.trim(), cliente_cnpj: V.cnpj, contato_nome: (V.rep_nome || '').trim() || null, contato_telefone: V.rep_cel || null, contato_email: (V.rep_email || '').trim() || null, observacao: obs };
+  if (info.f === 'fixa') return pedPayloadFixa(base);
   if (info.f === 'generico') return { ...base, qtd_linhas: V.qtd === '' ? null : Math.max(0, Math.round(pedNum(V.qtd))), dados: { v: 2, familia: 'generico' } };
   const t = pedTotais();
   const pessoa = p => (V[p + '_nome'] || V[p + '_cpf']) ? { nome: V[p + '_nome'], cpf: V[p + '_cpf'], email: V[p + '_email'], celular: V[p + '_cel'] } : null;
@@ -9989,6 +10119,7 @@ async function pedEnviar() {
 // ── formulário preenchido, visto pelo BKO ──
 function pedDadosHtml(p) {
   const d = p.dados;
+  if (d && d.v === 2 && d.familia === 'fixa') return pedDadosFixaHtml(d);
   if (!d || d.v !== 2 || d.familia !== 'movel') return '';
   const kv = (r, v) => `<div class="ped-kv"><span>${r}</span><b>${v ? escapeHtml(String(v)) : '—'}</b></div>`;
   const pessoa = (r, x) => x ? kv(r, [x.nome, x.cpf, x.email, x.celular].filter(Boolean).join(' · ')) : '';
