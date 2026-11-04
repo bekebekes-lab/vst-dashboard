@@ -2823,7 +2823,7 @@
       <div class="pn-titulo">PEDIDOS</div>
       <div class="pn-hero-dir">
         <button class="pn-btn-claro" onclick="pedCarregar()" title="Busca de novo os pedidos no banco">↻ Atualizar</button>
-        <div class="pn-pill">Fase de teste · só você vê esta aba</div>
+        <div class="pn-pill">Fase de teste · aba restrita a poucos usuários</div>
       </div>
     </div>
     <div class="ped-subtabs">
@@ -9544,7 +9544,7 @@ function initAace() {
 // Acesso: lista fechada de e-mails (aqui) + lista public.pedidos_acesso (banco, migração 20261103000001).
 // Tabelas: pedidos, pedidos_eventos (histórico), pedidos_anexos; arquivos no bucket privado "pedidos".
 // ═════════════════════════════════════════════════════════════════════════════
-const PEDIDOS_EMAILS_PERMITIDOS = ['raphael@vstgroup.com.br'];
+const PEDIDOS_EMAILS_PERMITIDOS = ['raphael@vstgroup.com.br', 'patricia@vstgroup.com.br', 'diou@vstgroup.com.br'];
 function pedidosPodeVer(usuario) {
   const u = usuario === undefined ? USUARIO_ATUAL : usuario;
   return u?.perfil === 'admin' && PEDIDOS_EMAILS_PERMITIDOS.includes((u.email || '').trim().toLowerCase());

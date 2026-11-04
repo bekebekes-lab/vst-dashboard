@@ -134,5 +134,5 @@ create policy pedidos_obj_ins on storage.objects for insert to authenticated
 
 -- ─── liberação inicial: só o admin que está testando (Raphael Mariano) ───────
 insert into public.pedidos_acesso (user_id, papel)
-select id, 'teste' from auth.users where lower(email) = 'raphael@vstgroup.com.br'
+select id, 'teste' from auth.users where lower(email) in ('raphael@vstgroup.com.br', 'patricia@vstgroup.com.br', 'diou@vstgroup.com.br')
 on conflict (user_id) do nothing;
