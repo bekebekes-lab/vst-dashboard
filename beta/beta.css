@@ -215,7 +215,7 @@ body:not(.carregando) .espera { display: none; }
 .modal dt { font-size: 11px; color: var(--texto-3); } .modal dd { margin: 0; font-weight: 500; overflow-wrap: anywhere; }
 
 /* visão Produção */
-.prod-ctl-painel { padding: var(--e4); display: flex; flex-direction: column; gap: var(--e3); overflow: visible; }
+.painel.prod-ctl-painel { padding: var(--e4); display: flex; flex-direction: column; gap: var(--e3); overflow: visible; }
 .prod-ctl { display: flex; flex-wrap: wrap; align-items: center; gap: var(--e2); }
 .prod-comp { display: flex; flex-wrap: wrap; align-items: center; gap: var(--e3); }
 .prod-comp-tit { font-size: 12px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; color: var(--texto-3); }
