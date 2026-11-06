@@ -178,8 +178,8 @@ body:not(.carregando) .espera { display: none; }
 .ms-vazio { padding: var(--e3); color: var(--texto-3); }
 
 /* visões (cada uma é um item do menu) */
-#visao-gerencial, #visao-producao, #visao-painel, #visao-gerfin, #visao-acessos, #visao-qualidade { display: flex; flex-direction: column; gap: var(--e5); min-width: 0; }
-#visao-gerencial[hidden], #visao-producao[hidden], #visao-painel[hidden], #visao-gerfin[hidden], #visao-acessos[hidden], #visao-qualidade[hidden] { display: none; }
+#visao-gerencial, #visao-producao, #visao-painel, #visao-gerfin, #visao-acessos, #visao-qualidade, #visao-carteira { display: flex; flex-direction: column; gap: var(--e5); min-width: 0; }
+#visao-gerencial[hidden], #visao-producao[hidden], #visao-painel[hidden], #visao-gerfin[hidden], #visao-acessos[hidden], #visao-qualidade[hidden], #visao-carteira[hidden] { display: none; }
 #visao-esteira { display: flex; flex-direction: column; gap: var(--e5); min-width: 0; }
 
 /* visão Esteira (cartões por categoria + pedidos) */
@@ -296,7 +296,7 @@ body[data-tela="painel"] .mes { display: none; }
 .fat-barra .txt-aviso { margin-top: 4px; }
 
 /* visão Acessos (não usa filtros nem período) */
-body[data-tela="acessos"] .filtros, body[data-tela="acessos"] .mes, body[data-tela="acessos"] #btn-atualizar, body[data-tela="qualidade"] .filtros, body[data-tela="qualidade"] .mes, body[data-tela="qualidade"] #btn-atualizar { display: none; }
+body[data-tela="acessos"] .filtros, body[data-tela="acessos"] .mes, body[data-tela="acessos"] #btn-atualizar, body[data-tela="qualidade"] .filtros, body[data-tela="qualidade"] .mes, body[data-tela="qualidade"] #btn-atualizar, body[data-tela="carteira"] .filtros, body[data-tela="carteira"] .mes, body[data-tela="carteira"] #btn-atualizar { display: none; }
 .ac-bloco { display: flex; flex-direction: column; gap: var(--e4); }
 .ac-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--e3); }
 .ac-campo { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--texto-3); min-width: 200px; }
@@ -325,6 +325,15 @@ button.q-kpi { cursor: pointer; } button.q-kpi:hover { border-color: var(--cinza
 .q-modal-in { padding: var(--e4) var(--e5) var(--e5); display: flex; flex-direction: column; gap: var(--e2); }
 .q-opc { display: block; font-size: 14px; } .q-modal-in input[type="text"] { height: 38px; padding: 0 var(--e3); border: 1px solid var(--borda-forte); border-radius: var(--r-sm); }
 .q-modal-acoes { display: flex; justify-content: flex-end; gap: var(--e2); }
+
+/* visão Carteira */
+.c-titulo { margin: var(--e5) 0 var(--e2); font-size: 13px; letter-spacing: .6px; text-transform: uppercase; color: var(--texto-2); }
+#visao-carteira h5 { margin: var(--e3) 0 var(--e2); font-size: 12px; color: var(--texto-2); }
+.c-grade { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: var(--e4); } .c-grade-l { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+.c-card { background: var(--superficie); border: 1px solid var(--borda); border-radius: var(--r-md); padding: var(--e4); min-width: 0; } .c-card h4 { margin: 0 0 var(--e3); font-size: 12px; text-transform: uppercase; color: var(--texto-2); }
+.c-pizza { display: flex; gap: var(--e4); align-items: center; } .c-disco { width: 100px; height: 100px; border-radius: 50%; flex: none; }
+.c-leg { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; } .c-leg > div { display: flex; align-items: center; gap: 6px; font-size: 12px; } .c-leg-n { color: var(--texto-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .c-leg b { margin-left: auto; white-space: nowrap; font-variant-numeric: tabular-nums; } .c-leg small, .c-barra small { color: var(--texto-3); font-weight: 400; }
+.c-barra { display: flex; align-items: center; gap: var(--e3); margin-bottom: 10px; } .c-rot { width: 100px; font-size: 11px; color: var(--texto-2); text-align: right; flex: none; } .c-barra .hb-trilho { flex: 1; } .c-barra b { width: 120px; font-size: 12px; flex: none; white-space: nowrap; font-variant-numeric: tabular-nums; }
 
 /* alertas */
 .alerta { padding: var(--e3) var(--e4); border-radius: var(--r-md); border: 1px solid; }

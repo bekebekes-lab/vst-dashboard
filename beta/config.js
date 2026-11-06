@@ -32,7 +32,7 @@ export const MENU = [
     { id: 'conectividade', rotulo: 'Conectividade/SD', icone: 'signal' },
   ]},
   { grupo: 'Base', itens: [
-    { id: 'carteira', rotulo: 'Carteira', icone: 'wallet' },
+    { id: 'carteira', rotulo: 'Carteira', icone: 'wallet', beta: true },
     { id: 'churn', rotulo: 'Churn', icone: 'refresh' },
   ]},
   { grupo: 'Admin', itens: [
