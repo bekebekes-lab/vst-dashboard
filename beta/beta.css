@@ -178,8 +178,8 @@ body:not(.carregando) .espera { display: none; }
 .ms-vazio { padding: var(--e3); color: var(--texto-3); }
 
 /* visões (cada uma é um item do menu) */
-#visao-gerencial, #visao-producao, #visao-painel, #visao-gerfin { display: flex; flex-direction: column; gap: var(--e5); min-width: 0; }
-#visao-gerencial[hidden], #visao-producao[hidden], #visao-painel[hidden], #visao-gerfin[hidden] { display: none; }
+#visao-gerencial, #visao-producao, #visao-painel, #visao-gerfin, #visao-acessos { display: flex; flex-direction: column; gap: var(--e5); min-width: 0; }
+#visao-gerencial[hidden], #visao-producao[hidden], #visao-painel[hidden], #visao-gerfin[hidden], #visao-acessos[hidden] { display: none; }
 #visao-esteira { display: flex; flex-direction: column; gap: var(--e5); min-width: 0; }
 
 /* visão Esteira (cartões por categoria + pedidos) */
@@ -294,6 +294,19 @@ body[data-tela="painel"] .mes { display: none; }
 .chip-chk { cursor: pointer; } .chip-chk input { accent-color: var(--marca-600); width: 16px; height: 16px; }
 .fat-barra { font-size: 12px; color: var(--texto-2); background: var(--superficie); border: 1px solid var(--borda); border-radius: var(--r-md); padding: var(--e3) var(--e4); line-height: 1.55; }
 .fat-barra .txt-aviso { margin-top: 4px; }
+
+/* visão Acessos (não usa filtros nem período) */
+body[data-tela="acessos"] .filtros, body[data-tela="acessos"] .mes, body[data-tela="acessos"] #btn-atualizar { display: none; }
+.ac-bloco { display: flex; flex-direction: column; gap: var(--e4); }
+.ac-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--e3); }
+.ac-campo { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--texto-3); min-width: 200px; }
+.ac-campo.ac-g { flex: 1 1 260px; }
+.ac-campo input { height: 38px; padding: 0 var(--e3); border: 1px solid var(--borda-forte); border-radius: var(--r-sm); background: var(--superficie); color: var(--texto); font-size: 14px; }
+.ac-msg { margin-top: var(--e2); font-size: 13px; font-weight: 500; }
+.ac-senha { margin-top: var(--e3); padding: var(--e3) var(--e4); border: 1px solid var(--ok-600); background: var(--ok-50); border-radius: var(--r-md); color: #14532D; display: flex; flex-direction: column; gap: 4px; }
+.ac-senha code { font-size: 15px; font-weight: 700; user-select: all; }
+.btn-perigo { color: var(--erro-600); }
+.ac-bloco .seg { align-self: flex-start; }
 
 /* alertas */
 .alerta { padding: var(--e3) var(--e4); border-radius: var(--r-md); border: 1px solid; }

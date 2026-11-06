@@ -36,6 +36,6 @@ export const MENU = [
     { id: 'churn', rotulo: 'Churn', icone: 'refresh' },
   ]},
   { grupo: 'Admin', itens: [
-    { id: 'acessos', rotulo: 'Acessos', icone: 'users' },
+    { id: 'acessos', rotulo: 'Acessos', icone: 'users', beta: true },
   ]},
 ];

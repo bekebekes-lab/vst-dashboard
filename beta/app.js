@@ -16,6 +16,7 @@ import { criarEsteira } from './esteira.js';
 import { criarProducao } from './producao.js';
 import { criarPainel } from './painel.js';
 import { criarFinanceiro } from './financeiro.js';
+import { criarAcessos } from './acessos.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 
@@ -25,6 +26,7 @@ const VISOES = [
   { id: 'gerencial', rotulo: 'Gerencial', dica: 'KPIs, cartões por categoria com as filas, pedidos e detalhamento por consultor (como o Gerencial atual)' },
   { id: 'painel', rotulo: 'Painel Analítico', dica: 'Histórico mês a mês, mix por grupo e cortes por Estado, DDD, Cidade, Equipe e Vendedor (como a aba Painel Analítico)' },
   { id: 'gerfin', rotulo: 'Gerencial Financeiro', dica: 'Gerencial com Gross separado em Voz Novo + Portabilidade e comissão estimada pelos fatores do Simulador 2.0 (piloto)' },
+  { id: 'acessos', rotulo: 'Acessos', dica: 'Criar, bloquear e redefinir acessos de consultores; status online/offline (admin)', semFiltros: true },
   { id: 'producao', rotulo: 'Produção', dica: 'Produção por unidade, gestor ou equipe × status, com UF BL, TRI, MOM e comparar meses (como a aba Produção)' },
 ];
 // hashes antigos (abas Resumo/Esteira) levam ao Gerencial
@@ -115,6 +117,7 @@ function montarCasca() {
         <div id="visao-producao" hidden></div>
         <div id="visao-painel" hidden></div>
         <div id="visao-gerfin" hidden></div>
+        <div id="visao-acessos" hidden></div>
         <footer class="rodape" id="rodape"></footer>
       </main>
     </div>`;
@@ -267,7 +270,7 @@ async function carregarMesesAnteriores(req) {
 }
 
 // ── cálculo + desenho ───────────────────────────────────────────────────────
-let AGG = null, KPI = null, ANT = null, ESTEIRA = null, PRODUCAO = null, PAINEL = null, FINANCEIRO = null;
+let AGG = null, KPI = null, ANT = null, ESTEIRA = null, PRODUCAO = null, PAINEL = null, FINANCEIRO = null, ACESSOS = null;
 
 function aoMudarFiltro() { atualizarOpcoesFiltro(); recalcular(); }
 
@@ -333,6 +336,7 @@ function mudarVisao(id, atualizarHash = true) {
   $('#visao-producao').hidden = id !== 'producao';
   $('#visao-painel').hidden = id !== 'painel';
   $('#visao-gerfin').hidden = id !== 'gerfin';
+  $('#visao-acessos').hidden = id !== 'acessos';
   document.body.dataset.tela = id;
   $('#titulo-visao').textContent = VISOES.find(v => v.id === id).rotulo;
   document.title = `${VISOES.find(v => v.id === id).rotulo} · ${NOME_SISTEMA}`;
@@ -341,6 +345,7 @@ function mudarVisao(id, atualizarHash = true) {
   if (id === 'producao') desenharVisaoProducao();
   if (id === 'painel') desenharVisaoPainel();
   if (id === 'gerfin') desenharVisaoFin();
+  if (id === 'acessos' && ACESSOS) ACESSOS.mostrar();
   desenharBusca();
 }
 
@@ -419,6 +424,20 @@ function desenharRodape() {
   el.textContent = partes.join('  ·  ');
 }
 
+// ── presença online (igual ao Dash atual: index.html presencaIniciar) ───────
+const PRES_INTERVALO_MS = 60000, PRES_OCIOSO_MS = 5 * 60000;
+let _presTimer = null, _presUltima = Date.now();
+async function presencaEnviar() {
+  if (document.visibilityState !== 'visible' || Date.now() - _presUltima >= PRES_OCIOSO_MS) return;
+  try { await supa.rpc('registrar_presenca', { p_online: true }); } catch (e) { /* presença nunca atrapalha o uso */ }
+}
+function presencaIniciar() {
+  ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'].forEach(ev => window.addEventListener(ev, () => { _presUltima = Date.now(); }, { passive: true, capture: true }));
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { _presUltima = Date.now(); presencaEnviar(); } });
+  if (_presTimer) return;
+  presencaEnviar(); _presTimer = setInterval(presencaEnviar, PRES_INTERVALO_MS);
+}
+
 // ── início ──────────────────────────────────────────────────────────────────
 async function iniciar() {
   const acesso = await exigirAdminBeta();
@@ -445,6 +464,8 @@ async function iniciar() {
     rows: S.rows, f: S.filtros, escopo: S.escopo, ref: mesReferencia(), monitorDup: S.monitorDup,
     carregarConfig: async periodo => { const r = await supa.from('config_simulador2').select('*').eq('periodo', periodo); if (r.error) throw new Error(r.error.message); return r.data || []; },
   }));
+  ACESSOS = criarAcessos($('#visao-acessos'), () => ({ perfil: S.acesso.perfil.perfil }));
+  presencaIniciar();
   mudarVisao(location.hash.replace(/^#/, ''), false);
   document.body.classList.remove('carregando');
   $('#app').hidden = false;
