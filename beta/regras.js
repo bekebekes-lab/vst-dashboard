@@ -1,6 +1,7 @@
 // Regras de classificação copiadas de index.html (Gerencial). Manter em sincronia:
 //  - PRODUTOS_SOLUCAO_DIGITAL / PRODUTOS_SD_CONTEM / ehProdutoSolucaoDigital  (index.html ~linha 3650)
 //  - SUBGRUPOS_FILA / ORDEM_SUBGRUPOS_FILA                                       (index.html ~linha 4218)
+//  - MAPEAMENTO_TAGS (tag -> unidade)                                            (index.html ~linha 6205)
 // Gerado por extração do index.html; se mudar lá, atualizar aqui.
 
 export const PRODUTOS_SOLUCAO_DIGITAL = [
@@ -58,3 +59,15 @@ export const SUBGRUPOS_FILA = {
 };
 
 export const ORDEM_SUBGRUPOS_FILA = ['Ativo', 'Esteira de ativação', 'Esteira de ativação (correção)', 'Esteira operadora', 'Esteira escritório', 'Outros'];
+
+export const MAPEAMENTO_TAGS = {
+  '#1EWV': '#1EWV - CASCAVEL',
+  '#1FK6': '#1FK6 - PELOTAS',
+  '#5Q8X': '#5Q8X - CAXIAS DO SUL',
+  '#6OV1': '#6OV1 - CRICIUMA',
+  '#E928': '#E928 - CAMPO MOURAO',
+  '#EKQG': '#EKQG - LONDRINA',
+  '#HG72': '#HG72 - NOVO HAMBURGO',
+  '#MW0K': '#MW0K - FRANCISCO BELTRAO',
+  '#YI8F': '#YI8F - CURITIBA'
+};

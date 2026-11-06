@@ -115,6 +115,15 @@ export function filtrosVazios() {
   return { uf: 'Todos', gestores: [], equipes: [], consultores: [], tag: 'Todas', busca: '', de: null, ate: null, statusModo: 'todos', status: [] };
 }
 
+// Grupos de UF (UF BL da Produção). Regra num único lugar; as UFs soltas vêm da base.
+// RPS = PR + SC; SUL = PR + RS + SC (definição do Raphael; no Dash atual o RPS inclui o RS).
+export const GRUPOS_UF = { RPS: ['PR', 'SC'], SUL: ['PR', 'RS', 'SC'] };
+export function ufBlBate(filtro, uf) {
+  if (!filtro || filtro === 'Geral') return true;
+  const u = (uf || '').trim().toUpperCase();
+  return GRUPOS_UF[filtro] ? GRUPOS_UF[filtro].includes(u) : u === filtro;
+}
+
 // "Aprovado" = Ativo + Esteira de ativação (mesma definição do bloco "Aprovado" do Gerencial atual).
 const SUBGRUPOS_APROVADO = ['Ativo', 'Esteira de ativação'];
 const FILAS_APROVADO = new Set(Object.keys(SUBGRUPOS_FILA).filter(k => SUBGRUPOS_APROVADO.includes(SUBGRUPOS_FILA[k])));

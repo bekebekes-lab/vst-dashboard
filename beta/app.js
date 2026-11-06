@@ -14,6 +14,7 @@ import {
 import { esc, icone, iniciais, fmtInt, fmtDec, fmtMoeda, fmtMoedaCurta, fmtPct, criarMultiSelect, prefs } from './ui.js';
 import { criarMultivisao } from './multivisao.js';
 import { criarEsteira } from './esteira.js';
+import { criarProducao } from './producao.js';
 import { montarResponsivo, barrasVerticais } from './graficos.js';
 
 const $ = (s, r = document) => r.querySelector(s);
@@ -22,6 +23,7 @@ const $ = (s, r = document) => r.querySelector(s);
 const VISOES = [
   { id: 'resumo', rotulo: 'Resumo', dica: 'KPIs, evolução, esteira por etapa, performance e comparativo' },
   { id: 'esteira', rotulo: 'Esteira', dica: 'Cartões por categoria com as filas, pedidos e detalhamento por consultor (como o Gerencial atual)' },
+  { id: 'producao', rotulo: 'Produção', dica: 'Produção por unidade, gestor ou equipe × status, com UF BL, TRI, MOM e comparar meses (como a aba Produção)' },
 ];
 
 const S = {
@@ -108,6 +110,7 @@ function montarCasca() {
         <div id="aviso"></div>
         <div id="slot-busca"></div>
         <div id="visao-esteira" hidden></div>
+        <div id="visao-producao" hidden></div>
         <div id="visao-resumo">
         <section class="kpis" id="kpis" aria-label="Indicadores"></section>
         <div class="grade-2">
@@ -141,7 +144,7 @@ function ligarCasca() {
   bu.addEventListener('click', e => { e.stopPropagation(); mu.hidden = !mu.hidden; bu.setAttribute('aria-expanded', String(!mu.hidden)); });
   document.addEventListener('click', e => { if (!mu.hidden && !mu.contains(e.target)) { mu.hidden = true; bu.setAttribute('aria-expanded', 'false'); } });
   $('#btn-sair').addEventListener('click', sair);
-  $('#sel-mes').addEventListener('change', e => { S.periodo = e.target.value; S.filtros = filtrosVazios(); carregarPeriodo(); });
+  $('#sel-mes').addEventListener('change', e => { S.periodo = e.target.value; S.filtros = filtrosVazios(); if (PRODUCAO) PRODUCAO.reiniciar(); carregarPeriodo(); });
   $('#btn-atualizar').addEventListener('click', () => { limparCache(); S.meses.clear(); carregarPeriodo({ forcar: true }); });
   $('#abas-visao').addEventListener('click', e => { const b = e.target.closest('[data-visao-id]'); if (b) mudarVisao(b.dataset.visaoId); });
   window.addEventListener('hashchange', () => mudarVisao(location.hash.replace(/^#/, ''), false));
@@ -249,6 +252,7 @@ async function carregarPeriodo({ forcar = false } = {}) {
   $('#kpis').innerHTML = Array(4).fill('<div class="kpi kpi-esq"><span class="esq"></span></div>').join('');
   PAINEIS.performance.carregando(); PAINEIS.esteira.carregando(); PAINEIS.comparativo.carregando();
   if (ESTEIRA) ESTEIRA.carregando();
+  if (PRODUCAO) PRODUCAO.carregando();
   $('#evolucao-graf').innerHTML = '<div class="vazio"><span class="spinner"></span> Carregando…</div>';
   try {
     const rows = await carregarAba(S.periodo, { forcar: forcar || ehLive() });   // mês corrente sempre fresco
@@ -284,7 +288,7 @@ async function carregarMesesAnteriores(req) {
 }
 
 // ── cálculo + desenho ───────────────────────────────────────────────────────
-let AGG = null, KPI = null, ANT = null, ESTEIRA = null;
+let AGG = null, KPI = null, ANT = null, ESTEIRA = null, PRODUCAO = null;
 
 function aoMudarFiltro() { atualizarOpcoesFiltro(); recalcular(); }
 
@@ -298,7 +302,13 @@ function recalcular() {
   desenharPerformance();
   desenharEsteira();
   desenharVisaoEsteira();
+  desenharVisaoProducao();
   desenharRodape();
+}
+
+function desenharVisaoProducao() {
+  if (!PRODUCAO || S.visao !== 'producao' || !S.rows.length) return;
+  PRODUCAO.render();
 }
 
 function desenharVisaoEsteira() {
@@ -309,7 +319,7 @@ function desenharVisaoEsteira() {
 // Quantidade × Receita vale para todos os painéis e visões.
 function aplicarReceita(b) {
   S.receita = b; prefs.set('receita', b ? '1' : '0');
-  desenharPerformance(); desenharEsteira(); desenharVisaoEsteira();
+  desenharPerformance(); desenharEsteira(); desenharVisaoEsteira(); desenharVisaoProducao();
 }
 
 function mudarVisao(id, atualizarHash = true) {
@@ -318,6 +328,8 @@ function mudarVisao(id, atualizarHash = true) {
   S.visao = id; prefs.set('visao', id);
   $('#visao-resumo').hidden = id !== 'resumo';
   $('#visao-esteira').hidden = id !== 'esteira';
+  $('#visao-producao').hidden = id !== 'producao';
+  if (id === 'producao') desenharVisaoProducao();
   document.querySelectorAll('[data-visao-id]').forEach(b => { const on = b.dataset.visaoId === id; b.classList.toggle('ativo', on); b.setAttribute('aria-selected', String(on)); });
   if (atualizarHash && location.hash.replace(/^#/, '') !== id) history.replaceState(null, '', '#' + id);
   if (id === 'resumo') desenharEvolucao();   // gráfico mede a largura: redesenha ao reaparecer
@@ -546,6 +558,10 @@ async function iniciar() {
     filtrarConsultor: nome => { S.filtros.consultores = [nome]; aoMudarFiltro(); window.scrollTo({ top: 0, behavior: 'smooth' }); },
     filtrarEquipe: eq => { S.filtros.equipes = [eq]; S.filtros.consultores = []; aoMudarFiltro(); window.scrollTo({ top: 0, behavior: 'smooth' }); },
   });
+  PRODUCAO = criarProducao($('#visao-producao'), () => ({
+    rows: S.rows, f: S.filtros, escopo: S.escopo, receita: S.receita, ref: mesReferencia(), diaCorte: diaCorte(), abas: S.abas,
+    carregarMes: nome => carregarAba(nome),
+  }));
   mudarVisao(location.hash.replace(/^#/, ''), false);
   document.body.classList.remove('carregando');
   $('#app').hidden = false;
