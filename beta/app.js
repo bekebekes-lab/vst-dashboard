@@ -439,6 +439,7 @@ async function iniciar() {
     f: S.filtros, escopoOk: registroNoEscopo, meses: mesesDoPainel(),
     filtrarUf: uf => { S.filtros.uf = uf; aoMudarFiltro(); window.scrollTo({ top: 0, behavior: 'smooth' }); },
     reusar: sheet => (sheet === S.periodo && S.rows.length ? Promise.resolve(S.rows) : null),
+    carregarConfigs: async () => { const r = await supa.from('config_simulador2').select('*'); if (r.error) throw new Error(r.error.message); return r.data || []; },
   }));
   FINANCEIRO = criarFinanceiro($('#visao-gerfin'), () => ({
     rows: S.rows, f: S.filtros, escopo: S.escopo, ref: mesReferencia(), monitorDup: S.monitorDup,

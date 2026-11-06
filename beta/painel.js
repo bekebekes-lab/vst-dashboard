@@ -10,8 +10,8 @@
 // Diferenças deliberadas:
 //  - filtros globais da barra (Status, UF, Gestor, Equipe, Consultor, Tag) valem aqui; o
 //    filtro de data de cadastro e a busca não (o registro compacto não guarda esses campos);
-//  - a métrica COMISSÃO ainda não foi migrada (depende dos fatores do Simulador 2.0; vem
-//    junto com o Gerencial Financeiro);
+//  - a métrica COMISSÃO usa as regras de beta/politica.js (cópia do Simulador 2.0) com a config
+//    salva de CADA mês (config_simulador2) e o realizado do próprio mês (escopo "Ativo");
 //  - Claro Monitor duplicado é detectado por mês (o Dash atual usa um valor global).
 // Os meses são lidos aba a aba, reduzidos a registros compactos e as linhas cruas são
 // descartadas (o histórico em memória fica leve).
@@ -25,6 +25,7 @@ import { esc, icone, fmtInt, fmtMoeda, fmtMoedaCurta, criarMultiSelect, prefs } 
 import { criarMultivisao } from './multivisao.js';
 import { montarResponsivo, linhasMensais } from './graficos.js';
 import { MAPA_VIEWBOX, MAPA_UF } from './mapa-uf.js';
+import { GF_FATOR_POR_CAT, gfKey, criarColunas, gfComissaoLinha, gfMontarCfg, gfRealizadoDe, gfFatoresDe } from './politica.js';
 import { abaEmCache, buscarAbaSemCache } from './dados.js';
 
 const MESES_INICIAIS = 13;   // mês corrente + 12 anteriores; o resto sob demanda
@@ -32,7 +33,7 @@ const GRUPOS = ['GROSS', 'RENOVAÇÃO', 'BL', 'TITULARIDADE', 'SERV. DIGITAIS'];
 const ROTULO = { GROSS: 'Gross', 'RENOVAÇÃO': 'Renovação', BL: 'BL (Fixa Básica)', TITULARIDADE: 'Titularidade', 'SERV. DIGITAIS': 'Serv. Digitais', TOTAL: 'Total' };
 const FORA_DO_TOTAL = ['SERV. DIGITAIS'];       // Serv. Digitais não soma no total (como no Gerencial)
 const COR = { TOTAL: '#C0281C', GROSS: '#111111', 'RENOVAÇÃO': '#8E1B12', BL: '#D6D6D6', TITULARIDADE: '#E2B100', 'SERV. DIGITAIS': '#7C4DCC' };
-const METRICAS = [['quantidade', 'Quantidade'], ['receita', 'Receita'], ['cnpjs', 'CNPJs'], ['ticket', 'Ticket médio']];
+const METRICAS = [['comissao', 'Comissão'], ['quantidade', 'Quantidade'], ['receita', 'Receita'], ['cnpjs', 'CNPJs'], ['ticket', 'Ticket médio']];
 const DIMS = [['estado', 'Estado'], ['ddd', 'DDD'], ['cidade', 'Cidade']];
 // Contorno das UFs: beta/mapa-uf.js (malha do IBGE, gerado por script).
 const NOME_UF = { AC: 'Acre', AL: 'Alagoas', AP: 'Amapá', AM: 'Amazonas', BA: 'Bahia', CE: 'Ceará', DF: 'Distrito Federal', ES: 'Espírito Santo', GO: 'Goiás', MA: 'Maranhão', MT: 'Mato Grosso', MS: 'Mato Grosso do Sul', MG: 'Minas Gerais', PA: 'Pará', PB: 'Paraíba', PR: 'Paraná', PE: 'Pernambuco', PI: 'Piauí', RJ: 'Rio de Janeiro', RN: 'Rio Grande do Norte', RS: 'Rio Grande do Sul', RO: 'Rondônia', RR: 'Roraima', SC: 'Santa Catarina', SP: 'São Paulo', SE: 'Sergipe', TO: 'Tocantins' };
@@ -45,17 +46,20 @@ const MODOS_MAPA = {
 const COLUNAS_CIDADE = ['CIDADE', 'MUNICIPIO', 'MUNICÍPIO', 'DSC_MUNICIPIO', 'CIDADE CLIENTE'];
 
 // ── registro compacto de um mês ─────────────────────────────────────────────
-function compactar(rows, chave) {
+function compactar(rows, chave, cfg) {
   const monitorDup = detectarMonitorDuplicado(rows);
+  const col = criarColunas(rows[0]);
+  const { realMovelVoz, realFixaBl } = gfRealizadoDe(rows);
+  const fat = gfFatoresDe(cfg, realMovelVoz, realFixaBl);
   const colCidade = rows.length ? COLUNAS_CIDADE.find(c => c in rows[0]) || null : null;
   const out = [];
   for (const r of rows) {
-    const g = getGrupoKey(r['GRUPO'], r['PRODUTO'], r['SOLICITACAO'], monitorDup);
-    if (!g) continue;
+    const key = gfKey(r, monitorDup);
+    if (!key) continue;
     const eq = r['EQUIPE'] || '';
     const num = (r['NUMERO'] || r['Numero'] || r['NÚMERO'] || '').toString().replace(/\D/g, '');
     const fila = r['FILA'] || '';
-    out.push({
+    const base = {
       m: chave, eq, uf: EQUIPES_ESTADOS[eq] || '',
       es: (r['Estado'] || r['ESTADO'] || '').trim().toUpperCase(),
       ub: (r['UF'] || '').trim().toUpperCase(),
@@ -65,20 +69,22 @@ function compactar(rows, chave) {
       tg: MAPEAMENTO_TAGS[r['TAGS ATIVIDADE'] || ''] || 'Sem Tag',
       ge: EQUIPES_GESTORES[eq] || '',
       fl: fila, sg: subgrupoDaFila(fila),
-      g, q: parseInt(r['QUANTIDADE']) || 1, r: receitaLinha(r),
-      cn: (r['CPF/CNPJ'] || '').replace(/\D/g, ''),
-    });
+    };
+    // Voz Novo/Portabilidade são o espelho do Gross: só levam a comissão (quantidade e receita vêm do GROSS)
+    if (key === 'VOZ NOVO' || key === 'PORTABILIDADE') { out.push({ ...base, g: 'GROSS', q: 0, r: 0, c: gfComissaoLinha(r, key, fat, col).valor, cn: '' }); continue; }
+    out.push({ ...base, g: key, q: parseInt(r['QUANTIDADE']) || 1, r: receitaLinha(r),
+      c: GF_FATOR_POR_CAT[key] ? gfComissaoLinha(r, key, fat, col).valor : 0, cn: (r['CPF/CNPJ'] || '').replace(/\D/g, '') });
   }
   return out;
 }
 
-const acc = () => ({ q: 0, r: 0, cn: new Set() });
-const soma = (a, r) => { a.q += r.q; a.r += r.r; if (r.cn) a.cn.add(r.cn); };
+const acc = () => ({ q: 0, r: 0, c: 0, cn: new Set() });
+const soma = (a, r) => { a.q += r.q; a.r += r.r; a.c += r.c || 0; if (r.cn) a.cn.add(r.cn); };
 function valor(a, metrica) {
   if (!a) return 0;
-  switch (metrica) { case 'receita': return a.r; case 'cnpjs': return a.cn.size; case 'ticket': return a.q ? a.r / a.q : 0; default: return a.q; }
+  switch (metrica) { case 'comissao': return a.c; case 'receita': return a.r; case 'cnpjs': return a.cn.size; case 'ticket': return a.q ? a.r / a.q : 0; default: return a.q; }
 }
-const ehMoeda = m => m === 'receita' || m === 'ticket';
+const ehMoeda = m => m === 'comissao' || m === 'receita' || m === 'ticket';
 const fmtMetrica = (v, m, compacto) => (ehMoeda(m) ? (compacto ? fmtMoedaCurta(v) : fmtMoeda(v)) : fmtInt(v));
 const dimValor = (r, dim) => dim === 'ddd' ? (r.dd || '—') : dim === 'cidade' ? (r.ci || '—') : (r.es || r.uf || '—');
 
@@ -87,7 +93,7 @@ export function criarPainel(host, ctx) {
   const st = {
     dados: {},              // chave 'YYYY-MM' -> registros compactos
     erros: {}, pendentes: 0, iniciou: false, atualizadoEm: null,
-    metrica: prefs.get('painel_metrica', 'quantidade'), dim: prefs.get('painel_dim', 'estado'),
+    metrica: prefs.get('painel_metrica', 'quantidade'), cfgMapa: null, dim: prefs.get('painel_dim', 'estado'),
     seriesOff: new Set(), visaoMes: prefs.get('painel_visao_mes', 'grafico'),
     selMeses: [], selGrupos: [], selEstados: [],
     mapaModo: prefs.get('painel_mapa', 'origem'), ufSel: null,
@@ -143,6 +149,7 @@ export function criarPainel(host, ctx) {
   const cols = () => [
     { k: 'q', rotulo: 'Quantidade', num: true, valor: l => l.q, fmt: v => fmtInt(v) },
     { k: 'r', rotulo: 'Receita', num: true, valor: l => l.r, fmt: v => fmtMoeda(v) },
+    { k: 'cm', rotulo: 'Comissão', num: true, valor: l => l.cm, fmt: v => fmtMoeda(v) },
     { k: 'c', rotulo: 'CNPJs', num: true, valor: l => l.c, fmt: v => fmtInt(v) },
     { k: 't', rotulo: 'Ticket médio', num: true, valor: l => l.t, fmt: v => fmtMoeda(v) },
   ];
@@ -175,9 +182,17 @@ export function criarPainel(host, ctx) {
 
   // ── carga ──────────────────────────────────────────────────────────────────
   async function carregarMes(m) {
+    if (!st.cfgMapa) {                                  // config_simulador2 de todas as competências, uma vez por carga
+      st.cfgMapa = {};
+      try {
+        const linhas = await ctx().carregarConfigs();
+        const porPeriodo = {}; linhas.forEach(d => { (porPeriodo[d.periodo] = porPeriodo[d.periodo] || []).push(d); });
+        Object.entries(porPeriodo).forEach(([per, ls]) => { st.cfgMapa[per] = gfMontarCfg(per, ls); });
+      } catch (e) { console.warn('Painel: config_simulador2 indisponível —', e.message); }
+    }
     const emCache = abaEmCache(m.sheet) || ctx().reusar(m.sheet);
     const linhas = emCache ? await emCache : await buscarAbaSemCache(m.sheet);
-    return compactar(linhas, m.chave);
+    return compactar(linhas, m.chave, st.cfgMapa[m.chave] || gfMontarCfg(m.chave, []));
   }
   async function carregarLista(lista) {
     const fila = lista.filter(m => !st.dados[m.chave]).reverse();   // mais recentes primeiro
@@ -195,7 +210,7 @@ export function criarPainel(host, ctx) {
   }
   function recarregar() {
     if (st.pendentes > 0) return;
-    st.dados = {}; st.erros = {};
+    st.dados = {}; st.erros = {}; st.cfgMapa = null;
     carregarLista(ctx().meses.slice(-MESES_INICIAIS));
   }
   function desenharProgresso() {
@@ -257,7 +272,7 @@ export function criarPainel(host, ctx) {
   }
 
   // ── desenho ────────────────────────────────────────────────────────────────
-  const linhaDe = (nome, a, extra = {}) => ({ nome, q: a.q, r: a.r, c: a.cn.size, t: a.q ? a.r / a.q : 0, ...extra });
+  const linhaDe = (nome, a, extra = {}) => ({ nome, q: a.q, r: a.r, cm: a.c, c: a.cn.size, t: a.q ? a.r / a.q : 0, ...extra });
   let desmontaLinhas = null;
   function render() {
     if (!st.iniciou) return;
@@ -265,7 +280,7 @@ export function criarPainel(host, ctx) {
     opcoes();
     const agg = agregar();
     desenharProgresso();
-    $('#pn-nota').textContent = 'Filtros da barra de cima (Status, UF, Gestor, Equipe, Consultor, Tag) valem aqui; data de cadastro e busca não. Comissão chega junto com o Gerencial Financeiro.';
+    $('#pn-nota').textContent = 'Filtros da barra de cima (Status, UF, Gestor, Equipe, Consultor, Tag) valem aqui; data de cadastro e busca não. Comissão = receita × fatores do Simulador 2.0 de cada mês (Gross: Voz Novo + Portabilidade).';
 
     // por dimensão
     const dimNome = DIMS.find(d => d[0] === st.dim)[1];
@@ -389,11 +404,11 @@ export function criarPainel(host, ctx) {
   function exportarCsv() {
     const agg = agregar();
     if (!agg.meses.length) { alert('Nenhum mês carregado ainda.'); return; }
-    const cab = ['Mês', 'Grupo', 'Quantidade', 'Receita', 'CNPJs', 'Ticket médio'];
+    const cab = ['Mês', 'Grupo', 'Quantidade', 'Receita', 'Comissão', 'CNPJs', 'Ticket médio'];
     const linhas = [];
     agg.meses.forEach(m => ['TOTAL', ...GRUPOS].forEach(g => {
       const a = agg.porMes[m.chave][g];
-      linhas.push([m.label, g === 'TOTAL' ? 'Total (sem Serv. Digitais)' : ROTULO[g], a.q, a.r.toFixed(2), a.cn.size, (a.q ? a.r / a.q : 0).toFixed(2)]);
+      linhas.push([m.label, g === 'TOTAL' ? 'Total (sem Serv. Digitais)' : ROTULO[g], a.q, a.r.toFixed(2), a.c.toFixed(2), a.cn.size, (a.q ? a.r / a.q : 0).toFixed(2)]);
     }));
     const e = v => '"' + String(v).replace(/"/g, '""') + '"';
     const csv = '﻿' + [cab, ...linhas].map(l => l.map(e).join(',')).join('\n');
