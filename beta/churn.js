@@ -29,9 +29,46 @@ function unidade(r) {
   return cod ? (MAPEAMENTO_TAGS['#' + cod.toUpperCase()] || cod) : '—';
 }
 
+// Aba 'baseneo' da planilha da Carteira (index.html carregarBaseNeo / baseneoDono / baseneoUltimosConsultores): de onde as abas dos
+// meses puxam o cliente. Várias linhas por CNPJ (um pedido por linha, com a etapa). CNPJ (só dígitos) -> [{ consultor, equipe, etapa, ts }].
+const BASENEO_ETAPAS_ATIVAS = new Set(['ATIVO', 'CONECTADO']);
+async function carregarBaseNeo() {
+  const dados = await C.baixarBase('baseneo');
+  const mapa = new Map();
+  dados.forEach(l => {
+    const cnpj = (l['CPF-CNPJ'] || '').replace(/\D/g, '');
+    const consultor = C.valor(l['USUARIO']), equipe = C.valor(l['EQUIPE']);
+    if (!cnpj || (!consultor && !equipe)) return;
+    const m = (l['ÚLTIMA'] || l['ULTIMA'] || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    const ts = m ? Date.UTC(+m[3], +m[2] - 1, +m[1]) : 0;
+    const etapa = (l['ETAPA'] || '').trim().toUpperCase();
+    if (!mapa.has(cnpj)) mapa.set(cnpj, []);
+    mapa.get(cnpj).push({ consultor, equipe, etapa, ts });
+  });
+  return mapa;
+}
+// último pedido ATIVO/CONECTADO (por data ÚLTIMA; empate: o que aparece depois); sem nenhum ativo, o mais recente de qualquer etapa
+function baseneoDono(mapa, cnpjDigitos) {
+  const hist = mapa?.get(cnpjDigitos);
+  if (!hist) return null;
+  const maisRecente = lista => lista.reduce((a, h) => (!a || h.ts >= a.ts) ? h : a, null);
+  return maisRecente(hist.filter(h => BASENEO_ETAPAS_ATIVAS.has(h.etapa))) || maisRecente(hist);
+}
+// últimos consultores que atenderam o cliente (detalhe do alerta): um por consultor, do mais novo ao mais antigo
+function baseneoUltimosConsultores(mapa, cnpjDigitos, max = 3) {
+  const porConsultor = new Map();
+  (mapa?.get(cnpjDigitos) || []).forEach(h => {
+    if (!h.consultor) return;
+    const k = h.consultor.toUpperCase(), a = porConsultor.get(k);
+    if (!a || h.ts >= a.ts) porConsultor.set(k, h);
+  });
+  return [...porConsultor.values()].sort((a, b) => b.ts - a.ts).slice(0, max);
+}
+const fmtDH = iso => { const d = iso ? new Date(iso) : null; return d && !isNaN(d) ? d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '—'; };
+
 // ctx() => {}
 export function criarChurn(host) {
-  const st = { dados: [], usuarios: [], carteira: null, mapaCnpj: null, sortCol: 'recebido_em', sortAsc: false, iniciou: false, req: 0, sel: { unidade: [], equipe: [], recebido: [], janela: [] } };
+  const st = { dados: [], usuarios: [], carteira: null, mapaCnpj: null, baseneo: null, sortCol: 'recebido_em', sortAsc: false, iniciou: false, req: 0, sel: { unidade: [], equipe: [], recebido: [], janela: [] } };
 
   host.innerHTML = `
     <section class="painel prod-ctl-painel"><div class="prod-ctl">
@@ -49,14 +86,19 @@ export function criarChurn(host) {
     $('#ch-' + k).replaceWith(ms[k].el);
   });
 
-  // dono do cliente na Carteira, pelo CNPJ (index.html churnDonoCliente)
+  // dono do cliente (index.html churnDonoCliente): Carteira do mês pelo CNPJ; sem consultor/equipe nela (ou CNPJ fora dela),
+  // vale a aba "baseneo" (último pedido ATIVO/CONECTADO); por fim as colunas de gestor da Carteira.
   function dono(r) {
     const dig = (r.cnpj || '').replace(/\D/g, '');
-    if (!dig || !st.mapaCnpj) return null;
-    const linha = st.mapaCnpj.get(dig); if (!linha) return null;
-    const consultor = C.valor(linha['NEO VST (CONSULTOR)']); let equipe = C.valor(linha['NEO VST (EQUIPE)']);
-    if (!consultor && !equipe) for (const col of C.CAMPOS_IGNORADOS) { const v = C.valor(linha[col]); if (v) { equipe = v; break; } }
-    const telefone = C.valor(linha['Telefone de Contato']), nomeAdm = C.valor(linha['Nome do ADM']);
+    if (!dig) return null;
+    const linha = st.mapaCnpj ? st.mapaCnpj.get(dig) : null;
+    let consultor = '', equipe = '', telefone = '', nomeAdm = '';
+    if (linha) {
+      consultor = C.valor(linha['NEO VST (CONSULTOR)']); equipe = C.valor(linha['NEO VST (EQUIPE)']);
+      telefone = C.valor(linha['Telefone de Contato']); nomeAdm = C.valor(linha['Nome do ADM']);
+    }
+    if (!consultor && !equipe) { const b = baseneoDono(st.baseneo, dig); if (b) { consultor = b.consultor; equipe = b.equipe; } }
+    if (linha && !consultor && !equipe) for (const col of C.CAMPOS_IGNORADOS) { const v = C.valor(linha[col]); if (v) { equipe = v; break; } }
     return (!consultor && !equipe && !telefone && !nomeAdm) ? null : { consultor, equipe, telefone, nomeAdm };
   }
 
@@ -125,10 +167,13 @@ export function criarChurn(host) {
     const campos = [['Nome do Cliente', r.nome_cliente], ['CNPJ', r.cnpj], ['Número de linhas', r.qtd_linhas], ['Cidade', r.municipio_cliente], ['UF', r.uf_cliente], ['Unidade', unidade(r)],
       ['Consultor (Carteira)', d?.consultor], ['Equipe (Carteira)', d?.equipe], ['Contato (Carteira)', d?.telefone], ['Nome do ADM (Carteira)', d?.nomeAdm], ['Receptora', r.receptora], ['Promoção Atual', r.promocao_atual],
       ['Classificação', r.classificacao], ['Tempo Médio', r.tempo_medio], ['Carteira AACE', r.carteira_aace], ['Gerente de Canal', r.gerente_canal], ['Coordenador', r.coordenador], ['Data da Janela', r.data_janela],
-      ['Multa estimada', r.multa_estimada], ['Oferta de Retenção MKT', r.oferta_retencao_mkt], ['Oferta Pós', r.oferta_pos]].filter(([, x]) => x !== null && x !== undefined && x !== '' && x !== '—');
+      ['Multa estimada', r.multa_estimada], ['Oferta de Retenção MKT', r.oferta_retencao_mkt], ['Oferta Pós', r.oferta_pos],
+      ['Tratado pelo gestor', r.tratado_gestor ? `${r.tratado_gestor_nome || 'gestor'} em ${fmtDH(r.tratado_gestor_em)}` : ''], ['Resposta do gestor', r.tratado_gestor ? r.resposta_gestor : '']].filter(([, x]) => x !== null && x !== undefined && x !== '' && x !== '—');
+    const ultimos = baseneoUltimosConsultores(st.baseneo, (r.cnpj || '').replace(/\D/g, ''));
+    const ultimosHtml = ultimos.length ? `<div class="ch-form"><label>Últimos consultores que atenderam o cliente (baseneo)</label>${ultimos.map(h => `<div class="prod-dica"><b>${esc(h.consultor)}</b> — ${esc(h.equipe || 'sem equipe')} · ${esc(h.etapa || '—')}${h.ts ? ' · ' + new Date(h.ts).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : ''}</div>`).join('')}</div>` : '';
     const ov = document.createElement('div'); ov.className = 'modal-fundo';
     ov.innerHTML = `<div class="modal" role="dialog" aria-modal="true" aria-label="Alerta de PORT-OUT"><header><h3>${esc(r.nome_cliente || '—')}</h3><button type="button" class="btn-icone" data-x aria-label="Fechar">${icone('close')}</button></header>
-      <dl>${campos.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(String(v))}</dd></div>`).join('')}</dl>
+      <dl>${campos.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(String(v))}</dd></div>`).join('')}</dl>${ultimosHtml}
       <div class="ch-form"><label>Atribuído a<select id="ch-m-atrib"><option value="">Sem atribuição</option>${st.usuarios.map(u => `<option value="${u.id}" ${String(r.atribuido_a) === String(u.id) ? 'selected' : ''}>${esc(u.nome)}</option>`).join('')}</select></label>
         <label>Feedback / resposta pra Claro<textarea id="ch-m-fb" rows="5">${esc(r.feedback || '')}</textarea></label>
         <div class="ch-form-pe"><label class="chip chip-chk"><input type="checkbox" id="ch-m-resp" ${r.respondido ? 'checked' : ''}><span>Marcar como respondido</span></label><button type="button" class="btn btn-marca" id="ch-m-salvar">Salvar</button></div><div class="txt-neg" id="ch-m-erro"></div></div></div>`;
@@ -162,6 +207,8 @@ export function criarChurn(host) {
       const bases = await C.listarBases(), padrao = C.escolherBasePadrao(bases);
       if (padrao) { const dados = await C.baixarBase(padrao.titulo); st.mapaCnpj = new Map(); dados.forEach(r => { const dig = (r['CNPJ'] || '').replace(/\D/g, ''); if (dig) st.mapaCnpj.set(dig, r); }); }
     } catch (e) { console.warn('Não consegui cruzar o Churn com a Carteira:', e.message); }
+    // aba 'baseneo' (reserva quando a aba do mês não traz consultor/equipe); best-effort como a Carteira
+    try { st.baseneo = await carregarBaseNeo(); } catch (e) { console.warn('Não consegui ler a aba baseneo:', e.message); }
     if (eu !== st.req) return;
     atualizarOpcoes(); desenhar();
   }
