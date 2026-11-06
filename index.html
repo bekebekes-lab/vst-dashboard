@@ -3495,6 +3495,8 @@ const EQUIPES_ESTADOS = {
   "EQUIPE RIO GRANDE":"RS",
   "EQUIPE STA CRUZ":"RS",
   "EQUIPE STA MARIA":"RS",
+  "EQUIPE SANTA MARIA":"RS", // mesma equipe de "STA MARIA" — grafia por extenso
+  "COMERCIAL RICHIELLE SC":"SC",
   "EQUIPE THIAGO KASSNER":"RS",
   "INSIDE SALES POA - A":"RS",
   "INSIDE SALES POA - B":"RS",
@@ -3556,11 +3558,13 @@ const EQUIPES_GESTORES = {
   "EQUIPE NH - INTERNO MARIA":"MARIA VAZ",
   "EQUIPE NH - PAULA":"PAULA",
   "EQUIPE PEL":"VAGNER PEREIRA",
-  "EQUIPE PEL 2":"VAGNER PEREIRA",
+  "EQUIPE PEL 2":"RICHIELLE MORAIS",
   "EQUIPE PONTA GROSSA":"BRS",
   "EQUIPE RIO GRANDE":"RICHIELLE MORAIS",
   "EQUIPE STA CRUZ":"KARINA MENDES",
   "EQUIPE STA MARIA":"RICHIELLE MORAIS",
+  "EQUIPE SANTA MARIA":"RICHIELLE MORAIS", // mesma equipe de "STA MARIA" — grafia por extenso
+  "COMERCIAL RICHIELLE SC":"RICHIELLE MORAIS",
   "EQUIPE THIAGO KASSNER":"KARINA MENDES",
   "INSIDE SALES POA - A":"RICHARD REIS",
   "INSIDE SALES POA - B":"RICHARD REIS",
@@ -3631,6 +3635,8 @@ const EQUIPES_GESTOR_MACRO = {
   "EQUIPE RIO GRANDE":"PATRÍCIA",
   "EQUIPE STA CRUZ":"PATRÍCIA",
   "EQUIPE STA MARIA":"PATRÍCIA",
+  "EQUIPE SANTA MARIA":"PATRÍCIA", // mesma equipe de "STA MARIA" — grafia por extenso
+  "COMERCIAL RICHIELLE SC":"DIOU",
   "EQUIPE THIAGO KASSNER":"PATRÍCIA",
   "INSIDE SALES POA - A":"DIOU",
   "INSIDE SALES POA - B":"DIOU",
@@ -4118,10 +4124,10 @@ function thDrill(col, label, currentCol, currentAsc, onclickFn) {
 // calcula o escopo real do perfil direto de USUARIO_ATUAL — sem depender de
 // nenhum elemento da tela — para ser usada como um filtro obrigatório e
 // independente em cima de ALL_DATA, em Gerencial e Produção.
-// admin_gestao: "quase admin" — mesmas abas/ações do admin, sem trava de escopo
-// (getEscopoTravado() devolve null pra ele), EXCETO no Gerencial Financeiro e
-// no Painel Analítico, onde só enxerga a gestão dela (gestor_ref/gestores_ref).
-// Falha fechada: sem gestão definida no perfil, essas duas abas ficam vazias.
+// admin_gestao: travada na gestão dela (gestor_ref/gestores_ref) — getEscopoTravado()
+// devolve o escopo da gestão, então Gerencial, Produção, Painel e Acessos só mostram
+// o que é dela. Sem Gerencial Financeiro. Falha fechada: sem gestão definida no
+// perfil, as abas ficam vazias. (Ainda usa ehAdminLike para editar metas/Conectividade.)
 function ehAdminLike(perfil) {
   return perfil === 'admin' || perfil === 'admin_gestao';
 }
@@ -4140,6 +4146,7 @@ function getEscopoTravado() {
   const u = USUARIO_ATUAL;
   const p = u?.perfil;
   if (!p || p === 'admin') return null;
+  if (p === 'admin_gestao') return getEscopoGestaoPropria(); // só a gestão dela, em todas as abas (falha fechada)
 
   if (p === 'gestor_macro2') {
     const g = u.gestores_ref || [];
@@ -4933,7 +4940,7 @@ function drillFila(categoria, fila) {
 const GF_EMAILS_PERMITIDOS = ['raphael@vstgroup.com.br', 'everton@vstgroup.com.br', 'financeiro@vstgroup.com.br']; // financeiro@ = Dariane Slaski
 function gfPodeVer(usuario) {
   const u = usuario === undefined ? USUARIO_ATUAL : usuario;
-  if (u?.perfil === 'admin_gestao') return true; // vê só a gestão dela (getEscopoFinanceiro)
+  // admin_gestao NÃO vê o Gerencial Financeiro (decisão de 06/11/2026)
   return u?.perfil === 'admin' && GF_EMAILS_PERMITIDOS.includes((u.email || '').trim().toLowerCase());
 }
 const GF_CATS = ['GERAL', 'GROSS', 'VOZ NOVO', 'PORTABILIDADE', 'RENOVAÇÃO', 'BL', 'TITULARIDADE', 'SERV. DIGITAIS'];
@@ -7995,7 +8002,7 @@ let USUARIO_ATUAL = null;
 // ao abrir" no drawer de conta e pelo redirecionamento pós-login.
 const ABAS_PERMITIDAS_POR_PERFIL = {
   'admin':          ['gerencial', 'producao', 'discadora', 'simulador2', 'aace', 'churn', 'carteira', 'qualidade', 'acessos', 'conectividade'],
-  'admin_gestao':   ['gerencial', 'producao', 'discadora', 'churn', 'acessos', 'conectividade'], // sem Simulador 2.0, Carteira e Qualidade
+  'admin_gestao':   ['gerencial', 'producao', 'discadora', 'churn', 'acessos', 'conectividade'], // Gerencial/Produção/Painel/Acessos só da gestão dela; Discadora (sem CSV e sem Centro de Custos) e Churn sem trava por gestão; sem Simulador 2.0, Carteira, Qualidade e Gerencial Financeiro
   'admin_beta':     ['gerencial', 'producao', 'carteira', 'acessos', 'conectividade'],
   'gestor_macro':   ['gerencial', 'discadora', 'acessos', 'conectividade'],
   'gestor_macro2':  ['gerencial', 'producao', 'discadora', 'acessos', 'conectividade'],
@@ -11237,8 +11244,10 @@ async function carregarPerfil(user) {
 
 // ─── ESQUEMA DE PERFIS (reorganizado) ────────────────────────────────────────
 //  admin          — acesso 100% a tudo
-//  admin_gestao   — igual admin em abas/ações e sem trava de escopo, EXCETO Gerencial
-//                   Financeiro e Painel Analítico: só a gestão dela (gestor_ref)
+//  admin_gestao   — travada na gestão dela (gestor_ref/gestores_ref) em todas as abas:
+//                   Gerencial, Produção, Painel Analítico, Acessos; Discadora (sem CSV e sem
+//                   Centro de Custos) e Churn liberadas SEM trava por gestão (vêem tudo); sem
+//                   Gerencial Financeiro, Simulador, Carteira e Qualidade
 //  admin_beta     — sem trava de escopo (vê tudo, igual admin), mas só nas
 //                   abas Gerencial/Produção/Carteira/Conectividade (sem
 //                   Discadora/Simulador 2.0/Churn)
@@ -11337,7 +11346,7 @@ function aplicarPermissoes() {
         travarDropdownMulti('dd-content-f-consultor', '#dd-f-consultor .dropdown-btn', [USUARIO_ATUAL.consultor_ref]);
       }
       render();
-    } else if ((p === 'gestor_macro' || p === 'gestor_macro3' || p === 'gestor' || p === 'gestor_beta') && ((USUARIO_ATUAL.gestores_ref || []).length > 0 || USUARIO_ATUAL.gestor_ref)) {
+    } else if ((p === 'gestor_macro' || p === 'gestor_macro3' || p === 'gestor' || p === 'gestor_beta' || p === 'admin_gestao') && ((USUARIO_ATUAL.gestores_ref || []).length > 0 || USUARIO_ATUAL.gestor_ref)) {
       // Trava Gerencial no(s) nome(s) do(s) gestor(es) — usa gestores_ref (1+) se
       // preenchido, senão cai para o gestor_ref único (comportamento padrão)
       const nomesLock = (USUARIO_ATUAL.gestores_ref || []).length > 0 ? USUARIO_ATUAL.gestores_ref : [USUARIO_ATUAL.gestor_ref];
@@ -11422,10 +11431,10 @@ function getGrupoDiscadoraTravado() {
   return null;
 }
 
-// Só admin e gestor_macro podem exportar o CSV de ligações produtivas da Discadora
+// Só admin e gestor_macro podem exportar o CSV de ligações produtivas da Discadora (admin_gestao não)
 function podeExportarDiscadoraCSV() {
   const p = USUARIO_ATUAL?.perfil;
-  return ehAdminLike(p) || p === 'gestor_macro';
+  return p === 'admin' || p === 'gestor_macro';
 }
 
 // Filtro de UF/Estado de quem tem escopo travado. Com UMA UF no escopo, trava
@@ -11502,7 +11511,7 @@ function aplicarTravaProducao() {
     )];
     if (estadosSupervisaoProd.length > 0) travarProdEstado(estadosSupervisaoProd);
 
-  } else if (p === 'gestor_macro3' && ((USUARIO_ATUAL.gestores_ref || []).length > 0 || USUARIO_ATUAL.gestor_ref) && document.getElementById('dd-content-prod-gestor')) {
+  } else if ((p === 'gestor_macro3' || p === 'admin_gestao') && ((USUARIO_ATUAL.gestores_ref || []).length > 0 || USUARIO_ATUAL.gestor_ref) && document.getElementById('dd-content-prod-gestor')) {
     // Trava Produção no gestor único (mesmo tratamento de gestor_macro2, mas com 1 nome)
     const nomesLockMacro3 = (USUARIO_ATUAL.gestores_ref || []).length > 0 ? USUARIO_ATUAL.gestores_ref : [USUARIO_ATUAL.gestor_ref];
     travarDropdownMulti('dd-content-prod-gestor', '#dd-prod-gestor .dropdown-btn', nomesLockMacro3);
@@ -11831,7 +11840,7 @@ function initDiscadora() {
 
   // Botão "Centro de Custos" — só admin. O painel em si (#disc-voip-area)
   // só abre quando clicado (discToggleCentroCustos()), não fica sempre visível.
-  if (ehAdminLike(USUARIO_ATUAL?.perfil)) {
+  if (USUARIO_ATUAL?.perfil === 'admin') {
     document.getElementById('disc-btn-centro-custos-wrap').style.display = '';
     const seteDiasAtras = new Date();
     seteDiasAtras.setUTCDate(seteDiasAtras.getUTCDate() - 7);
