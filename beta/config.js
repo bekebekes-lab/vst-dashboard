@@ -33,7 +33,7 @@ export const MENU = [
   ]},
   { grupo: 'Base', itens: [
     { id: 'carteira', rotulo: 'Carteira', icone: 'wallet', beta: true },
-    { id: 'churn', rotulo: 'Churn', icone: 'refresh' },
+    { id: 'churn', rotulo: 'Churn', icone: 'refresh', beta: true },
   ]},
   { grupo: 'Admin', itens: [
     { id: 'acessos', rotulo: 'Acessos', icone: 'users', beta: true },
