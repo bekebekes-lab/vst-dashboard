@@ -33,7 +33,7 @@ const GRUPOS = ['GROSS', 'RENOVAÇÃO', 'BL', 'TITULARIDADE', 'SERV. DIGITAIS'];
 const ROTULO = { GROSS: 'Gross', 'RENOVAÇÃO': 'Renovação', BL: 'BL (Fixa Básica)', TITULARIDADE: 'Titularidade', 'SERV. DIGITAIS': 'Serv. Digitais', TOTAL: 'Total' };
 const FORA_DO_TOTAL = ['SERV. DIGITAIS'];       // Serv. Digitais não soma no total (como no Gerencial)
 const COR = { TOTAL: '#C0281C', GROSS: '#111111', 'RENOVAÇÃO': '#8E1B12', BL: '#D6D6D6', TITULARIDADE: '#E2B100', 'SERV. DIGITAIS': '#7C4DCC' };
-const METRICAS = [['comissao', 'Comissão'], ['quantidade', 'Quantidade'], ['receita', 'Receita'], ['cnpjs', 'CNPJs'], ['ticket', 'Ticket médio']];
+const METRICAS_TODAS = [['comissao', 'Comissão'], ['quantidade', 'Quantidade'], ['receita', 'Receita'], ['cnpjs', 'CNPJs'], ['ticket', 'Ticket médio']];
 const DIMS = [['estado', 'Estado'], ['ddd', 'DDD'], ['cidade', 'Cidade']];
 // Contorno das UFs: beta/mapa-uf.js (malha do IBGE, gerado por script).
 const NOME_UF = { AC: 'Acre', AL: 'Alagoas', AP: 'Amapá', AM: 'Amazonas', BA: 'Bahia', CE: 'Ceará', DF: 'Distrito Federal', ES: 'Espírito Santo', GO: 'Goiás', MA: 'Maranhão', MT: 'Mato Grosso', MS: 'Mato Grosso do Sul', MG: 'Minas Gerais', PA: 'Pará', PB: 'Paraíba', PR: 'Paraná', PE: 'Pernambuco', PI: 'Piauí', RJ: 'Rio de Janeiro', RN: 'Rio Grande do Norte', RS: 'Rio Grande do Sul', RO: 'Rondônia', RR: 'Roraima', SC: 'Santa Catarina', SP: 'São Paulo', SE: 'Sergipe', TO: 'Tocantins' };
@@ -90,6 +90,9 @@ const dimValor = (r, dim) => dim === 'ddd' ? (r.dd || '—') : dim === 'cidade' 
 
 // ctx() => { f (filtros globais), escopoFn(r)->bool, meses:[{chave,sheet,yyyy,mm,label}], reusar(sheet)->Promise<linhas>|null }
 export function criarPainel(host, ctx) {
+  // comissão só para perfil admin (como no Dash atual): sem ela some a métrica, a coluna, o texto e a coluna do CSV
+  const comCom = ctx().podeComissao !== false;
+  const METRICAS = comCom ? METRICAS_TODAS : METRICAS_TODAS.filter(m => m[0] !== 'comissao');
   const st = {
     dados: {},              // chave 'YYYY-MM' -> registros compactos
     erros: {}, pendentes: 0, iniciou: false, atualizadoEm: null,
@@ -149,7 +152,7 @@ export function criarPainel(host, ctx) {
   const cols = () => [
     { k: 'q', rotulo: 'Quantidade', num: true, valor: l => l.q, fmt: v => fmtInt(v) },
     { k: 'r', rotulo: 'Receita', num: true, valor: l => l.r, fmt: v => fmtMoeda(v) },
-    { k: 'cm', rotulo: 'Comissão', num: true, valor: l => l.cm, fmt: v => fmtMoeda(v) },
+    ...(comCom ? [{ k: 'cm', rotulo: 'Comissão', num: true, valor: l => l.cm, fmt: v => fmtMoeda(v) }] : []),
     { k: 'c', rotulo: 'CNPJs', num: true, valor: l => l.c, fmt: v => fmtInt(v) },
     { k: 't', rotulo: 'Ticket médio', num: true, valor: l => l.t, fmt: v => fmtMoeda(v) },
   ];
@@ -185,6 +188,7 @@ export function criarPainel(host, ctx) {
     if (!st.cfgMapa) {                                  // config_simulador2 de todas as competências, uma vez por carga
       st.cfgMapa = {};
       try {
+        if (!comCom) throw new Error('sem acesso à comissão');   // não lê config_simulador2 (política do parceiro) sem necessidade
         const linhas = await ctx().carregarConfigs();
         const porPeriodo = {}; linhas.forEach(d => { (porPeriodo[d.periodo] = porPeriodo[d.periodo] || []).push(d); });
         Object.entries(porPeriodo).forEach(([per, ls]) => { st.cfgMapa[per] = gfMontarCfg(per, ls); });
@@ -280,7 +284,7 @@ export function criarPainel(host, ctx) {
     opcoes();
     const agg = agregar();
     desenharProgresso();
-    $('#pn-nota').textContent = 'Filtros da barra de cima (Status, UF, Gestor, Equipe, Consultor, Tag) valem aqui; data de cadastro e busca não. Comissão = receita × fatores do Simulador 2.0 de cada mês (Gross: Voz Novo + Portabilidade).';
+    $('#pn-nota').textContent = 'Filtros da barra de cima (Status, UF, Gestor, Equipe, Consultor, Tag) valem aqui; data de cadastro e busca não.' + (comCom ? ' Comissão = receita × fatores do Simulador 2.0 de cada mês (Gross: Voz Novo + Portabilidade).' : '');
 
     // por dimensão
     const dimNome = DIMS.find(d => d[0] === st.dim)[1];
@@ -404,11 +408,11 @@ export function criarPainel(host, ctx) {
   function exportarCsv() {
     const agg = agregar();
     if (!agg.meses.length) { alert('Nenhum mês carregado ainda.'); return; }
-    const cab = ['Mês', 'Grupo', 'Quantidade', 'Receita', 'Comissão', 'CNPJs', 'Ticket médio'];
+    const cab = ['Mês', 'Grupo', 'Quantidade', 'Receita', ...(comCom ? ['Comissão'] : []), 'CNPJs', 'Ticket médio'];
     const linhas = [];
     agg.meses.forEach(m => ['TOTAL', ...GRUPOS].forEach(g => {
       const a = agg.porMes[m.chave][g];
-      linhas.push([m.label, g === 'TOTAL' ? 'Total (sem Serv. Digitais)' : ROTULO[g], a.q, a.r.toFixed(2), a.c.toFixed(2), a.cn.size, (a.q ? a.r / a.q : 0).toFixed(2)]);
+      linhas.push([m.label, g === 'TOTAL' ? 'Total (sem Serv. Digitais)' : ROTULO[g], a.q, a.r.toFixed(2), ...(comCom ? [a.c.toFixed(2)] : []), a.cn.size, (a.q ? a.r / a.q : 0).toFixed(2)]);
     }));
     const e = v => '"' + String(v).replace(/"/g, '""') + '"';
     const csv = '﻿' + [cab, ...linhas].map(l => l.map(e).join(',')).join('\n');

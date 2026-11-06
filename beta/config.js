@@ -7,7 +7,18 @@
 // NUNCA colocar service_role, senhas ou tokens neste arquivo (repo público).
 
 export const NOME_SISTEMA = 'Dash Beta2';
-export const EMAIL_ADMIN_BETA = 'raphael@vstgroup.com.br';
+// Quem pode entrar no Beta2 (só e-mails desta lista; cada pessoa vê SÓ as abas e dados que o perfil dela tem no Dash atual —
+// ver permissoes.js). Para liberar/retirar alguém: editar aqui (e-mail em minúsculas). A segurança de verdade continua no
+// RLS do Supabase e nas rotas /api (api/_lib/auth.js + escopo.js), que valem igual para todos.
+export const EMAILS_BETA = [
+  'raphael@vstgroup.com.br',
+  'diou@vstgroup.com.br',       // Diou
+  'patricia@vstgroup.com.br',   // Pati (Patrícia Faria)
+  'everton@vstgroup.com.br',    // Everton Vasconcellos
+  // Laura: e-mail a confirmar (ver Dash Beta2.md → pendências)
+];
+export const emailLiberadoBeta = email => !!email && EMAILS_BETA.includes(String(email).trim().toLowerCase());
+export const EMAIL_ADMIN_BETA = EMAILS_BETA[0];   // legado (mantido para não quebrar quem ainda importa)
 
 export const SUPA_URL = 'https://kzlchetrpsfefwybaaoy.supabase.co';
 export const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt6bGNoZXRycHNmZWZ3eWJhYW95Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkwNTM4NDIsImV4cCI6MjA5NDYyOTg0Mn0.4euWpZZadXe9ayg6ITY5SNueEhU094ajJv379gC9YrU';

@@ -4,7 +4,8 @@
 //             multivisao.js / graficos.js / ui.js (componentes)
 
 import { NOME_SISTEMA, MENU } from './config.js';
-import { exigirAdminBeta, sair, supa } from './sessao.js';
+import { exigirAcessoBeta, sair, supa } from './sessao.js';
+import { getAbasPermitidas, podeVerComissao } from './permissoes.js';
 import { carregarAba, limparCache, listarAbasHistorico, statusDaBase } from './dados.js';
 import {
   filtrosVazios, filtrar, opcoesDosFiltros, agregar, calcularKPIs, variacaoPct,
@@ -28,7 +29,7 @@ const $ = (s, r = document) => r.querySelector(s);
 
 // Visões do Beta2: cada uma é um item do menu lateral (config.js, `beta: true`) e usa a mesma
 // barra de filtros e os mesmos dados. Novas visões entram aqui e no MENU.
-const VISOES = [
+const VISOES_TODAS = [
   { id: 'gerencial', rotulo: 'Gerencial', dica: 'KPIs, cartões por categoria com as filas, pedidos e detalhamento por consultor (como o Gerencial atual)' },
   { id: 'painel', rotulo: 'Painel Analítico', dica: 'Histórico mês a mês, mix por grupo e cortes por Estado, DDD, Cidade, Equipe e Vendedor (como a aba Painel Analítico)' },
   { id: 'gerfin', rotulo: 'Gerencial Financeiro', dica: 'Gerencial com Gross separado em Voz Novo + Portabilidade e comissão estimada pelos fatores do Simulador 2.0 (piloto)' },
@@ -41,12 +42,14 @@ const VISOES = [
   { id: 'aace', rotulo: 'Simulador de AACE', dica: 'Comparativo AACE hoje × com a VST pela política Claro, com importador de extrato e simulações salvas', semFiltros: true },
   { id: 'producao', rotulo: 'Produção', dica: 'Produção por unidade, gestor ou equipe × status, com UF BL, TRI, MOM e comparar meses (como a aba Produção)' },
 ];
+// Visões que a PESSOA pode ver (perfil + acessos extras, como no Dash atual: permissoes.js). Definidas no início, depois do login.
+let VISOES = VISOES_TODAS;
 // hashes antigos (abas Resumo/Esteira) levam ao Gerencial
 const ALIAS_VISAO = { resumo: 'gerencial', esteira: 'gerencial' };
 
 // Menu: só aparecem as abas JÁ migradas (beta: true). As que ainda não existem no Beta2 (Pedidos, Conectividade/SD) ficam
 // ocultas — voltam sozinhas ao menu quando o item ganhar `beta: true` em config.js. Grupos sem itens somem.
-const MENU_VISIVEL = MENU.map(g => ({ ...g, itens: g.itens.filter(i => i.beta) })).filter(g => g.itens.length);
+let MENU_VISIVEL = [];   // calculado em iniciar(): itens migrados (beta: true) E permitidos ao perfil
 
 const S = {
   acesso: null, escopo: null,
@@ -381,7 +384,7 @@ function aplicarReceita(b) {
 function mudarVisao(id, atualizarHash = true) {
   id = ALIAS_VISAO[id] || id;
   if (!VISOES.some(v => v.id === id)) id = ALIAS_VISAO[prefs.get('visao', 'gerencial')] || prefs.get('visao', 'gerencial');
-  if (!VISOES.some(v => v.id === id)) id = 'gerencial';
+  if (!VISOES.some(v => v.id === id)) id = VISOES[0].id;
   S.visao = id; prefs.set('visao', id);
   $('#visao-gerencial').hidden = id !== 'gerencial';
   $('#visao-producao').hidden = id !== 'producao';
@@ -503,10 +506,15 @@ function presencaIniciar() {
 
 // ── início ──────────────────────────────────────────────────────────────────
 async function iniciar() {
-  const acesso = await exigirAdminBeta();
+  const acesso = await exigirAcessoBeta();
   if (!acesso) return;                     // já redirecionou para o Dash atual
   S.acesso = acesso;
   S.escopo = getEscopoTravado(acesso.perfil);
+  // abas permitidas a esta pessoa (perfil + acessos extras + listas fechadas), só as que já existem no Beta2
+  S.abasOk = new Set(getAbasPermitidas({ ...acesso.perfil, email: acesso.perfil.email || acesso.user.email }));
+  VISOES = VISOES_TODAS.filter(v => S.abasOk.has(v.id));
+  if (!VISOES.length) { location.replace('/'); return; }   // nenhuma aba do Beta2 para este perfil: volta ao Dash atual
+  MENU_VISIVEL = MENU.map(g => ({ ...g, itens: g.itens.filter(i => i.beta && S.abasOk.has(i.id)) })).filter(g => g.itens.length);
   montarCasca(); ligarCasca(); montarFiltros();
   ESTEIRA = criarEsteira($('#visao-esteira'), {
     receita: () => S.receita, setReceita: aplicarReceita,
@@ -518,7 +526,7 @@ async function iniciar() {
     carregarMes: nome => carregarAba(nome),
   }));
   PAINEL = criarPainel($('#visao-painel'), () => ({
-    f: S.filtros, escopoOk: registroNoEscopo, meses: mesesDoPainel(),
+    f: S.filtros, escopoOk: registroNoEscopo, meses: mesesDoPainel(), podeComissao: podeVerComissao(S.acesso.perfil),
     filtrarUf: uf => { S.filtros.uf = uf; aoMudarFiltro(); window.scrollTo({ top: 0, behavior: 'smooth' }); },
     reusar: sheet => (sheet === S.periodo && S.rows.length ? Promise.resolve(S.rows) : null),
     carregarConfigs: async () => { const r = await supa.from('config_simulador2').select('*'); if (r.error) throw new Error(r.error.message); return r.data || []; },
@@ -545,7 +553,7 @@ async function iniciar() {
   // selo no menu: alertas de Churn pendentes com resposta obrigatória (10+ linhas)
   const selo = n => { const el = document.querySelector('.lat-item[data-visao-id=churn]'); if (!el) return; let b = el.querySelector('.lat-badge'); if (!b) { b = document.createElement('em'); b.className = 'lat-badge'; el.append(b); } b.textContent = n; b.hidden = !n; };
   $('#visao-churn').addEventListener('churn-obrigatorios', e => selo(e.detail));
-  CHURN.contarObrigatorios().then(selo).catch(() => {});
+  if (S.abasOk.has('churn')) CHURN.contarObrigatorios().then(selo).catch(() => {});
   presencaIniciar();
   mudarVisao(location.hash.replace(/^#/, ''), false);
   document.body.classList.remove('carregando');

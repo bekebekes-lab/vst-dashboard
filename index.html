@@ -11081,7 +11081,7 @@ async function fazerLogin(paraBeta2) {
   // O botão do Beta2 aparece para todos, mas só o e-mail liberado em /beta/config.js entra por ele:
   // para os demais nem chega a tentar o login (usam "Entrar" e vão para o Dash normal).
   if (paraBeta2 === true && !beta2Liberado(email)) {
-    erro.textContent = 'O ' + (BETA2_CFG ? BETA2_CFG.NOME_SISTEMA : 'Dash Beta2') + ' está liberado apenas para o administrador. Use "Entrar" para acessar o Dash.';
+    erro.textContent = 'O ' + (BETA2_CFG ? BETA2_CFG.NOME_SISTEMA : 'Dash Beta2') + ' está liberado só para alguns usuários. Use "Entrar" para acessar o Dash.';
     erro.classList.add('active');
     return;
   }
@@ -11142,7 +11142,7 @@ async function fazerLogin(paraBeta2) {
 let BETA2_CFG = null;
 import('/beta/config.js').then(cfg => { BETA2_CFG = cfg; atualizarOpcaoBeta2(); }).catch(() => {});
 function beta2Liberado(email) {
-  return !!(BETA2_CFG && email && email.trim().toLowerCase() === BETA2_CFG.EMAIL_ADMIN_BETA);
+  return !!(BETA2_CFG && BETA2_CFG.emailLiberadoBeta && BETA2_CFG.emailLiberadoBeta(email));
 }
 function atualizarOpcaoBeta2() {
   const btn = document.getElementById('login-beta2-btn');
@@ -11639,7 +11639,7 @@ function abrirDrawerConta() {
   document.getElementById('drawer-user-email').textContent = USUARIO_ATUAL?.email || '—';
   const linkBeta2 = document.getElementById('drawer-beta2-link');
   if (linkBeta2) {
-    const liberado = beta2Liberado(USUARIO_ATUAL?.email) && USUARIO_ATUAL?.perfil === 'admin';
+    const liberado = beta2Liberado(USUARIO_ATUAL?.email);
     linkBeta2.style.display = liberado ? 'flex' : 'none';
     if (liberado) linkBeta2.textContent = '🚀 Abrir o ' + BETA2_CFG.NOME_SISTEMA;
   }
