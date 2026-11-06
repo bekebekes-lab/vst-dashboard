@@ -15,7 +15,7 @@ export const EMAILS_BETA = [
   'diou@vstgroup.com.br',       // Diou
   'patricia@vstgroup.com.br',   // Pati (Patrícia Faria)
   'everton@vstgroup.com.br',    // Everton Vasconcellos
-  // Laura: e-mail a confirmar (ver Dash Beta2.md → pendências)
+  'laura@vstgroup.com.br',      // Laura
 ];
 export const emailLiberadoBeta = email => !!email && EMAILS_BETA.includes(String(email).trim().toLowerCase());
 export const EMAIL_ADMIN_BETA = EMAILS_BETA[0];   // legado (mantido para não quebrar quem ainda importa)
