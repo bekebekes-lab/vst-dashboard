@@ -44,6 +44,10 @@ const VISOES = [
 // hashes antigos (abas Resumo/Esteira) levam ao Gerencial
 const ALIAS_VISAO = { resumo: 'gerencial', esteira: 'gerencial' };
 
+// Menu: só aparecem as abas JÁ migradas (beta: true). As que ainda não existem no Beta2 (Pedidos, Conectividade/SD) ficam
+// ocultas — voltam sozinhas ao menu quando o item ganhar `beta: true` em config.js. Grupos sem itens somem.
+const MENU_VISIVEL = MENU.map(g => ({ ...g, itens: g.itens.filter(i => i.beta) })).filter(g => g.itens.length);
+
 const S = {
   acesso: null, escopo: null,
   abas: [],                 // abas históricas [{mm,yyyy,nome}]
@@ -82,7 +86,7 @@ function montarCasca() {
         <button class="btn-icone lat-fechar" type="button" data-fechar-menu aria-label="Fechar menu">${icone('close')}</button>
       </div>
       <nav class="lat-nav">
-        ${MENU.map(g => `
+        ${MENU_VISIVEL.map(g => `
           <div class="lat-grupo">
             <div class="lat-grupo-tit">${esc(g.grupo)}</div>
             ${g.itens.map(i => i.beta
@@ -479,7 +483,7 @@ function desenharRodape() {
   const partes = [];
   if (S.statusBase) partes.push(`Base atualizada em ${S.statusBase}`);
   if (AGG) partes.push(`${fmtInt(S.rows.length)} registros na base · ${fmtInt(AGG.nLinhas)} filtrados · ${fmtInt(AGG.nConsultores)} consultores`);
-  partes.push(`${NOME_SISTEMA} · itens com ↗ no menu abrem o Dash atual.`);
+  partes.push(NOME_SISTEMA);
   el.textContent = partes.join('  ·  ');
 }
 
