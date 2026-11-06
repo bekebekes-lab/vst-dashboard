@@ -24,6 +24,7 @@ import { MAPEAMENTO_TAGS } from './regras.js';
 import { esc, icone, fmtInt, fmtMoeda, fmtMoedaCurta, criarMultiSelect, prefs } from './ui.js';
 import { criarMultivisao } from './multivisao.js';
 import { montarResponsivo, linhasMensais } from './graficos.js';
+import { MAPA_VIEWBOX, MAPA_UF } from './mapa-uf.js';
 import { abaEmCache, buscarAbaSemCache } from './dados.js';
 
 const MESES_INICIAIS = 13;   // mês corrente + 12 anteriores; o resto sob demanda
@@ -33,17 +34,7 @@ const FORA_DO_TOTAL = ['SERV. DIGITAIS'];       // Serv. Digitais não soma no t
 const COR = { TOTAL: '#C0281C', GROSS: '#111111', 'RENOVAÇÃO': '#8E1B12', BL: '#D6D6D6', TITULARIDADE: '#E2B100', 'SERV. DIGITAIS': '#7C4DCC' };
 const METRICAS = [['quantidade', 'Quantidade'], ['receita', 'Receita'], ['cnpjs', 'CNPJs'], ['ticket', 'Ticket médio']];
 const DIMS = [['estado', 'Estado'], ['ddd', 'DDD'], ['cidade', 'Cidade']];
-// Mapa em blocos: cada UF fica numa célula (coluna, linha) aproximando a posição geográfica.
-// Para trocar por um mapa com o contorno real basta substituir este layout por caminhos SVG
-// (o resto — cores, clique, detalhe — não muda).
-const MAPA_UFS = {
-  RR: [1, 0], AP: [3, 0],
-  AM: [1, 1], PA: [3, 1], MA: [4, 1], CE: [5, 1], RN: [6, 1],
-  AC: [0, 2], RO: [1, 2], MT: [2, 2], TO: [3, 2], PI: [4, 2], PE: [5, 2], PB: [6, 2],
-  GO: [2, 3], DF: [3, 3], BA: [4, 3], AL: [5, 3],
-  MS: [2, 4], MG: [3, 4], ES: [4, 4], SE: [5, 4],
-  SP: [3, 5], RJ: [4, 5], PR: [3, 6], SC: [3, 7], RS: [3, 8],
-};
+// Contorno das UFs: beta/mapa-uf.js (malha do IBGE, gerado por script).
 const NOME_UF = { AC: 'Acre', AL: 'Alagoas', AP: 'Amapá', AM: 'Amazonas', BA: 'Bahia', CE: 'Ceará', DF: 'Distrito Federal', ES: 'Espírito Santo', GO: 'Goiás', MA: 'Maranhão', MT: 'Mato Grosso', MS: 'Mato Grosso do Sul', MG: 'Minas Gerais', PA: 'Pará', PB: 'Paraíba', PR: 'Paraná', PE: 'Pernambuco', PI: 'Piauí', RJ: 'Rio de Janeiro', RN: 'Rio Grande do Norte', RS: 'Rio Grande do Sul', RO: 'Rondônia', RR: 'Roraima', SC: 'Santa Catarina', SP: 'São Paulo', SE: 'Sergipe', TO: 'Tocantins' };
 // o que o mapa mostra: campo do registro, rótulo e a "contraparte" (para ver origem × cliente)
 const MODOS_MAPA = {
@@ -178,6 +169,7 @@ export function criarPainel(host, ctx) {
     const s = e.target.closest('[data-serie]');
     if (s) { const k = s.dataset.serie; st.seriesOff.has(k) ? st.seriesOff.delete(k) : st.seriesOff.add(k); render(); }
   });
+  host.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('.uf-forma')) { e.preventDefault(); e.target.dispatchEvent(new MouseEvent('click', { bubbles: true })); } });
   $('#pn-csv').addEventListener('click', exportarCsv);
   $('#pn-recarregar').addEventListener('click', () => recarregar());
 
@@ -320,18 +312,44 @@ export function criarPainel(host, ctx) {
     const valores = [...ag.porUf.entries()].map(([k, a]) => [k, valor(a, m)]);
     const max = Math.max(1, ...valores.map(([, v]) => v));
     const vmap = new Map(valores);
-    const fora = valores.filter(([k, v]) => v > 0 && !MAPA_UFS[k]);          // UF fora da lista (dado sujo) fica numa nota
-    $('#pn-mapa-grade').innerHTML = Object.entries(MAPA_UFS).map(([uf, [col, lin]]) => {
-      const v = vmap.get(uf) || 0, i = v > 0 ? 0.12 + 0.88 * (v / max) : 0;
-      const estilo = `grid-column:${col + 1};grid-row:${lin + 1};` + (v > 0 ? `background:rgba(185,28,28,${i.toFixed(2)});color:${i > 0.5 ? '#fff' : 'var(--texto)'}` : '');
-      return `<button type="button" class="uf${uf === st.ufSel ? ' uf-sel' : ''}${v > 0 ? '' : ' uf-vazio'}" data-uf="${uf}" style="${estilo}" title="${esc(NOME_UF[uf])}: ${esc(fmtMetrica(v, m))}" aria-pressed="${uf === st.ufSel}"><b>${uf}</b><small>${v > 0 ? esc(fmtMetrica(v, m, true)) : '—'}</small></button>`;
+    const fora = valores.filter(([k, v]) => v > 0 && !MAPA_UF[k]);          // UF fora da lista (dado sujo) fica numa nota
+    const [, , vw, vh] = MAPA_VIEWBOX;
+    const corDe = v => (v > 0 ? 0.14 + 0.86 * (v / max) : 0);
+    const ufs = Object.keys(MAPA_UF);
+    const ordem = [...ufs.filter(u => u !== st.ufSel), ...ufs.filter(u => u === st.ufSel)];      // selecionada por cima
+    const formas = ordem.map(uf => {
+      const info = MAPA_UF[uf], v = vmap.get(uf) || 0, i = corDe(v);
+      const fill = v > 0 ? `rgba(185,28,28,${i.toFixed(2)})` : 'var(--cinza-100)';
+      return `<path class="uf-forma${uf === st.ufSel ? ' uf-sel' : ''}" data-uf="${uf}" d="${info.d}" style="fill:${fill}" tabindex="0" role="button" aria-pressed="${uf === st.ufSel}" aria-label="${esc(NOME_UF[uf])}: ${esc(fmtMetrica(v, m))}"><title>${esc(NOME_UF[uf])}: ${esc(fmtMetrica(v, m))}</title></path>`;
     }).join('');
+    // rótulos: dentro do estado quando cabe; os pequenos do litoral saem para a direita com uma linha guia
+    const LITORAL = ['RN', 'PB', 'PE', 'AL', 'SE'], FORA = ['ES', 'RJ'];
+    const ne = LITORAL.map(u => ({ u, cy: MAPA_UF[u].cy, mx: MAPA_UF[u].mx, cx: MAPA_UF[u].cx })).sort((a, b) => a.cy - b.cy);
+    let ult = -99; ne.forEach(o => { o.ly = Math.max(o.cy, ult + 15); ult = o.ly; });
+    const colX = vw - 64;
+    const txtCor = (uf) => { const v = vmap.get(uf) || 0; return corDe(v) > 0.5 ? '#fff' : 'var(--texto)'; };
+    const rotDentro = ufs.filter(u => !LITORAL.includes(u) && !FORA.includes(u)).map(uf => {
+      const info = MAPA_UF[uf], v = vmap.get(uf) || 0, grande = info.a >= 1500;
+      return `<g class="uf-rot-g" style="fill:${txtCor(uf)}"><text class="uf-rot${info.a < 300 ? ' uf-rot-p' : ''}" x="${info.cx}" y="${info.cy + (grande && v > 0 ? -1 : 3)}" text-anchor="middle">${uf}</text>${grande && v > 0 ? `<text class="uf-val" x="${info.cx}" y="${info.cy + 10}" text-anchor="middle">${esc(fmtMetrica(v, m, true))}</text>` : ''}</g>`;
+    }).join('');
+    const chamada = (uf, x, y, mx, cy) => {
+      const v = vmap.get(uf) || 0;
+      return `<g class="uf-cham"><line x1="${mx - 2}" y1="${cy}" x2="${x - 3}" y2="${y - 3}"/><text x="${x}" y="${y}" class="uf-cham-t"><tspan class="uf-cham-u">${uf}</tspan>${v > 0 ? `<tspan class="uf-cham-v" dx="4">${esc(fmtMetrica(v, m, true))}</tspan>` : ''}</text></g>`;
+    };
+    const rotFora = ne.map(o => chamada(o.u, colX, o.ly + 3, o.mx, o.cy)).join('')
+      + FORA.map(u => chamada(u, MAPA_UF[u].mx + 14, MAPA_UF[u].cy + 3, MAPA_UF[u].mx, MAPA_UF[u].cy)).join('');
+    $('#pn-mapa-grade').innerHTML = `<svg class="mapa-svg" viewBox="0 0 ${vw} ${vh}" role="group" aria-label="Mapa do Brasil por UF">${formas}${rotDentro}${rotFora}</svg>`;
     $('#pn-mapa-leg').innerHTML = `<span>menos</span><i class="mapa-leg-barra"></i><span>mais</span>` +
       (fora.length ? `<span class="prod-dica">Sem UF reconhecida no mapa: ${fora.map(([k, v]) => `${esc(k)} (${esc(fmtMetrica(v, m, true))})`).join(', ')}</span>` : '');
 
     // detalhe da UF clicada
     const det = $('#pn-mapa-det');
-    if (!st.ufSel) { det.innerHTML = `<div class="mapa-dica"><b>Clique numa UF</b><span>para ver o resumo, as equipes e ${esc(cfg.contraRotulo.toLowerCase())}.</span></div>`; return; }
+    if (!st.ufSel) {
+      const rank = valores.filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]).slice(0, 10);
+      det.innerHTML = `<div class="mapa-dica"><b>Clique numa UF</b><span>para ver o resumo, as equipes e ${esc(cfg.contraRotulo.toLowerCase())}.</span></div>`
+        + (rank.length ? `<h4>Maiores UFs · ${esc(METRICAS.find(x => x[0] === m)[1])}</h4><ol class="mapa-rank">${rank.map(([k, v]) => `<li><button type="button" data-uf="${k}"><span class="rk-uf">${k}</span><span class="rk-nome">${esc(NOME_UF[k] || k)}</span><i class="rk-barra"><b style="width:${Math.max(3, (v / max) * 100).toFixed(1)}%"></b></i><span class="rk-val">${esc(fmtMetrica(v, m, true))}</span></button></li>`).join('')}</ol>` : '');
+      return;
+    }
     const a = ag.det.total, u = st.ufSel;
     const top = (mapa, n = 5) => [...mapa.entries()].map(([k, x]) => [k, valor(x, m)]).filter(([, v]) => v > 0).sort((x, y) => y[1] - x[1]).slice(0, n);
     const lista = itens => itens.length ? `<ul class="mapa-lista">${itens.map(([k, v]) => `<li><span>${esc(k)}</span><b>${esc(fmtMetrica(v, m, true))}</b></li>`).join('')}</ul>` : '<div class="prod-dica">Sem dados.</div>';
