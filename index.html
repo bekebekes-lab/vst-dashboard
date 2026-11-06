@@ -282,6 +282,12 @@
     color: #fff; font-size: 15px; cursor: pointer; transition: background .15s;
   }
   .notif-bell:hover { background: rgba(255,255,255,.22); }
+  .notif-bell.alerta { background: #fff; color: var(--brand); border-color: #fff; animation: notifBalanca 1.6s ease-in-out infinite; }
+  @keyframes notifBalanca { 0%, 55%, 100% { transform: rotate(0); } 10%, 30% { transform: rotate(-14deg); } 20%, 40% { transform: rotate(14deg); } }
+  @media (prefers-reduced-motion: reduce) { .notif-bell.alerta { animation: none; } }
+  .cg-card { border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; margin-bottom: 10px; background: var(--surface); }
+  .cg-card.tratado { border-color: #16a34a; background: #f0fdf4; }
+  .cg-card .cg-linha { font-size: 12px; color: var(--text-2); margin-top: 3px; }
   .notif-badge {
     display: none; position: absolute; top: -3px; right: -3px;
     min-width: 16px; height: 16px; padding: 0 3px; border-radius: 8px;
@@ -11227,6 +11233,7 @@ async function carregarPerfil(user) {
   // Sino de notificações (Churn) — só admin, consulta leve independente
   // de já ter aberto a aba Churn alguma vez.
   if (ehAdminLike(USUARIO_ATUAL.perfil)) atualizarNotificacoesChurn();
+  else if (PERFIS_AVISO_CHURN.includes(USUARIO_ATUAL.perfil)) churnGestorIniciar();
 
   // Esconde login, mostra dashboard
   document.getElementById('login-screen').classList.remove('active');
@@ -13143,6 +13150,8 @@ function atualizarBadgeNotificacoes(qtd) {
   badge.style.display = qtd > 0 ? 'block' : 'none';
 }
 function abrirNotificacoesChurn() {
+  // Gestor/supervisão não têm a aba Churn: o sino abre a lista deles, pra tratar um a um.
+  if (!ehAdminLike(USUARIO_ATUAL?.perfil) && PERFIS_AVISO_CHURN.includes(USUARIO_ATUAL?.perfil)) { churnGestorAbrirLista(); return; }
   const btn = document.querySelector(`.tab-btn[onclick*="'churn'"]`);
   if (!btn) return;
   // Define os filtros ANTES de trocar de aba — initChurn() é assíncrono
@@ -13174,6 +13183,9 @@ async function initChurn() {
   // é o cliente (consultor/equipe) — best-effort: se a Carteira falhar em
   // carregar, o Churn continua funcionando normalmente, só sem essa info.
   try { await carregarCarteiraDados(); } catch (e) { console.error('Não consegui cruzar Churn com a Carteira:', e); }
+  // Aba 'baseneo' da mesma planilha: de onde as abas dos meses puxam o cliente. Serve de
+  // reserva quando a aba do mês não traz consultor/equipe (best-effort, como a Carteira).
+  try { await carregarBaseNeo(); } catch (e) { console.error('Não consegui ler a aba baseneo:', e); }
 
   // Filtros de Unidade/Equipe (multi-seleção, mesmo padrão de dropdown com
   // checkbox já usado em Gerencial/Produção) são preenchidos com os valores
@@ -13225,30 +13237,84 @@ function carteiraValor(v) {
   return (s && s !== '-' && s !== '#N/A' && s !== '#N/D' && s !== '#NOME?') ? s : '';
 }
 
+// Aba 'baseneo' da planilha da Carteira (CPF-CNPJ, NOME CLIENTE, ETAPA, ÚLTIMA, USUARIO, EQUIPE):
+// é de onde as abas dos meses puxam o cliente. Tem várias linhas por CNPJ (um pedido por linha, com
+// a etapa em que está). Guardamos o histórico todo: CNPJ (só dígitos) -> [{ consultor, equipe,
+// etapa, ts }] (ts = data ÚLTIMA em ms UTC). Fica em cache pela sessão; null até carregar.
+let BASENEO_MAPA = null;
+async function carregarBaseNeo() {
+  if (BASENEO_MAPA) return BASENEO_MAPA;
+  const dados = await carteiraBaixarBase('baseneo');
+  const mapa = new Map();
+  dados.forEach(l => {
+    const cnpj = (l['CPF-CNPJ'] || '').replace(/\D/g, '');
+    const consultor = carteiraValor(l['USUARIO']);
+    const equipe = carteiraValor(l['EQUIPE']);
+    if (!cnpj || (!consultor && !equipe)) return;
+    const m = (l['ÚLTIMA'] || l['ULTIMA'] || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    const ts = m ? Date.UTC(+m[3], +m[2] - 1, +m[1]) : 0;
+    const etapa = (l['ETAPA'] || '').trim().toUpperCase();
+    if (!mapa.has(cnpj)) mapa.set(cnpj, []);
+    mapa.get(cnpj).push({ consultor, equipe, etapa, ts });
+  });
+  BASENEO_MAPA = mapa;
+  return mapa;
+}
+
+// Dono do cliente pela baseneo: o último pedido ATIVO (por data ÚLTIMA; empate: o que aparece
+// depois na aba). Pedido novo de outro consultor que não ativou (cancelado, pendente...) não
+// tira o cliente de quem já o ativou. Sem nenhum pedido ATIVO, cai no mais recente de qualquer etapa.
+function baseneoDono(cnpjDigitos) {
+  const hist = BASENEO_MAPA?.get(cnpjDigitos);
+  if (!hist) return null;
+  const maisRecente = lista => lista.reduce((a, h) => (!a || h.ts >= a.ts) ? h : a, null);
+  return maisRecente(hist.filter(h => h.etapa === 'ATIVO')) || maisRecente(hist);
+}
+
+// Últimos consultores que atenderam o cliente (pro detalhe do alerta): um por consultor, com a
+// equipe/etapa/data do pedido mais recente dele, do mais novo pro mais antigo.
+function baseneoUltimosConsultores(cnpjDigitos, max = 3) {
+  const porConsultor = new Map();
+  (BASENEO_MAPA?.get(cnpjDigitos) || []).forEach(h => {
+    if (!h.consultor) return;
+    const k = h.consultor.toUpperCase();
+    const a = porConsultor.get(k);
+    if (!a || h.ts >= a.ts) porConsultor.set(k, h);
+  });
+  return [...porConsultor.values()].sort((a, b) => b.ts - a.ts).slice(0, max);
+}
+
 function churnDonoCliente(r) {
   const cnpjDigitos = (r.cnpj || '').replace(/\D/g, '');
-  if (!cnpjDigitos || !CARTEIRA_DADOS.length) return null;
-  const linha = carteiraMapaPorCnpj().get(cnpjDigitos);
-  if (!linha) return null;
+  if (!cnpjDigitos) return null;
+  // CNPJ que não está na aba do mês não encerra a busca: ainda vale a baseneo.
+  const linha = CARTEIRA_DADOS.length ? carteiraMapaPorCnpj().get(cnpjDigitos) : null;
 
-  const consultor = carteiraValor(linha['NEO VST (CONSULTOR)']);
-  let equipe = carteiraValor(linha['NEO VST (EQUIPE)']);
+  let consultor = '', equipe = '', telefone = '', nomeAdm = '';
+  if (linha) {
+    consultor = carteiraValor(linha['NEO VST (CONSULTOR)']);
+    equipe = carteiraValor(linha['NEO VST (EQUIPE)']);
+    // Contato e ADM vêm direto da Carteira, independente de ter achado
+    // consultor/equipe — são úteis pra quem vai tratar o PORT-OUT ligar
+    // pro cliente ou acionar o ADM responsável.
+    telefone = carteiraValor(linha['Telefone de Contato']);
+    nomeAdm = carteiraValor(linha['Nome do ADM']);
+  }
 
-  // Se NEO VST (CONSULTOR/EQUIPE) não identificou nada, procura nas colunas
-  // de gestor a partir de AE (YAB, ERECHIM, BRS...) — usa o VALOR da célula
-  // do cliente naquela coluna (não o nome da coluna) como equipe.
+  // Aba do mês sem consultor/equipe (ou cliente fora dela): pega da baseneo.
   if (!consultor && !equipe) {
+    const b = baseneoDono(cnpjDigitos);
+    if (b) { consultor = b.consultor; equipe = b.equipe; }
+  }
+
+  // Última tentativa: colunas de gestor a partir de AE (YAB, ERECHIM, BRS...) —
+  // usa o VALOR da célula do cliente naquela coluna (não o nome da coluna) como equipe.
+  if (linha && !consultor && !equipe) {
     for (const nomeColuna of CARTEIRA_CAMPOS_IGNORADOS) {
       const valor = carteiraValor(linha[nomeColuna]);
       if (valor) { equipe = valor; break; }
     }
   }
-
-  // Contato e ADM vêm direto da Carteira, independente de ter achado
-  // consultor/equipe — são úteis pra quem vai tratar o PORT-OUT ligar
-  // pro cliente ou acionar o ADM responsável.
-  const telefone = carteiraValor(linha['Telefone de Contato']);
-  const nomeAdm = carteiraValor(linha['Nome do ADM']);
 
   if (!consultor && !equipe && !telefone && !nomeAdm) return null;
   return { consultor, equipe, telefone, nomeAdm };
@@ -13493,6 +13559,16 @@ function churnAbrirDetalhe(id) {
     document.body.appendChild(modal);
   }
 
+  const ultimos = baseneoUltimosConsultores((r.cnpj || '').replace(/\D/g, ''));
+  const ultimosHtml = ultimos.length ? `
+        <div style="margin-top:16px;">
+          <div class="det-label" style="margin-bottom:6px;">Últimos consultores que atenderam o cliente (baseneo)</div>
+          ${ultimos.map(h => `<div style="font-size:13px;padding:6px 0;border-top:1px solid var(--border);">
+            <strong>${escapeHtml(h.consultor)}</strong> — ${escapeHtml(h.equipe || 'sem equipe')}
+            <span style="color:var(--text-2);font-size:12px;"> · ${escapeHtml(h.etapa || '—')}${h.ts ? ' · ' + new Date(h.ts).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : ''}</span>
+          </div>`).join('')}
+        </div>` : '';
+
   const dono = churnDonoCliente(r);
   const campos = [
     ['Nome do Cliente', r.nome_cliente], ['CNPJ', r.cnpj], ['Número de linhas', r.qtd_linhas],
@@ -13503,6 +13579,8 @@ function churnAbrirDetalhe(id) {
     ['Tempo Médio', r.tempo_medio], ['Carteira AACE', r.carteira_aace], ['Gerente de Canal', r.gerente_canal],
     ['Coordenador', r.coordenador], ['Data da Janela', r.data_janela], ['Multa estimada', r.multa_estimada],
     ['Oferta de Retenção MKT', r.oferta_retencao_mkt], ['Oferta Pós', r.oferta_pos],
+    ['Tratado pelo gestor', r.tratado_gestor ? `${r.tratado_gestor_nome || 'gestor'} em ${churnGestorFmtData(r.tratado_gestor_em)}` : ''],
+    ['Resposta do gestor', r.tratado_gestor ? r.resposta_gestor : ''],
   ].filter(([, v]) => v !== null && v !== undefined && v !== '' && v !== '—');
 
   modal.innerHTML = `
@@ -13521,7 +13599,7 @@ function churnAbrirDetalhe(id) {
               <div class="det-label">${escapeHtml(label)}</div>
               <div class="det-value">${escapeHtml(String(val))}</div>
             </div>`).join('')}
-        </div>
+        </div>${ultimosHtml}
         <div style="margin-top:16px;">
           <label style="font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-2);display:block;margin-bottom:6px;">Atribuído a</label>
           <select id="churn-atribuido-modal" onchange="churnAtribuir(${r.id}, this.value)" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius);font-family:inherit;font-size:13px;">
@@ -13560,6 +13638,171 @@ async function churnSalvarFeedback(id) {
   if (item) { item.feedback = feedback; item.respondido = respondido; }
   churnFecharDetalhe();
   renderChurn();
+}
+
+// ─── AVISO DE CHURN PARA GESTOR / SUPERVISÃO ───────────────────────────────
+// Quem não tem a aba Churn recebe aqui o aviso dos PORT-OUT dos clientes da própria visão (equipe do
+// consultor dono do cliente, pela aba 'baseneo'). A lista vem de /api/acessos?recurso=churn, que filtra
+// no servidor; o sino do topo abre a lista, cada alerta é respondido um a um e os tratados ficam verdes.
+const PERFIS_AVISO_CHURN = ['gestor_macro', 'gestor_macro2', 'gestor_macro3', 'gestor', 'gestor_beta', 'supervisao', 'supervisao_beta'];
+let CHURN_GESTOR = [];
+let churnGestorTimer = null;
+
+function churnGestorFmtData(iso) {
+  const d = iso ? new Date(iso) : null;
+  return d && !isNaN(d) ? d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '—';
+}
+function churnGestorVistos() {
+  try { return new Set(JSON.parse(sessionStorage.getItem('vst_churn_gestor_vistos') || '[]')); } catch (e) { return new Set(); }
+}
+function churnGestorSalvarVistos(set) {
+  try { sessionStorage.setItem('vst_churn_gestor_vistos', JSON.stringify([...set])); } catch (e) {}
+}
+
+async function churnGestorBuscar() {
+  const res = await fetch('/api/acessos?recurso=churn', { headers: authHeaders() });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.error || 'Falha ao ler os churns');
+  return json.alertas || [];
+}
+
+async function churnGestorIniciar() {
+  const atualizar = async () => {
+    try { CHURN_GESTOR = await churnGestorBuscar(); }
+    catch (e) { console.error('Aviso de churn indisponível:', e); return; }
+    churnGestorAtualizarSino();
+  };
+  await atualizar();
+  if (!churnGestorTimer) churnGestorTimer = setInterval(atualizar, 5 * 60 * 1000); // pega alerta novo sem recarregar a página
+}
+
+function churnGestorAtualizarSino() {
+  const bell = document.getElementById('notif-bell');
+  const pendentes = CHURN_GESTOR.filter(a => !a.tratado_gestor);
+  bell.style.display = 'flex';
+  bell.classList.toggle('alerta', pendentes.length > 0);
+  bell.title = pendentes.length ? `${pendentes.length} churn(s) para tratar` : 'Churn: nenhum pendente';
+  atualizarBadgeNotificacoes(pendentes.length);
+
+  // Pop-up: só quando aparece alerta pendente que esta sessão ainda não avisou (login e alertas novos).
+  const vistos = churnGestorVistos();
+  const novos = pendentes.filter(a => !vistos.has(a.id));
+  if (novos.length && !document.getElementById('churn-gestor-lista')) {
+    novos.forEach(a => vistos.add(a.id));
+    churnGestorSalvarVistos(vistos);
+    churnGestorPopup(pendentes.length, novos.length);
+  }
+  if (document.getElementById('churn-gestor-lista')) churnGestorRenderLista();
+}
+
+function churnGestorPopup(totalPendentes, qtdNovos) {
+  document.getElementById('churn-gestor-aviso')?.remove();
+  const el = document.createElement('div');
+  el.id = 'churn-gestor-aviso';
+  el.style.cssText = 'position:fixed;inset:0;z-index:9500;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:20px;';
+  el.innerHTML = `
+    <div role="alertdialog" aria-labelledby="cg-aviso-titulo" style="background:var(--surface);border-radius:var(--radius-xl);max-width:440px;width:100%;box-shadow:0 24px 60px rgba(0,0,0,.35);overflow:hidden;">
+      <div style="background:var(--brand);color:#fff;padding:16px 20px;font-size:12px;text-transform:uppercase;letter-spacing:.07em;">Alerta de PORT-OUT</div>
+      <div style="padding:22px 20px 8px;">
+        <div id="cg-aviso-titulo" style="font-size:20px;font-weight:700;margin-bottom:8px;">${totalPendentes === 1 ? 'Há 1 churn a ser tratado' : `Há ${totalPendentes} churns a serem tratados`}</div>
+        <div style="font-size:13px;color:var(--text-2);line-height:1.5;">
+          ${qtdNovos < totalPendentes ? `${qtdNovos} chegou(aram) agora. ` : ''}Clientes da sua visão pediram portabilidade para outra operadora. Abra a lista, responda cada um e marque como tratado.
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;justify-content:flex-end;padding:16px 20px 20px;">
+        <button class="btn-secondary" onclick="document.getElementById('churn-gestor-aviso').remove()">Depois</button>
+        <button class="btn-primary" onclick="document.getElementById('churn-gestor-aviso').remove();churnGestorAbrirLista()">Tratar agora</button>
+      </div>
+    </div>`;
+  document.body.appendChild(el);
+}
+
+function churnGestorAbrirLista() {
+  document.getElementById('churn-gestor-aviso')?.remove();
+  let modal = document.getElementById('churn-gestor-lista');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'churn-gestor-lista';
+    modal.style.cssText = 'position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.5);display:flex;align-items:flex-start;justify-content:center;padding:40px 20px;overflow-y:auto;';
+    modal.onclick = e => { if (e.target === modal) churnGestorFecharLista(); };
+    document.body.appendChild(modal);
+    document.body.style.overflow = 'hidden';
+  }
+  churnGestorRenderLista();
+  // Atualiza em segundo plano ao abrir, pra não tratar em cima de lista velha.
+  churnGestorBuscar().then(l => { CHURN_GESTOR = l; churnGestorAtualizarSino(); }).catch(() => {});
+}
+
+function churnGestorFecharLista() {
+  document.getElementById('churn-gestor-lista')?.remove();
+  document.body.style.overflow = '';
+}
+
+function churnGestorRenderLista() {
+  const modal = document.getElementById('churn-gestor-lista');
+  if (!modal) return;
+  // Guarda o que já foi digitado nos campos, pra não perder ao atualizar a lista.
+  const digitado = {};
+  modal.querySelectorAll('textarea[data-cg-id]').forEach(t => { digitado[t.dataset.cgId] = t.value; });
+
+  const pendentes = CHURN_GESTOR.filter(a => !a.tratado_gestor);
+  const tratados = CHURN_GESTOR.filter(a => a.tratado_gestor);
+  const cartao = a => {
+    const linhas = [
+      `${escapeHtml(a.cnpj || '—')} · ${a.qtd_linhas ?? '—'} linha(s) · ${escapeHtml(a.receptora || '—')}`,
+      `${escapeHtml([a.municipio_cliente, a.uf_cliente].filter(Boolean).join(' / ') || '—')} · Janela: <strong>${escapeHtml(a.data_janela || '—')}</strong>`,
+      `Consultor: ${escapeHtml(a.consultor || '—')} · Equipe: ${escapeHtml(a.equipe || '—')}`,
+    ];
+    if (a.multa_estimada) linhas.push(`Multa estimada: ${escapeHtml(a.multa_estimada)}`);
+    if (a.oferta_retencao_mkt) linhas.push(`Oferta de retenção: ${escapeHtml(a.oferta_retencao_mkt)}`);
+    const cabeca = `<div style="font-weight:700;font-size:14px;">${a.tratado_gestor ? '<span style="color:#16a34a;">✓</span> ' : ''}${escapeHtml(a.nome_cliente || '—')}</div>
+      ${linhas.map(l => `<div class="cg-linha">${l}</div>`).join('')}`;
+    if (a.tratado_gestor) {
+      return `<div class="cg-card tratado">${cabeca}
+        <div style="margin-top:8px;font-size:13px;"><strong style="color:#16a34a;">Tratado</strong> por ${escapeHtml(a.tratado_gestor_nome || '—')} em ${escapeHtml(churnGestorFmtData(a.tratado_gestor_em))}</div>
+        <div style="margin-top:4px;font-size:13px;white-space:pre-wrap;">${escapeHtml(a.resposta_gestor || '')}</div></div>`;
+    }
+    return `<div class="cg-card">${cabeca}
+      <textarea data-cg-id="${a.id}" id="cg-resp-${a.id}" rows="2" placeholder="O que foi feito com o cliente (contato, proposta de retenção, resultado...)" style="width:100%;margin-top:8px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius);font-family:inherit;font-size:13px;resize:vertical;">${escapeHtml(digitado[a.id] || '')}</textarea>
+      <div style="text-align:right;margin-top:8px;"><button class="btn-primary" id="cg-btn-${a.id}" onclick="churnGestorTratar(${a.id})">Marcar como tratado</button></div></div>`;
+  };
+
+  modal.innerHTML = `
+    <div style="background:var(--surface);border-radius:var(--radius-xl);width:100%;max-width:680px;box-shadow:0 24px 60px rgba(0,0,0,.3);overflow:hidden;">
+      <div style="background:var(--brand);padding:16px 20px;display:flex;align-items:center;justify-content:space-between;">
+        <div>
+          <div style="font-size:10px;color:rgba(255,255,255,.65);text-transform:uppercase;letter-spacing:.07em;margin-bottom:2px;">Alertas de PORT-OUT da sua visão</div>
+          <div style="font-size:18px;font-weight:700;color:#fff;">${pendentes.length} pendente(s) · ${tratados.length} tratado(s)</div>
+        </div>
+        <button onclick="churnGestorFecharLista()" style="background:rgba(255,255,255,.15);border:none;color:#fff;width:32px;height:32px;border-radius:50%;font-size:18px;cursor:pointer;">×</button>
+      </div>
+      <div style="padding:16px 20px 20px;max-height:75vh;overflow-y:auto;">
+        ${CHURN_GESTOR.length ? '' : '<div style="padding:24px 0;text-align:center;color:var(--text-2);">Nenhum churn na sua visão no momento.</div>'}
+        ${pendentes.map(cartao).join('')}
+        ${tratados.length ? `<div style="font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-2);margin:14px 0 8px;">Tratados</div>${tratados.map(cartao).join('')}` : ''}
+      </div>
+    </div>`;
+}
+
+async function churnGestorTratar(id) {
+  const ta = document.getElementById('cg-resp-' + id);
+  const btn = document.getElementById('cg-btn-' + id);
+  const resposta = (ta?.value || '').trim();
+  if (resposta.length < 3) { alert('Escreva a tratativa antes de marcar como tratado.'); ta?.focus(); return; }
+  if (btn) { btn.disabled = true; btn.textContent = 'Salvando...'; }
+  try {
+    const res = await fetch('/api/acessos?recurso=churn&action=tratar', {
+      method: 'POST', headers: { ...authHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify({ id, resposta }),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(json.error || 'Falha ao salvar');
+    CHURN_GESTOR = CHURN_GESTOR.map(a => a.id === id ? { ...a, ...json.alerta } : a);
+    churnGestorAtualizarSino();
+    churnGestorRenderLista();
+  } catch (e) {
+    alert('Não consegui salvar: ' + e.message);
+    if (btn) { btn.disabled = false; btn.textContent = 'Marcar como tratado'; }
+  }
 }
 
 // ─── ABA CARTEIRA (planilha separada, só admin) ────────────────────────────
