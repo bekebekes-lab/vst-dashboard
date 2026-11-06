@@ -110,8 +110,24 @@ export function linhaDentroDoEscopo(r, escopo) {
 }
 
 // ── filtros ─────────────────────────────────────────────────────────────────
+// statusModo: 'todos' | 'aprovado' | 'ativo' | 'custom' (lista em `status`)
 export function filtrosVazios() {
-  return { uf: 'Todos', gestores: [], equipes: [], consultores: [], tag: 'Todas', busca: '', de: null, ate: null };
+  return { uf: 'Todos', gestores: [], equipes: [], consultores: [], tag: 'Todas', busca: '', de: null, ate: null, statusModo: 'todos', status: [] };
+}
+
+// "Aprovado" = Ativo + Esteira de ativação (mesma definição do bloco "Aprovado" do Gerencial atual).
+const SUBGRUPOS_APROVADO = ['Ativo', 'Esteira de ativação'];
+const FILAS_APROVADO = new Set(Object.keys(SUBGRUPOS_FILA).filter(k => SUBGRUPOS_APROVADO.includes(SUBGRUPOS_FILA[k])));
+// Conjunto de filas permitido pelo filtro de status; null = todas.
+export function filasPermitidas(f) {
+  if (f.statusModo === 'ativo') return new Set([FILA_ATIVO]);
+  if (f.statusModo === 'aprovado') return FILAS_APROVADO;
+  if (f.statusModo === 'custom' && f.status.length) return new Set(f.status);
+  return null;
+}
+// Só Ativo/Instalado (preset ou seleção única)? Muda a data de corte do comparativo (DATA REF, como a Produção).
+export function soAtivo(f) {
+  return f.statusModo === 'ativo' || (f.statusModo === 'custom' && f.status.length === 1 && f.status[0] === FILA_ATIVO);
 }
 
 function bateBusca(r, lower, digits) {
@@ -134,6 +150,7 @@ export function filtrar(rows, f, escopo, ignorar = []) {
   const ig = new Set(ignorar);
   const lower = ig.has('busca') ? '' : (f.busca || '').trim().toLowerCase();
   const digits = lower.replace(/\D/g, '');
+  const filas = ig.has('status') ? null : filasPermitidas(f);
   const de = ig.has('data') ? null : f.de;
   const ate = ig.has('data') ? null : f.ate;
   return rows.filter(r => {
@@ -147,6 +164,7 @@ export function filtrar(rows, f, escopo, ignorar = []) {
       if (!f.consultores.some(c => c.toUpperCase() === cons)) return false;
     }
     if (!ig.has('tag') && f.tag !== 'Todas' && (r['TAGS ATIVIDADE'] || '') !== f.tag) return false;
+    if (filas && !filas.has(r['FILA'] || 'Sem Status')) return false;
     if (!bateBusca(r, lower, digits)) return false;
     if (de || ate) {
       const d = parseDataBR(r['CADASTRO']);
@@ -167,6 +185,7 @@ export function opcoesDosFiltros(rows, f, escopo) {
     equipe:    r => r['EQUIPE'] || null,
     consultor: r => r['PROPRIETÁRIO DO PEDIDO'] || null,
     tag:       r => r['TAGS ATIVIDADE'] || null,
+    status:    r => r['FILA'] || 'Sem Status',
   };
   const out = {};
   for (const k of Object.keys(facetas)) {

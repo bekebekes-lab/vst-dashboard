@@ -215,6 +215,7 @@ body:not(.carregando) .espera { display: none; }
 .seg { display: inline-flex; padding: 3px; border-radius: var(--r-sm); background: var(--cinza-100); gap: 2px; }
 .seg-btn { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border: 0; border-radius: 5px; background: transparent; color: var(--texto-2); font-weight: 600; font-size: 13px; }
 .seg-btn:hover { color: var(--texto); }
+.seg-status { flex: none; }
 .seg-btn.ativo { background: var(--superficie); color: var(--marca-700); box-shadow: var(--sombra-1); }
 
 /* tabela */
@@ -298,7 +299,7 @@ body:not(.carregando) .espera { display: none; }
   .kpi { padding: var(--e3) var(--e4); } .kpi-val { font-size: clamp(18px, 5.4vw, 22px); } .kpi-rot { font-size: 13px; }
   .kpis { gap: var(--e3); }
   .painel-cab { padding: var(--e3) var(--e4) var(--e2); } .painel-corpo { padding: 0 var(--e4) var(--e4); }
-  .seg-btn span { display: none; } .painel-ctl .seg:not([aria-label="Forma de exibição"]) .seg-btn span, .seg[aria-label="Medida da evolução"] .seg-btn span { display: inline; }
+  .seg[aria-label="Forma de exibição"] .seg-btn span { display: none; }
   .hb-linha { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "rot val" "bar bar"; row-gap: 4px; }
   .hb-linha .hb-rotulo { grid-area: rot; } .hb-linha .hb-valor { grid-area: val; } .hb-linha .hb-trilho { grid-area: bar; }
   .cartoes { grid-template-columns: minmax(0, 1fr); }

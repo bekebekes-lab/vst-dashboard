@@ -8,7 +8,7 @@ import { exigirAdminBeta, sair } from './sessao.js';
 import { carregarAba, limparCache, listarAbasHistorico, statusDaBase } from './dados.js';
 import {
   filtrosVazios, filtrar, opcoesDosFiltros, agregar, calcularKPIs, variacaoPct, totaisPorSubgrupo,
-  detectarMonitorDuplicado, getEscopoTravado, parseDataBR, diasNoMes, mesAnterior,
+  detectarMonitorDuplicado, soAtivo, getEscopoTravado, parseDataBR, diasNoMes, mesAnterior,
   MESES_ABREV, receitaLinha,
 } from './nucleo.js';
 import { esc, icone, iniciais, fmtInt, fmtDec, fmtMoeda, fmtMoedaCurta, fmtPct, criarMultiSelect, prefs } from './ui.js';
@@ -149,6 +149,12 @@ function montarFiltros() {
   const host = $('#filtros');
   host.innerHTML = `
     <div class="filtros-linha">
+      <div class="seg seg-status" role="group" aria-label="Status">
+        <button type="button" class="seg-btn" data-status="todos" title="Todas as filas"><span>Todos</span></button>
+        <button type="button" class="seg-btn" data-status="aprovado" title="Ativo/Instalado + Esteira de ativação"><span>Aprovado</span></button>
+        <button type="button" class="seg-btn" data-status="ativo" title="Somente Ativo/Instalado"><span>Somente ativo</span></button>
+      </div>
+      <div id="f-status"></div>
       <label class="chip chip-sel"><span>UF</span><select id="f-uf" aria-label="UF"></select></label>
       <div id="f-gestor"></div><div id="f-equipe"></div><div id="f-consultor"></div>
       <label class="chip chip-sel"><span>Tag/Unidade</span><select id="f-tag" aria-label="Tag ou unidade"></select></label>
@@ -162,6 +168,14 @@ function montarFiltros() {
     const c = criarMultiSelect({ rotulo, onChange: v => { S.filtros[chave] = v; aoMudarFiltro(); } });
     $('#' + id).replaceWith(c.el); c.el.id = id; FILTROS_UI[chave] = c;
   };
+  {
+    const c = criarMultiSelect({ rotulo: 'Status', onChange: v => { S.filtros.status = v; S.filtros.statusModo = v.length ? 'custom' : 'todos'; aoMudarFiltro(); } });
+    $('#f-status').replaceWith(c.el); c.el.id = 'f-status'; FILTROS_UI.status = c;
+  }
+  $('.seg-status').addEventListener('click', e => {
+    const b = e.target.closest('[data-status]'); if (!b) return;
+    S.filtros.statusModo = b.dataset.status; S.filtros.status = []; aoMudarFiltro();
+  });
   ms('f-gestor', 'gestores', 'Gestor'); ms('f-equipe', 'equipes', 'Equipe'); ms('f-consultor', 'consultores', 'Consultor');
   $('#f-uf').addEventListener('change', e => { S.filtros.uf = e.target.value; aoMudarFiltro(); });
   $('#f-tag').addEventListener('change', e => { S.filtros.tag = e.target.value; aoMudarFiltro(); });
@@ -190,11 +204,16 @@ function atualizarOpcoesFiltro() {
   };
   fill('#f-uf', op.uf, f.uf, 'Todos'); f.uf = $('#f-uf').value;
   fill('#f-tag', op.tag, f.tag, 'Todas'); f.tag = $('#f-tag').value;
+  FILTROS_UI.status.atualizar(op.status, f.status);
+  document.querySelectorAll('.seg-status [data-status]').forEach(b => { const on = b.dataset.status === f.statusModo; b.classList.toggle('ativo', on); b.setAttribute('aria-pressed', String(on)); });
   FILTROS_UI.gestores.atualizar(op.gestor, f.gestores);
   FILTROS_UI.equipes.atualizar(op.equipe, f.equipes);
   FILTROS_UI.consultores.atualizar(op.consultor, f.consultores);
 
   const ativos = [];
+  if (f.statusModo === 'aprovado') ativos.push('Status: Aprovado (Ativo + Esteira de ativação)');
+  else if (f.statusModo === 'ativo') ativos.push('Status: Somente ativo');
+  else if (f.statusModo === 'custom') ativos.push(`Status: ${f.status.length > 2 ? f.status.length + ' selec.' : f.status.join(', ')}`);
   if (f.uf !== 'Todos') ativos.push(`UF: ${f.uf}`);
   if (f.tag !== 'Todas') ativos.push(`Tag: ${f.tag}`);
   [['Gestor', f.gestores], ['Equipe', f.equipes], ['Consultor', f.consultores]].forEach(([n, v]) => { if (v.length) ativos.push(`${n}: ${v.length > 2 ? v.length + ' selec.' : v.join(', ')}`); });
@@ -274,8 +293,10 @@ function agregarMesAnterior() {
   const rows = S.meses.get(aba.nome);
   if (!rows) return { indisponivel: S.mesesCarregando ? 'Carregando mês anterior…' : 'Mês anterior indisponível.' };
   const corte = new Date(+ant.yyyy, +ant.mm - 1, Math.min(diaCorte(), diasNoMes(ant.mm, ant.yyyy)), 23, 59, 59, 999);
-  const base = filtrar(rows, f, S.escopo, ['data', 'busca']).filter(r => { const d = parseDataBR(r['CADASTRO']); return !d || d <= corte; });
-  return { agg: agregar(base, detectarMonitorDuplicado(rows)), rotulo: rotuloMes(ant.mm, ant.yyyy), ate: Math.min(diaCorte(), diasNoMes(ant.mm, ant.yyyy)) };
+  // Somente Ativo/Instalado: corta pela DATA REF (data da ativação), como a Produção; senão pelo CADASTRO.
+  const ativo = soAtivo(f), colCorte = ativo ? 'DATA REF' : 'CADASTRO';
+  const base = filtrar(rows, f, S.escopo, ['data', 'busca']).filter(r => { const d = parseDataBR(r[colCorte]); return !d || d <= corte; });
+  return { agg: agregar(base, detectarMonitorDuplicado(rows)), rotulo: rotuloMes(ant.mm, ant.yyyy), ate: Math.min(diaCorte(), diasNoMes(ant.mm, ant.yyyy)), porData: ativo ? 'ativação' : 'cadastro' };
 }
 
 function recalcularComparativos() {
@@ -295,7 +316,7 @@ function chipVar(pct, { neutro = false, pp = false } = {}) {
 function desenharKPIs() {
   if (!KPI) return;
   const a = ANT && ANT.agg ? calcularKPIs(ANT.agg) : null;
-  const nota = ANT && ANT.agg ? `Variação vs. ${ANT.rotulo} até o dia ${ANT.ate} (por data de cadastro).` : (ANT ? ANT.indisponivel : '');
+  const nota = ANT && ANT.agg ? `Variação vs. ${ANT.rotulo} até o dia ${ANT.ate} (por data de ${ANT.porData}).` : (ANT ? ANT.indisponivel : '');
   const cards = [
     { rot: 'Pedidos (Geral)', val: fmtInt(KPI.pedidos), v: a ? variacaoPct(KPI.pedidos, a.pedidos) : null,
       dica: 'Total do card GERAL do Gerencial atual (Gross + Renovação + BL + Titularidade; sem Serv. Digitais).' },
@@ -438,7 +459,7 @@ function desenharComparativo() {
     return;
   }
   const ref = mesReferencia();
-  p2.textContent = `Pedidos do Geral por equipe: ${rotuloMes(ref.mm, ref.yyyy)} × ${ANT.rotulo} até o dia ${ANT.ate} (por data de cadastro).`;
+  p2.textContent = `Pedidos do Geral por equipe: ${rotuloMes(ref.mm, ref.yyyy)} × ${ANT.rotulo} até o dia ${ANT.ate} (por data de ${ANT.porData}).`;
   const mapAnt = new Map(ANT.agg.porEquipe.map(e => [e.nome, e.GERAL]));
   const nomes = new Set([...AGG.porEquipe.map(e => e.nome), ...mapAnt.keys()]);
   const mapAtual = new Map(AGG.porEquipe.map(e => [e.nome, e]));
