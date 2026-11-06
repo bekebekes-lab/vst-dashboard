@@ -13174,6 +13174,9 @@ async function initChurn() {
   // é o cliente (consultor/equipe) — best-effort: se a Carteira falhar em
   // carregar, o Churn continua funcionando normalmente, só sem essa info.
   try { await carregarCarteiraDados(); } catch (e) { console.error('Não consegui cruzar Churn com a Carteira:', e); }
+  // Aba 'baseneo' da mesma planilha: de onde as abas dos meses puxam o cliente. Serve de
+  // reserva quando a aba do mês não traz consultor/equipe (best-effort, como a Carteira).
+  try { await carregarBaseNeo(); } catch (e) { console.error('Não consegui ler a aba baseneo:', e); }
 
   // Filtros de Unidade/Equipe (multi-seleção, mesmo padrão de dropdown com
   // checkbox já usado em Gerencial/Produção) são preenchidos com os valores
@@ -13225,30 +13228,60 @@ function carteiraValor(v) {
   return (s && s !== '-' && s !== '#N/A' && s !== '#N/D' && s !== '#NOME?') ? s : '';
 }
 
+// Aba 'baseneo' da planilha da Carteira (CPF-CNPJ, NOME CLIENTE, ETAPA, ÚLTIMA, USUARIO, EQUIPE):
+// é de onde as abas dos meses puxam o cliente. Tem várias linhas por CNPJ (histórico de etapas);
+// vale a de ÚLTIMA mais recente (empate: a que aparece depois na aba). Mapa CNPJ (só dígitos) ->
+// { consultor, equipe }. Fica em cache pela sessão; null até carregar (ou se não carregar).
+let BASENEO_MAPA = null;
+async function carregarBaseNeo() {
+  if (BASENEO_MAPA) return BASENEO_MAPA;
+  const dados = await carteiraBaixarBase('baseneo');
+  const mapa = new Map();
+  dados.forEach(l => {
+    const cnpj = (l['CPF-CNPJ'] || '').replace(/\D/g, '');
+    const consultor = carteiraValor(l['USUARIO']);
+    const equipe = carteiraValor(l['EQUIPE']);
+    if (!cnpj || (!consultor && !equipe)) return;
+    const m = (l['ÚLTIMA'] || l['ULTIMA'] || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    const ts = m ? Date.UTC(+m[3], +m[2] - 1, +m[1]) : 0;
+    const atual = mapa.get(cnpj);
+    if (!atual || ts >= atual.ts) mapa.set(cnpj, { consultor, equipe, ts });
+  });
+  BASENEO_MAPA = mapa;
+  return mapa;
+}
+
 function churnDonoCliente(r) {
   const cnpjDigitos = (r.cnpj || '').replace(/\D/g, '');
-  if (!cnpjDigitos || !CARTEIRA_DADOS.length) return null;
-  const linha = carteiraMapaPorCnpj().get(cnpjDigitos);
-  if (!linha) return null;
+  if (!cnpjDigitos) return null;
+  // CNPJ que não está na aba do mês não encerra a busca: ainda vale a baseneo.
+  const linha = CARTEIRA_DADOS.length ? carteiraMapaPorCnpj().get(cnpjDigitos) : null;
 
-  const consultor = carteiraValor(linha['NEO VST (CONSULTOR)']);
-  let equipe = carteiraValor(linha['NEO VST (EQUIPE)']);
+  let consultor = '', equipe = '', telefone = '', nomeAdm = '';
+  if (linha) {
+    consultor = carteiraValor(linha['NEO VST (CONSULTOR)']);
+    equipe = carteiraValor(linha['NEO VST (EQUIPE)']);
+    // Contato e ADM vêm direto da Carteira, independente de ter achado
+    // consultor/equipe — são úteis pra quem vai tratar o PORT-OUT ligar
+    // pro cliente ou acionar o ADM responsável.
+    telefone = carteiraValor(linha['Telefone de Contato']);
+    nomeAdm = carteiraValor(linha['Nome do ADM']);
+  }
 
-  // Se NEO VST (CONSULTOR/EQUIPE) não identificou nada, procura nas colunas
-  // de gestor a partir de AE (YAB, ERECHIM, BRS...) — usa o VALOR da célula
-  // do cliente naquela coluna (não o nome da coluna) como equipe.
-  if (!consultor && !equipe) {
+  // Aba do mês sem consultor/equipe (ou cliente fora dela): pega da baseneo.
+  if (!consultor && !equipe && BASENEO_MAPA) {
+    const b = BASENEO_MAPA.get(cnpjDigitos);
+    if (b) { consultor = b.consultor; equipe = b.equipe; }
+  }
+
+  // Última tentativa: colunas de gestor a partir de AE (YAB, ERECHIM, BRS...) —
+  // usa o VALOR da célula do cliente naquela coluna (não o nome da coluna) como equipe.
+  if (linha && !consultor && !equipe) {
     for (const nomeColuna of CARTEIRA_CAMPOS_IGNORADOS) {
       const valor = carteiraValor(linha[nomeColuna]);
       if (valor) { equipe = valor; break; }
     }
   }
-
-  // Contato e ADM vêm direto da Carteira, independente de ter achado
-  // consultor/equipe — são úteis pra quem vai tratar o PORT-OUT ligar
-  // pro cliente ou acionar o ADM responsável.
-  const telefone = carteiraValor(linha['Telefone de Contato']);
-  const nomeAdm = carteiraValor(linha['Nome do ADM']);
 
   if (!consultor && !equipe && !telefone && !nomeAdm) return null;
   return { consultor, equipe, telefone, nomeAdm };
