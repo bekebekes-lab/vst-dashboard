@@ -1,0 +1,45 @@
+// Configuração única do Beta2 — nome do sistema, quem pode entrar e o menu.
+// O index.html (tela de login) também importa este arquivo, então trocar o
+// nome definitivo do sistema ou o e-mail liberado é só aqui.
+//
+// Chaves do Supabase: a "anon key" é pública por definição (já está em
+// index.html e api/_lib/auth.js); quem protege os dados é o RLS e as rotas /api.
+// NUNCA colocar service_role, senhas ou tokens neste arquivo (repo público).
+
+export const NOME_SISTEMA = 'Dash Beta2';
+export const EMAIL_ADMIN_BETA = 'raphael@vstgroup.com.br';
+
+export const SUPA_URL = 'https://kzlchetrpsfefwybaaoy.supabase.co';
+export const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt6bGNoZXRycHNmZWZ3eWJhYW95Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkwNTM4NDIsImV4cCI6MjA5NDYyOTg0Mn0.4euWpZZadXe9ayg6ITY5SNueEhU094ajJv379gC9YrU';
+
+// Menu lateral. `aba` = id da aba no Dash atual (index.html); itens com
+// `beta: true` já existem no Beta2, os demais abrem o Dash atual naquela aba
+// (index.html lê "#aba=<id>" depois do login).
+export const MENU = [
+  { grupo: 'Gestão', itens: [
+    { id: 'gerencial', rotulo: 'Gerencial', icone: 'grid', beta: true },
+    { id: 'gerfin', rotulo: 'Gerencial Financeiro', icone: 'wallet' },
+    { id: 'painel', rotulo: 'Painel Analítico', icone: 'bars' },
+    { id: 'producao', rotulo: 'Produção', icone: 'cloud' },
+    { id: 'discadora', rotulo: 'Discadora', icone: 'phone' },
+  ]},
+  { grupo: 'Simuladores', itens: [
+    { id: 'simulador2', rotulo: 'Simulador 2.0', icone: 'calc' },
+    { id: 'aace', rotulo: 'Simulador de AACE', icone: 'calc' },
+  ]},
+  { grupo: 'Operação', itens: [
+    { id: 'pedidos', rotulo: 'Pedidos', icone: 'file' },
+    { id: 'qualidade', rotulo: 'Qualidade', icone: 'check' },
+    { id: 'conectividade', rotulo: 'Conectividade/SD', icone: 'signal' },
+  ]},
+  { grupo: 'Base', itens: [
+    { id: 'carteira', rotulo: 'Carteira', icone: 'wallet' },
+    { id: 'churn', rotulo: 'Churn', icone: 'refresh' },
+  ]},
+  { grupo: 'Admin', itens: [
+    { id: 'acessos', rotulo: 'Acessos', icone: 'users' },
+  ]},
+];
+
+// Quantos meses (além do selecionado) entram no gráfico de evolução.
+export const MESES_EVOLUCAO = 5;

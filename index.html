@@ -182,6 +182,10 @@
   .login-btn:hover  { background: var(--brand-dark); box-shadow: 0 6px 18px rgba(185,28,28,.4); }
   .login-btn:active { transform: scale(.98); }
   .login-btn:disabled { background: var(--border-strong); box-shadow: none; cursor: not-allowed; }
+  /* Dash Beta2: opção extra, só aparece para o e-mail liberado em /beta/config.js */
+  .login-btn-beta2 { background: transparent; color: var(--brand); border: 1.5px solid var(--brand); box-shadow: none; margin-top: 10px; }
+  .login-btn-beta2:hover { background: var(--brand-light); box-shadow: none; }
+  .login-btn-beta2:disabled { background: transparent; color: var(--text-3); border-color: var(--border-strong); }
   .login-error {
     background: var(--red-sem-bg); border: 1px solid var(--red-sem-brd);
     color: var(--red-sem); border-radius: var(--radius);
@@ -1771,6 +1775,7 @@
           <input type="password" id="login-senha" placeholder="••••••••" autocomplete="current-password">
         </div>
         <button class="login-btn" id="login-btn" type="submit">Entrar</button>
+        <button class="login-btn login-btn-beta2" id="login-beta2-btn" type="button" style="display:none" onclick="fazerLogin(true)">Entrar no Dash Beta2</button>
       </form>
       <div class="login-forgot-link" onclick="abrirTelaEsqueciSenha()">Esqueci minha senha</div>
       <div class="login-footer">Acesso restrito · VST Group</div>
@@ -1899,6 +1904,7 @@
     <div class="mobile-drawer-section">
       <div class="mobile-drawer-section-title">Conta</div>
       <div class="mobile-drawer-info-row"><span>E-mail</span><span id="drawer-user-email">—</span></div>
+      <a class="mobile-drawer-item" id="drawer-beta2-link" href="/beta.html" style="display:none;margin-top:10px;border:1px solid var(--border);border-radius:var(--radius);text-decoration:none;">🚀 Abrir o Dash Beta2</a>
     </div>
     <div class="mobile-drawer-section">
       <div class="mobile-drawer-section-title">Preferências</div>
@@ -10916,6 +10922,8 @@ const _ehRecuperacaoSenha = window.location.hash.includes('type=recovery') || wi
   document.getElementById('login-senha')?.addEventListener('keydown', e => {
     if (e.key === 'Enter') fazerLogin();
   });
+  ['input', 'change', 'blur'].forEach(ev => document.getElementById('login-email')?.addEventListener(ev, atualizarOpcaoBeta2));
+  setTimeout(atualizarOpcaoBeta2, 600); // e-mail preenchido pelo navegador sem disparar evento
 })();
 
 function updateClock() {
@@ -11050,10 +11058,11 @@ async function salvarNovaSenha() {
   sucesso.classList.add('active');
 }
 
-async function fazerLogin() {
+async function fazerLogin(paraBeta2) {
   const email = document.getElementById('login-email').value.trim();
   const senha = document.getElementById('login-senha').value;
   const btn   = document.getElementById('login-btn');
+  const btnBeta2 = document.getElementById('login-beta2-btn');
   const erro  = document.getElementById('login-error');
 
   if (!email || !senha) {
@@ -11064,6 +11073,7 @@ async function fazerLogin() {
 
   btn.disabled = true;
   btn.textContent = 'Entrando...';
+  if (btnBeta2) btnBeta2.disabled = true;
   erro.classList.remove('active');
   document.getElementById('login-success')?.classList.remove('active');
 
@@ -11080,10 +11090,20 @@ async function fazerLogin() {
       erro.classList.add('active');
       btn.disabled = false;
       btn.textContent = 'Entrar';
+      if (btnBeta2) btnBeta2.disabled = false;
       return;
     }
 
     USUARIO_ACCESS_TOKEN = data.session?.access_token || null;
+    // Dash Beta2: só segue se o clique foi no botão do Beta2 E o e-mail está liberado.
+    // (Conveniência de navegação — a página /beta.html confere de novo e a segurança
+    // real continua no RLS/API.)
+    if (paraBeta2 === true && beta2Liberado(data.user?.email)) {
+      btn.textContent = 'Abrindo o Beta2...';
+      location.href = '/beta.html';
+      return;
+    }
+    if (btnBeta2) btnBeta2.disabled = false;
     await carregarPerfil(data.user);
   } catch (e) {
     console.error('Erro no login:', e);
@@ -11091,7 +11111,24 @@ async function fazerLogin() {
     erro.classList.add('active');
     btn.disabled = false;
     btn.textContent = 'Entrar';
+    if (btnBeta2) btnBeta2.disabled = false;
   }
+}
+
+// ─── DASH BETA2 (entrada) ────────────────────────────────────────────────────
+// Nome do sistema e e-mail liberado ficam em /beta/config.js (único lugar a trocar).
+// Falha silenciosa: se o arquivo não carregar, a opção simplesmente não aparece.
+let BETA2_CFG = null;
+import('/beta/config.js').then(cfg => { BETA2_CFG = cfg; atualizarOpcaoBeta2(); }).catch(() => {});
+function beta2Liberado(email) {
+  return !!(BETA2_CFG && email && email.trim().toLowerCase() === BETA2_CFG.EMAIL_ADMIN_BETA);
+}
+function atualizarOpcaoBeta2() {
+  const btn = document.getElementById('login-beta2-btn');
+  if (!btn || !BETA2_CFG) return;
+  const email = document.getElementById('login-email')?.value || '';
+  btn.textContent = 'Entrar no ' + BETA2_CFG.NOME_SISTEMA;
+  btn.style.display = beta2Liberado(email) ? '' : 'none';
 }
 
 // Header padrão pra chamadas autenticadas em /api/* — sem token, nem tenta.
@@ -11165,6 +11202,12 @@ async function carregarPerfil(user) {
   if (prefAba && permitidas.includes(prefAba)) {
     const btnPref = document.querySelector(`.tab-btn[onclick*="'${prefAba}'"]`);
     if (btnPref) switchTab(prefAba, btnPref);
+  }
+  // Link direto "#aba=<id>" (usado pelo menu do Dash Beta2); só vale se a aba é permitida pro perfil.
+  const abaLink = (window.location.hash.match(/^#aba=(\w+)/) || [])[1];
+  if (abaLink && permitidas.includes(abaLink)) {
+    const btnLink = document.querySelector(`.tab-btn[onclick*="'${abaLink}'"]`);
+    if (btnLink) switchTab(abaLink, btnLink);
   }
 
   // Sino de notificações (Churn) — só admin, consulta leve independente
@@ -11571,6 +11614,12 @@ function abrirDrawerConta() {
   document.getElementById('drawer-user-nome').textContent = document.getElementById('user-nome').textContent;
   document.getElementById('drawer-user-perfil').textContent = document.getElementById('user-perfil').textContent;
   document.getElementById('drawer-user-email').textContent = USUARIO_ATUAL?.email || '—';
+  const linkBeta2 = document.getElementById('drawer-beta2-link');
+  if (linkBeta2) {
+    const liberado = beta2Liberado(USUARIO_ATUAL?.email) && USUARIO_ATUAL?.perfil === 'admin';
+    linkBeta2.style.display = liberado ? 'flex' : 'none';
+    if (liberado) linkBeta2.textContent = '🚀 Abrir o ' + BETA2_CFG.NOME_SISTEMA;
+  }
   document.getElementById('drawer-pref-telefone').value = USUARIO_ATUAL?.telefone || '';
   document.getElementById('drawer-pref-cargo').value = USUARIO_ATUAL?.cargo || '';
 

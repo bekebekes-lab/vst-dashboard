@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#7A1519">
+<title>Dash Beta2</title>
+<link rel="icon" href="/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/beta/beta.css">
+<script src="/vendor/supabase-js-2.112.3.js"></script>
+</head>
+<body class="carregando">
+
+<!-- Tela de espera: só some depois que o porteiro (beta/sessao.js) confirma o admin.
+     Quem não é o admin liberado é mandado de volta ao Dash atual ("/"). -->
+<div class="espera" id="espera" role="status">
+  <div class="espera-card"><span class="spinner"></span><span id="espera-txt">Verificando acesso…</span></div>
+</div>
+
+<div class="app" id="app" hidden></div>
+
+<script type="module" src="/beta/app.js"></script>
+</body>
+</html>
