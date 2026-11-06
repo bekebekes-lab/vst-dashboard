@@ -29,7 +29,8 @@ const PERFIS_QUE_GERENCIAM = new Set([
   'admin', 'admin_gestao', 'admin_beta',
   'gestor_macro', 'gestor_macro2', 'gestor_macro3', 'gestor', 'gestor_beta',
 ]);
-const PERFIS_ADMIN = new Set(['admin', 'admin_gestao', 'admin_beta']);
+// admin_gestao NÃO entra aqui: ela gerencia só as contas da gestão dela (escopo), sem poder de admin.
+const PERFIS_ADMIN = new Set(['admin', 'admin_beta']);
 
 class ErroHttp extends Error {
   constructor(status, msg) { super(msg); this.status = status; }

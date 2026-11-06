@@ -102,6 +102,12 @@ export function getEscopoTravado(perfil, u) {
   const row = u || { consultor_ref: null };
   if (!p || p === 'admin') return null;
 
+  // admin_gestao: travada na gestão dela em tudo. Falha fechada: sem gestão
+  // definida no perfil, nada é liberado (Set vazio), ao contrário dos demais.
+  if (p === 'admin_gestao') {
+    const g = (row.gestores_ref || []).length ? row.gestores_ref : (row.gestor_ref ? [row.gestor_ref] : []);
+    return { gestores: new Set(g) };
+  }
   if (p === 'gestor_macro2') {
     const g = row.gestores_ref || [];
     return g.length ? { gestores: new Set(g) } : null;
