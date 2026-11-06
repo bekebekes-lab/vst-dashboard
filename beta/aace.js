@@ -1,4 +1,4 @@
-// Visão "Simulador de AACE" do Beta2 = a aba Simulador de AACE do Dash atual (index.html 2739-2857 e 8571-9575).
+// Visão "Simulador de AACE" do Beta2 = a aba Simulador de AACE do Dash atual (index.html 2745-2863 e 8577-9581).
 //
 // Comparativo "AACE hoje" (Lado A) × "AACE sob a VST" (Lado B) pela política Claro (Anexo III-A).
 // Regras, cálculo e importador de extrato estão em aace-regras.js (CÓPIA LITERAL do index.html, conferida contra o
@@ -23,7 +23,7 @@ export function criarAace(host, ctx) {
   const st = { montado: false, iniciou: false, sim: null };     // sim = simulação aberta { id, nome, dono, donoNome }
   const $ = s => host.querySelector(s);
 
-  // ── persistência local (index.html aaceSalvar / aaceCarregarSalvo, 9009-9018) ───────────────────────────
+  // ── persistência local (index.html aaceSalvar / aaceCarregarSalvo, 9015-9024) ───────────────────────────
   function salvarLocal() { try { localStorage.setItem(AACE_STORAGE_KEY, JSON.stringify(AACE)); } catch (e) { /* sem storage: segue sem lembrar */ } }
   function carregarLocal() {
     try {
@@ -134,7 +134,7 @@ export function criarAace(host, ctx) {
 
   const aaceMsg = (txt, erro) => { const el = $('#aace-msg'); if (!el) return; el.textContent = txt || ''; el.classList.toggle('aa-erro', !!erro); };
 
-  // ── formulário (origem: aaceInputHtml / aaceCorpoHtml / aaceRenderForm, index.html 8955-9007) ────────────
+  // ── formulário (origem: aaceInputHtml / aaceCorpoHtml / aaceRenderForm, index.html 8961-9013) ────────────
   function inputHtml(lado, k, def) {
     const id = `aace-${lado}-${k}`, v = aaceValor(lado, k);
     const trava = aaceSomenteImport(k) ? ' disabled title="Vem do extrato importado — somente leitura"'
@@ -181,14 +181,14 @@ export function criarAace(host, ctx) {
     }).join('');
     $('#aace-g-tabela').value = AACE.g.tabela;
   }
-  // origem: aaceAlterou, index.html 9019-9024
+  // origem: aaceAlterou, index.html 9025-9030
   function alterou(lado, k, v) {
     if (aaceSomenteImport(k) || (lado === 'b' && aaceEspelhado(k))) return;       // travado: vem do extrato importado / do Lado A
     AACE[lado][k] = v;
     if (lado === 'a' && aaceEspelhado(k)) { const el = $('#aace-b-' + k); if (el) el.value = v; }
     salvarLocal(); renderResultado();
   }
-  // origem: aaceLimpar, index.html 9033-9042
+  // origem: aaceLimpar, index.html 9039-9048
   function limpar() {
     if (!confirm('Limpar todos os campos dos dois lados?')) return;
     AACE.a = aaceEstadoPadrao('a'); AACE.b = aaceEstadoPadrao('b'); AACE.g = { tabela: 'definitiva' };
@@ -198,7 +198,7 @@ export function criarAace(host, ctx) {
     $('#aace-imp-res').textContent = '';
     minimizarTudo();
   }
-  // origem: aaceCarregarPadraoVst, index.html 9044-9061 (só LÊ config_simulador2)
+  // origem: aaceCarregarPadraoVst, index.html 9050-9067 (só LÊ config_simulador2)
   async function carregarPadraoVst() {
     const periodo = ctx().periodoS2();
     aaceMsg('Buscando o padrão VST de ' + periodo + '…');
@@ -218,7 +218,7 @@ export function criarAace(host, ctx) {
     }
   }
 
-  // ── "Automático" mostra o que o cálculo escolheu (origem: aaceRotulosAuto, index.html 9064-9082) ──────────
+  // ── "Automático" mostra o que o cálculo escolheu (origem: aaceRotulosAuto, index.html 9070-9088) ──────────
   function rotulosAuto(lado, r) {
     const set = (k, txt) => { const op = host.querySelector(`#aace-${lado}-${k} option[value="auto"]`); if (op) op.textContent = txt; };
     const hc = aaceNum(AACE[lado === 'b' ? 'b' : 'a'].hcs);
@@ -239,7 +239,7 @@ export function criarAace(host, ctx) {
     set('faixaProd', r.prod.elegivel ? `Automático Faixa ${r.prod.faixaAuto} (${s2fmt(FAIXAS_BONUS_PRODUTIVIDADE[r.prod.faixaAuto].valor)} por vendedor)` : 'Automático — não elegível (Master ou menos de 4 HCs)');
   }
 
-  // ── demonstrativo (origem: aaceDemonstrativo, index.html 9085-9143) ─────────────────────────────────────
+  // ── demonstrativo (origem: aaceDemonstrativo, index.html 9091-9149) ─────────────────────────────────────
   function demonstrativo(ra, rb) {
     const el = $('#aace-demo'); if (!el) return;
     const A = AACE.a, B = aaceEstadoEfetivo('b');
@@ -294,7 +294,7 @@ export function criarAace(host, ctx) {
     el.innerHTML = resumo + carteira;
   }
 
-  // ── resultado (origem: aaceRender, index.html 9145-9270) ────────────────────────────────────────────────
+  // ── resultado (origem: aaceRender, index.html 9151-9276) ────────────────────────────────────────────────
   function renderResultado() {
     if (!st.montado) return;
     const ra = aaceCalcular(AACE.a, AACE.g), rb = aaceCalcular(aaceEstadoEfetivo('b'), AACE.g);
@@ -413,7 +413,7 @@ export function criarAace(host, ctx) {
     $('#aace-avisos').innerHTML = (ra.avisos.length || rb.avisos.length) ? `<ul>${av(ra, 'A')}${av(rb, 'B')}</ul>` : '<span class="aa-mudo">Sem avisos.</span>';
   }
 
-  // ── importador (origem: aaceAbrirImportador / aaceImportar, index.html 9434-9469) ───────────────────────────
+  // ── importador (origem: aaceAbrirImportador / aaceImportar, index.html 9440-9475) ───────────────────────────
   function abrirImportador() { const el = $('#aace-importador'); el.hidden = !el.hidden; }
   async function importar() {
     const arq = $('#aace-imp-csv').files[0];
@@ -448,7 +448,7 @@ export function criarAace(host, ctx) {
     }
   }
 
-  // ── simulações salvas (origem: index.html 9471-9574) — tabela public.simulacoes_aace ─────────────────────────
+  // ── simulações salvas (origem: index.html 9477-9580) — tabela public.simulacoes_aace ─────────────────────────
   const simMsg = (txt, erro) => { const el = $('#aace-sim-msg'); if (!el) return; el.textContent = txt || ''; el.classList.toggle('aa-erro', !!erro); };
   function simErro(e) {
     const m = String((e && (e.message || e.details)) || e || '');
@@ -542,7 +542,7 @@ export function criarAace(host, ctx) {
     }
   }
 
-  // origem: initAace, index.html 9576-9584 — toda vez que a aba é aberta, tudo começa minimizado
+  // origem: initAace, index.html 9582-9590 — toda vez que a aba é aberta, tudo começa minimizado
   return {
     mostrar() {
       if (!st.montado) montar();

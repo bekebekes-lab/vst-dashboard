@@ -2,7 +2,7 @@
 // Gerado por script (extração por linhas). Ao mudar uma regra no Dash atual, regerar/atualizar aqui.
 // Cada bloco indica a linha de origem no index.html.
 
-// ── origem: index.html linhas 8387-8400 (copiado sem alteração, só com "export") ──
+// ── origem: index.html linhas 8393-8406 (copiado sem alteração, só com "export") ──
 // Item 2.6.4-ii — Faixa CNPJ/HC (tabela definitiva, a partir de set/26)
 export const FAIXAS_CNPJHC_DEFINITIVA = [
   { faixa: 'Faixa 1', min: 0,   max: 200,      unitario: 2.50 },
@@ -18,7 +18,7 @@ export const FAIXAS_CNPJHC_TRANSICAO = [
   { faixa: 'Faixa 4', min: 600, max: Infinity, unitario: 1.00 },
 ];
 
-// ── origem: index.html linhas 8498-8529 (copiado sem alteração, só com "export") ──
+// ── origem: index.html linhas 8504-8535 (copiado sem alteração, só com "export") ──
 // Item 2.6.4-i — Net Adds negativo: unitário fixo por categoria
 export const UNITARIO_NETADDS_NEGATIVO = { bronze: 0.60, prata: 0.60, ouro: 0.80, safira: 1.00, diamante: 1.00 };
 
@@ -52,10 +52,10 @@ export const FAIXAS_BONUS_PRODUTIVIDADE = [
   { min: 100, max: Infinity, valor: 2300, label: 'Faixa 3' },
 ];
 
-// ── origem: index.html linhas 8531-8531 (copiado sem alteração, só com "export") ──
+// ── origem: index.html linhas 8537-8537 (copiado sem alteração, só com "export") ──
 export function s2fmt(v) { return (v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
 
-// ── origem: index.html linhas 10707-10721 (copiado sem alteração, só com "export") ──
+// ── origem: index.html linhas 10713-10727 (copiado sem alteração, só com "export") ──
 // Valores default de cada campo — usados pra limpar o formulário antes de
 // carregar uma competência nova, senão os valores do mês anterior "vazam"
 // pro mês seguinte quando não há nada salvo ainda pra ele.

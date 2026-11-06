@@ -331,7 +331,7 @@ function recalcular() {
 
 // o Simulador 2.0 usa a base do período (sem os filtros da barra, como o ALL_DATA do Dash atual)
 function desenharVisaoSim2() {
-  if (!SIM2 || S.visao !== 'simulador2' || !S.rows.length) return;
+  if (!SIM2 || S.visao !== 'simulador2') return;      // funciona mesmo com a base vazia/erro (zeros), como o Dash atual
   SIM2.mostrar();
 }
 

@@ -1,7 +1,7 @@
 // SIMULADOR 2.0 — cálculo puro (sem DOM). PORTE LITERAL de index.html:
-//   s2PuxarDadosSheet ........ index.html 8321-8385 (agregação do BaseCRM por tag/escopo)
-//   s2RecalcularFatores ...... index.html 8460-8496 (fator fixo + adicional por meta)
-//   renderSimulador2 ......... index.html 10423-10668 (recebimento por unidade, produtividade, categoria)
+//   s2PuxarDadosSheet ........ index.html 8327-8391 (agregação do BaseCRM por tag/escopo)
+//   s2RecalcularFatores ...... index.html 8466-8502 (fator fixo + adicional por meta)
+//   renderSimulador2 ......... index.html 10429-10674 (recebimento por unidade, produtividade, categoria)
 // As contas e a ordem das operações são as mesmas do original; só trocamos "ler do campo/escrever no
 // elemento" por "ler do estado/devolver no resultado". Ao mudar a regra no Dash atual, atualizar aqui.
 //
@@ -13,24 +13,24 @@ import { MAPEAMENTO_TAGS } from './regras.js';
 import { FILAS_POR_VISAO, FATORES_FIXOS_TABELA1, FATORES_ADICIONAIS_TABELA1, PLUGIN_PORTABILIDADE_VOZ, s2FaixaAdicionalIdx } from './politica.js';
 import { FAIXAS_CNPJHC_DEFINITIVA, FAIXAS_CNPJHC_TRANSICAO, UNITARIO_NETADDS_NEGATIVO, TETO_LIBERACAO, BONUS_CATEGORIA_PCT, RAMPA_PRODUTIVIDADE, FAIXAS_BONUS_PRODUTIVIDADE } from './politica-sim.js';
 
-// origem: index.html 8300-8303 (códigos AACE = unidades/tags do MAPEAMENTO_TAGS)
+// origem: index.html 8306-8309 (códigos AACE = unidades/tags do MAPEAMENTO_TAGS)
 export const CODIGOS_AACE2 = Object.entries(MAPEAMENTO_TAGS)
   .sort((a, b) => a[1].localeCompare(b[1]))
   .map(([tag, nome]) => ({ tag, nome }))
   .concat([{ tag: 'Sem Tag', nome: 'Sem Tag' }]);
 
-// origem: index.html 8306
+// origem: index.html 8312
 export function s2Sid(tag) { return tag.replace(/[^a-zA-Z0-9]/g, ''); }
 
-// origem: index.html 8540-8543 (s2FaixasCnpjHc / s2FaixaPorCnpjHc; tabela = valor do seletor)
+// origem: index.html 8546-8549 (s2FaixasCnpjHc / s2FaixaPorCnpjHc; tabela = valor do seletor)
 const faixasCnpjHc = tabela => (tabela === 'transicao' ? FAIXAS_CNPJHC_TRANSICAO : FAIXAS_CNPJHC_DEFINITIVA);
 const faixaPorCnpjHc = (tabela, razao) => { const f = faixasCnpjHc(tabela); return f.find(x => razao >= x.min && razao <= x.max) || f[f.length - 1]; };
 
-// origem: index.html 8532 (s2num: parseFloat(valor) || 0)
+// origem: index.html 8538 (s2num: parseFloat(valor) || 0)
 export const num = v => parseFloat(v) || 0;
 
 // Agrega o BaseCRM do período (todas as linhas, como ALL_DATA) por unidade, no escopo de filas escolhido.
-// origem: s2PuxarDadosSheet, index.html 8321-8377. `monitorDup` = MONITOR_SD_DUPLICADO da carga.
+// origem: s2PuxarDadosSheet, index.html 8327-8383. `monitorDup` = MONITOR_SD_DUPLICADO da carga.
 export function s2PuxarDados(rows, visao, monitorDup) {
   const filasPermitidas = FILAS_POR_VISAO[visao];
   const produtosAlvo = ['NET PJ - VIRTUA', 'VOZ - Novo', 'VOZ - Portabilidade'];
@@ -67,7 +67,7 @@ export function s2PuxarDados(rows, visao, monitorDup) {
   return { ativacao: aggAtivacao, receitaSD: recSDCents / 100 };
 }
 
-// origem: s2RecalcularFatores, index.html 8460-8493.  `v` = estado (chaves iguais às do config_simulador2).
+// origem: s2RecalcularFatores, index.html 8466-8499.  `v` = estado (chaves iguais às do config_simulador2).
 export function s2Fatores(v, sheet) {
   const cluster = v['cluster'];
   const fFixo = FATORES_FIXOS_TABELA1[cluster] || FATORES_FIXOS_TABELA1.P;
@@ -93,7 +93,7 @@ export function s2Fatores(v, sheet) {
   return { fVirtua, fVozNovo, fVozPort, realMovelVoz, realFixaBl, pctMovelVoz, pctFixaBl, faixaMovelVozIdx, faixaFixaBlIdx };
 }
 
-// origem: renderSimulador2, index.html 10423-10668. Devolve só números (a tela formata).
+// origem: renderSimulador2, index.html 10429-10674. Devolve só números (a tela formata).
 export function s2Calcular(v, sheet0) {
   const sheet = sheet0 || { ativacao: {}, carteira: {} };
   const categoria = v['categoria'];

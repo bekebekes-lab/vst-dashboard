@@ -6,7 +6,7 @@
 import { s2FaixaAdicionalIdx, GF_RENOVACAO_TABELA1 } from './politica.js';
 import { BONUS_CATEGORIA_PCT, FAIXAS_CNPJHC_TRANSICAO, FAIXAS_CNPJHC_DEFINITIVA, UNITARIO_NETADDS_NEGATIVO, TETO_LIBERACAO, FAIXAS_BONUS_PRODUTIVIDADE, s2fmt } from './politica-sim.js';
 
-// ── origem: index.html linhas 8580-8765 (copiado sem alteração, só com "export") ──
+// ── origem: index.html linhas 8586-8771 (copiado sem alteração, só com "export") ──
 export const AACE_STORAGE_KEY = 'vst_aace_v1';
 
 // Item 2.2, Tabela 1 (PDF p.8) — fatores fixos. m* = Master; e* = Elite; P/M/G = Elite dentro da área
@@ -194,7 +194,7 @@ export function aaceEstadoPadrao(lado) {
 export let AACE = { a: aaceEstadoPadrao('a'), b: aaceEstadoPadrao('b'), g: { tabela: 'definitiva' } };
 export let _aaceIniciou = false;
 
-// ── origem: index.html linhas 8767-8949 (copiado sem alteração, só com "export") ──
+// ── origem: index.html linhas 8773-8955 (copiado sem alteração, só com "export") ──
 // ─── Funções puras de cálculo ────────────────────────────────────────────────
 export function aaceNum(v) { const n = parseFloat(String(v ?? '').replace(',', '.')); return isFinite(n) ? n : 0; }
 // Redução de campanha (ex.: "REDUÇÃO % - MKT NACIONAL"): parte das linhas recebe só pctPago% do fator
@@ -379,11 +379,11 @@ export function aaceCalcular(s, g) {
     comMovel, comFixa, comAtivacao, baseBonusCat, baseTeto, bonusCat, manut, prod, total, avisos };
 }
 
-// ── origem: index.html linhas 8952-8953 (copiado sem alteração, só com "export") ──
+// ── origem: index.html linhas 8958-8959 (copiado sem alteração, só com "export") ──
 export function aaceFmtPct(v) { return (v || 0).toFixed(1).replace('.', ',') + '%'; }
 export function aaceFmtNum(v) { return (v || 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 }); }
 
-// ── origem: index.html linhas 9274-9432 (copiado sem alteração, só com "export") ──
+// ── origem: index.html linhas 9280-9438 (copiado sem alteração, só com "export") ──
 export function aaceLerCsv(texto) {
   const linhas = texto.replace(/^﻿/, '').replace(/\r/g, '').split('\n').filter(l => l.trim());
   const dividir = l => {

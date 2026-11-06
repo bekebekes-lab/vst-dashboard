@@ -1,12 +1,12 @@
-// Visão "Simulador 2.0" do Beta2 = a aba principal do Simulador 2.0 do Dash atual (index.html 2228-2463 e
-// 8296-10930). A sub-aba "Simulador de Carteira" NÃO foi migrada (decisão do Raphael, 06/11/2026).
+// Visão "Simulador 2.0" do Beta2 = a aba principal do Simulador 2.0 do Dash atual (index.html 2234-2469 e
+// 8302-10936). A sub-aba "Simulador de Carteira" NÃO foi migrada (decisão do Raphael, 06/11/2026).
 //
 // As contas ficam em simulador2-calculo.js (porte literal, conferido contra o Dash atual). Esta tela só lê/escreve
 // os campos e desenha. Persistência = a MESMA tabela do Dash atual (config_simulador2: periodo, chave, valor),
 // com as mesmas chaves e o mesmo formato, pelo cliente Supabase com a sessão do usuário (o RLS decide).
 //   • competência = o seletor de Período do topo (nunca escolhida aqui);
 //   • "Salvar competência" faz upsert (onConflict periodo,chave); troca de período salva antes se houver edição pendente;
-//   • fechar/recarregar com edição pendente: fetch keepalive igual ao do Dash atual (beforeunload, index.html 8136-8155).
+//   • fechar/recarregar com edição pendente: fetch keepalive igual ao do Dash atual (beforeunload, index.html 8142-8161).
 
 import { supa } from './sessao.js';
 import { SUPA_URL, SUPA_KEY } from './config.js';
@@ -15,7 +15,7 @@ import { S2_DEFAULTS, RAMPA_PRODUTIVIDADE, s2fmt } from './politica-sim.js';
 import { S2_METAS_TRIMESTRE } from './politica.js';
 import { CODIGOS_AACE2, s2Sid, num, s2PuxarDados, s2Calcular } from './simulador2-calculo.js';
 
-const ehAdminLike = p => p === 'admin' || p === 'admin_gestao';                     // index.html 4131
+const ehAdminLike = p => p === 'admin' || p === 'admin_gestao';                     // index.html 4137
 const L = x => x.toLocaleString('pt-BR');
 const S2_MESES_LABEL = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 const VISOES = [['ativo', 'Ativo'], ['ativacao', '+ Ativação'], ['aprovados', '+ Aprovados'], ['geral', 'Geral']];
@@ -171,7 +171,7 @@ export function criarSimulador2(host, ctx) {
     const p = (st.periodo || '').match(/^(\d{4})-(\d{2})$/);       // s2AtualizarLabelCompetencia
     const c = $('#sm-comp'); if (c) c.value = p ? `${S2_MESES_LABEL[parseInt(p[2], 10) - 1]}/${p[1]}` : '—';
   }
-  // valores como o Dash atual lê/grava (s2CamposParaSalvar, index.html 10678-10698)
+  // valores como o Dash atual lê/grava (s2CamposParaSalvar, index.html 10684-10704)
   function camposParaSalvar() {
     const v = st.v, c = {
       'tabela-cnpjhc': v['tabela-cnpjhc'], 'categoria': v['categoria'], 'cluster': v['cluster'],
@@ -184,7 +184,7 @@ export function criarSimulador2(host, ctx) {
   }
 
   // ── carga / gravação (config_simulador2) ────────────────────────────────────
-  // origem: carregarSimulador2, index.html 10776-10805
+  // origem: carregarSimulador2, index.html 10782-10811
   async function carregar(periodo) {
     st.v = estadoPadrao();
     try {
@@ -204,7 +204,7 @@ export function criarSimulador2(host, ctx) {
     st.periodo = periodo; st.sujo = false;
     pintarCampos();
   }
-  // origem: salvarSimulador2, index.html 10748-10774
+  // origem: salvarSimulador2, index.html 10754-10780
   async function salvar(silencioso, periodoForcado) {
     if (!ehAdminLike(ctx().perfil)) { if (!silencioso) msg('Apenas administradores podem salvar o Simulador 2.0.', true); return; }
     const btn = $('#sm-salvar');
@@ -224,7 +224,7 @@ export function criarSimulador2(host, ctx) {
       if (!silencioso) setTimeout(() => { btn.textContent = 'Salvar competência'; btn.disabled = false; }, 2000);
     }
   }
-  // origem: carregarHistoricoListaSimulador2, index.html 10807-10816
+  // origem: carregarHistoricoListaSimulador2, index.html 10813-10822
   async function carregarHistorico() {
     try {
       const { data, error } = await supa.from('config_simulador2').select('periodo').order('periodo', { ascending: false });
@@ -233,7 +233,7 @@ export function criarSimulador2(host, ctx) {
       $('#sm-historico').innerHTML = '<option value="">Ver competências salvas…</option>' + periodos.map(p => `<option value="${esc(p)}">${esc(p)}</option>`).join('');
     } catch (e) { /* tabela ainda não existe — silencioso */ }
   }
-  // origem: trocarPeriodoSimulador2, index.html 10823-10834
+  // origem: trocarPeriodoSimulador2, index.html 10829-10840
   async function trocarPeriodo(novo) {
     if (!novo) return;
     if (st.sujo && st.periodo && st.periodo !== novo && ehAdminLike(ctx().perfil)) {
@@ -243,7 +243,7 @@ export function criarSimulador2(host, ctx) {
     await carregar(novo);
     atualizar();
   }
-  // origem: carregarHistoricoSimulador2, index.html 10840-10851: se o mês é uma aba do seletor, troca o Período do topo
+  // origem: carregarHistoricoSimulador2, index.html 10846-10857: se o mês é uma aba do seletor, troca o Período do topo
   async function abrirHistorico(periodo) {
     if (ctx().irParaPeriodo(periodo)) return;            // o app troca o seletor e a carga volta aqui por mostrar()
     await trocarPeriodo(periodo);
@@ -297,7 +297,7 @@ export function criarSimulador2(host, ctx) {
     out('total', moeda(R.totalGeralCompetencia));
   }
 
-  // origem: exportarSimulador2, index.html 10853-10888
+  // origem: exportarSimulador2, index.html 10859-10894
   function exportarCsv() {
     const R = st.resultado; if (!R) { msg('Calcule o simulador antes de exportar.', true); return; }
     const r = R.ultimo, v = st.v;
@@ -316,7 +316,7 @@ export function criarSimulador2(host, ctx) {
     document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
   }
 
-  // Edição pendente ao fechar/recarregar a página: mesmo POST keepalive do Dash atual (index.html 8136-8155)
+  // Edição pendente ao fechar/recarregar a página: mesmo POST keepalive do Dash atual (index.html 8142-8161)
   window.addEventListener('beforeunload', () => {
     if (!st.sujo || !st.periodo || !st.montado) return;
     if (!ehAdminLike(ctx().perfil)) return;
@@ -329,7 +329,7 @@ export function criarSimulador2(host, ctx) {
     }).catch(() => {});
   });
 
-  // origem: initSimulador2, index.html 10368-10420
+  // origem: initSimulador2, index.html 10374-10426
   return {
     // chamada ao abrir a visão e sempre que a base do período é (re)carregada
     async mostrar() {
