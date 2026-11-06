@@ -13,9 +13,16 @@ import {
 } from './nucleo.js';
 import { esc, icone, iniciais, fmtInt, fmtDec, fmtMoeda, fmtMoedaCurta, fmtPct, criarMultiSelect, prefs } from './ui.js';
 import { criarMultivisao } from './multivisao.js';
+import { criarEsteira } from './esteira.js';
 import { montarResponsivo, barrasVerticais } from './graficos.js';
 
 const $ = (s, r = document) => r.querySelector(s);
+
+// Visões do Gerencial (mesma barra de filtros, mesmos dados). Novas visões entram aqui.
+const VISOES = [
+  { id: 'resumo', rotulo: 'Resumo', dica: 'KPIs, evolução, esteira por etapa, performance e comparativo' },
+  { id: 'esteira', rotulo: 'Esteira', dica: 'Cartões por categoria com as filas, pedidos e detalhamento por consultor (como o Gerencial atual)' },
+];
 
 const S = {
   acesso: null, escopo: null,
@@ -27,6 +34,7 @@ const S = {
   mesesCarregando: false,
   req: 0,
   receita: prefs.get('receita', '0') === '1',
+  visao: 'resumo',
   dimensao: prefs.get('dimensao', 'gestor'),
   statusBase: null,
 };
@@ -94,7 +102,13 @@ function montarCasca() {
 
       <main class="conteudo" id="conteudo">
         <section class="filtros" id="filtros" aria-label="Filtros"></section>
+        <nav class="abas-visao" id="abas-visao" role="tablist" aria-label="Visões do Gerencial">
+          ${VISOES.map(v => `<button type="button" role="tab" class="aba-visao" data-visao-id="${v.id}" title="${esc(v.dica)}">${esc(v.rotulo)}</button>`).join('')}
+        </nav>
         <div id="aviso"></div>
+        <div id="slot-busca"></div>
+        <div id="visao-esteira" hidden></div>
+        <div id="visao-resumo">
         <section class="kpis" id="kpis" aria-label="Indicadores"></section>
         <div class="grade-2">
           <section class="painel" id="painel-evolucao">
@@ -106,13 +120,13 @@ function montarCasca() {
           </section>
           <div id="slot-esteira"></div>
         </div>
-        <div id="slot-busca"></div>
         <div id="slot-performance"></div>
         <div id="slot-comparativo"></div>
         <section class="painel painel-futuro" aria-label="Metas × realizado">
           <header class="painel-cab"><div class="painel-tit"><h2>Metas × realizado</h2>
             <p>Em breve — depende de definir de onde vêm as metas de venda por equipe/consultor.</p></div></header>
         </section>
+        </div>
         <footer class="rodape" id="rodape"></footer>
       </main>
     </div>`;
@@ -129,6 +143,8 @@ function ligarCasca() {
   $('#btn-sair').addEventListener('click', sair);
   $('#sel-mes').addEventListener('change', e => { S.periodo = e.target.value; S.filtros = filtrosVazios(); carregarPeriodo(); });
   $('#btn-atualizar').addEventListener('click', () => { limparCache(); S.meses.clear(); carregarPeriodo({ forcar: true }); });
+  $('#abas-visao').addEventListener('click', e => { const b = e.target.closest('[data-visao-id]'); if (b) mudarVisao(b.dataset.visaoId); });
+  window.addEventListener('hashchange', () => mudarVisao(location.hash.replace(/^#/, ''), false));
   $('#painel-evolucao').addEventListener('click', e => {
     const b = e.target.closest('[data-evo]'); if (!b) return;
     prefs.set('evo', b.dataset.evo); desenharEvolucao();
@@ -232,6 +248,7 @@ async function carregarPeriodo({ forcar = false } = {}) {
   $('#aviso').innerHTML = '';
   $('#kpis').innerHTML = Array(4).fill('<div class="kpi kpi-esq"><span class="esq"></span></div>').join('');
   PAINEIS.performance.carregando(); PAINEIS.esteira.carregando(); PAINEIS.comparativo.carregando();
+  if (ESTEIRA) ESTEIRA.carregando();
   $('#evolucao-graf').innerHTML = '<div class="vazio"><span class="spinner"></span> Carregando…</div>';
   try {
     const rows = await carregarAba(S.periodo, { forcar: forcar || ehLive() });   // mês corrente sempre fresco
@@ -267,7 +284,7 @@ async function carregarMesesAnteriores(req) {
 }
 
 // ── cálculo + desenho ───────────────────────────────────────────────────────
-let AGG = null, KPI = null, ANT = null;
+let AGG = null, KPI = null, ANT = null, ESTEIRA = null;
 
 function aoMudarFiltro() { atualizarOpcoesFiltro(); recalcular(); }
 
@@ -280,7 +297,30 @@ function recalcular() {
   desenharBusca();
   desenharPerformance();
   desenharEsteira();
+  desenharVisaoEsteira();
   desenharRodape();
+}
+
+function desenharVisaoEsteira() {
+  if (!AGG || !ESTEIRA) return;
+  ESTEIRA.render({ agg: AGG, filtradas: S.filtradas, totalBase: S.rows.length, monitorDup: S.monitorDup });
+}
+
+// Quantidade × Receita vale para todos os painéis e visões.
+function aplicarReceita(b) {
+  S.receita = b; prefs.set('receita', b ? '1' : '0');
+  desenharPerformance(); desenharEsteira(); desenharVisaoEsteira();
+}
+
+function mudarVisao(id, atualizarHash = true) {
+  if (!VISOES.some(v => v.id === id)) id = prefs.get('visao', 'resumo');
+  if (!VISOES.some(v => v.id === id)) id = 'resumo';
+  S.visao = id; prefs.set('visao', id);
+  $('#visao-resumo').hidden = id !== 'resumo';
+  $('#visao-esteira').hidden = id !== 'esteira';
+  document.querySelectorAll('[data-visao-id]').forEach(b => { const on = b.dataset.visaoId === id; b.classList.toggle('ativo', on); b.setAttribute('aria-selected', String(on)); });
+  if (atualizarHash && location.hash.replace(/^#/, '') !== id) history.replaceState(null, '', '#' + id);
+  if (id === 'resumo') desenharEvolucao();   // gráfico mede a largura: redesenha ao reaparecer
 }
 
 // Mês anterior "até o mesmo dia" (por CADASTRO) com os mesmos filtros; sem data de cadastro entra normal.
@@ -390,7 +430,7 @@ function criarPaineis() {
   PAINEIS.performance.slotExtra.addEventListener('click', e => {
     const d = e.target.closest('[data-dim]'), m = e.target.closest('[data-med]');
     if (d) { S.dimensao = d.dataset.dim; prefs.set('dimensao', S.dimensao); desenharPerformance(); }
-    if (m) { S.receita = m.dataset.med === 'rec'; prefs.set('receita', S.receita ? '1' : '0'); desenharPerformance(); desenharEsteira(); }
+    if (m) aplicarReceita(m.dataset.med === 'rec');
   });
   $('#slot-performance').append(PAINEIS.performance.el);
 
@@ -501,6 +541,12 @@ async function iniciar() {
   S.acesso = acesso;
   S.escopo = getEscopoTravado(acesso.perfil);
   montarCasca(); ligarCasca(); montarFiltros(); criarPaineis();
+  ESTEIRA = criarEsteira($('#visao-esteira'), {
+    receita: () => S.receita, setReceita: aplicarReceita,
+    filtrarConsultor: nome => { S.filtros.consultores = [nome]; aoMudarFiltro(); window.scrollTo({ top: 0, behavior: 'smooth' }); },
+    filtrarEquipe: eq => { S.filtros.equipes = [eq]; S.filtros.consultores = []; aoMudarFiltro(); window.scrollTo({ top: 0, behavior: 'smooth' }); },
+  });
+  mudarVisao(location.hash.replace(/^#/, ''), false);
   document.body.classList.remove('carregando');
   $('#app').hidden = false;
   try { S.abas = await listarAbasHistorico(); } catch (e) { S.abas = []; }
