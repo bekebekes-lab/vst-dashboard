@@ -7996,7 +7996,7 @@ let USUARIO_ATUAL = null;
 // ao abrir" no drawer de conta e pelo redirecionamento pós-login.
 const ABAS_PERMITIDAS_POR_PERFIL = {
   'admin':          ['gerencial', 'producao', 'discadora', 'simulador2', 'aace', 'churn', 'carteira', 'qualidade', 'acessos', 'conectividade'],
-  'admin_gestao':   ['gerencial', 'producao', 'acessos', 'conectividade'], // só a gestão dela; sem Discadora/Churn (não têm trava por gestão), Simulador 2.0, Carteira e Qualidade
+  'admin_gestao':   ['gerencial', 'producao', 'discadora', 'churn', 'acessos', 'conectividade'], // Gerencial/Produção/Painel/Acessos só da gestão dela; Discadora (sem CSV e sem Centro de Custos) e Churn sem trava por gestão; sem Simulador 2.0, Carteira, Qualidade e Gerencial Financeiro
   'admin_beta':     ['gerencial', 'producao', 'carteira', 'acessos', 'conectividade'],
   'gestor_macro':   ['gerencial', 'discadora', 'acessos', 'conectividade'],
   'gestor_macro2':  ['gerencial', 'producao', 'discadora', 'acessos', 'conectividade'],
@@ -11195,8 +11195,9 @@ async function carregarPerfil(user) {
 // ─── ESQUEMA DE PERFIS (reorganizado) ────────────────────────────────────────
 //  admin          — acesso 100% a tudo
 //  admin_gestao   — travada na gestão dela (gestor_ref/gestores_ref) em todas as abas:
-//                   Gerencial, Produção, Painel Analítico, Acessos; sem Gerencial Financeiro,
-//                   Discadora, Churn, Simulador, Carteira e Qualidade
+//                   Gerencial, Produção, Painel Analítico, Acessos; Discadora (sem CSV e sem
+//                   Centro de Custos) e Churn liberadas SEM trava por gestão (vêem tudo); sem
+//                   Gerencial Financeiro, Simulador, Carteira e Qualidade
 //  admin_beta     — sem trava de escopo (vê tudo, igual admin), mas só nas
 //                   abas Gerencial/Produção/Carteira/Conectividade (sem
 //                   Discadora/Simulador 2.0/Churn)
@@ -11380,10 +11381,10 @@ function getGrupoDiscadoraTravado() {
   return null;
 }
 
-// Só admin e gestor_macro podem exportar o CSV de ligações produtivas da Discadora
+// Só admin e gestor_macro podem exportar o CSV de ligações produtivas da Discadora (admin_gestao não)
 function podeExportarDiscadoraCSV() {
   const p = USUARIO_ATUAL?.perfil;
-  return ehAdminLike(p) || p === 'gestor_macro';
+  return p === 'admin' || p === 'gestor_macro';
 }
 
 // Filtro de UF/Estado de quem tem escopo travado. Com UMA UF no escopo, trava
@@ -11783,7 +11784,7 @@ function initDiscadora() {
 
   // Botão "Centro de Custos" — só admin. O painel em si (#disc-voip-area)
   // só abre quando clicado (discToggleCentroCustos()), não fica sempre visível.
-  if (ehAdminLike(USUARIO_ATUAL?.perfil)) {
+  if (USUARIO_ATUAL?.perfil === 'admin') {
     document.getElementById('disc-btn-centro-custos-wrap').style.display = '';
     const seteDiasAtras = new Date();
     seteDiasAtras.setUTCDate(seteDiasAtras.getUTCDate() - 7);
