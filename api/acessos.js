@@ -15,6 +15,7 @@
 import { randomBytes } from 'crypto';
 import { requireAuth, getUsuarioDashboard } from './_lib/auth.js';
 import { getEscopoTravado, linhaDentroDoEscopo, normalizarNomeEquipe, EQUIPES_GESTORES } from './_lib/escopo.js';
+import churnGestorHandler from './_lib/churn-gestor.js';
 
 const SUPA_URL = 'https://kzlchetrpsfefwybaaoy.supabase.co';
 // Origem fixa de propósito: o /api/sheets é consultado com o token de quem
@@ -183,6 +184,10 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'GET' && req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  // Aviso de churn pra gestor/supervisão (regra de acesso própria, em _lib/churn-gestor.js): fica
+  // aqui só porque o projeto está no limite de funções da Vercel; não passa por contextoDoChamador.
+  if (req.query.recurso === 'churn') return churnGestorHandler(req, res);
 
   try {
     const ctx = await contextoDoChamador(req, res);
