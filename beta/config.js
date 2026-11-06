@@ -28,7 +28,7 @@ export const MENU = [
   ]},
   { grupo: 'Operação', itens: [
     { id: 'pedidos', rotulo: 'Pedidos', icone: 'file' },
-    { id: 'qualidade', rotulo: 'Qualidade', icone: 'check' },
+    { id: 'qualidade', rotulo: 'Qualidade', icone: 'check', beta: true },
     { id: 'conectividade', rotulo: 'Conectividade/SD', icone: 'signal' },
   ]},
   { grupo: 'Base', itens: [

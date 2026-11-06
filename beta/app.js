@@ -17,6 +17,7 @@ import { criarProducao } from './producao.js';
 import { criarPainel } from './painel.js';
 import { criarFinanceiro } from './financeiro.js';
 import { criarAcessos } from './acessos.js';
+import { criarQualidade } from './qualidade.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 
@@ -26,6 +27,7 @@ const VISOES = [
   { id: 'gerencial', rotulo: 'Gerencial', dica: 'KPIs, cartões por categoria com as filas, pedidos e detalhamento por consultor (como o Gerencial atual)' },
   { id: 'painel', rotulo: 'Painel Analítico', dica: 'Histórico mês a mês, mix por grupo e cortes por Estado, DDD, Cidade, Equipe e Vendedor (como a aba Painel Analítico)' },
   { id: 'gerfin', rotulo: 'Gerencial Financeiro', dica: 'Gerencial com Gross separado em Voz Novo + Portabilidade e comissão estimada pelos fatores do Simulador 2.0 (piloto)' },
+  { id: 'qualidade', rotulo: 'Qualidade', dica: 'Acompanhamento das 9 parcelas (270 dias) de cada contratação, para controle de estorno', semFiltros: true },
   { id: 'acessos', rotulo: 'Acessos', dica: 'Criar, bloquear e redefinir acessos de consultores; status online/offline (admin)', semFiltros: true },
   { id: 'producao', rotulo: 'Produção', dica: 'Produção por unidade, gestor ou equipe × status, com UF BL, TRI, MOM e comparar meses (como a aba Produção)' },
 ];
@@ -118,6 +120,7 @@ function montarCasca() {
         <div id="visao-painel" hidden></div>
         <div id="visao-gerfin" hidden></div>
         <div id="visao-acessos" hidden></div>
+        <div id="visao-qualidade" hidden></div>
         <footer class="rodape" id="rodape"></footer>
       </main>
     </div>`;
@@ -270,7 +273,7 @@ async function carregarMesesAnteriores(req) {
 }
 
 // ── cálculo + desenho ───────────────────────────────────────────────────────
-let AGG = null, KPI = null, ANT = null, ESTEIRA = null, PRODUCAO = null, PAINEL = null, FINANCEIRO = null, ACESSOS = null;
+let AGG = null, KPI = null, ANT = null, ESTEIRA = null, PRODUCAO = null, PAINEL = null, FINANCEIRO = null, ACESSOS = null, QUALIDADE = null;
 
 function aoMudarFiltro() { atualizarOpcoesFiltro(); recalcular(); }
 
@@ -337,6 +340,7 @@ function mudarVisao(id, atualizarHash = true) {
   $('#visao-painel').hidden = id !== 'painel';
   $('#visao-gerfin').hidden = id !== 'gerfin';
   $('#visao-acessos').hidden = id !== 'acessos';
+  $('#visao-qualidade').hidden = id !== 'qualidade';
   document.body.dataset.tela = id;
   $('#titulo-visao').textContent = VISOES.find(v => v.id === id).rotulo;
   document.title = `${VISOES.find(v => v.id === id).rotulo} · ${NOME_SISTEMA}`;
@@ -346,6 +350,7 @@ function mudarVisao(id, atualizarHash = true) {
   if (id === 'painel') desenharVisaoPainel();
   if (id === 'gerfin') desenharVisaoFin();
   if (id === 'acessos' && ACESSOS) ACESSOS.mostrar();
+  if (id === 'qualidade' && QUALIDADE) QUALIDADE.mostrar();
   desenharBusca();
 }
 
@@ -465,6 +470,7 @@ async function iniciar() {
     carregarConfig: async periodo => { const r = await supa.from('config_simulador2').select('*').eq('periodo', periodo); if (r.error) throw new Error(r.error.message); return r.data || []; },
   }));
   ACESSOS = criarAcessos($('#visao-acessos'), () => ({ perfil: S.acesso.perfil.perfil }));
+  QUALIDADE = criarQualidade($('#visao-qualidade'));
   presencaIniciar();
   mudarVisao(location.hash.replace(/^#/, ''), false);
   document.body.classList.remove('carregando');
