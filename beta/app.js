@@ -21,6 +21,8 @@ import { criarQualidade } from './qualidade.js';
 import { criarCarteira } from './carteira.js';
 import { criarChurn } from './churn.js';
 import { criarDiscadora } from './discadora.js';
+import { criarSimulador2 } from './simulador2.js';
+import { criarAace } from './aace.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 
@@ -35,6 +37,8 @@ const VISOES = [
   { id: 'carteira', rotulo: 'Carteira', dica: 'Base de clientes por mês: totais, aptos a renovar, classificação, tempo de contrato e busca', semFiltros: true },
   { id: 'qualidade', rotulo: 'Qualidade', dica: 'Acompanhamento das 9 parcelas (270 dias) de cada contratação, para controle de estorno', semFiltros: true },
   { id: 'acessos', rotulo: 'Acessos', dica: 'Criar, bloquear e redefinir acessos de consultores; status online/offline (admin)', semFiltros: true },
+  { id: 'simulador2', rotulo: 'Simulador 2.0', dica: 'Remuneração do parceiro pela política Claro: recebimento de carteira por unidade, bônus produtividade e bônus categoria (aba principal do Simulador 2.0)', semFiltros: true },
+  { id: 'aace', rotulo: 'Simulador de AACE', dica: 'Comparativo AACE hoje × com a VST pela política Claro, com importador de extrato e simulações salvas', semFiltros: true },
   { id: 'producao', rotulo: 'Produção', dica: 'Produção por unidade, gestor ou equipe × status, com UF BL, TRI, MOM e comparar meses (como a aba Produção)' },
 ];
 // hashes antigos (abas Resumo/Esteira) levam ao Gerencial
@@ -130,6 +134,8 @@ function montarCasca() {
         <div id="visao-carteira" hidden></div>
         <div id="visao-churn" hidden></div>
         <div id="visao-discadora" hidden></div>
+        <div id="visao-simulador2" hidden></div>
+        <div id="visao-aace" hidden></div>
         <footer class="rodape" id="rodape"></footer>
       </main>
     </div>`;
@@ -144,11 +150,33 @@ function ligarCasca() {
   bu.addEventListener('click', e => { e.stopPropagation(); mu.hidden = !mu.hidden; bu.setAttribute('aria-expanded', String(!mu.hidden)); });
   document.addEventListener('click', e => { if (!mu.hidden && !mu.contains(e.target)) { mu.hidden = true; bu.setAttribute('aria-expanded', 'false'); } });
   $('#btn-sair').addEventListener('click', sair);
-  $('#sel-mes').addEventListener('change', e => { S.periodo = e.target.value; S.filtros = filtrosVazios(); if (PRODUCAO) PRODUCAO.reiniciar(); if (FINANCEIRO) FINANCEIRO.reiniciar(); carregarPeriodo(); });
+  $('#sel-mes').addEventListener('change', e => trocarPeriodo(e.target.value));
   $('#btn-atualizar').addEventListener('click', () => { limparCache(); S.meses.clear(); if (PAINEL && S.visao === 'painel') PAINEL.recarregar(); carregarPeriodo({ forcar: true }); });
   // item do menu = visão do Beta2: o hash muda, a visão troca e (no celular) o menu fecha
   document.querySelectorAll('.lat-item[data-visao-id]').forEach(a => a.addEventListener('click', () => abrir(false)));
   window.addEventListener('hashchange', () => mudarVisao(location.hash.replace(/^#/, ''), false));
+}
+
+function trocarPeriodo(nome) {
+  S.periodo = nome; S.filtros = filtrosVazios();
+  if (PRODUCAO) PRODUCAO.reiniciar();
+  if (FINANCEIRO) FINANCEIRO.reiniciar();
+  carregarPeriodo();
+}
+
+// competência 'YYYY-MM' do Simulador 2.0 / AACE = a do seletor de Período (index.html s2PeriodoDoSeletorAtivo, 8549-8554)
+function periodoS2() {
+  if (S.periodo === 'BaseCRM') return new Date().toISOString().slice(0, 7);
+  const m = S.periodo.match(/BaseCRM\s+(\d{2})(\d{4})/);
+  return m ? `${m[2]}-${m[1]}` : new Date().toISOString().slice(0, 7);
+}
+// histórico do Simulador 2.0: se o mês é uma aba do seletor, troca o Período do topo (index.html carregarHistoricoSimulador2)
+function irParaPeriodoS2(periodo) {
+  const m = (periodo || '').match(/^(\d{4})-(\d{2})$/);
+  const aba = m && S.abas.find(a => a.mm === m[2] && a.yyyy === m[1]);
+  if (!aba) return false;
+  trocarPeriodo(aba.nome);
+  return true;
 }
 
 function popularMeses() {
@@ -282,7 +310,7 @@ async function carregarMesesAnteriores(req) {
 }
 
 // ── cálculo + desenho ───────────────────────────────────────────────────────
-let AGG = null, KPI = null, ANT = null, ESTEIRA = null, PRODUCAO = null, PAINEL = null, FINANCEIRO = null, ACESSOS = null, QUALIDADE = null, CARTEIRA = null, CHURN = null, DISCADORA = null;
+let AGG = null, KPI = null, ANT = null, ESTEIRA = null, PRODUCAO = null, PAINEL = null, FINANCEIRO = null, ACESSOS = null, QUALIDADE = null, CARTEIRA = null, CHURN = null, DISCADORA = null, SIM2 = null, AACE = null;
 
 function aoMudarFiltro() { atualizarOpcoesFiltro(); recalcular(); }
 
@@ -297,7 +325,14 @@ function recalcular() {
   desenharVisaoProducao();
   desenharVisaoPainel();
   desenharVisaoFin();
+  desenharVisaoSim2();
   desenharRodape();
+}
+
+// o Simulador 2.0 usa a base do período (sem os filtros da barra, como o ALL_DATA do Dash atual)
+function desenharVisaoSim2() {
+  if (!SIM2 || S.visao !== 'simulador2' || !S.rows.length) return;
+  SIM2.mostrar();
 }
 
 function desenharVisaoFin() {
@@ -353,6 +388,8 @@ function mudarVisao(id, atualizarHash = true) {
   $('#visao-carteira').hidden = id !== 'carteira';
   $('#visao-churn').hidden = id !== 'churn';
   $('#visao-discadora').hidden = id !== 'discadora';
+  $('#visao-simulador2').hidden = id !== 'simulador2';
+  $('#visao-aace').hidden = id !== 'aace';
   document.body.dataset.tela = id;
   $('#titulo-visao').textContent = VISOES.find(v => v.id === id).rotulo;
   document.title = `${VISOES.find(v => v.id === id).rotulo} · ${NOME_SISTEMA}`;
@@ -366,6 +403,8 @@ function mudarVisao(id, atualizarHash = true) {
   if (id === 'carteira' && CARTEIRA) CARTEIRA.mostrar();
   if (id === 'churn' && CHURN) CHURN.mostrar();
   if (id === 'discadora' && DISCADORA) DISCADORA.mostrar();
+  if (id === 'simulador2') desenharVisaoSim2();
+  if (id === 'aace' && AACE) AACE.mostrar();
   desenharBusca();
 }
 
@@ -492,6 +531,12 @@ async function iniciar() {
     perfil: S.acesso.perfil.perfil, grupoRef: S.acesso.perfil.grupo_ref,
     // status do pedido no CRM por CNPJ (primeira linha de cada CNPJ), para a coluna "Status CRM" do raio-x
     statusPorCnpj: () => { if (S._crmCnpj !== S.rows) { const m = new Map(); S.rows.forEach(r => { const c = (r['CPF/CNPJ'] || '').replace(/[^0-9]/g, ''), fi = r['FILA'] || ''; if (c && fi && !m.has(c)) m.set(c, fi); }); S._crmCnpj = S.rows; S._crmMapa = m; } return S._crmMapa || new Map(); },
+  }));
+  SIM2 = criarSimulador2($('#visao-simulador2'), () => ({
+    perfil: S.acesso.perfil.perfil, periodoS2, rows: () => S.rows, monitorDup: () => S.monitorDup, irParaPeriodo: irParaPeriodoS2,
+  }));
+  AACE = criarAace($('#visao-aace'), () => ({
+    periodoS2, usuario: () => ({ id: S.acesso.user.id, nome: S.acesso.perfil.nome, email: S.acesso.perfil.email }),
   }));
   // selo no menu: alertas de Churn pendentes com resposta obrigatória (10+ linhas)
   const selo = n => { const el = document.querySelector('.lat-item[data-visao-id=churn]'); if (!el) return; let b = el.querySelector('.lat-badge'); if (!b) { b = document.createElement('em'); b.className = 'lat-badge'; el.append(b); } b.textContent = n; b.hidden = !n; };
