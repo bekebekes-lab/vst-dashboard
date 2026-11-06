@@ -13261,14 +13261,17 @@ async function carregarBaseNeo() {
   return mapa;
 }
 
-// Dono do cliente pela baseneo: o último pedido ATIVO (por data ÚLTIMA; empate: o que aparece
-// depois na aba). Pedido novo de outro consultor que não ativou (cancelado, pendente...) não
-// tira o cliente de quem já o ativou. Sem nenhum pedido ATIVO, cai no mais recente de qualquer etapa.
+// Etapas da baseneo em que o pedido já está ativo/conectado (ATIVO e CONECTADO contam igual).
+const BASENEO_ETAPAS_ATIVAS = new Set(['ATIVO', 'CONECTADO']);
+
+// Dono do cliente pela baseneo: o último pedido ATIVO ou CONECTADO (por data ÚLTIMA; empate: o que
+// aparece depois na aba). Pedido novo de outro consultor que não ativou (cancelado, pendente...) não
+// tira o cliente de quem já o ativou. Sem nenhum pedido ativo, cai no mais recente de qualquer etapa.
 function baseneoDono(cnpjDigitos) {
   const hist = BASENEO_MAPA?.get(cnpjDigitos);
   if (!hist) return null;
   const maisRecente = lista => lista.reduce((a, h) => (!a || h.ts >= a.ts) ? h : a, null);
-  return maisRecente(hist.filter(h => h.etapa === 'ATIVO')) || maisRecente(hist);
+  return maisRecente(hist.filter(h => BASENEO_ETAPAS_ATIVAS.has(h.etapa))) || maisRecente(hist);
 }
 
 // Últimos consultores que atenderam o cliente (pro detalhe do alerta): um por consultor, com a

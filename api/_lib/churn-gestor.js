@@ -44,8 +44,9 @@ async function supa(path, { method = 'GET', body, prefer } = {}) {
 }
 
 // ── baseneo: CNPJ -> dono do cliente ─────────────────────────────────────────
-// Mesma regra do Churn no dash: vale o pedido ATIVO mais recente (data ÚLTIMA); pedido novo de outro
-// consultor que não ativou não tira o cliente de quem já ativou. Sem nenhum ATIVO, o mais recente.
+// Mesma regra do Churn no dash: vale o pedido ATIVO ou CONECTADO mais recente (data ÚLTIMA); pedido novo de outro
+// consultor que não ativou não tira o cliente de quem já ativou. Sem nenhum ativo, o mais recente.
+const ETAPAS_ATIVAS = new Set(['ATIVO', 'CONECTADO']);
 let _base = null; // { mapa, em }
 const TTL_BASE = 10 * 60 * 1000;
 
@@ -67,7 +68,7 @@ async function baseNeo() {
     const equipe = (c['EQUIPE'][i] || '').trim();
     if (!cnpj || (!consultor && !equipe)) continue;
     const reg = { consultor, equipe, ts: tsData(c['ULTIMA'][i]) };
-    const ativo = (c['ETAPA'][i] || '').trim().toUpperCase() === 'ATIVO';
+    const ativo = ETAPAS_ATIVAS.has((c['ETAPA'][i] || '').trim().toUpperCase());
     let e = mapa.get(cnpj);
     if (!e) { e = { ativo: null, qualquer: null }; mapa.set(cnpj, e); }
     if (ativo && (!e.ativo || reg.ts >= e.ativo.ts)) e.ativo = reg;
