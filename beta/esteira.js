@@ -5,6 +5,7 @@
 import { CATS, getGrupoKey, receitaLinha, subgrupoDaFila, ORDEM_SUBGRUPOS_FILA, parseDataBR } from './nucleo.js';
 import { esc, icone, fmtInt, fmtDec, fmtMoeda, fmtPct } from './ui.js';
 import { criarMultivisao } from './multivisao.js';
+import { abrirDetalheRegistro } from './detalhe.js';
 
 const APROVADO = ['Ativo', 'Esteira de ativação'];
 const ROTULO_CAT = { GERAL: 'Geral', GROSS: 'Gross', 'RENOVAÇÃO': 'Renovação', BL: 'BL', TITULARIDADE: 'Titularidade', 'SERV. DIGITAIS': 'Serv. Digitais' };
@@ -137,22 +138,6 @@ export function criarEsteira(host, api) {
         : '<div class="vazio">Nenhum pedido nesta fila para os filtros atuais.</div>'}</div></section>`;
   }
 
-  // ── detalhe do registro (modal) ──────────────────────────────────────────
-  function abrirDetalhe(r) {
-    const ov = document.createElement('div');
-    ov.className = 'modal-fundo';
-    const campos = Object.entries(r).filter(([, v]) => v !== '' && v != null);
-    ov.innerHTML = `<div class="modal" role="dialog" aria-modal="true" aria-label="Dados do registro">
-      <header><h3>${esc(r['NOME CLIENTE'] || 'Registro')}</h3><button type="button" class="btn-icone" data-x aria-label="Fechar">${icone('close')}</button></header>
-      <dl>${campos.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl></div>`;
-    const fechar = () => { ov.remove(); document.removeEventListener('keydown', tecla); };
-    const tecla = e => { if (e.key === 'Escape') fechar(); };
-    ov.addEventListener('click', e => { if (e.target === ov || e.target.closest('[data-x]')) fechar(); });
-    document.addEventListener('keydown', tecla);
-    document.body.append(ov);
-    ov.querySelector('[data-x]').focus();
-  }
-
   host.addEventListener('click', e => {
     const f = e.target.closest('[data-fila]');
     if (f) { drill = { cat: f.dataset.cat, fila: f.dataset.fila }; dr.col = 'qtd'; dr.asc = false; dr.todas = false; desenharDrill(); $('#est-drill').scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
@@ -161,7 +146,7 @@ export function criarEsteira(host, api) {
     if (o) { const k = o.dataset.dord; dr.asc = dr.col === k ? !dr.asc : COLS_DRILL.find(c => c.k === k).num !== true && !['cad', 'atu'].includes(k); dr.col = k; desenharDrill(); return; }
     if (e.target.closest('[data-mais-drill]')) { dr.todas = !dr.todas; desenharDrill(); return; }
     const d = e.target.closest('[data-detalhe]');
-    if (d) { abrirDetalhe(dr.linhas[+d.dataset.detalhe]); return; }
+    if (d) { abrirDetalheRegistro(dr.linhas[+d.dataset.detalhe]); return; }
     const m = e.target.closest('.est-topo [data-med]');
     if (m) api.setReceita(m.dataset.med === 'rec');
   });

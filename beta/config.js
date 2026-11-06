@@ -19,7 +19,7 @@ export const MENU = [
     { id: 'gerencial', rotulo: 'Gerencial', icone: 'grid', beta: true },
     { id: 'painel', rotulo: 'Painel Analítico', icone: 'bars', beta: true },
     { id: 'producao', rotulo: 'Produção', icone: 'cloud', beta: true },
-    { id: 'gerfin', rotulo: 'Gerencial Financeiro', icone: 'wallet' },
+    { id: 'gerfin', rotulo: 'Gerencial Financeiro', icone: 'wallet', beta: true },
     { id: 'discadora', rotulo: 'Discadora', icone: 'phone' },
   ]},
   { grupo: 'Simuladores', itens: [

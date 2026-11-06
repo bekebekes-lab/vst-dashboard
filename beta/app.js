@@ -4,7 +4,7 @@
 //             multivisao.js / graficos.js / ui.js (componentes)
 
 import { NOME_SISTEMA, MENU } from './config.js';
-import { exigirAdminBeta, sair } from './sessao.js';
+import { exigirAdminBeta, sair, supa } from './sessao.js';
 import { carregarAba, limparCache, listarAbasHistorico, statusDaBase } from './dados.js';
 import {
   filtrosVazios, filtrar, opcoesDosFiltros, agregar, calcularKPIs, variacaoPct,
@@ -15,6 +15,7 @@ import { esc, icone, iniciais, fmtInt, fmtDec, fmtMoeda, fmtPct, criarMultiSelec
 import { criarEsteira } from './esteira.js';
 import { criarProducao } from './producao.js';
 import { criarPainel } from './painel.js';
+import { criarFinanceiro } from './financeiro.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 
@@ -23,6 +24,7 @@ const $ = (s, r = document) => r.querySelector(s);
 const VISOES = [
   { id: 'gerencial', rotulo: 'Gerencial', dica: 'KPIs, cartões por categoria com as filas, pedidos e detalhamento por consultor (como o Gerencial atual)' },
   { id: 'painel', rotulo: 'Painel Analítico', dica: 'Histórico mês a mês, mix por grupo e cortes por Estado, DDD, Cidade, Equipe e Vendedor (como a aba Painel Analítico)' },
+  { id: 'gerfin', rotulo: 'Gerencial Financeiro', dica: 'Gerencial com Gross separado em Voz Novo + Portabilidade e comissão estimada pelos fatores do Simulador 2.0 (piloto)' },
   { id: 'producao', rotulo: 'Produção', dica: 'Produção por unidade, gestor ou equipe × status, com UF BL, TRI, MOM e comparar meses (como a aba Produção)' },
 ];
 // hashes antigos (abas Resumo/Esteira) levam ao Gerencial
@@ -112,6 +114,7 @@ function montarCasca() {
         </div>
         <div id="visao-producao" hidden></div>
         <div id="visao-painel" hidden></div>
+        <div id="visao-gerfin" hidden></div>
         <footer class="rodape" id="rodape"></footer>
       </main>
     </div>`;
@@ -126,7 +129,7 @@ function ligarCasca() {
   bu.addEventListener('click', e => { e.stopPropagation(); mu.hidden = !mu.hidden; bu.setAttribute('aria-expanded', String(!mu.hidden)); });
   document.addEventListener('click', e => { if (!mu.hidden && !mu.contains(e.target)) { mu.hidden = true; bu.setAttribute('aria-expanded', 'false'); } });
   $('#btn-sair').addEventListener('click', sair);
-  $('#sel-mes').addEventListener('change', e => { S.periodo = e.target.value; S.filtros = filtrosVazios(); if (PRODUCAO) PRODUCAO.reiniciar(); carregarPeriodo(); });
+  $('#sel-mes').addEventListener('change', e => { S.periodo = e.target.value; S.filtros = filtrosVazios(); if (PRODUCAO) PRODUCAO.reiniciar(); if (FINANCEIRO) FINANCEIRO.reiniciar(); carregarPeriodo(); });
   $('#btn-atualizar').addEventListener('click', () => { limparCache(); S.meses.clear(); if (PAINEL && S.visao === 'painel') PAINEL.recarregar(); carregarPeriodo({ forcar: true }); });
   // item do menu = visão do Beta2: o hash muda, a visão troca e (no celular) o menu fecha
   document.querySelectorAll('.lat-item[data-visao-id]').forEach(a => a.addEventListener('click', () => abrir(false)));
@@ -231,6 +234,7 @@ async function carregarPeriodo({ forcar = false } = {}) {
   $('#kpis').innerHTML = Array(4).fill('<div class="kpi kpi-esq"><span class="esq"></span></div>').join('');
   if (ESTEIRA) ESTEIRA.carregando();
   if (PRODUCAO) PRODUCAO.carregando();
+  if (FINANCEIRO) FINANCEIRO.carregando();
   try {
     const rows = await carregarAba(S.periodo, { forcar: forcar || ehLive() });   // mês corrente sempre fresco
     if (req !== S.req) return;
@@ -263,7 +267,7 @@ async function carregarMesesAnteriores(req) {
 }
 
 // ── cálculo + desenho ───────────────────────────────────────────────────────
-let AGG = null, KPI = null, ANT = null, ESTEIRA = null, PRODUCAO = null, PAINEL = null;
+let AGG = null, KPI = null, ANT = null, ESTEIRA = null, PRODUCAO = null, PAINEL = null, FINANCEIRO = null;
 
 function aoMudarFiltro() { atualizarOpcoesFiltro(); recalcular(); }
 
@@ -277,7 +281,13 @@ function recalcular() {
   desenharVisaoEsteira();
   desenharVisaoProducao();
   desenharVisaoPainel();
+  desenharVisaoFin();
   desenharRodape();
+}
+
+function desenharVisaoFin() {
+  if (!FINANCEIRO || S.visao !== 'gerfin' || !S.rows.length) return;
+  FINANCEIRO.render();
 }
 
 function desenharVisaoPainel() {
@@ -311,7 +321,7 @@ function desenharVisaoEsteira() {
 // Quantidade × Receita vale para todos os painéis e visões.
 function aplicarReceita(b) {
   S.receita = b; prefs.set('receita', b ? '1' : '0');
-  desenharVisaoEsteira(); desenharVisaoProducao();
+  desenharVisaoEsteira(); desenharVisaoProducao(); desenharVisaoFin();
 }
 
 function mudarVisao(id, atualizarHash = true) {
@@ -322,6 +332,7 @@ function mudarVisao(id, atualizarHash = true) {
   $('#visao-gerencial').hidden = id !== 'gerencial';
   $('#visao-producao').hidden = id !== 'producao';
   $('#visao-painel').hidden = id !== 'painel';
+  $('#visao-gerfin').hidden = id !== 'gerfin';
   document.body.dataset.tela = id;
   $('#titulo-visao').textContent = VISOES.find(v => v.id === id).rotulo;
   document.title = `${VISOES.find(v => v.id === id).rotulo} · ${NOME_SISTEMA}`;
@@ -329,6 +340,7 @@ function mudarVisao(id, atualizarHash = true) {
   if (atualizarHash && location.hash.replace(/^#/, '') !== id) history.replaceState(null, '', '#' + id);
   if (id === 'producao') desenharVisaoProducao();
   if (id === 'painel') desenharVisaoPainel();
+  if (id === 'gerfin') desenharVisaoFin();
   desenharBusca();
 }
 
@@ -427,6 +439,10 @@ async function iniciar() {
     f: S.filtros, escopoOk: registroNoEscopo, meses: mesesDoPainel(),
     filtrarUf: uf => { S.filtros.uf = uf; aoMudarFiltro(); window.scrollTo({ top: 0, behavior: 'smooth' }); },
     reusar: sheet => (sheet === S.periodo && S.rows.length ? Promise.resolve(S.rows) : null),
+  }));
+  FINANCEIRO = criarFinanceiro($('#visao-gerfin'), () => ({
+    rows: S.rows, f: S.filtros, escopo: S.escopo, ref: mesReferencia(), monitorDup: S.monitorDup,
+    carregarConfig: async periodo => { const r = await supa.from('config_simulador2').select('*').eq('periodo', periodo); if (r.error) throw new Error(r.error.message); return r.data || []; },
   }));
   mudarVisao(location.hash.replace(/^#/, ''), false);
   document.body.classList.remove('carregando');
