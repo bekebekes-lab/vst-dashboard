@@ -20,6 +20,7 @@ import { criarAcessos } from './acessos.js';
 import { criarQualidade } from './qualidade.js';
 import { criarCarteira } from './carteira.js';
 import { criarChurn } from './churn.js';
+import { criarDiscadora } from './discadora.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 
@@ -29,6 +30,7 @@ const VISOES = [
   { id: 'gerencial', rotulo: 'Gerencial', dica: 'KPIs, cartões por categoria com as filas, pedidos e detalhamento por consultor (como o Gerencial atual)' },
   { id: 'painel', rotulo: 'Painel Analítico', dica: 'Histórico mês a mês, mix por grupo e cortes por Estado, DDD, Cidade, Equipe e Vendedor (como a aba Painel Analítico)' },
   { id: 'gerfin', rotulo: 'Gerencial Financeiro', dica: 'Gerencial com Gross separado em Voz Novo + Portabilidade e comissão estimada pelos fatores do Simulador 2.0 (piloto)' },
+  { id: 'discadora', rotulo: 'Discadora', dica: 'Produtividade de ligações dos consultores: KPIs, funil de duração, mapa de calor e raio-x', semFiltros: true },
   { id: 'churn', rotulo: 'Churn', dica: 'Alertas de PORT-OUT: atribuir responsável e responder à Claro', semFiltros: true },
   { id: 'carteira', rotulo: 'Carteira', dica: 'Base de clientes por mês: totais, aptos a renovar, classificação, tempo de contrato e busca', semFiltros: true },
   { id: 'qualidade', rotulo: 'Qualidade', dica: 'Acompanhamento das 9 parcelas (270 dias) de cada contratação, para controle de estorno', semFiltros: true },
@@ -127,6 +129,7 @@ function montarCasca() {
         <div id="visao-qualidade" hidden></div>
         <div id="visao-carteira" hidden></div>
         <div id="visao-churn" hidden></div>
+        <div id="visao-discadora" hidden></div>
         <footer class="rodape" id="rodape"></footer>
       </main>
     </div>`;
@@ -279,7 +282,7 @@ async function carregarMesesAnteriores(req) {
 }
 
 // ── cálculo + desenho ───────────────────────────────────────────────────────
-let AGG = null, KPI = null, ANT = null, ESTEIRA = null, PRODUCAO = null, PAINEL = null, FINANCEIRO = null, ACESSOS = null, QUALIDADE = null, CARTEIRA = null, CHURN = null;
+let AGG = null, KPI = null, ANT = null, ESTEIRA = null, PRODUCAO = null, PAINEL = null, FINANCEIRO = null, ACESSOS = null, QUALIDADE = null, CARTEIRA = null, CHURN = null, DISCADORA = null;
 
 function aoMudarFiltro() { atualizarOpcoesFiltro(); recalcular(); }
 
@@ -349,6 +352,7 @@ function mudarVisao(id, atualizarHash = true) {
   $('#visao-qualidade').hidden = id !== 'qualidade';
   $('#visao-carteira').hidden = id !== 'carteira';
   $('#visao-churn').hidden = id !== 'churn';
+  $('#visao-discadora').hidden = id !== 'discadora';
   document.body.dataset.tela = id;
   $('#titulo-visao').textContent = VISOES.find(v => v.id === id).rotulo;
   document.title = `${VISOES.find(v => v.id === id).rotulo} · ${NOME_SISTEMA}`;
@@ -361,6 +365,7 @@ function mudarVisao(id, atualizarHash = true) {
   if (id === 'qualidade' && QUALIDADE) QUALIDADE.mostrar();
   if (id === 'carteira' && CARTEIRA) CARTEIRA.mostrar();
   if (id === 'churn' && CHURN) CHURN.mostrar();
+  if (id === 'discadora' && DISCADORA) DISCADORA.mostrar();
   desenharBusca();
 }
 
@@ -483,6 +488,11 @@ async function iniciar() {
   QUALIDADE = criarQualidade($('#visao-qualidade'));
   CARTEIRA = criarCarteira($('#visao-carteira'), () => ({ perfil: S.acesso.perfil.perfil }));
   CHURN = criarChurn($('#visao-churn'));
+  DISCADORA = criarDiscadora($('#visao-discadora'), () => ({
+    perfil: S.acesso.perfil.perfil, grupoRef: S.acesso.perfil.grupo_ref,
+    // status do pedido no CRM por CNPJ (primeira linha de cada CNPJ), para a coluna "Status CRM" do raio-x
+    statusPorCnpj: () => { if (S._crmCnpj !== S.rows) { const m = new Map(); S.rows.forEach(r => { const c = (r['CPF/CNPJ'] || '').replace(/[^0-9]/g, ''), fi = r['FILA'] || ''; if (c && fi && !m.has(c)) m.set(c, fi); }); S._crmCnpj = S.rows; S._crmMapa = m; } return S._crmMapa || new Map(); },
+  }));
   // selo no menu: alertas de Churn pendentes com resposta obrigatória (10+ linhas)
   const selo = n => { const el = document.querySelector('.lat-item[data-visao-id=churn]'); if (!el) return; let b = el.querySelector('.lat-badge'); if (!b) { b = document.createElement('em'); b.className = 'lat-badge'; el.append(b); } b.textContent = n; b.hidden = !n; };
   $('#visao-churn').addEventListener('churn-obrigatorios', e => selo(e.detail));

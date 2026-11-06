@@ -178,8 +178,8 @@ body:not(.carregando) .espera { display: none; }
 .ms-vazio { padding: var(--e3); color: var(--texto-3); }
 
 /* visões (cada uma é um item do menu) */
-#visao-gerencial, #visao-producao, #visao-painel, #visao-gerfin, #visao-acessos, #visao-qualidade, #visao-carteira, #visao-churn { display: flex; flex-direction: column; gap: var(--e5); min-width: 0; }
-#visao-gerencial[hidden], #visao-producao[hidden], #visao-painel[hidden], #visao-gerfin[hidden], #visao-acessos[hidden], #visao-qualidade[hidden], #visao-carteira[hidden], #visao-churn[hidden] { display: none; }
+#visao-gerencial, #visao-producao, #visao-painel, #visao-gerfin, #visao-acessos, #visao-qualidade, #visao-carteira, #visao-churn, #visao-discadora { display: flex; flex-direction: column; gap: var(--e5); min-width: 0; }
+#visao-gerencial[hidden], #visao-producao[hidden], #visao-painel[hidden], #visao-gerfin[hidden], #visao-acessos[hidden], #visao-qualidade[hidden], #visao-carteira[hidden], #visao-churn[hidden], #visao-discadora[hidden] { display: none; }
 #visao-esteira { display: flex; flex-direction: column; gap: var(--e5); min-width: 0; }
 
 /* visão Esteira (cartões por categoria + pedidos) */
@@ -296,7 +296,7 @@ body[data-tela="painel"] .mes { display: none; }
 .fat-barra .txt-aviso { margin-top: 4px; }
 
 /* visão Acessos (não usa filtros nem período) */
-body[data-tela="acessos"] .filtros, body[data-tela="acessos"] .mes, body[data-tela="acessos"] #btn-atualizar, body[data-tela="qualidade"] .filtros, body[data-tela="qualidade"] .mes, body[data-tela="qualidade"] #btn-atualizar, body[data-tela="carteira"] .filtros, body[data-tela="carteira"] .mes, body[data-tela="carteira"] #btn-atualizar, body[data-tela="churn"] .filtros, body[data-tela="churn"] .mes, body[data-tela="churn"] #btn-atualizar { display: none; }
+body[data-tela="acessos"] .filtros, body[data-tela="acessos"] .mes, body[data-tela="acessos"] #btn-atualizar, body[data-tela="qualidade"] .filtros, body[data-tela="qualidade"] .mes, body[data-tela="qualidade"] #btn-atualizar, body[data-tela="carteira"] .filtros, body[data-tela="carteira"] .mes, body[data-tela="carteira"] #btn-atualizar, body[data-tela="churn"] .filtros, body[data-tela="churn"] .mes, body[data-tela="churn"] #btn-atualizar, body[data-tela="discadora"] .filtros, body[data-tela="discadora"] .mes, body[data-tela="discadora"] #btn-atualizar { display: none; }
 .ac-bloco { display: flex; flex-direction: column; gap: var(--e4); }
 .ac-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--e3); }
 .ac-campo { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--texto-3); min-width: 200px; }
@@ -343,6 +343,26 @@ button.q-kpi { cursor: pointer; } button.q-kpi:hover { border-color: var(--cinza
 .ch-form-pe { display: flex; gap: var(--e3); align-items: center; justify-content: space-between; } .ch-form .chip-chk { flex-direction: row; text-transform: none; font-weight: 500; font-size: 13px; }
 .lat-badge { margin-left: auto; min-width: 20px; padding: 1px 6px; border-radius: var(--r-pill); background: #fff; color: var(--marca-700); font-style: normal; font-size: 11px; font-weight: 700; text-align: center; }
 .lat-badge[hidden] { display: none; }
+
+/* visão Discadora */
+.inp-data { border: 0; background: transparent; font: inherit; color: var(--texto); } .inp-data:focus-visible { outline: none; }
+.d-trilho { height: 6px; background: var(--cinza-200); border-radius: var(--r-pill); overflow: hidden; } .d-trilho i { display: block; height: 100%; width: 0; background: var(--marca-600); transition: width .3s; }
+.d-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--e3); }
+.d-kpi, .d-k2 { background: var(--superficie); border: 1px solid var(--borda); border-radius: var(--r-md); padding: var(--e3) var(--e4); box-shadow: var(--sombra-1); display: flex; flex-direction: column; gap: 2px; position: relative; min-width: 0; }
+.d-kpi span, .d-k2 > span { font-size: 12px; color: var(--texto-3); font-weight: 600; } .d-kpi b { font-size: 26px; font-variant-numeric: tabular-nums; } .d-kpi small { font-weight: 500; color: var(--texto-3); }
+.d-dest { border-color: var(--marca-500); } .d-clic { cursor: pointer; } .d-clic:hover { background: var(--marca-50); }
+.d-kpis2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: var(--e3); }
+.d-k2 b { font-size: 26px; font-variant-numeric: tabular-nums; } .d-k2 small { font-size: 11px; color: var(--texto-3); }
+.d-k2 .bom, .d-k2 b.bom { color: var(--ok-600); } .d-k2 .med, .d-k2 b.med { color: var(--aviso-500); } .d-k2 .ruim, .d-k2 b.ruim { color: var(--erro-600); }
+.d-b { position: absolute; top: var(--e3); right: var(--e3); font-style: normal; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: var(--r-pill); background: var(--cinza-100); }
+.d-b.bom { background: var(--ok-100); color: var(--ok-600); } .d-b.med { background: var(--aviso-100); color: var(--aviso-600); } .d-b.ruim { background: var(--erro-100); color: var(--erro-600); }
+.d-reap { margin-top: 4px; font-size: 11px; } .d-reap > div { display: flex; justify-content: space-between; font-family: monospace; }
+.d-funil { display: flex; gap: var(--e4); align-items: flex-end; justify-content: space-around; flex-wrap: wrap; }
+.d-fcol { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 70px; text-align: center; } .d-fcol b { font-size: 20px; } .d-fcol span, .d-fcol small { font-size: 11px; color: var(--texto-3); } .d-fcol em { font-style: normal; font-weight: 700; font-size: 12px; }
+.d-fbar-w { height: 80px; display: flex; align-items: flex-end; } .d-fbar { width: 40px; border-radius: 4px 4px 0 0; }
+.d-hm td.num b { font-weight: 700; } .d-hm td small { font-weight: 600; } .d-golden td { box-shadow: inset 0 2px 0 #F59E0B, inset 0 -2px 0 #F59E0B; }
+.d-modal { width: min(960px, 100%); } .d-modal header > div { display: flex; flex-direction: column; } .d-pane { padding: var(--e3) var(--e5) var(--e5); max-height: 55vh; overflow: auto; }
+.d-play { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--marca-600); color: #fff; font-size: 11px; }
 
 /* alertas */
 .alerta { padding: var(--e3) var(--e4); border-radius: var(--r-md); border: 1px solid; }
