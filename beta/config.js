@@ -16,6 +16,7 @@ export const EMAILS_BETA = [
   'patricia@vstgroup.com.br',   // Pati (Patrícia Faria)
   'everton@vstgroup.com.br',    // Everton Vasconcellos
   'laura@vstgroup.com.br',      // Laura
+  'leandro.horacio@vst.com.br', // Leandro Horácio (consultor; Painel Analítico por acesso extra, sem comissão)
 ];
 export const emailLiberadoBeta = email => !!email && EMAILS_BETA.includes(String(email).trim().toLowerCase());
 export const EMAIL_ADMIN_BETA = EMAILS_BETA[0];   // legado (mantido para não quebrar quem ainda importa)
