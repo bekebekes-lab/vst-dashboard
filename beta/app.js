@@ -85,7 +85,7 @@ function montarCasca() {
   $('#app').innerHTML = `
     <aside class="lateral" id="lateral" aria-label="Menu principal">
       <div class="lat-marca">
-        <a class="lat-logo" href="#gerencial" aria-label="VST Group"><img src="/beta/logo-vst.png" alt="VST Group"></a>
+        <a class="lat-logo" href="#gerencial" aria-label="VST Group"><img src="/beta/logo-vst-grupo.png" alt="VST Group"></a>
         <button class="btn-icone lat-fechar" type="button" data-fechar-menu aria-label="Fechar menu">${icone('close')}</button>
       </div>
       <nav class="lat-nav">

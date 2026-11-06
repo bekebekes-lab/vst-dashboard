@@ -90,8 +90,9 @@ body:not(.carregando) .espera { display: none; }
 }
 .lat-marca { display: flex; align-items: center; gap: var(--e3); padding: var(--e5) var(--e5) var(--e4); min-height: var(--altura-topo); }
 /* o PNG tem o VST GROUP + a bola da Claro: mostra só os 72% da esquerda, em branco (igual ao cabeçalho do Dash atual) */
-.lat-logo { width: 105px; height: 48px; overflow: hidden; flex: none; }
-.lat-logo img { height: 48px; width: auto; max-width: none; display: block; filter: brightness(0) invert(1); }
+.lat-logo { flex: none; display: block; }
+/* logo-vst-grupo.png = só o VST GROUP (sem o selo Claro), proporção 315:139 preservada */
+.lat-logo img { height: 56px; width: auto; display: block; filter: brightness(0) invert(1); }
 .lateral .lat-fechar { display: none; margin-left: auto; color: var(--branco); }
 .lat-nav { flex: 1; padding: var(--e2) var(--e3) var(--e4); }
 .lat-grupo { margin-top: var(--e4); }
