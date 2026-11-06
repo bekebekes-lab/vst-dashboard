@@ -14,6 +14,7 @@ import {
 import { esc, icone, iniciais, fmtInt, fmtDec, fmtMoeda, fmtPct, criarMultiSelect, prefs } from './ui.js';
 import { criarEsteira } from './esteira.js';
 import { criarProducao } from './producao.js';
+import { criarPainel } from './painel.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 
@@ -21,6 +22,7 @@ const $ = (s, r = document) => r.querySelector(s);
 // barra de filtros e os mesmos dados. Novas visões entram aqui e no MENU.
 const VISOES = [
   { id: 'gerencial', rotulo: 'Gerencial', dica: 'KPIs, cartões por categoria com as filas, pedidos e detalhamento por consultor (como o Gerencial atual)' },
+  { id: 'painel', rotulo: 'Painel Analítico', dica: 'Histórico mês a mês, mix por grupo e cortes por Estado, DDD, Cidade, Equipe e Vendedor (como a aba Painel Analítico)' },
   { id: 'producao', rotulo: 'Produção', dica: 'Produção por unidade, gestor ou equipe × status, com UF BL, TRI, MOM e comparar meses (como a aba Produção)' },
 ];
 // hashes antigos (abas Resumo/Esteira) levam ao Gerencial
@@ -109,6 +111,7 @@ function montarCasca() {
           <div id="visao-esteira"></div>
         </div>
         <div id="visao-producao" hidden></div>
+        <div id="visao-painel" hidden></div>
         <footer class="rodape" id="rodape"></footer>
       </main>
     </div>`;
@@ -124,7 +127,7 @@ function ligarCasca() {
   document.addEventListener('click', e => { if (!mu.hidden && !mu.contains(e.target)) { mu.hidden = true; bu.setAttribute('aria-expanded', 'false'); } });
   $('#btn-sair').addEventListener('click', sair);
   $('#sel-mes').addEventListener('change', e => { S.periodo = e.target.value; S.filtros = filtrosVazios(); if (PRODUCAO) PRODUCAO.reiniciar(); carregarPeriodo(); });
-  $('#btn-atualizar').addEventListener('click', () => { limparCache(); S.meses.clear(); carregarPeriodo({ forcar: true }); });
+  $('#btn-atualizar').addEventListener('click', () => { limparCache(); S.meses.clear(); if (PAINEL && S.visao === 'painel') PAINEL.recarregar(); carregarPeriodo({ forcar: true }); });
   // item do menu = visão do Beta2: o hash muda, a visão troca e (no celular) o menu fecha
   document.querySelectorAll('.lat-item[data-visao-id]').forEach(a => a.addEventListener('click', () => abrir(false)));
   window.addEventListener('hashchange', () => mudarVisao(location.hash.replace(/^#/, ''), false));
@@ -260,7 +263,7 @@ async function carregarMesesAnteriores(req) {
 }
 
 // ── cálculo + desenho ───────────────────────────────────────────────────────
-let AGG = null, KPI = null, ANT = null, ESTEIRA = null, PRODUCAO = null;
+let AGG = null, KPI = null, ANT = null, ESTEIRA = null, PRODUCAO = null, PAINEL = null;
 
 function aoMudarFiltro() { atualizarOpcoesFiltro(); recalcular(); }
 
@@ -273,7 +276,26 @@ function recalcular() {
   desenharBusca();
   desenharVisaoEsteira();
   desenharVisaoProducao();
+  desenharVisaoPainel();
   desenharRodape();
+}
+
+function desenharVisaoPainel() {
+  if (!PAINEL || S.visao !== 'painel' || !S.rows.length) return;
+  PAINEL.mostrar();
+}
+
+// meses do Painel Analítico: abas históricas + o mês corrente (base viva)
+function mesesDoPainel() {
+  const h = new Date(), chaveHoje = `${h.getFullYear()}-${String(h.getMonth() + 1).padStart(2, '0')}`;
+  const mapa = {};
+  S.abas.forEach(a => { mapa[`${a.yyyy}-${a.mm}`] = a.nome; });
+  mapa[chaveHoje] = 'BaseCRM';
+  return Object.keys(mapa).sort().map(k => ({ chave: k, sheet: mapa[k], yyyy: k.slice(0, 4), mm: k.slice(5), label: `${MESES_ABREV[parseInt(k.slice(5), 10) - 1]}/${k.slice(0, 4)}` }));
+}
+function registroNoEscopo(r) {
+  const e = S.escopo;
+  return !e || ((!e.gestores || e.gestores.has(r.ge)) && (!e.equipes || e.equipes.has(r.eq)) && (!e.consultorRef || (r.ve || '').toUpperCase() === e.consultorRef));
 }
 
 function desenharVisaoProducao() {
@@ -299,11 +321,14 @@ function mudarVisao(id, atualizarHash = true) {
   S.visao = id; prefs.set('visao', id);
   $('#visao-gerencial').hidden = id !== 'gerencial';
   $('#visao-producao').hidden = id !== 'producao';
+  $('#visao-painel').hidden = id !== 'painel';
+  document.body.dataset.tela = id;
   $('#titulo-visao').textContent = VISOES.find(v => v.id === id).rotulo;
   document.title = `${VISOES.find(v => v.id === id).rotulo} · ${NOME_SISTEMA}`;
   document.querySelectorAll('.lat-item[data-visao-id]').forEach(el => { const on = el.dataset.visaoId === id; el.classList.toggle('ativo', on); if (on) el.setAttribute('aria-current', 'page'); else el.removeAttribute('aria-current'); });
   if (atualizarHash && location.hash.replace(/^#/, '') !== id) history.replaceState(null, '', '#' + id);
   if (id === 'producao') desenharVisaoProducao();
+  if (id === 'painel') desenharVisaoPainel();
   desenharBusca();
 }
 
@@ -397,6 +422,11 @@ async function iniciar() {
   PRODUCAO = criarProducao($('#visao-producao'), () => ({
     rows: S.rows, f: S.filtros, escopo: S.escopo, receita: S.receita, ref: mesReferencia(), diaCorte: diaCorte(), abas: S.abas,
     carregarMes: nome => carregarAba(nome),
+  }));
+  PAINEL = criarPainel($('#visao-painel'), () => ({
+    f: S.filtros, escopoOk: registroNoEscopo, meses: mesesDoPainel(),
+    filtrarUf: uf => { S.filtros.uf = uf; aoMudarFiltro(); window.scrollTo({ top: 0, behavior: 'smooth' }); },
+    reusar: sheet => (sheet === S.periodo && S.rows.length ? Promise.resolve(S.rows) : null),
   }));
   mudarVisao(location.hash.replace(/^#/, ''), false);
   document.body.classList.remove('carregando');

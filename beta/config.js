@@ -17,8 +17,8 @@ export const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYm
 export const MENU = [
   { grupo: 'Gestão', itens: [
     { id: 'gerencial', rotulo: 'Gerencial', icone: 'grid', beta: true },
+    { id: 'painel', rotulo: 'Painel Analítico', icone: 'bars', beta: true },
     { id: 'producao', rotulo: 'Produção', icone: 'cloud', beta: true },
-    { id: 'painel', rotulo: 'Painel Analítico', icone: 'bars' },
     { id: 'gerfin', rotulo: 'Gerencial Financeiro', icone: 'wallet' },
     { id: 'discadora', rotulo: 'Discadora', icone: 'phone' },
   ]},

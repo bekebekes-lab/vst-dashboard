@@ -32,6 +32,13 @@ export function carregarAba(nome, { forcar = false } = {}) {
   return _cache.get(nome);
 }
 
+// Para históricos longos (Painel Analítico): busca sem guardar as linhas cruas em memória.
+export function buscarAbaSemCache(nome) {
+  return getJSON(`/api/sheets?action=values&sheet=${encodeURIComponent(nome)}`).then(j => parseLinhas(j.values || []));
+}
+// Promessa da aba se ela já está em cache (senão undefined)
+export function abaEmCache(nome) { return _cache.get(nome); }
+
 // Abas históricas "BaseCRM MMYYYY", da mais recente para a mais antiga.
 export async function listarAbasHistorico() {
   const j = await getJSON('/api/sheets?action=list');

@@ -45,7 +45,7 @@ export function criarMultivisao(cfg) {
   recalcColunas();
 
   const estado = {
-    visao: prefs.get('visao_' + cfg.id, window.matchMedia('(max-width: 640px)').matches ? 'cartoes' : 'tabela'),
+    visao: prefs.get('visao_' + cfg.id, cfg.visaoPadrao || (window.matchMedia('(max-width: 640px)').matches ? 'cartoes' : 'tabela')),
     ordK: cfg.ordemInicial === null ? null : (cfg.ordemInicial || (numericas[0] && numericas[0].k)),
     asc: false,
     metrica: cfg.metricaInicial || (metricas[0] && metricas[0].k),
@@ -100,7 +100,7 @@ export function criarMultivisao(cfg) {
     return `<div class="graf-ctl"><label>Medida
         <select class="sel" data-metrica>${metricas.map(x => `<option value="${esc(x.k)}" ${x.k === m.k ? 'selected' : ''}>${esc(x.rotulo)}</option>`).join('')}</select></label>
         <span class="graf-info">${ord.length} de ${ls.length}</span></div>
-      ${barrasHorizontais({ itens, fmt: v => c.fmt ? c.fmt(v, null) : String(v) })}`;
+      ${cfg.graficoCustom ? cfg.graficoCustom({ linhas: ord, col: c, fmt: v => c.fmt ? c.fmt(v, null) : String(v) }) : barrasHorizontais({ itens, fmt: v => c.fmt ? c.fmt(v, null) : String(v) })}`;
   }
 
   function desenhar() {
