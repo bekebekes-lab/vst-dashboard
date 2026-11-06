@@ -1,30 +1,30 @@
-// Dash Beta2 — casca nova + aba Gerencial (fase 1).
+// Dash Beta2 — casca nova. Cada visão é um item do menu lateral (Gerencial, Produção, ...).
 // Estrutura:  config.js (nome/menu)  ·  sessao.js (porteiro/Supabase)
 //             dados.js (/api/sheets)  ·  nucleo.js (regras do Gerencial)
 //             multivisao.js / graficos.js / ui.js (componentes)
 
-import { NOME_SISTEMA, MENU, MESES_EVOLUCAO } from './config.js';
+import { NOME_SISTEMA, MENU } from './config.js';
 import { exigirAdminBeta, sair } from './sessao.js';
 import { carregarAba, limparCache, listarAbasHistorico, statusDaBase } from './dados.js';
 import {
-  filtrosVazios, filtrar, opcoesDosFiltros, agregar, calcularKPIs, variacaoPct, totaisPorSubgrupo,
+  filtrosVazios, filtrar, opcoesDosFiltros, agregar, calcularKPIs, variacaoPct,
   detectarMonitorDuplicado, soAtivo, getEscopoTravado, parseDataBR, diasNoMes, mesAnterior,
   MESES_ABREV, receitaLinha,
 } from './nucleo.js';
-import { esc, icone, iniciais, fmtInt, fmtDec, fmtMoeda, fmtMoedaCurta, fmtPct, criarMultiSelect, prefs } from './ui.js';
-import { criarMultivisao } from './multivisao.js';
+import { esc, icone, iniciais, fmtInt, fmtDec, fmtMoeda, fmtPct, criarMultiSelect, prefs } from './ui.js';
 import { criarEsteira } from './esteira.js';
 import { criarProducao } from './producao.js';
-import { montarResponsivo, barrasVerticais } from './graficos.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 
-// Visões do Gerencial (mesma barra de filtros, mesmos dados). Novas visões entram aqui.
+// Visões do Beta2: cada uma é um item do menu lateral (config.js, `beta: true`) e usa a mesma
+// barra de filtros e os mesmos dados. Novas visões entram aqui e no MENU.
 const VISOES = [
-  { id: 'resumo', rotulo: 'Resumo', dica: 'KPIs, evolução, esteira por etapa, performance e comparativo' },
-  { id: 'esteira', rotulo: 'Esteira', dica: 'Cartões por categoria com as filas, pedidos e detalhamento por consultor (como o Gerencial atual)' },
+  { id: 'gerencial', rotulo: 'Gerencial', dica: 'KPIs, cartões por categoria com as filas, pedidos e detalhamento por consultor (como o Gerencial atual)' },
   { id: 'producao', rotulo: 'Produção', dica: 'Produção por unidade, gestor ou equipe × status, com UF BL, TRI, MOM e comparar meses (como a aba Produção)' },
 ];
+// hashes antigos (abas Resumo/Esteira) levam ao Gerencial
+const ALIAS_VISAO = { resumo: 'gerencial', esteira: 'gerencial' };
 
 const S = {
   acesso: null, escopo: null,
@@ -32,12 +32,11 @@ const S = {
   periodo: 'BaseCRM',       // 'BaseCRM' (live) ou nome da aba
   rows: [], monitorDup: false,
   filtros: filtrosVazios(),
-  meses: new Map(),         // nome da aba -> linhas (meses anteriores, p/ MoM e evolução)
+  meses: new Map(),         // nome da aba -> linhas (mês anterior, p/ a variação dos KPIs)
   mesesCarregando: false,
   req: 0,
   receita: prefs.get('receita', '0') === '1',
-  visao: 'resumo',
-  dimensao: prefs.get('dimensao', 'gestor'),
+  visao: 'gerencial',
   statusBase: null,
 };
 
@@ -61,8 +60,7 @@ function montarCasca() {
   $('#app').innerHTML = `
     <aside class="lateral" id="lateral" aria-label="Menu principal">
       <div class="lat-marca">
-        <span class="lat-logo"><img src="/icon-192.png" alt="VST Group"></span>
-        <span class="lat-nome">${esc(NOME_SISTEMA)}</span>
+        <a class="lat-logo" href="#gerencial" aria-label="VST Group"><img src="/beta/logo-vst.png" alt="VST Group"></a>
         <button class="btn-icone lat-fechar" type="button" data-fechar-menu aria-label="Fechar menu">${icone('close')}</button>
       </div>
       <nav class="lat-nav">
@@ -70,7 +68,7 @@ function montarCasca() {
           <div class="lat-grupo">
             <div class="lat-grupo-tit">${esc(g.grupo)}</div>
             ${g.itens.map(i => i.beta
-              ? `<a class="lat-item ativo" href="#${i.id}" aria-current="page">${icone(i.icone)}<span>${esc(i.rotulo)}</span></a>`
+              ? `<a class="lat-item" href="#${i.id}" data-visao-id="${i.id}">${icone(i.icone)}<span>${esc(i.rotulo)}</span></a>`
               : `<a class="lat-item" href="/#aba=${esc(i.id)}" title="Abre no Dash atual">${icone(i.icone)}<span>${esc(i.rotulo)}</span><em class="lat-ext" aria-hidden="true">↗</em></a>`).join('')}
           </div>`).join('')}
       </nav>
@@ -82,7 +80,7 @@ function montarCasca() {
       <header class="topo">
         <button class="btn-icone topo-menu" type="button" id="btn-menu" aria-label="Abrir menu">${icone('menu')}</button>
         <div class="topo-tit">
-          <h1>Gerencial</h1>
+          <h1 id="titulo-visao">Gerencial</h1>
           <span class="selo" id="selo-base">BaseCRM Live</span>
         </div>
         <div class="topo-acoes">
@@ -104,32 +102,13 @@ function montarCasca() {
 
       <main class="conteudo" id="conteudo">
         <section class="filtros" id="filtros" aria-label="Filtros"></section>
-        <nav class="abas-visao" id="abas-visao" role="tablist" aria-label="Visões do Gerencial">
-          ${VISOES.map(v => `<button type="button" role="tab" class="aba-visao" data-visao-id="${v.id}" title="${esc(v.dica)}">${esc(v.rotulo)}</button>`).join('')}
-        </nav>
         <div id="aviso"></div>
         <div id="slot-busca"></div>
-        <div id="visao-esteira" hidden></div>
+        <div id="visao-gerencial" hidden>
+          <section class="kpis" id="kpis" aria-label="Indicadores"></section>
+          <div id="visao-esteira"></div>
+        </div>
         <div id="visao-producao" hidden></div>
-        <div id="visao-resumo">
-        <section class="kpis" id="kpis" aria-label="Indicadores"></section>
-        <div class="grade-2">
-          <section class="painel" id="painel-evolucao">
-            <header class="painel-cab"><div class="painel-tit"><h2>Evolução mensal</h2><p id="evolucao-sub"></p></div>
-              <div class="painel-ctl"><div class="seg" role="group" aria-label="Medida da evolução">
-                <button type="button" class="seg-btn" data-evo="qtd"><span>Pedidos</span></button>
-                <button type="button" class="seg-btn" data-evo="rec"><span>Receita</span></button></div></div></header>
-            <div class="painel-corpo"><div id="evolucao-graf" class="graf-host"></div></div>
-          </section>
-          <div id="slot-esteira"></div>
-        </div>
-        <div id="slot-performance"></div>
-        <div id="slot-comparativo"></div>
-        <section class="painel painel-futuro" aria-label="Metas × realizado">
-          <header class="painel-cab"><div class="painel-tit"><h2>Metas × realizado</h2>
-            <p>Em breve — depende de definir de onde vêm as metas de venda por equipe/consultor.</p></div></header>
-        </section>
-        </div>
         <footer class="rodape" id="rodape"></footer>
       </main>
     </div>`;
@@ -146,12 +125,9 @@ function ligarCasca() {
   $('#btn-sair').addEventListener('click', sair);
   $('#sel-mes').addEventListener('change', e => { S.periodo = e.target.value; S.filtros = filtrosVazios(); if (PRODUCAO) PRODUCAO.reiniciar(); carregarPeriodo(); });
   $('#btn-atualizar').addEventListener('click', () => { limparCache(); S.meses.clear(); carregarPeriodo({ forcar: true }); });
-  $('#abas-visao').addEventListener('click', e => { const b = e.target.closest('[data-visao-id]'); if (b) mudarVisao(b.dataset.visaoId); });
+  // item do menu = visão do Beta2: o hash muda, a visão troca e (no celular) o menu fecha
+  document.querySelectorAll('.lat-item[data-visao-id]').forEach(a => a.addEventListener('click', () => abrir(false)));
   window.addEventListener('hashchange', () => mudarVisao(location.hash.replace(/^#/, ''), false));
-  $('#painel-evolucao').addEventListener('click', e => {
-    const b = e.target.closest('[data-evo]'); if (!b) return;
-    prefs.set('evo', b.dataset.evo); desenharEvolucao();
-  });
 }
 
 function popularMeses() {
@@ -250,10 +226,8 @@ async function carregarPeriodo({ forcar = false } = {}) {
   $('#selo-base').textContent = ehLive() ? 'BaseCRM Live' : S.periodo;
   $('#aviso').innerHTML = '';
   $('#kpis').innerHTML = Array(4).fill('<div class="kpi kpi-esq"><span class="esq"></span></div>').join('');
-  PAINEIS.performance.carregando(); PAINEIS.esteira.carregando(); PAINEIS.comparativo.carregando();
   if (ESTEIRA) ESTEIRA.carregando();
   if (PRODUCAO) PRODUCAO.carregando();
-  $('#evolucao-graf').innerHTML = '<div class="vazio"><span class="spinner"></span> Carregando…</div>';
   try {
     const rows = await carregarAba(S.periodo, { forcar: forcar || ehLive() });   // mês corrente sempre fresco
     if (req !== S.req) return;
@@ -272,16 +246,14 @@ async function carregarPeriodo({ forcar = false } = {}) {
   carregarMesesAnteriores(req);
 }
 
-// Meses anteriores em segundo plano (MoM + evolução). Mesmas rotas/escopo.
+// Mês anterior em segundo plano (variação dos KPIs). Mesmas rotas/escopo.
 async function carregarMesesAnteriores(req) {
-  S.mesesCarregando = true; desenharEvolucao();
+  S.mesesCarregando = true;
   const ref = mesReferencia();
-  const alvos = [];
-  for (let k = 1; k <= MESES_EVOLUCAO; k++) { const m = mesAnterior(ref.mm, ref.yyyy, k); const a = abaDoMes(m.mm, m.yyyy); if (a) alvos.push(a); }
-  await Promise.allSettled(alvos.map(async a => {
-    if (S.meses.has(a.nome)) return;
-    try { S.meses.set(a.nome, await carregarAba(a.nome)); } catch (e) { /* mês indisponível: segue sem ele */ }
-  }));
+  const m = mesAnterior(ref.mm, ref.yyyy), aba = abaDoMes(m.mm, m.yyyy);
+  if (aba && !S.meses.has(aba.nome)) {
+    try { S.meses.set(aba.nome, await carregarAba(aba.nome)); } catch (e) { /* mês indisponível: segue sem a variação */ }
+  }
   if (req !== S.req) return;
   S.mesesCarregando = false;
   recalcularComparativos();
@@ -299,8 +271,6 @@ function recalcular() {
   S.filtradas = filtradas;
   recalcularComparativos();
   desenharBusca();
-  desenharPerformance();
-  desenharEsteira();
   desenharVisaoEsteira();
   desenharVisaoProducao();
   desenharRodape();
@@ -319,20 +289,22 @@ function desenharVisaoEsteira() {
 // Quantidade × Receita vale para todos os painéis e visões.
 function aplicarReceita(b) {
   S.receita = b; prefs.set('receita', b ? '1' : '0');
-  desenharPerformance(); desenharEsteira(); desenharVisaoEsteira(); desenharVisaoProducao();
+  desenharVisaoEsteira(); desenharVisaoProducao();
 }
 
 function mudarVisao(id, atualizarHash = true) {
-  if (!VISOES.some(v => v.id === id)) id = prefs.get('visao', 'resumo');
-  if (!VISOES.some(v => v.id === id)) id = 'resumo';
+  id = ALIAS_VISAO[id] || id;
+  if (!VISOES.some(v => v.id === id)) id = ALIAS_VISAO[prefs.get('visao', 'gerencial')] || prefs.get('visao', 'gerencial');
+  if (!VISOES.some(v => v.id === id)) id = 'gerencial';
   S.visao = id; prefs.set('visao', id);
-  $('#visao-resumo').hidden = id !== 'resumo';
-  $('#visao-esteira').hidden = id !== 'esteira';
+  $('#visao-gerencial').hidden = id !== 'gerencial';
   $('#visao-producao').hidden = id !== 'producao';
-  if (id === 'producao') desenharVisaoProducao();
-  document.querySelectorAll('[data-visao-id]').forEach(b => { const on = b.dataset.visaoId === id; b.classList.toggle('ativo', on); b.setAttribute('aria-selected', String(on)); });
+  $('#titulo-visao').textContent = VISOES.find(v => v.id === id).rotulo;
+  document.title = `${VISOES.find(v => v.id === id).rotulo} · ${NOME_SISTEMA}`;
+  document.querySelectorAll('.lat-item[data-visao-id]').forEach(el => { const on = el.dataset.visaoId === id; el.classList.toggle('ativo', on); if (on) el.setAttribute('aria-current', 'page'); else el.removeAttribute('aria-current'); });
   if (atualizarHash && location.hash.replace(/^#/, '') !== id) history.replaceState(null, '', '#' + id);
-  if (id === 'resumo') desenharEvolucao();   // gráfico mede a largura: redesenha ao reaparecer
+  if (id === 'producao') desenharVisaoProducao();
+  desenharBusca();
 }
 
 // Mês anterior "até o mesmo dia" (por CADASTRO) com os mesmos filtros; sem data de cadastro entra normal.
@@ -354,8 +326,6 @@ function agregarMesAnterior() {
 function recalcularComparativos() {
   ANT = agregarMesAnterior();
   desenharKPIs();
-  desenharComparativo();
-  desenharEvolucao();
 }
 
 function chipVar(pct, { neutro = false, pp = false } = {}) {
@@ -389,145 +359,11 @@ function desenharKPIs() {
     </article>`).join('') + (nota ? `<p class="kpis-nota">${esc(nota)}</p>` : '');
 }
 
-// ── evolução mensal ─────────────────────────────────────────────────────────
-let _desmontaEvo = null;
-function desenharEvolucao() {
-  const host = $('#evolucao-graf'); if (!host || !S.rows.length) return;
-  const modo = prefs.get('evo', 'qtd');
-  document.querySelectorAll('[data-evo]').forEach(b => { const on = b.dataset.evo === modo; b.classList.toggle('ativo', on); b.setAttribute('aria-pressed', String(on)); });
-  const ref = mesReferencia();
-  const pontos = [];
-  for (let k = MESES_EVOLUCAO; k >= 0; k--) {
-    const m = mesAnterior(ref.mm, ref.yyyy, k);
-    let rows, parcial = false;
-    if (k === 0) { rows = S.rows; parcial = ehLive(); }
-    else { const a = abaDoMes(m.mm, m.yyyy); rows = a && S.meses.get(a.nome); }
-    if (!rows) continue;
-    const ag = agregar(filtrar(rows, S.filtros, S.escopo, ['data', 'busca']), detectarMonitorDuplicado(rows));
-    pontos.push({ rotulo: MESES_ABREV[+m.mm - 1], valor: modo === 'rec' ? ag.cats.GERAL.totalRec : ag.cats.GERAL.total, parcial });
-  }
-  $('#evolucao-sub').textContent = (S.mesesCarregando ? 'Carregando meses anteriores… · ' : '') +
-    (modo === 'rec' ? 'Receita estimada (Geral)' : 'Pedidos (Geral)') + ' por mês, com os filtros atuais' + (ehLive() ? ' · mês corrente em andamento' : '');
-  if (_desmontaEvo) _desmontaEvo();
-  const fmt = modo === 'rec' ? fmtMoedaCurta : fmtInt;
-  _desmontaEvo = montarResponsivo(host, w => barrasVerticais({ pontos, largura: w, fmt, fmtEixo: modo === 'rec' ? fmtMoedaCurta : fmtInt, altura: w < 420 ? 220 : 260 }));
-}
-
-// ── painéis multivisão ──────────────────────────────────────────────────────
-const PAINEIS = {};
-function criarPaineis() {
-  const num = (rotulo, k) => ({ k, rotulo, num: true,
-    valor: l => l[k + (S.receita ? '_REC' : '')] || 0,
-    fmt: v => (S.receita ? fmtMoeda(v) : fmtInt(v)) });
-
-  // Performance por Gestor / Equipe / Consultor
-  PAINEIS.performance = criarMultivisao({
-    id: 'performance', titulo: 'Performance por Gestor / Equipe', subtitulo: 'Mesmos números do Detalhamento por consultor do Gerencial atual.',
-    nome: l => l.nome,
-    sub: l => S.dimensao === 'consultor' ? l.equipe : S.dimensao === 'equipe' ? `${l.gestor}${l.uf ? ' · ' + l.uf : ''}` : '',
-    colunas: () => [
-      { k: 'nome', rotulo: { gestor: 'Gestor', equipe: 'Equipe', consultor: 'Consultor' }[S.dimensao], valor: l => l.nome },
-      num('Gross', 'GROSS'), num('Renov.', 'RENOVAÇÃO'), num('BL', 'BL'), num('Titular.', 'TITULARIDADE'),
-      num('Ativo/Inst.', 'ATIVO'), num('Total', 'GERAL'),
-      { k: 'taxa', rotulo: 'Taxa ativ.', num: true, valor: l => (l.GERAL ? (l.ATIVO / l.GERAL) * 100 : 0), fmt: v => fmtPct(v),
-        html: (v) => `<span class="taxa"><i style="width:${Math.min(100, v)}%"></i></span><b>${fmtPct(v)}</b>` },
-    ],
-    ordemInicial: 'GERAL', metricaInicial: 'GERAL', destaque: 'GERAL', limite: 25,
-  });
-  const seg = document.createElement('div'); seg.className = 'seg'; seg.setAttribute('role', 'group'); seg.setAttribute('aria-label', 'Agrupar por');
-  seg.innerHTML = [['gestor', 'Gestor'], ['equipe', 'Equipe'], ['consultor', 'Consultor']].map(([k, r]) => `<button type="button" class="seg-btn" data-dim="${k}"><span>${r}</span></button>`).join('');
-  const segMed = document.createElement('div'); segMed.className = 'seg'; segMed.setAttribute('role', 'group'); segMed.setAttribute('aria-label', 'Medida');
-  segMed.innerHTML = `<button type="button" class="seg-btn" data-med="qtd"><span>Qtd</span></button><button type="button" class="seg-btn" data-med="rec"><span>Receita</span></button>`;
-  PAINEIS.performance.slotExtra.append(seg, segMed);
-  PAINEIS.performance.slotExtra.addEventListener('click', e => {
-    const d = e.target.closest('[data-dim]'), m = e.target.closest('[data-med]');
-    if (d) { S.dimensao = d.dataset.dim; prefs.set('dimensao', S.dimensao); desenharPerformance(); }
-    if (m) aplicarReceita(m.dataset.med === 'rec');
-  });
-  $('#slot-performance').append(PAINEIS.performance.el);
-
-  // Esteira por etapa (funil de processo)
-  PAINEIS.esteira = criarMultivisao({
-    id: 'esteira', titulo: 'Esteira por etapa', subtitulo: 'Onde estão os pedidos do Geral, na ordem do processo (escritório → operadora → ativação → ativo).',
-    nome: l => l.nome,
-    colunas: () => [
-      { k: 'nome', rotulo: 'Etapa', valor: l => l.nome },
-      { k: 'v', rotulo: S.receita ? 'Receita' : 'Pedidos', num: true, valor: l => l.v, fmt: v => S.receita ? fmtMoeda(v) : fmtInt(v) },
-      { k: 'pct', rotulo: '% do total', num: true, valor: l => l.pct, fmt: v => fmtPct(v) },
-    ],
-    ordemInicial: null, graficoOrdemOriginal: true, metricaInicial: 'v', destaque: 'v', limite: 12,
-    classeBarra: l => l.classe,
-  });
-  $('#slot-esteira').append(PAINEIS.esteira.el);
-
-  // Comparativo com o mês anterior, por equipe
-  PAINEIS.comparativo = criarMultivisao({
-    id: 'comparativo', titulo: 'Comparativo de equipes × mês anterior', subtitulo: '',
-    nome: l => l.nome, sub: l => `${l.gestor}${l.uf ? ' · ' + l.uf : ''}`,
-    colunas: () => [
-      { k: 'nome', rotulo: 'Equipe', valor: l => l.nome },
-      { k: 'atual', rotulo: 'Atual', num: true, valor: l => l.atual, fmt: v => fmtInt(v) },
-      { k: 'ant', rotulo: 'Mês anterior', num: true, valor: l => l.ant, fmt: v => fmtInt(v) },
-      { k: 'dif', rotulo: 'Diferença', num: true, valor: l => l.dif, fmt: v => (v > 0 ? '+' : '') + fmtInt(v) },
-      { k: 'pct', rotulo: 'Variação', num: true, valor: l => (l.pct === null ? -Infinity : l.pct), fmt: v => (v === -Infinity ? 'novo' : (v > 0 ? '+' : '') + fmtDec(v, 1) + '%'),
-        html: (v, l) => l.pct === null ? '<span class="var var-nd">novo</span>' : chipVar(l.pct) },
-    ],
-    ordemInicial: 'dif', metricas: () => [{ k: 'dif', rotulo: 'Diferença (pedidos)' }, { k: 'atual', rotulo: 'Atual' }, { k: 'ant', rotulo: 'Mês anterior' }],
-    metricaInicial: 'dif', destaque: 'atual',
-    classeBarra: (l, k) => (k === 'dif' && l.dif < 0 ? 'hb-neg' : ''), limite: 20,
-  });
-  $('#slot-comparativo').append(PAINEIS.comparativo.el);
-}
-
-function marcarSegmentos() {
-  PAINEIS.performance.slotExtra.querySelectorAll('[data-dim]').forEach(b => { const on = b.dataset.dim === S.dimensao; b.classList.toggle('ativo', on); b.setAttribute('aria-pressed', String(on)); });
-  PAINEIS.performance.slotExtra.querySelectorAll('[data-med]').forEach(b => { const on = (b.dataset.med === 'rec') === S.receita; b.classList.toggle('ativo', on); b.setAttribute('aria-pressed', String(on)); });
-}
-
-function desenharPerformance() {
-  if (!AGG) return;
-  marcarSegmentos();
-  PAINEIS.performance.render({ gestor: AGG.porGestor, equipe: AGG.porEquipe, consultor: AGG.porConsultor }[S.dimensao]);
-}
-
-const CLASSE_ETAPA = { 'Ativo': 'hb-ok', 'Esteira de ativação (correção)': 'hb-aviso', 'Outros': 'hb-cinza' };
-function desenharEsteira() {
-  if (!AGG) return;
-  const g = AGG.cats.GERAL, sub = totaisPorSubgrupo(g, S.receita);
-  const total = S.receita ? g.totalRec : g.total;
-  // ordem do processo (a lista do Dash atual começa por Ativo; aqui invertemos para ler como funil)
-  const ordem = ['Esteira escritório', 'Esteira operadora', 'Esteira de ativação', 'Esteira de ativação (correção)', 'Ativo', 'Outros'];
-  const linhas = ordem.filter(k => sub[k]).map(k => ({ nome: k, v: sub[k], pct: total ? (sub[k] / total) * 100 : 0, classe: CLASSE_ETAPA[k] || '' }));
-  PAINEIS.esteira.render(linhas);
-}
-
-function desenharComparativo() {
-  const p = PAINEIS.comparativo; if (!AGG || !p) return;
-  const sub = p.el.querySelector('.painel-tit');
-  let p2 = sub.querySelector('p'); if (!p2) { p2 = document.createElement('p'); sub.append(p2); }
-  if (!ANT || !ANT.agg) {
-    p2.textContent = ANT ? ANT.indisponivel : '';
-    p.render([]);
-    return;
-  }
-  const ref = mesReferencia();
-  p2.textContent = `Pedidos do Geral por equipe: ${rotuloMes(ref.mm, ref.yyyy)} × ${ANT.rotulo} até o dia ${ANT.ate} (por data de ${ANT.porData}).`;
-  const mapAnt = new Map(ANT.agg.porEquipe.map(e => [e.nome, e.GERAL]));
-  const nomes = new Set([...AGG.porEquipe.map(e => e.nome), ...mapAnt.keys()]);
-  const mapAtual = new Map(AGG.porEquipe.map(e => [e.nome, e]));
-  const linhas = [...nomes].map(nome => {
-    const at = mapAtual.get(nome), atual = at ? at.GERAL : 0, ant = mapAnt.get(nome) || 0;
-    const info = at || ANT.agg.porEquipe.find(e => e.nome === nome);
-    return { nome, gestor: info.gestor, uf: info.uf, atual, ant, dif: atual - ant, pct: ant ? ((atual - ant) / ant) * 100 : null };
-  });
-  p.render(linhas);
-}
-
 // Resultados da busca por CNPJ/razão social (como no Gerencial atual)
 function desenharBusca() {
   const slot = $('#slot-busca');
   const q = (S.filtros.busca || '').trim();
-  if (!q) { slot.innerHTML = ''; return; }
+  if (!q || S.visao !== 'gerencial') { slot.innerHTML = ''; return; }
   const ls = S.filtradas.slice(0, 200);
   slot.innerHTML = `<section class="painel"><header class="painel-cab"><div class="painel-tit"><h2>Resultados da busca</h2>
     <p>${fmtInt(S.filtradas.length)} pedido${S.filtradas.length === 1 ? '' : 's'}${S.filtradas.length > 200 ? ' (mostrando 200)' : ''}</p></div></header>
@@ -542,7 +378,7 @@ function desenharRodape() {
   const partes = [];
   if (S.statusBase) partes.push(`Base atualizada em ${S.statusBase}`);
   if (AGG) partes.push(`${fmtInt(S.rows.length)} registros na base · ${fmtInt(AGG.nLinhas)} filtrados · ${fmtInt(AGG.nConsultores)} consultores`);
-  partes.push(`${NOME_SISTEMA} · fase 1 (Gerencial). As demais abas abrem o Dash atual.`);
+  partes.push(`${NOME_SISTEMA} · itens com ↗ no menu abrem o Dash atual.`);
   el.textContent = partes.join('  ·  ');
 }
 
@@ -552,7 +388,7 @@ async function iniciar() {
   if (!acesso) return;                     // já redirecionou para o Dash atual
   S.acesso = acesso;
   S.escopo = getEscopoTravado(acesso.perfil);
-  montarCasca(); ligarCasca(); montarFiltros(); criarPaineis();
+  montarCasca(); ligarCasca(); montarFiltros();
   ESTEIRA = criarEsteira($('#visao-esteira'), {
     receita: () => S.receita, setReceita: aplicarReceita,
     filtrarConsultor: nome => { S.filtros.consultores = [nome]; aoMudarFiltro(); window.scrollTo({ top: 0, behavior: 'smooth' }); },

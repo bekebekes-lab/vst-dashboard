@@ -12,15 +12,14 @@ export const EMAIL_ADMIN_BETA = 'raphael@vstgroup.com.br';
 export const SUPA_URL = 'https://kzlchetrpsfefwybaaoy.supabase.co';
 export const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt6bGNoZXRycHNmZWZ3eWJhYW95Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkwNTM4NDIsImV4cCI6MjA5NDYyOTg0Mn0.4euWpZZadXe9ayg6ITY5SNueEhU094ajJv379gC9YrU';
 
-// Menu lateral. `aba` = id da aba no Dash atual (index.html); itens com
-// `beta: true` já existem no Beta2, os demais abrem o Dash atual naquela aba
-// (index.html lê "#aba=<id>" depois do login).
+// Menu lateral. Itens com `beta: true` são visões do Beta2 (rota "#<id>", ver VISOES em app.js);
+// os demais abrem o Dash atual naquela aba (index.html lê "#aba=<id>" depois do login).
 export const MENU = [
   { grupo: 'Gestão', itens: [
     { id: 'gerencial', rotulo: 'Gerencial', icone: 'grid', beta: true },
-    { id: 'gerfin', rotulo: 'Gerencial Financeiro', icone: 'wallet' },
+    { id: 'producao', rotulo: 'Produção', icone: 'cloud', beta: true },
     { id: 'painel', rotulo: 'Painel Analítico', icone: 'bars' },
-    { id: 'producao', rotulo: 'Produção', icone: 'cloud' },
+    { id: 'gerfin', rotulo: 'Gerencial Financeiro', icone: 'wallet' },
     { id: 'discadora', rotulo: 'Discadora', icone: 'phone' },
   ]},
   { grupo: 'Simuladores', itens: [
@@ -40,6 +39,3 @@ export const MENU = [
     { id: 'acessos', rotulo: 'Acessos', icone: 'users' },
   ]},
 ];
-
-// Quantos meses (além do selecionado) entram no gráfico de evolução.
-export const MESES_EVOLUCAO = 5;
