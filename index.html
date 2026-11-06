@@ -11065,6 +11065,14 @@ async function fazerLogin(paraBeta2) {
   const btnBeta2 = document.getElementById('login-beta2-btn');
   const erro  = document.getElementById('login-error');
 
+  // O botão do Beta2 aparece para todos, mas só o e-mail liberado em /beta/config.js entra por ele:
+  // para os demais nem chega a tentar o login (usam "Entrar" e vão para o Dash normal).
+  if (paraBeta2 === true && !beta2Liberado(email)) {
+    erro.textContent = 'O ' + (BETA2_CFG ? BETA2_CFG.NOME_SISTEMA : 'Dash Beta2') + ' está liberado apenas para o administrador. Use "Entrar" para acessar o Dash.';
+    erro.classList.add('active');
+    return;
+  }
+
   if (!email || !senha) {
     erro.textContent = 'Preencha e-mail e senha.';
     erro.classList.add('active');
@@ -11126,9 +11134,8 @@ function beta2Liberado(email) {
 function atualizarOpcaoBeta2() {
   const btn = document.getElementById('login-beta2-btn');
   if (!btn || !BETA2_CFG) return;
-  const email = document.getElementById('login-email')?.value || '';
   btn.textContent = 'Entrar no ' + BETA2_CFG.NOME_SISTEMA;
-  btn.style.display = beta2Liberado(email) ? '' : 'none';
+  btn.style.display = '';   // visível para todos; o login por ele só funciona para o e-mail liberado (ver fazerLogin)
 }
 
 // Header padrão pra chamadas autenticadas em /api/* — sem token, nem tenta.
