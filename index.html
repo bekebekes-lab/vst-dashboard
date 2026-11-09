@@ -2948,6 +2948,14 @@
         </select>
       </div>
       <div class="filter-group">
+        <label>Tratativa do gestor</label>
+        <select id="churn-gestor" onchange="churnAoFiltrar('gestor')">
+          <option value="todos">Todos</option>
+          <option value="tratados">Tratados pelo gestor</option>
+          <option value="nao_tratados">Sem tratativa do gestor</option>
+        </select>
+      </div>
+      <div class="filter-group">
         <label>Atribuído a</label>
         <select id="churn-atribuido" onchange="churnAoFiltrar('atribuido')"><option value="todos">Todos</option></select>
       </div>
@@ -13169,6 +13177,7 @@ function abrirNotificacoesChurn() {
   // renderChurn() no fim do initChurn() já vai ler esses valores.
   document.getElementById('churn-status').value = 'pendentes';
   document.getElementById('churn-linhas').value = '10+';
+  document.getElementById('churn-gestor').value = 'todos';
   switchTab('churn', btn);
 }
 
@@ -13415,9 +13424,12 @@ function churnAplicarAtribuido(ids) {
 function churnAtualizarCascata(origem) {
   const status = document.getElementById('churn-status')?.value || 'pendentes';
   const linhas = document.getElementById('churn-linhas')?.value || 'todos';
+  const gestorFiltro = document.getElementById('churn-gestor')?.value || 'todos';
   const base = CHURN_DADOS.filter(r => {
     if (status === 'pendentes' && r.respondido) return false;
     if (status === 'respondidos' && !r.respondido) return false;
+    if (gestorFiltro === 'tratados' && !r.tratado_gestor) return false;
+    if (gestorFiltro === 'nao_tratados' && r.tratado_gestor) return false;
     if (linhas === '10+' && !(r.qtd_linhas >= 10)) return false;
     return true;
   });
@@ -13460,6 +13472,7 @@ function churnValorOrdenacao(r, col) {
 function renderChurn() {
   const statusFiltro = document.getElementById('churn-status').value;
   const linhasFiltro = document.getElementById('churn-linhas').value;
+  const gestorFiltro = document.getElementById('churn-gestor')?.value || 'todos';
   const atribuidoFiltro = document.getElementById('churn-atribuido').value;
   // Multi-seleção (mesmo dropdown de checkbox de Gerencial/Produção): array
   // vazio = "Todas".
@@ -13472,6 +13485,8 @@ function renderChurn() {
     if (statusFiltro === 'pendentes' && r.respondido) return false;
     if (statusFiltro === 'respondidos' && !r.respondido) return false;
     if (linhasFiltro === '10+' && !(r.qtd_linhas >= 10)) return false;
+    if (gestorFiltro === 'tratados' && !r.tratado_gestor) return false;
+    if (gestorFiltro === 'nao_tratados' && r.tratado_gestor) return false;
     if (atribuidoFiltro === 'ninguem' && r.atribuido_a) return false;
     if (atribuidoFiltro !== 'todos' && atribuidoFiltro !== 'ninguem' && String(r.atribuido_a) !== atribuidoFiltro) return false;
     if (unidadeSel.length > 0 && !unidadeSel.includes(churnUnidade(r))) return false;
