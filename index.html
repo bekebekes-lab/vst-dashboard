@@ -13542,7 +13542,7 @@ function renderChurn() {
             <td style="font-size:12px">${escapeHtml(r.municipio_cliente || '—')}</td>
             <td class="center" style="font-size:12px">${escapeHtml(r.uf_cliente || '—')}</td>
             <td>${escapeHtml(r.data_janela || '—')}</td>
-            <td class="center"><span class="badge ${r.respondido ? '' : 'badge-gray'}" style="${r.respondido ? 'background:#dcfce7;color:#16a34a;' : ''}">${r.respondido ? 'Respondido' : 'Pendente'}</span></td>
+            <td class="center"><span class="badge ${r.respondido ? '' : 'badge-gray'}" style="${r.respondido ? 'background:#dcfce7;color:#16a34a;' : ''}">${r.respondido ? 'Respondido' : 'Pendente'}</span>${r.tratado_gestor ? `<div title="${escapeHtml((r.tratado_gestor_nome || 'Gestor') + ': ' + (r.resposta_gestor || ''))}" style="margin-top:3px;font-size:10px;font-weight:600;color:#16a34a;white-space:nowrap;">✓ Tratado pelo gestor</div>` : ''}</td>
             <td class="center"><button class="btn-secondary" style="padding:4px 10px;font-size:11px;white-space:nowrap;" onclick="churnAbrirDetalhe(${r.id})">Ver / Responder</button></td>
           </tr>`;
         }).join('')}
