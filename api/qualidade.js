@@ -109,7 +109,7 @@ async function carregarMarcacoes() {
 let _cache = null;      // { em, jornadas, equipes, abas }
 let _emAndamento = null;
 
-const COLS = ['NUMERO PEDIDO', 'NOME CLIENTE', 'CPF/CNPJ', 'PROPRIETARIO DO PEDIDO', 'EQUIPE',
+const COLS = ['NUMERO PEDIDO', 'NOME CLIENTE', 'CPF/CNPJ', 'PROPRIETARIO DO PEDIDO', 'PROPRIETARIO DA ATIVIDADE', 'EQUIPE',
   'ETAPA PEDIDO', 'TIPO NEGOCIACAO', 'PRODUTO', 'NUMERO', 'VALOR UNIT', 'DATA REF'];
 
 function ordemDaAba(titulo) {
@@ -154,7 +154,7 @@ async function montarUniverso() {
           pedido, data_ref: dataRef,
           cnpj: (c['CPF/CNPJ'][i] || '').toString().trim(),
           cliente: (c['NOME CLIENTE'][i] || '').toString().trim(),
-          proprietario: (c['PROPRIETARIO DO PEDIDO'][i] || '').toString().trim(),
+          proprietario: (c['PROPRIETARIO DO PEDIDO'][i] || c['PROPRIETARIO DA ATIVIDADE'][i] || '').toString().trim(),
           equipe, gestor: EQUIPES_GESTORES[equipe] || '',
           tipo: (c['TIPO NEGOCIACAO'][i] || '').toString().trim().toUpperCase(),
           valor: 0, itens: [], aba: aba.t,
