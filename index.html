@@ -3795,6 +3795,7 @@ async function loadData() {
     }
     const json = await res.json();
     const rows = json.values || [];
+    avisoColunasBase(json, sheetName);
     if (rows.length < 2) throw new Error('Planilha sem dados.');
 
     headers = rows[0];
@@ -3844,6 +3845,25 @@ async function loadData() {
 // base (aba StatusBot, escrita pelo bot.py), e não a hora em que o navegador
 // carregou/recarregou a página. A data/hora vem em texto ISO de Brasília
 // (-03:00) e é exibida como veio, sem converter pro fuso do navegador.
+// A API traduz os nomes de coluna que o NeoSales mudar (api/_lib/colunas-crm.js) e avisa quando uma
+// coluna OBRIGATÓRIA não foi achada nem por apelido. Sem esse aviso a tela mostraria zeros sem explicar.
+function avisoColunasBase(json, sheetName) {
+  const el = document.getElementById('aviso-colunas-base');
+  const ausentes = json?.colunasAusentes || [];
+  if (json?.colunasRenomeadas?.length) console.info('Base: colunas traduzidas pela API:', json.colunasRenomeadas);
+  if (!ausentes.length) { el?.remove(); return; }
+  console.warn('Base: colunas obrigatórias não encontradas em ' + sheetName + ':', ausentes);
+  const admin = typeof USUARIO_ATUAL !== 'undefined' && USUARIO_ATUAL && ehAdminLike(USUARIO_ATUAL.perfil);
+  const texto = admin
+    ? `<strong>⚠ A base mudou:</strong> não encontrei ${ausentes.length > 1 ? 'as colunas' : 'a coluna'} <code>${ausentes.map(escapeHtml).join('</code>, <code>')}</code> em "${escapeHtml(sheetName)}". O NeoSales pode ter renomeado o cabeçalho — acrescente o nome novo em <code>api/_lib/colunas-crm.js</code>. Até lá, números e filtros podem aparecer zerados.`
+    : '<strong>⚠ A base de dados foi atualizada e estamos ajustando.</strong> Alguns números podem aparecer zerados por enquanto — avise o administrador se persistir.';
+  const novo = document.createElement('div');
+  novo.id = 'aviso-colunas-base';
+  novo.style.cssText = 'position:fixed;left:16px;right:16px;bottom:16px;max-width:680px;margin:0 auto;z-index:9000;background:#fef2f2;border:1px solid #fca5a5;color:#991b1b;border-radius:10px;padding:12px 40px 12px 14px;font-size:12.5px;line-height:1.5;box-shadow:0 8px 24px rgba(0,0,0,.18);';
+  novo.innerHTML = texto + '<button aria-label="Fechar" onclick="this.parentNode.remove()" style="position:absolute;top:6px;right:8px;border:0;background:transparent;font-size:18px;cursor:pointer;color:#991b1b;">×</button>';
+  el?.remove();
+  document.body.appendChild(novo);
+}
 let _baseStatusTimer = null;
 async function atualizarRotuloBase(sheetName) {
   const el = document.getElementById('last-update');

@@ -12,6 +12,7 @@
 import { createSign } from 'crypto';
 import { requireAuth, getUsuarioDashboard } from './_lib/auth.js';
 import { getEscopoTravado, linhaDentroDoEscopo, normalizarNomeEquipe, getCarteiraCodigosPermitidos, carteiraCodigoDoTerritorio } from './_lib/escopo.js';
+import { ehAbaBaseCRM, canonicalizarCabecalho } from './_lib/colunas-crm.js';
 
 function base64url(input) {
   return Buffer.from(input)
@@ -63,22 +64,6 @@ async function getAccessToken() {
   _cachedToken = data.access_token;
   _cachedTokenExpiraEm = agora + 3600;
   return _cachedToken;
-}
-
-// Nomes novos do NeoSales -> nomes que o resto do sistema usa. Só renomeia se o nome antigo
-// NÃO existir no cabeçalho (nunca cria coluna duplicada).
-const ALIAS_CABECALHO_NEOSALES = {
-  'PROPRIETÁRIO DA ATIVIDADE': 'PROPRIETÁRIO DO PEDIDO',
-  'TAGS PROPRIETARIO ATIVIDADE': 'TAGS PROPRIETARIO PEDIDO',
-  'ADM ATIVIDADE': 'ADM DO PEDIDO',
-};
-function aliasCabecalhoNeoSales(header) {
-  const nfc = h => (h ?? '').toString().normalize('NFC').trim();
-  const existentes = new Set(header.map(nfc));
-  header.forEach((h, i) => {
-    const novo = ALIAS_CABECALHO_NEOSALES[nfc(h)];
-    if (novo && !existentes.has(novo)) { header[i] = novo; existentes.add(novo); }
-  });
 }
 
 export default async function handler(req, res) {
@@ -152,12 +137,18 @@ export default async function handler(req, res) {
     const response = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
     const data = await response.json();
 
-    // O NeoSales passou a exportar "PROPRIETÁRIO DA ATIVIDADE" (e TAGS/ADM) no lugar
-    // dos nomes "...DO PEDIDO" (nov/2026). O dash inteiro, o filtro de escopo logo abaixo e
-    // a API de Acessos leem pelo nome antigo — então o cabeçalho é traduzido aqui, num ponto
-    // só, e as abas dos meses anteriores (que ainda têm o nome antigo) seguem valendo.
-    if (action === 'values' && response.ok && Array.isArray(data.values) && Array.isArray(data.values[0])) {
-      aliasCabecalhoNeoSales(data.values[0]);
+    // O NeoSales já renomeou colunas da base (ex.: "PROPRIETÁRIO DO PEDIDO" virou "PROPRIETÁRIO DA
+    // ATIVIDADE") e tudo ficou sem consultor. O cabeçalho da BaseCRM é traduzido aqui, num ponto só,
+    // para os nomes que o sistema usa (ver api/_lib/colunas-crm.js); se uma coluna obrigatória não
+    // for achada, a resposta leva "colunasAusentes" e o Dash avisa em vez de mostrar zeros calado.
+    if (action === 'values' && response.ok && planilha !== 'carteira' && ehAbaBaseCRM(sheet)
+        && Array.isArray(data.values) && Array.isArray(data.values[0])) {
+      const r = canonicalizarCabecalho(data.values[0]);
+      if (r.renomeadas.length) data.colunasRenomeadas = r.renomeadas;
+      if (r.ausentes.length) {
+        data.colunasAusentes = r.ausentes;
+        console.error(`BaseCRM "${sheet}": colunas obrigatórias não encontradas: ${r.ausentes.join(', ')}`);
+      }
     }
 
     // Filtra as linhas pelo escopo travado do usuário ANTES de devolver —
