@@ -13224,7 +13224,12 @@ async function initChurn() {
   try { await carregarCarteiraDados(); } catch (e) { console.error('Não consegui cruzar Churn com a Carteira:', e); }
   // Aba 'baseneo' da mesma planilha: de onde as abas dos meses puxam o cliente. Serve de
   // reserva quando a aba do mês não traz consultor/equipe (best-effort, como a Carteira).
-  try { await carregarBaseNeo(); } catch (e) { console.error('Não consegui ler a aba baseneo:', e); }
+  try { await carregarBaseNeo(); }
+  catch (e) {
+    // Sem acesso à planilha (ex.: perfil 'suporte' com a aba Churn liberada à parte): o servidor
+    // devolve só o histórico de pedidos dos CNPJs que estão nos alertas.
+    try { await carregarBaseNeoViaApi(); } catch (e2) { console.error('Não consegui ler a baseneo (nem pela API):', e2); }
+  }
 
   // Filtros de Unidade/Equipe (multi-seleção, mesmo padrão de dropdown com
   // checkbox já usado em Gerencial/Produção) são preenchidos com os valores
@@ -13296,6 +13301,17 @@ async function carregarBaseNeo() {
     if (!mapa.has(cnpj)) mapa.set(cnpj, []);
     mapa.get(cnpj).push({ consultor, equipe, etapa, ts });
   });
+  BASENEO_MAPA = mapa;
+  return mapa;
+}
+
+// Mesmo BASENEO_MAPA, mas vindo da API (histórico só dos CNPJs do Churn) — pra quem não lê a planilha.
+async function carregarBaseNeoViaApi() {
+  const res = await fetch('/api/acessos?recurso=churn&action=donos', { headers: authHeaders() });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.error || 'HTTP ' + res.status);
+  const mapa = new Map();
+  Object.entries(json.historico || {}).forEach(([cnpj, pedidos]) => mapa.set(cnpj, pedidos));
   BASENEO_MAPA = mapa;
   return mapa;
 }

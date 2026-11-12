@@ -67,10 +67,12 @@ async function baseNeo() {
     const consultor = (c['USUARIO'][i] || '').trim();
     const equipe = (c['EQUIPE'][i] || '').trim();
     if (!cnpj || (!consultor && !equipe)) continue;
+    const etapa = (c['ETAPA'][i] || '').trim().toUpperCase();
     const reg = { consultor, equipe, ts: tsData(c['ULTIMA'][i]) };
-    const ativo = ETAPAS_ATIVAS.has((c['ETAPA'][i] || '').trim().toUpperCase());
+    const ativo = ETAPAS_ATIVAS.has(etapa);
     let e = mapa.get(cnpj);
-    if (!e) { e = { ativo: null, qualquer: null }; mapa.set(cnpj, e); }
+    if (!e) { e = { ativo: null, qualquer: null, pedidos: [] }; mapa.set(cnpj, e); }
+    e.pedidos.push({ consultor, equipe, etapa, ts: reg.ts });
     if (ativo && (!e.ativo || reg.ts >= e.ativo.ts)) e.ativo = reg;
     if (!e.qualquer || reg.ts >= e.qualquer.ts) e.qualquer = reg;
   }
@@ -100,7 +102,41 @@ async function contexto(req, res) {
   return { authUser, perfilRow, escopo };
 }
 
+// ── GET ?action=donos: consultor/equipe dos clientes da aba Churn ────────────
+// Quem tem a aba Churn mas NÃO lê as planilhas (ex.: perfil 'suporte' com acesso_extra_abas 'churn')
+// não consegue montar consultor/equipe no navegador: a aba 'baseneo' fica na planilha da Carteira,
+// fechada pra esse perfil. Este endpoint devolve SÓ o histórico de pedidos (consultor, equipe, etapa,
+// data) dos CNPJs que existem em churn_alertas — nada além do que a tela de Churn precisa mostrar.
+const PERFIS_CHURN_COMPLETO = new Set(['admin', 'admin_gestao', 'admin_beta']);
+
+async function donosHandler(req, res) {
+  try {
+    const authUser = await requireAuth(req, res);
+    if (!authUser) return;
+    const perfilRow = await getUsuarioDashboard(req, authUser.id);
+    if (!perfilRow || perfilRow.ativo === false) throw new ErroHttp(403, 'Acesso desativado');
+    const extras = perfilRow.acesso_extra_abas || [];
+    if (!PERFIS_CHURN_COMPLETO.has(perfilRow.perfil) && !extras.includes('churn')) throw new ErroHttp(403, 'Sem acesso à aba Churn');
+
+    const [mapa, r] = await Promise.all([baseNeo(), supa('/rest/v1/churn_alertas?select=cnpj&limit=10000')]);
+    if (!r.ok) throw new ErroHttp(502, 'Falha ao ler os alertas de churn');
+    const historico = {};
+    for (const a of r.json || []) {
+      const cnpj = (a.cnpj || '').replace(/\D/g, '');
+      if (!cnpj || historico[cnpj]) continue;
+      const e = mapa.get(cnpj);
+      if (e) historico[cnpj] = e.pedidos;
+    }
+    return res.status(200).json({ historico });
+  } catch (e) {
+    if (e instanceof ErroHttp) return res.status(e.status).json({ error: e.message });
+    console.error('churn-donos:', e);
+    return res.status(500).json({ error: 'Erro interno' });
+  }
+}
+
 export default async function churnGestorHandler(req, res) {
+  if (req.method === 'GET' && req.query.action === 'donos') return donosHandler(req, res);
   try {
     const ctx = await contexto(req, res);
     if (!ctx) return; // 401 já respondido
