@@ -32,6 +32,7 @@ export const COLUNAS_CRM = {
   'TAGS ATIVIDADE': { apelidos: ['TAGS DA ATIVIDADE'] },
   'UF': { apelidos: ['UF INSTALACAO', 'ESTADO INSTALACAO'] },
   'ESTADO': { apelidos: ['UF CLIENTE', 'ESTADO CLIENTE'] },
+  'CIDADE INSTALAÇÃO': { apelidos: ['CIDADE INSTALACAO', 'MUNICIPIO INSTALACAO', 'CIDADE DE INSTALACAO'] },
 };
 
 // Chave de comparação: sem acento, maiúscula, pontuação virando espaço, espaços colapsados.

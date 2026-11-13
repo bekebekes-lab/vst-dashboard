@@ -2141,6 +2141,13 @@
           <div class="dropdown-content" id="dd-content-prod-ddd"></div>
         </div>
       </div>
+      <div class="prod-filter-group" id="prod-filter-cidade" style="min-width:180px">
+        <label>Cidade</label>
+        <div class="custom-dropdown" id="dd-prod-cidade">
+          <button class="dropdown-btn" onclick="toggleDropdown('dd-content-prod-cidade')">Todas <span>&#9660;</span></button>
+          <div class="dropdown-content" id="dd-content-prod-cidade"></div>
+        </div>
+      </div>
       <div class="prod-filter-group" style="min-width:180px">
         <label>Grupo de Produto</label>
         <select id="prod-grupo" onchange="atualizarVisibilidadeMomTri(); prodAoFiltrar('grupo')">
@@ -6779,6 +6786,7 @@ function contarStatusPorTag(rows, filtros, statusSelecionados, cutoffDate, modoA
     if (!checkUF(filtros.uf, uf)) return;
     if (filtros.ufCliente && filtros.ufCliente.length > 0 && !filtros.ufCliente.includes(ufCliente)) return;
     if (filtros.ddd && filtros.ddd.length > 0 && !filtros.ddd.includes(ddd)) return;
+    if (filtros.cidade && filtros.cidade.length > 0 && !filtros.cidade.includes(cidadeInstalacaoDe(r))) return;
     // Grupo: 100% dos lançamentos da coluna GRUPO da base entram em "Geral" (sem exclusão)
     if (filtros.grupo !== 'Geral' && grupo !== filtros.grupo) return;
     // Tag de Unidade: mesma regra do render principal, vale nas 3 visões.
@@ -7395,6 +7403,10 @@ function initProducao() {
   // atual. Aqui só garantimos que os componentes existam com o estado inicial.
   popularDropdownProdUFCliente([]);
   popularDropdownProdDDD([]);
+  popularDropdownProdCidade([]);
+  // sem coluna de cidade na base: esconde o filtro em vez de mostrar uma lista vazia
+  const _gCid = document.getElementById('prod-filter-cidade');
+  if (_gCid) _gCid.style.display = ALL_DATA.some(r => cidadeInstalacaoDe(r)) ? '' : 'none';
 
   atualizarContadorStatus();
   atualizarVisibilidadeMomTri();
@@ -7467,7 +7479,32 @@ function popularDropdownProdDDD(itens) {
   popularDropdownGenerico('dd-content-prod-ddd', itens, window._ddOnChange_dd_content_prod_ddd, '#dd-prod-ddd .dropdown-btn', FACETA_ROTULO_SEM_DADO);
 }
 
-// Cascata da Produção: Estado, Gestor, Equipe, Consultor, UF BL, UF Cliente, DDD, Grupo e Tag
+function popularDropdownProdCidade(itens) {
+  window._ddOnChange_dd_content_prod_cidade = function(){
+    atualizarBotaoDropdown('dd-content-prod-cidade','#dd-prod-cidade .dropdown-btn');
+    prodAoFiltrar('cidade');
+  };
+  ddRegisterCallback('dd-content-prod-cidade', window._ddOnChange_dd_content_prod_cidade);
+  popularDropdownGenerico('dd-content-prod-cidade', itens, window._ddOnChange_dd_content_prod_cidade, '#dd-prod-cidade .dropdown-btn', FACETA_ROTULO_SEM_DADO);
+}
+
+// Cidade de INSTALAÇÃO (Produção). A coluna é achada pelo NOME do cabeçalho (sem acento/caixa/pontuação),
+// como as demais colunas da base — se o NeoSales renomear, basta acrescentar o apelido aqui.
+// Mantenha igual em beta/producao.js (cidadeInstalacaoDe).
+const COLUNAS_CIDADE_INSTALACAO = ['CIDADE INSTALACAO', 'CIDADE DE INSTALACAO', 'MUNICIPIO INSTALACAO'];
+const _normCabCidade = k => String(k).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim();
+let _colCidadeInstalacao = null;
+function cidadeInstalacaoDe(r) {
+  if (!r) return '';
+  if (!_colCidadeInstalacao || !(_colCidadeInstalacao in r)) {
+    const achada = Object.keys(r).find(k => COLUNAS_CIDADE_INSTALACAO.includes(_normCabCidade(k)));
+    if (!achada) return '';
+    _colCidadeInstalacao = achada;
+  }
+  return String(r[_colCidadeInstalacao] || '').trim().toUpperCase();
+}
+
+// Cascata da Produção: Estado, Gestor, Equipe, Consultor, UF BL, UF Cliente, DDD, Cidade, Grupo e Tag
 // se restringem nos DOIS sentidos, e todos respeitam os status de fila marcados. As opções de cada
 // filtro vêm só das linhas que passam pelos OUTROS (ex.: escolher um DDD deixa só as Equipes e
 // Consultores com cliente naquele DDD; escolher um Consultor deixa só a Equipe/Gestor/Estado/Tag
@@ -7484,6 +7521,7 @@ function prodFacetasDefs() {
     { id: 'ufbl', valor: r => (r['UF'] || '').trim().toUpperCase() || null, sel: ufBlSel },
     { id: 'ufcliente', valor: r => (r['Estado'] || r['ESTADO'] || '').trim().toUpperCase() || null, sel: () => facetaSelDd('dd-content-prod-uf-cliente') },
     { id: 'ddd', valor: r => { const n = (r['NUMERO'] || r['Numero'] || r['NÚMERO'] || '').toString().replace(/\D/g, ''); return n.length >= 2 ? n.substring(0, 2) : null; }, sel: () => facetaSelDd('dd-content-prod-ddd') },
+    { id: 'cidade', valor: r => cidadeInstalacaoDe(r) || null, sel: () => facetaSelDd('dd-content-prod-cidade') },
     { id: 'grupo', valor: r => r['GRUPO'] || null, sel: () => facetaSelSelect('prod-grupo', 'Geral') },
     { id: 'tag', valor: r => { const t = r['TAGS ATIVIDADE'] || ''; return MAPEAMENTO_TAGS[t] ? t : 'Sem Tag'; }, sel: () => facetaSelDd('dd-content-prod-tag') },
   ];
@@ -7519,6 +7557,7 @@ function atualizarOpcoesInteligentesProducao(origem) {
   if (origem !== 'ufbl') prodAplicarUfBl(op.ufbl);
   if (origem !== 'ufcliente') popularDropdownProdUFCliente(op.ufcliente);
   if (origem !== 'ddd') popularDropdownProdDDD(op.ddd);
+  if (origem !== 'cidade') popularDropdownProdCidade(op.cidade);
   if (origem !== 'grupo') facetaAplicarSelect('prod-grupo', op.grupo, { valor: 'Geral', rotulo: 'Geral' });
   if (origem !== 'tag') facetaAplicarDropdown('dd-content-prod-tag', '#dd-prod-tag .dropdown-btn', op.tag);
 }
@@ -7561,6 +7600,7 @@ async function renderProducao() {
   const filtroUFBL      = document.getElementById('prod-uf-bl').value;
   const filtroUFCliente = getCheckedValuesDd('dd-content-prod-uf-cliente'); // vazio = todos
   const filtroDDD       = getCheckedValuesDd('dd-content-prod-ddd'); // vazio = todos
+  const filtroCidade    = getCheckedValuesDd('dd-content-prod-cidade'); // vazio = todas
   const filtroGrupo  = document.getElementById('prod-grupo').value;
   const statusArr    = [...prodStatusSelecionados];
   const escopo = getEscopoTravado();
@@ -7641,6 +7681,9 @@ async function renderProducao() {
 
     // Filtro DDD (2 primeiros dígitos de NUMERO)
     if (filtroDDD.length > 0 && !filtroDDD.includes(ddd)) return;
+
+    // Filtro Cidade de instalação
+    if (filtroCidade.length > 0 && !filtroCidade.includes(cidadeInstalacaoDe(r))) return;
 
     // Filtro grupo
     if (filtroGrupo !== 'Geral' && grupo !== filtroGrupo) return;
@@ -7755,7 +7798,7 @@ async function renderProducao() {
 
   if (mostrarComparativo || mostrarMeses) {
     resultArea.innerHTML = '<div class="prod-empty">Calculando comparativo...</div>';
-    const filtros = { estado: filtroEstado, gestores: gestoresChecked, equipes: equipesChecked, consultores: consultoresChecked, uf: filtroUFBL, ufCliente: filtroUFCliente, ddd: filtroDDD, grupo: filtroGrupo, tags: tagsFiltro };
+    const filtros = { estado: filtroEstado, gestores: gestoresChecked, equipes: equipesChecked, consultores: consultoresChecked, uf: filtroUFBL, ufCliente: filtroUFCliente, ddd: filtroDDD, cidade: filtroCidade, grupo: filtroGrupo, tags: tagsFiltro };
     const idRequisicao = ++prodComparativoReqId;
     if (mostrarComparativo) comparativo = await calcularComparativos(filtros, modoAgregacao);
     if (idRequisicao !== prodComparativoReqId) return; // uma nova chamada substituiu esta
@@ -7945,7 +7988,7 @@ async function renderProducao() {
 // Exportação CSV da Produção — só admin (botão só aparece pra esse perfil,
 // ver aplicarPermissoes()). Exporta os registros CRUS (um por linha, não a
 // contagem agregada) que passaram por TODOS os filtros ativos na tela
-// (Estado/Gestor/Equipe/Consultor/UF BL/UF Cliente/DDD/Grupo/Tag de Unidade/
+// (Estado/Gestor/Equipe/Consultor/UF BL/UF Cliente/DDD/Cidade/Grupo/Tag de Unidade/
 // Convergência/Status de Fila) — window._prodLinhasFiltradas é preenchido
 // dentro do mesmo loop de filtro de renderProducao(), então reflete
 // exatamente o que está na tela no momento do clique.
@@ -7955,7 +7998,7 @@ function prodExportarCsv() {
 
   const header = [
     'CNPJ', 'Nome Cliente', 'Vinculado', 'Número', 'Grupo', 'Status', 'Proprietário', 'Equipe',
-    'UF', 'Estado Cliente', 'Tag/Unidade', 'Quantidade', 'Valor Unit', 'Cadastro', 'Data Instalação', 'Atualização',
+    'UF', 'Estado Cliente', 'Cidade Instalação', 'Tag/Unidade', 'Quantidade', 'Valor Unit', 'Cadastro', 'Data Instalação', 'Atualização',
   ];
   const linhasCsv = linhas.map(r => {
     const tagRaw = r['TAGS ATIVIDADE'] || '';
@@ -7964,7 +8007,7 @@ function prodExportarCsv() {
     return [
       r['CPF/CNPJ'] || '', r['NOME CLIENTE'] || '', r['VINCULADO'] || '', numero, r['GRUPO'] || '',
       r['FILA'] || '', r['PROPRIETÁRIO DO PEDIDO'] || '', r['EQUIPE'] || '',
-      r['UF'] || '', (r['Estado'] || r['ESTADO'] || ''), tag,
+      r['UF'] || '', (r['Estado'] || r['ESTADO'] || ''), cidadeInstalacaoDe(r), tag,
       parseInt(r['QUANTIDADE']) || 1, r['VALOR UNIT'] || '', r['CADASTRO'] || '', r['DATA INSTALAÇÃO'] || '', r['ATUALIZACAO'] || '',
     ].map(v => '"' + String(v).replace(/"/g, '""') + '"').join(',');
   });

@@ -28,15 +28,30 @@ const DIMS = [['unidade', 'Unidade'], ['gestor', 'Gestor'], ['equipe', 'Equipe']
 const ufBlDe = r => (r['UF'] || '').trim().toUpperCase();
 const ufClienteDe = r => (r['Estado'] || r['ESTADO'] || '').trim().toUpperCase();
 const dddDe = r => { const n = (r['NUMERO'] || r['Numero'] || r['NÚMERO'] || '').toString().replace(/\D/g, ''); return n.length >= 2 ? n.substring(0, 2) : ''; };
+// Cidade de INSTALAÇÃO: coluna achada pelo NOME do cabeçalho (sem acento/caixa/pontuação). Mantenha igual
+// a COLUNAS_CIDADE_INSTALACAO / cidadeInstalacaoDe do index.html.
+const COLUNAS_CIDADE_INSTALACAO = ['CIDADE INSTALACAO', 'CIDADE DE INSTALACAO', 'MUNICIPIO INSTALACAO'];
+const normCab = k => String(k).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim();
+let colCidadeInstalacao = null;
+export function cidadeInstalacaoDe(r) {
+  if (!r) return '';
+  if (!colCidadeInstalacao || !(colCidadeInstalacao in r)) {
+    const achada = Object.keys(r).find(k => COLUNAS_CIDADE_INSTALACAO.includes(normCab(k)));
+    if (!achada) return '';
+    colCidadeInstalacao = achada;
+  }
+  return String(r[colCidadeInstalacao] || '').trim().toUpperCase();
+}
 const tagDe = r => { const t = r['TAGS ATIVIDADE'] || ''; return MAPEAMENTO_TAGS[t] ? t : SEM_TAG; };
 const chaveDe = (r, dim) => dim === 'gestor' ? (EQUIPES_GESTORES[r['EQUIPE'] || ''] || 'Sem Gestor') : dim === 'equipe' ? (r['EQUIPE'] || 'Sem Equipe') : tagDe(r);
 const nomeDe = (chave, dim) => dim === 'unidade' ? (MAPEAMENTO_TAGS[chave] || SEM_TAG) : chave;
 
-// Filtros próprios da Produção (fp) sobre uma linha; `ignorar` = 'ufbl' | 'ufcliente' | 'ddd' | 'grupo'
+// Filtros próprios da Produção (fp) sobre uma linha; `ignorar` = 'ufbl' | 'ufcliente' | 'ddd' | 'cidade' | 'grupo'
 function passaProd(r, fp, ignorar) {
   if (ignorar !== 'ufbl' && !ufBlBate(fp.ufBl, ufBlDe(r))) return false;
   if (ignorar !== 'ufcliente' && fp.ufCliente.length && !fp.ufCliente.includes(ufClienteDe(r))) return false;
   if (ignorar !== 'ddd' && fp.ddd.length && !fp.ddd.includes(dddDe(r))) return false;
+  if (ignorar !== 'cidade' && fp.cidade.length && !fp.cidade.includes(cidadeInstalacaoDe(r))) return false;
   if (ignorar !== 'grupo' && fp.grupo !== 'Geral' && (r['GRUPO'] || '') !== fp.grupo) return false;
   return true;
 }
@@ -121,7 +136,7 @@ export function contarComparativo(rows, f, fp, statusSet, corte, dim, escopo) {
 // ── componente ──────────────────────────────────────────────────────────────
 // ctx() => { rows, f, escopo, receita, ref:{mm,yyyy}, live, diaCorte, abas:[{mm,yyyy,nome}], carregarMes(nome) }
 export function criarProducao(host, ctx) {
-  const fp = { ufBl: 'Geral', ufCliente: [], ddd: [], grupo: 'Geral' };
+  const fp = { ufBl: 'Geral', ufCliente: [], ddd: [], cidade: [], grupo: 'Geral' };
   const st = {
     dim: prefs.get('prod_dim', 'unidade'), visao: prefs.get('prod_visao', window.matchMedia('(max-width: 640px)').matches ? 'cartoes' : 'tabela'),
     mom: false, tri: false, meses: new Set(), req: 0,
@@ -133,7 +148,7 @@ export function criarProducao(host, ctx) {
       <div class="prod-ctl">
         <div class="seg" role="group" aria-label="Agrupar por">${DIMS.map(([k, r]) => `<button type="button" class="seg-btn" data-pdim="${k}"><span>${r}</span></button>`).join('')}</div>
         <label class="chip chip-sel"><span>UF BL</span><select id="p-ufbl" aria-label="UF BL"></select></label>
-        <div id="p-ufcli"></div><div id="p-ddd"></div>
+        <div id="p-ufcli"></div><div id="p-ddd"></div><div id="p-cidade"></div>
         <label class="chip chip-sel"><span>Grupo de produto</span><select id="p-grupo" aria-label="Grupo de produto"></select></label>
       </div>
       <div class="prod-comp" id="p-comp"></div>
@@ -152,6 +167,8 @@ export function criarProducao(host, ctx) {
   const msDdd = criarMultiSelect({ rotulo: 'DDD', onChange: v => { fp.ddd = v; render(); } });
   $('#p-ufcli').replaceWith(msUfCli.el); msUfCli.el.id = 'p-ufcli';
   $('#p-ddd').replaceWith(msDdd.el); msDdd.el.id = 'p-ddd';
+  const msCidade = criarMultiSelect({ rotulo: 'Cidade', onChange: v => { fp.cidade = v; render(); } });
+  $('#p-cidade').replaceWith(msCidade.el); msCidade.el.id = 'p-cidade';
   $('#p-ufbl').addEventListener('change', e => { fp.ufBl = e.target.value; render(); });
   $('#p-grupo').addEventListener('change', e => { fp.grupo = e.target.value; render(); });
 
@@ -171,7 +188,7 @@ export function criarProducao(host, ctx) {
     const { rows, f, escopo } = ctx();
     const base = filtrar(rows, f, escopo).filter(r => r['FILA']);
     const de = (ign, fn) => { const c = new Map(); base.filter(r => passaProd(r, fp, ign)).forEach(r => { const v = fn(r); if (v) c.set(v, (c.get(v) || 0) + 1); }); return c; };
-    const ufbl = de('ufbl', ufBlDe), cli = de('ufcliente', ufClienteDe), ddd = de('ddd', dddDe), grp = de('grupo', r => r['GRUPO'] || '');
+    const ufbl = de('ufbl', ufBlDe), cli = de('ufcliente', ufClienteDe), ddd = de('ddd', dddDe), cid = de('cidade', cidadeInstalacaoDe), grp = de('grupo', r => r['GRUPO'] || '');
     const ufs = [...ufbl.keys()].sort();
     const itens = [['Geral', 'Geral']];
     Object.entries(GRUPOS_UF).forEach(([g, membros]) => { if (membros.filter(u => ufbl.has(u)).length >= 2) itens.push([g, `${g} (${membros.join(' + ')})`]); });
@@ -185,6 +202,9 @@ export function criarProducao(host, ctx) {
     $('#p-grupo').value = fp.grupo;
     msUfCli.atualizar([...cli.keys()].sort(), fp.ufCliente);
     msDdd.atualizar([...ddd.keys()].sort(), fp.ddd);
+    // sem coluna de cidade na base: esconde o filtro em vez de mostrar uma lista vazia
+    msCidade.el.style.display = base.some(r => cidadeInstalacaoDe(r)) || fp.cidade.length ? '' : 'none';
+    msCidade.atualizar([...cid.keys()].sort((a, b) => a.localeCompare(b, 'pt-BR')), fp.cidade);
   }
 
   const rotuloMes = (mm, yyyy) => `${MESES_ABREV[+mm - 1]}/${yyyy}`;
@@ -299,6 +319,6 @@ export function criarProducao(host, ctx) {
     render,
     carregando() { $('#p-corpo').innerHTML = '<div class="vazio"><span class="spinner"></span> Carregando…</div>'; },
     // zera filtros próprios (ao trocar de período)
-    reiniciar() { fp.ufBl = 'Geral'; fp.ufCliente = []; fp.ddd = []; fp.grupo = 'Geral'; st.mom = false; st.tri = false; st.meses.clear(); },
+    reiniciar() { fp.ufBl = 'Geral'; fp.ufCliente = []; fp.ddd = []; fp.cidade = []; fp.grupo = 'Geral'; st.mom = false; st.tri = false; st.meses.clear(); },
   };
 }
