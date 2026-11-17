@@ -259,7 +259,7 @@ export function criarChurn(host) {
       const d = destino(r);
       let lista = msgs;
       // alerta tratado antes da tabulação não tem histórico: mostra a resposta antiga como 1ª mensagem
-      if (!lista.length && r.tratado_gestor && r.resposta_gestor) lista = [{ tipo: 'gestor', autor_nome: r.tratado_gestor_nome, texto: r.resposta_gestor, criado_em: r.tratado_gestor_em }];
+      if (r.tratado_gestor && r.resposta_gestor) lista = [{ tipo: 'gestor', autor_nome: r.tratado_gestor_nome, texto: r.resposta_gestor, criado_em: r.tratado_gestor_em }, ...lista];
       const atualIds = new Set((d?.d || []).map(x => x.u));
       const recebe = !d ? '<span class="prod-dica">Atribuição indisponível no momento.</span>'
         : !(d.d || []).length ? '<span class="txt-neg"><b>⚠ Sem gestor atribuído — escolha quem recebe.</b></span>'
@@ -275,7 +275,7 @@ export function criarChurn(host) {
           <div class="ch-msg-txt">${esc(m.texto || '')}</div></div>`;
       }).join('');
       // devolver: a UM gestor que já respondeu com tabulação
-      const devolviveis = (d?.d || []).filter(x => x.e === 'tratado' && !x.l);
+      const devolviveis = (d?.d || []).filter(x => x.e === 'tratado');
       const devolver = devolviveis.length ? `<label>Devolver ao gestor com uma pergunta<select id="ch-m-dev-dest">${devolviveis.map(x => `<option value="${esc(x.u)}">${esc(nomeU(x.u))}</option>`).join('')}</select><textarea id="ch-m-dev" rows="3" placeholder="O que você precisa que o gestor esclareça ou refaça?">${esc(guardado)}</textarea></label><div class="ch-form-pe"><span></span><button type="button" class="btn btn-fantasma" id="ch-m-devolver">↩ Devolver ao gestor</button></div>` : '';
       alvo.innerHTML = `<label>Gestores atribuídos ${origem ? `<small style="text-transform:none;font-weight:400">(${origem})</small>` : ''}<button type="button" class="btn btn-fantasma ch-atrib-btn" data-pick-toggle>✎ Atribuir / mover</button></label><div>${recebe}</div>${picker}${corpo ? `<label>Conversa</label>${corpo}` : ''}${devolver}`;
     };

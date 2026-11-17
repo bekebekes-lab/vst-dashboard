@@ -37,7 +37,7 @@ const DIA = 24 * 3600 * 1000;
 const EPOCH = '1970-01-01T00:00:00.000Z';
 const CAMPOS = 'id,nome_cliente,cnpj,qtd_linhas,receptora,municipio_cliente,uf_cliente,data_janela,recebido_em,'
   + 'multa_estimada,oferta_retencao_mkt,oferta_pos,promocao_atual,'
-  + 'tratado_gestor,tratado_gestor_nome,tratado_gestor_em,resposta_gestor';
+  + 'tratado_gestor,tratado_gestor_por,tratado_gestor_nome,tratado_gestor_em,resposta_gestor';
 const CAMPOS_MSG = 'id,alerta_id,tipo,autor_id,autor_nome,destinatario_id,destinatario_nome,motivo,status,texto,criado_em,editado_em';
 
 // Listas da tabulação (as mesmas da planilha de tratativa). SEM CONTATO não exige Motivo.
@@ -170,14 +170,15 @@ function destinatariosDe(alerta, mapa, usuarios, manual) {
 
 // Estado de UM gestor num alerta, a partir da conversa (que é única). Conta só o que é dele e do que veio
 // depois de `aPartirDe` (quem entra por atribuição nova começa pendente, mesmo que já tenha falado antes).
-// Alerta tratado antes da tabulação (flag antiga, sem conversa) conta como tratado.
+// Alerta tratado antes da tabulação (flag antiga em churn_alertas): conta como tratado só pra QUEM respondeu na época
+// (tratado_gestor_por) — os demais gestores continuam pendentes, como no modelo novo.
 function estadoDe(alerta, msgs, userId, aPartirDe) {
   const corte = aPartirDe ? new Date(aPartirDe).getTime() : 0;
   const dele = (msgs || []).filter(m => new Date(m.criado_em).getTime() >= corte
     && ((m.tipo === 'gestor' && m.autor_id === userId) || (m.tipo === 'devolucao' && m.destinatario_id === userId)));
   const ult = dele[dele.length - 1];
   if (!ult) {
-    return (alerta.tratado_gestor && !(msgs || []).length) ? { estado: 'tratado', legado: true } : { estado: 'pendente' };
+    return (alerta.tratado_gestor && alerta.tratado_gestor_por && alerta.tratado_gestor_por === userId) ? { estado: 'tratado', legado: true } : { estado: 'pendente' };
   }
   const ultGestor = [...dele].reverse().find(m => m.tipo === 'gestor') || null;
   return { estado: ult.tipo === 'devolucao' ? 'devolvido' : 'tratado', ult, ultGestor };
@@ -201,7 +202,7 @@ async function responsavelCtx(req, res) {
 async function painelHandler(req, res) {
   const ctx = await responsavelCtx(req, res);
   if (!ctx) return;
-  const r = await supaTudo('/rest/v1/churn_alertas?select=id,cnpj,tratado_gestor&order=recebido_em.desc,id.desc');
+  const r = await supaTudo('/rest/v1/churn_alertas?select=id,cnpj,tratado_gestor,tratado_gestor_por&order=recebido_em.desc,id.desc');
   if (!r.ok) throw new ErroHttp(502, 'Falha ao ler os alertas de churn');
   const alertas = r.json || [];
   const ids = alertas.map(a => a.id);
@@ -236,7 +237,7 @@ async function responsavelHandler(req, res, action) {
     const id = parseInt(corpo.id, 10);
     if (!Number.isInteger(id)) throw new ErroHttp(400, 'Alerta inválido');
     const novos = [...new Set((Array.isArray(corpo.usuarios) ? corpo.usuarios : []).map(String))];
-    const a = await supa(`/rest/v1/churn_alertas?id=eq.${id}&select=id,cnpj,tratado_gestor`);
+    const a = await supa(`/rest/v1/churn_alertas?id=eq.${id}&select=id,cnpj,tratado_gestor,tratado_gestor_por`);
     const alerta = a.ok ? a.json?.[0] : null;
     if (!alerta) throw new ErroHttp(404, 'Alerta não encontrado');
     const [mapa, usuarios, manualMap] = await Promise.all([baseNeo(), usuariosDestino(), atribuicoes([id])]);
@@ -272,7 +273,7 @@ async function responsavelHandler(req, res, action) {
     const id = parseInt(corpo.id, 10);
     const destino = (corpo.destinatario_id || '').toString();
     if (!Number.isInteger(id) || !destino) throw new ErroHttp(400, 'Informe o alerta e o gestor');
-    const a = await supa(`/rest/v1/churn_alertas?id=eq.${id}&select=id,cnpj,tratado_gestor`);
+    const a = await supa(`/rest/v1/churn_alertas?id=eq.${id}&select=id,cnpj,tratado_gestor,tratado_gestor_por`);
     const alerta = a.ok ? a.json?.[0] : null;
     if (!alerta) throw new ErroHttp(404, 'Alerta não encontrado');
     const [mapa, usuarios, manualMap, msgsMap] = await Promise.all([baseNeo(), usuariosDestino(), atribuicoes([id]), conversas([id])]);
@@ -280,8 +281,8 @@ async function responsavelHandler(req, res, action) {
     const dest = destinatariosDe(alerta, mapa, usuarios, manual).usuarios.find(u => u.id === destino);
     if (!dest) throw new ErroHttp(409, 'Esse gestor não está atribuído ao alerta');
     const est = estadoDe(alerta, msgsMap.get(id) || [], destino, manual?.find(x => x.usuario_id === destino)?.a_partir_de);
-    // só devolve o que o gestor respondeu com a tabulação (resposta antiga, sem Motivo/Status, segue como está)
-    if (est.estado !== 'tratado' || est.legado) throw new ErroHttp(409, 'Só dá pra devolver a resposta que o gestor já enviou com Motivo e Status');
+    // só dá pra devolver a quem já respondeu (a resposta antiga, de antes da tabulação, também vale)
+    if (est.estado !== 'tratado') throw new ErroHttp(409, 'Esse gestor ainda não respondeu (ou já está com a devolução pendente)');
     const ins = await supa('/rest/v1/churn_tratativas', {
       method: 'POST', prefer: 'return=representation',
       body: { alerta_id: id, tipo: 'devolucao', autor_id: authUser.id, autor_nome: nome, destinatario_id: destino, destinatario_nome: dest.nome, texto },
@@ -365,7 +366,10 @@ function visaoDoGestor(alerta, dono, msgs, userId, minhaAtrib) {
     motivo_gestor: e.ultGestor?.motivo || null,
     atribuido_em: novaAtrib ? minhaAtrib.atribuido_em : null,
     atribuido_por_nome: novaAtrib ? minhaAtrib.atribuido_por_nome : null,
-    historico: msgs,
+    // resposta de antes da tabulação (flag antiga): entra como a 1ª mensagem da conversa, igual pra todos
+    historico: (alerta.tratado_gestor && alerta.resposta_gestor)
+      ? [{ id: null, tipo: 'gestor', autor_id: alerta.tratado_gestor_por, autor_nome: alerta.tratado_gestor_nome, texto: alerta.resposta_gestor, criado_em: alerta.tratado_gestor_em, legado: true }, ...msgs]
+      : msgs,
   };
 }
 

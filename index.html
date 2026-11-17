@@ -13861,8 +13861,9 @@ function churnChip(txt, cor, bg) {
 function churnConversaHtml(a, historico, opcoes) {
   const meuId = USUARIO_ATUAL?.id;
   let msgs = Array.isArray(historico) ? historico : [];
-  if (!msgs.length && a.tratado_gestor && a.resposta_gestor) {
-    msgs = [{ tipo: 'gestor', autor_nome: a.tratado_gestor_nome, texto: a.resposta_gestor, criado_em: a.tratado_gestor_em, motivo: a.motivo_gestor, status: a.status_gestor }];
+  // (na tela do responsável `a` é o alerta cru: a marca antiga entra como 1ª mensagem; na do gestor o servidor já manda isso no histórico)
+  if (opcoes && opcoes.editar && a.tratado_gestor && a.resposta_gestor) {
+    msgs = [{ tipo: 'gestor', autor_nome: a.tratado_gestor_nome, texto: a.resposta_gestor, criado_em: a.tratado_gestor_em }, ...msgs];
   }
   if (!msgs.length) return '';
   return `<div style="margin-top:10px;display:flex;flex-direction:column;gap:6px;">${msgs.map(m => {
@@ -14081,8 +14082,8 @@ function churnRenderConversaAdmin(id) {
         <button class="btn-primary" id="churn-atribuir-btn" onclick="churnAtribuirSalvar(${r.id})">Salvar atribuição</button>
       </div></div>` : '';
 
-  // devolver (a UM gestor que já respondeu com tabulação)
-  const devolvíveis = (d?.d || []).filter(x => x.e === 'tratado' && !x.l);
+  // devolver (a UM gestor que já respondeu, inclusive resposta antiga de antes da tabulação)
+  const devolvíveis = (d?.d || []).filter(x => x.e === 'tratado');
   const devolver = devolvíveis.length ? `
     <div style="margin-top:12px;">
       <label style="${lab}">Devolver ao gestor com uma pergunta</label>
