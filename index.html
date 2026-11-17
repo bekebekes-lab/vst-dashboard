@@ -13748,7 +13748,7 @@ async function churnSalvarFeedback(id) {
 // Quem não tem a aba Churn recebe aqui o aviso dos PORT-OUT dos clientes da própria visão (equipe do
 // consultor dono do cliente, pela aba 'baseneo'). A lista vem de /api/acessos?recurso=churn, que filtra
 // no servidor; o sino do topo abre a lista, cada alerta é respondido um a um e os tratados ficam verdes.
-const PERFIS_AVISO_CHURN = ['gestor_macro', 'gestor_macro2', 'gestor_macro3', 'gestor', 'gestor_beta', 'supervisao', 'supervisao_beta'];
+const PERFIS_AVISO_CHURN = ['gestor_macro', 'gestor_macro2', 'gestor_macro3', 'gestor', 'gestor_beta', 'supervisao', 'supervisao_beta', 'admin_beta'];
 let CHURN_GESTOR = [];
 let churnGestorTimer = null;
 

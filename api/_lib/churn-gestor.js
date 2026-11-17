@@ -30,9 +30,19 @@ import { lerColunas } from './gsheets.js';
 
 const SUPA_URL = 'https://kzlchetrpsfefwybaaoy.supabase.co';
 // Quem pode receber churn (nunca consultor).
+// admin_beta entra só pra quem tem gestor_ref/gestores_ref preenchido (ex.: Julia = gestão Londrina): a visão
+// de churn dela vem desse campo (escopoChurn), SEM mexer no escopo de dados do perfil (getEscopoTravado segue
+// sem trava pra admin_beta). admin_beta sem gestão definida não recebe nada pela regra automática (falha fechada).
 const PERFIS_AVISO = new Set([
-  'gestor_macro', 'gestor_macro2', 'gestor_macro3', 'gestor', 'gestor_beta', 'supervisao', 'supervisao_beta',
+  'gestor_macro', 'gestor_macro2', 'gestor_macro3', 'gestor', 'gestor_beta', 'supervisao', 'supervisao_beta', 'admin_beta',
 ]);
+function escopoChurn(perfil, u) {
+  if (perfil === 'admin_beta') {
+    const g = (u?.gestores_ref || []).length ? u.gestores_ref : (u?.gestor_ref ? [u.gestor_ref] : []);
+    return g.length ? { gestores: new Set(g) } : null;
+  }
+  return getEscopoTravado(perfil, u);
+}
 const DIA = 24 * 3600 * 1000;
 const EPOCH = '1970-01-01T00:00:00.000Z';
 const CAMPOS = 'id,nome_cliente,cnpj,qtd_linhas,receptora,municipio_cliente,uf_cliente,data_janela,recebido_em,'
@@ -134,7 +144,7 @@ async function usuariosDestino() {
   if (!r.ok) throw new ErroHttp(502, 'Falha ao ler os usuários');
   return (r.json || []).map(u => ({
     id: u.id, nome: u.nome || '—', perfil: u.perfil,
-    escopo: getEscopoTravado(u.perfil, u), // null = sem escopo definido: não recebe pela regra automática (falha fechada)
+    escopo: escopoChurn(u.perfil, u), // null = sem escopo definido: não recebe pela regra automática (falha fechada)
     visao: (u.equipes_ref || []).length ? u.equipes_ref.join(', ')
       : ((u.gestores_ref || []).length ? u.gestores_ref : (u.gestor_ref ? [u.gestor_ref] : [])).join(', '),
   }));
@@ -341,7 +351,7 @@ async function contextoGestor(req, res) {
   const perfilRow = await getUsuarioDashboard(req, authUser.id);
   if (!perfilRow || perfilRow.ativo === false) throw new ErroHttp(403, 'Acesso desativado');
   if (!PERFIS_AVISO.has(perfilRow.perfil)) throw new ErroHttp(403, 'Seu perfil não recebe esse aviso');
-  const escopo = getEscopoTravado(perfilRow.perfil, perfilRow);
+  const escopo = escopoChurn(perfilRow.perfil, perfilRow);
   const nome = perfilRow.nome || (authUser.email || '').split('@')[0] || 'gestor';
   return { authUser, perfilRow, escopo, nome };
 }
