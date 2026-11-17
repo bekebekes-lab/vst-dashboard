@@ -2959,13 +2959,20 @@
         <label>Tratativa do gestor</label>
         <select id="churn-gestor" onchange="churnAoFiltrar('gestor')">
           <option value="todos">Todos</option>
-          <option value="tratados">Tratados pelo gestor</option>
-          <option value="nao_tratados">Sem tratativa do gestor</option>
+          <option value="tratados">Já tratado por algum gestor</option>
+          <option value="nao_tratados">Nenhum gestor tratou ainda</option>
+          <option value="pendencia">Com pendência em algum gestor</option>
+          <option value="devolvidos">Devolvidos (aguardando réplica)</option>
+          <option value="sem_gestor">Sem gestor atribuído</option>
         </select>
       </div>
       <div class="filter-group">
-        <label>Atribuído a</label>
+        <label>Gestor atribuído</label>
         <select id="churn-atribuido" onchange="churnAoFiltrar('atribuido')"><option value="todos">Todos</option></select>
+      </div>
+      <div class="filter-group" style="justify-content:flex-end;">
+        <label>&nbsp;</label>
+        <button type="button" class="btn-secondary" onclick="churnAbrirRelatorio()" title="Relatório das tratativas por período, para enviar no grupo">📋 Relatório</button>
       </div>
       <div class="filter-group" style="min-width:190px">
         <label>Tag da Unidade</label>
@@ -13250,16 +13257,21 @@ async function initChurn() {
 
   const { data: usuarios } = await supa.from('usuarios_dashboard').select('id,nome').eq('ativo', true).order('nome');
   CHURN_USUARIOS = usuarios || [];
-  const selAtrib = document.getElementById('churn-atribuido');
-  selAtrib.innerHTML = '<option value="todos">Todos</option><option value="ninguem">Sem atribuição</option>' +
-    CHURN_USUARIOS.map(u => `<option value="${u.id}">${escapeHtml(u.nome)}</option>`).join('');
-
-  const { data, error } = await supa.from('churn_alertas').select('*').order('recebido_em', { ascending: false });
+  // O Supabase entrega no máximo 1000 linhas por chamada: lê em páginas.
+  let data = [], error = null;
+  for (let off = 0; ; off += 1000) {
+    const pag = await supa.from('churn_alertas').select('*').order('recebido_em', { ascending: false }).order('id', { ascending: false }).range(off, off + 999);
+    if (pag.error) { error = pag.error; break; }
+    data = data.concat(pag.data || []);
+    if ((pag.data || []).length < 1000) break;
+  }
   if (error) {
     document.getElementById('churn-table-area').innerHTML = `<div class="error-state"><strong>Erro ao carregar alertas</strong>${escapeHtml(error.message)}</div>`;
     return;
   }
-  CHURN_DADOS = data || [];
+  CHURN_DADOS = data;
+  // Quem recebe cada alerta e em que estado está (servidor: regra por equipe + atribuições manuais)
+  await churnCarregarPainel();
 
   // Cruza cada alerta com a base de Carteira pelo CNPJ pra mostrar de quem
   // é o cliente (consultor/equipe) — best-effort: se a Carteira falhar em
@@ -13474,47 +13486,26 @@ function churnRotuloParaChave(rotulo) {
 function churnFacetasDefs() {
   const ordemMes = (a, b) => churnRotuloParaChave(b).localeCompare(churnRotuloParaChave(a)); // mais recente primeiro
   return [
-    { id: 'atribuido', valor: r => r.atribuido_a ? String(r.atribuido_a) : CHURN_SEM_ATRIBUICAO,
-      sel: () => { const v = document.getElementById('churn-atribuido')?.value || 'todos'; return v === 'todos' ? null : new Set([v === 'ninguem' ? CHURN_SEM_ATRIBUICAO : v]); } },
     { id: 'unidade', valor: r => { const u = churnUnidade(r); return u && u !== '—' ? u : null; }, sel: () => facetaSelDd('dd-content-churn-unidade') },
     { id: 'equipe', valor: r => churnDonoCliente(r)?.equipe || null, sel: () => facetaSelDd('dd-content-churn-equipe') },
     { id: 'recebido', valor: r => churnMesRotulo(churnChaveRecebido(r)) || null, sel: () => facetaSelDd('dd-content-churn-recebido'), ordem: ordemMes },
     { id: 'janela', valor: r => churnMesRotulo(churnChaveJanela(r)) || null, sel: () => facetaSelDd('dd-content-churn-janela'), ordem: ordemMes },
   ];
 }
-function churnAplicarAtribuido(ids) {
-  const sel = document.getElementById('churn-atribuido');
-  if (!sel) return;
-  const atual = sel.value;
-  const presentes = new Set(ids);
-  const nomes = {}; CHURN_USUARIOS.forEach(u => { nomes[String(u.id)] = u.nome; });
-  const opts = [['todos', 'Todos']];
-  if (presentes.has(CHURN_SEM_ATRIBUICAO) || atual === 'ninguem') opts.push(['ninguem', 'Sem atribuição']);
-  CHURN_USUARIOS.filter(u => presentes.has(String(u.id)) || atual === String(u.id)).forEach(u => opts.push([String(u.id), u.nome]));
-  if (atual !== 'todos' && atual !== 'ninguem' && !presentes.has(atual)) {
-    const i = opts.findIndex(([v]) => v === atual);
-    if (i >= 0) opts[i] = [atual, `${nomes[atual] || atual} ${FACETA_ROTULO_SEM_DADO}`];
-  } else if (atual === 'ninguem' && !presentes.has(CHURN_SEM_ATRIBUICAO)) {
-    const i = opts.findIndex(([v]) => v === 'ninguem');
-    opts[i] = ['ninguem', `Sem atribuição ${FACETA_ROTULO_SEM_DADO}`];
-  }
-  sel.innerHTML = opts.map(([v, t]) => `<option value="${escapeHtml(v)}">${escapeHtml(t)}</option>`).join('');
-  sel.value = atual;
-}
 function churnAtualizarCascata(origem) {
   const status = document.getElementById('churn-status')?.value || 'pendentes';
   const linhas = document.getElementById('churn-linhas')?.value || 'todos';
   const gestorFiltro = document.getElementById('churn-gestor')?.value || 'todos';
+  const atribuidoSel = document.getElementById('churn-atribuido')?.value || 'todos';
   const base = CHURN_DADOS.filter(r => {
+    if (!churnGestorAtribuidoPassa(r, atribuidoSel)) return false;
     if (status === 'pendentes' && r.respondido) return false;
     if (status === 'respondidos' && !r.respondido) return false;
-    if (gestorFiltro === 'tratados' && !r.tratado_gestor) return false;
-    if (gestorFiltro === 'nao_tratados' && r.tratado_gestor) return false;
+    if (!churnTratativaPassa(r, gestorFiltro)) return false;
     if (linhas === '10+' && !(r.qtd_linhas >= 10)) return false;
     return true;
   });
   const op = facetasCalcular(base, churnFacetasDefs());
-  if (origem !== 'atribuido') churnAplicarAtribuido(op.atribuido);
   ['unidade', 'equipe', 'recebido', 'janela'].forEach(nome => {
     if (origem !== nome) facetaAplicarDropdown(`dd-content-churn-${nome}`, `#dd-churn-${nome} .dropdown-btn`, op[nome]);
   });
@@ -13565,10 +13556,8 @@ function renderChurn() {
     if (statusFiltro === 'pendentes' && r.respondido) return false;
     if (statusFiltro === 'respondidos' && !r.respondido) return false;
     if (linhasFiltro === '10+' && !(r.qtd_linhas >= 10)) return false;
-    if (gestorFiltro === 'tratados' && !r.tratado_gestor) return false;
-    if (gestorFiltro === 'nao_tratados' && r.tratado_gestor) return false;
-    if (atribuidoFiltro === 'ninguem' && r.atribuido_a) return false;
-    if (atribuidoFiltro !== 'todos' && atribuidoFiltro !== 'ninguem' && String(r.atribuido_a) !== atribuidoFiltro) return false;
+    if (!churnTratativaPassa(r, gestorFiltro)) return false;
+    if (!churnGestorAtribuidoPassa(r, atribuidoFiltro)) return false;
     if (unidadeSel.length > 0 && !unidadeSel.includes(churnUnidade(r))) return false;
     if (equipeSel.length > 0 && !equipeSel.includes(churnDonoCliente(r)?.equipe || '')) return false;
     if (recebidoSel.length > 0 && !recebidoSel.includes(churnMesRotulo(churnChaveRecebido(r)))) return false;
@@ -13583,13 +13572,15 @@ function renderChurn() {
     return 0;
   });
 
-  const pendentes = CHURN_DADOS.filter(r => !r.respondido).length;
-  const obrigatorios = CHURN_DADOS.filter(r => !r.respondido && r.qtd_linhas >= 10).length;
-  atualizarBadgeNotificacoes(obrigatorios);
-  const totalLinhas = CHURN_DADOS.reduce((s, r) => s + (parseInt(r.qtd_linhas) || 0), 0);
+  // O sino (badge) conta sempre os obrigatórios de TODOS os alertas; os números da faixa abaixo seguem os filtros.
+  atualizarBadgeNotificacoes(CHURN_DADOS.filter(r => !r.respondido && r.qtd_linhas >= 10).length);
+  const pendentes = linhas.filter(r => !r.respondido).length;
+  const obrigatorios = linhas.filter(r => !r.respondido && r.qtd_linhas >= 10).length;
+  const totalLinhas = linhas.reduce((s, r) => s + (parseInt(r.qtd_linhas) || 0), 0);
+  const filtrado = linhas.length !== CHURN_DADOS.length;
   document.getElementById('churn-stats-area').innerHTML = `<div class="stats-row">
-    <div class="stat-chip"><strong>${CHURN_DADOS.length}</strong> alertas no total</div>
-    <div class="stat-chip"><strong>${totalLinhas}</strong> linhas no total</div>
+    <div class="stat-chip"><strong>${linhas.length}</strong> alertas${filtrado ? ` <span style="color:var(--text-3);">(de ${CHURN_DADOS.length} no total)</span>` : ' no total'}</div>
+    <div class="stat-chip"><strong>${totalLinhas}</strong> linhas${filtrado ? '' : ' no total'}</div>
     <div class="stat-chip"><strong>${pendentes}</strong> pendentes</div>
     <div class="stat-chip" style="${obrigatorios > 0 ? 'color:#dc2626;font-weight:700;' : ''}"><strong>${obrigatorios}</strong> com resposta obrigatória (10+ linhas)</div>
   </div>`;
@@ -13637,20 +13628,13 @@ function renderChurn() {
             <td style="font-size:12px">${escapeHtml(r.municipio_cliente || '—')}</td>
             <td class="center" style="font-size:12px">${escapeHtml(r.uf_cliente || '—')}</td>
             <td>${escapeHtml(r.data_janela || '—')}</td>
-            <td class="center"><span class="badge ${r.respondido ? '' : 'badge-gray'}" style="${r.respondido ? 'background:#dcfce7;color:#16a34a;' : ''}">${r.respondido ? 'Respondido' : 'Pendente'}</span>${r.tratado_gestor ? `<div title="${escapeHtml((r.tratado_gestor_nome || 'Gestor') + ': ' + (r.resposta_gestor || ''))}" style="margin-top:3px;font-size:10px;font-weight:600;color:#16a34a;white-space:nowrap;">✓ Tratado pelo gestor</div>` : ''}</td>
+            <td class="center"><span class="badge ${r.respondido ? '' : 'badge-gray'}" style="${r.respondido ? 'background:#dcfce7;color:#16a34a;' : ''}">${r.respondido ? 'Respondido' : 'Pendente'}</span>${churnSeloTratativa(r)}</td>
             <td class="center"><button class="btn-secondary" style="padding:4px 10px;font-size:11px;white-space:nowrap;" onclick="churnAbrirDetalhe(${r.id})">Ver / Responder</button></td>
           </tr>`;
         }).join('')}
         </tbody>
       </table>
     </div></div>`;
-}
-
-async function churnAtribuir(id, usuarioId) {
-  const { error } = await supa.from('churn_alertas').update({ atribuido_a: usuarioId || null, atualizado_em: new Date().toISOString() }).eq('id', id);
-  if (error) { alert('Erro ao atribuir: ' + error.message); return; }
-  const item = CHURN_DADOS.find(r => r.id === id);
-  if (item) item.atribuido_a = usuarioId || null;
 }
 
 function churnAbrirDetalhe(id) {
@@ -13686,8 +13670,6 @@ function churnAbrirDetalhe(id) {
     ['Tempo Médio', r.tempo_medio], ['Carteira AACE', r.carteira_aace], ['Gerente de Canal', r.gerente_canal],
     ['Coordenador', r.coordenador], ['Data da Janela', r.data_janela], ['Multa estimada', r.multa_estimada],
     ['Oferta de Retenção MKT', r.oferta_retencao_mkt], ['Oferta Pós', r.oferta_pos],
-    ['Tratado pelo gestor', r.tratado_gestor ? `${r.tratado_gestor_nome || 'gestor'} em ${churnGestorFmtData(r.tratado_gestor_em)}` : ''],
-    ['Resposta do gestor', r.tratado_gestor ? r.resposta_gestor : ''],
   ].filter(([, v]) => v !== null && v !== undefined && v !== '' && v !== '—');
 
   modal.innerHTML = `
@@ -13707,16 +13689,13 @@ function churnAbrirDetalhe(id) {
               <div class="det-value">${escapeHtml(String(val))}</div>
             </div>`).join('')}
         </div>${ultimosHtml}
+        <div id="churn-conversa"></div>
         <div style="margin-top:16px;">
-          <label style="font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-2);display:block;margin-bottom:6px;">Atribuído a</label>
-          <select id="churn-atribuido-modal" onchange="churnAtribuir(${r.id}, this.value)" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius);font-family:inherit;font-size:13px;">
-            <option value="">Sem atribuição</option>
-            ${CHURN_USUARIOS.map(u => `<option value="${u.id}" ${String(r.atribuido_a) === String(u.id) ? 'selected' : ''}>${escapeHtml(u.nome)}</option>`).join('')}
-          </select>
-        </div>
-        <div style="margin-top:16px;">
-          <label style="font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-2);display:block;margin-bottom:6px;">Feedback / resposta pra Claro</label>
-          <textarea id="churn-feedback-texto" rows="5" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:var(--radius);font-family:inherit;font-size:13px;resize:vertical;">${escapeHtml(r.feedback || '')}</textarea>
+          <label style="font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-2);display:flex;align-items:center;gap:8px;margin-bottom:6px;">Feedback / resposta pra Claro
+            ${(r.feedback || '').trim() ? `<span style="text-transform:none;font-weight:400;">${r.feedback_por_nome ? 'por ' + escapeHtml(r.feedback_por_nome) : ''}</span>` : ''}
+            ${(r.feedback || '').trim() && (!r.feedback_por || r.feedback_por === USUARIO_ATUAL?.id) ? `<button type="button" id="churn-feedback-lapis" title="Editar meu texto" onclick="churnFeedbackEditar()" style="margin-left:auto;background:none;border:1px solid var(--border);border-radius:6px;cursor:pointer;padding:2px 8px;">✏️ Editar</button>` : ''}
+          </label>
+          <textarea id="churn-feedback-texto" rows="5" ${(r.feedback || '').trim() ? 'readonly' : ''} style="width:100%;padding:10px;border:1px solid var(--border);border-radius:var(--radius);font-family:inherit;font-size:13px;resize:vertical;${(r.feedback || '').trim() ? 'background:var(--bg,#f8fafc);' : ''}">${escapeHtml(r.feedback || '')}</textarea>
         </div>
         <div style="display:flex;gap:10px;margin-top:14px;align-items:center;">
           <label style="display:flex;align-items:center;gap:6px;font-size:13px;">
@@ -13728,6 +13707,7 @@ function churnAbrirDetalhe(id) {
     </div>`;
   modal.style.display = 'flex';
   document.body.style.overflow = 'hidden';
+  churnCarregarConversa(r.id);
 }
 
 function churnFecharDetalhe() {
@@ -13736,13 +13716,30 @@ function churnFecharDetalhe() {
   document.body.style.overflow = '';
 }
 
+// Texto do "Feedback pra Claro" já enviado fica travado; o lápis destrava (só pra quem escreveu).
+function churnFeedbackEditar() {
+  const ta = document.getElementById('churn-feedback-texto');
+  if (!ta) return;
+  ta.readOnly = false;
+  ta.style.background = '';
+  document.getElementById('churn-feedback-lapis')?.remove();
+  ta.focus();
+}
+
 async function churnSalvarFeedback(id) {
+  const item = CHURN_DADOS.find(r => r.id === id);
   const feedback = document.getElementById('churn-feedback-texto').value;
   const respondido = document.getElementById('churn-respondido-check').checked;
-  const { error } = await supa.from('churn_alertas').update({ feedback, respondido, atualizado_em: new Date().toISOString() }).eq('id', id);
+  const upd = { respondido, atualizado_em: new Date().toISOString() };
+  // Só registra autoria (e grava o texto) quando o texto mudou: marcar "respondido" não troca o autor.
+  if (feedback !== ((item && item.feedback) || '')) {
+    upd.feedback = feedback;
+    upd.feedback_por = USUARIO_ATUAL?.id || null;
+    upd.feedback_por_nome = USUARIO_ATUAL?.nome || (USUARIO_ATUAL?.email || '').split('@')[0] || null;
+  }
+  const { error } = await supa.from('churn_alertas').update(upd).eq('id', id);
   if (error) { alert('Erro ao salvar: ' + error.message); return; }
-  const item = CHURN_DADOS.find(r => r.id === id);
-  if (item) { item.feedback = feedback; item.respondido = respondido; }
+  if (item) { Object.assign(item, upd); }
   churnFecharDetalhe();
   renderChurn();
 }
@@ -13788,21 +13785,24 @@ function churnGestorAtualizarSino() {
   const pendentes = CHURN_GESTOR.filter(a => !a.tratado_gestor);
   bell.style.display = 'flex';
   bell.classList.toggle('alerta', pendentes.length > 0);
-  bell.title = pendentes.length ? `${pendentes.length} churn(s) para tratar` : 'Churn: nenhum pendente';
+  const devolvidos = pendentes.filter(a => a.devolvido).length;
+  bell.title = pendentes.length ? `${pendentes.length} churn(s) para tratar${devolvidos ? ` (${devolvidos} devolvido(s) com pergunta)` : ''}` : 'Churn: nenhum pendente';
   atualizarBadgeNotificacoes(pendentes.length);
 
   // Pop-up: só quando aparece alerta pendente que esta sessão ainda não avisou (login e alertas novos).
+  // Alerta devolvido conta como novo de novo: a chave inclui a data da devolução.
   const vistos = churnGestorVistos();
-  const novos = pendentes.filter(a => !vistos.has(a.id));
+  const chaveVisto = a => a.devolvido ? `${a.id}:${a.devolvido_em}` : (a.atribuido_em ? `${a.id}:${a.atribuido_em}` : a.id);
+  const novos = pendentes.filter(a => !vistos.has(chaveVisto(a)));
   if (novos.length && !document.getElementById('churn-gestor-lista')) {
-    novos.forEach(a => vistos.add(a.id));
+    novos.forEach(a => vistos.add(chaveVisto(a)));
     churnGestorSalvarVistos(vistos);
-    churnGestorPopup(pendentes.length, novos.length);
+    churnGestorPopup(pendentes.length, novos.length, novos.filter(a => a.devolvido).length, novos.filter(a => a.atribuido_em && !a.devolvido).length);
   }
   if (document.getElementById('churn-gestor-lista')) churnGestorRenderLista();
 }
 
-function churnGestorPopup(totalPendentes, qtdNovos) {
+function churnGestorPopup(totalPendentes, qtdNovos, qtdDevolvidos, qtdAtribuidos) {
   document.getElementById('churn-gestor-aviso')?.remove();
   const el = document.createElement('div');
   el.id = 'churn-gestor-aviso';
@@ -13813,7 +13813,7 @@ function churnGestorPopup(totalPendentes, qtdNovos) {
       <div style="padding:22px 20px 8px;">
         <div id="cg-aviso-titulo" style="font-size:20px;font-weight:700;margin-bottom:8px;">${totalPendentes === 1 ? 'Há 1 churn a ser tratado' : `Há ${totalPendentes} churns a serem tratados`}</div>
         <div style="font-size:13px;color:var(--text-2);line-height:1.5;">
-          ${qtdNovos < totalPendentes ? `${qtdNovos} chegou(aram) agora. ` : ''}Clientes da sua visão pediram portabilidade para outra operadora. Abra a lista, responda cada um e marque como tratado.
+          ${qtdNovos < totalPendentes ? `${qtdNovos} chegou(aram) agora. ` : ''}${qtdDevolvidos ? `${qtdDevolvidos} foi(ram) devolvido(s) com uma pergunta e aguarda(m) a sua réplica. ` : ''}${qtdAtribuidos ? `${qtdAtribuidos} foi(ram) atribuído(s) a você pelo responsável. ` : ''}Clientes da sua visão pediram portabilidade para outra operadora. Abra a lista, responda cada um e marque como tratado.
         </div>
       </div>
       <div style="display:flex;gap:10px;justify-content:flex-end;padding:16px 20px 20px;">
@@ -13845,15 +13845,52 @@ function churnGestorFecharLista() {
   document.body.style.overflow = '';
 }
 
+// Tabulação do tratamento (mesmas listas da planilha de tratativa). SEM CONTATO não exige Motivo.
+// Mantenha igual a MOTIVOS / STATUS_TRAT de api/_lib/churn-gestor.js e a beta/churn.js.
+const CHURN_MOTIVOS = ['OFERTA', 'COBERTURA', 'ATENDIMENTO'];
+const CHURN_STATUS_TRAT = ['SEM CONTATO', 'RETORNAR', 'AGUARDANDO CONSULTOR', 'REVERTIDO', 'PORTADO'];
+const CHURN_STATUS_SEM_MOTIVO = 'SEM CONTATO';
+
+function churnChip(txt, cor, bg) {
+  return `<span style="display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;background:${bg};color:${cor};margin-right:6px;border:1px solid ${cor}33;">${escapeHtml(txt)}</span>`;
+}
+
+// Conversa de um alerta: resposta do gestor (verde) e devoluções do responsável (laranja), da mais antiga
+// pra mais nova. Texto do gestor nunca tem lápis; o lápis só aparece (`opcoes.editar`) na pergunta de quem
+// está logado. Alerta tratado antes da tabulação não tem histórico: mostra a resposta antiga como 1ª mensagem.
+function churnConversaHtml(a, historico, opcoes) {
+  const meuId = USUARIO_ATUAL?.id;
+  let msgs = Array.isArray(historico) ? historico : [];
+  if (!msgs.length && a.tratado_gestor && a.resposta_gestor) {
+    msgs = [{ tipo: 'gestor', autor_nome: a.tratado_gestor_nome, texto: a.resposta_gestor, criado_em: a.tratado_gestor_em, motivo: a.motivo_gestor, status: a.status_gestor }];
+  }
+  if (!msgs.length) return '';
+  return `<div style="margin-top:10px;display:flex;flex-direction:column;gap:6px;">${msgs.map(m => {
+    const dev = m.tipo === 'devolucao';
+    const cor = dev ? '#b45309' : '#16a34a', bg = dev ? '#fffbeb' : '#f0fdf4', borda = dev ? '#fcd34d' : '#bbf7d0';
+    const tags = dev ? '' : [m.status && churnChip(m.status, cor, '#fff'), m.motivo && churnChip(m.motivo, '#334155', '#fff')].filter(Boolean).join('');
+    const podeEditar = !!(opcoes && opcoes.editar && dev && m.id && m.autor_id && m.autor_id === meuId);
+    const lapis = podeEditar ? `<button type="button" title="Editar minha mensagem" onclick="churnMsgEditar(${m.id})" style="background:none;border:1px solid var(--border);border-radius:6px;cursor:pointer;padding:1px 7px;">✏️</button>` : '';
+    return `<div data-cg-msg="${m.id || ''}" style="border:1px solid ${borda};background:${bg};border-radius:8px;padding:8px 10px;font-size:13px;">
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12px;"><strong style="color:${cor};">${dev ? '↩ Devolvido por' : '✓ Tratado por'}</strong> ${escapeHtml(m.autor_nome || '—')}${dev && m.destinatario_nome ? ` <span style="color:var(--text-2);">→ para ${escapeHtml(m.destinatario_nome)}</span>` : ''} · ${escapeHtml(churnGestorFmtData(m.criado_em))}${m.editado_em ? ` · <em title="Editado em ${escapeHtml(churnGestorFmtData(m.editado_em))}">editado</em>` : ''}<span style="margin-left:auto;">${lapis}</span></div>
+      ${tags ? `<div style="margin-top:4px;">${tags}</div>` : ''}
+      <div class="cg-msg-texto" style="margin-top:4px;white-space:pre-wrap;">${escapeHtml(m.texto || '')}</div></div>`;
+  }).join('')}</div>`;
+}
+
 function churnGestorRenderLista() {
   const modal = document.getElementById('churn-gestor-lista');
   if (!modal) return;
-  // Guarda o que já foi digitado nos campos, pra não perder ao atualizar a lista.
+  // Guarda o que já foi digitado/escolhido nos campos, pra não perder ao atualizar a lista.
   const digitado = {};
-  modal.querySelectorAll('textarea[data-cg-id]').forEach(t => { digitado[t.dataset.cgId] = t.value; });
+  modal.querySelectorAll('textarea[data-cg-id]').forEach(t => {
+    const id = t.dataset.cgId;
+    digitado[id] = { texto: t.value, motivo: modal.querySelector(`select[data-cg-motivo="${id}"]`)?.value || '', status: modal.querySelector(`select[data-cg-status="${id}"]`)?.value || '' };
+  });
 
   const pendentes = CHURN_GESTOR.filter(a => !a.tratado_gestor);
   const tratados = CHURN_GESTOR.filter(a => a.tratado_gestor);
+  const opcoes = (lista, atual, vazio) => `<option value="">${vazio}</option>` + lista.map(o => `<option value="${escapeHtml(o)}" ${atual === o ? 'selected' : ''}>${escapeHtml(o)}</option>`).join('');
   const cartao = a => {
     const linhas = [
       `${escapeHtml(a.cnpj || '—')} · ${a.qtd_linhas ?? '—'} linha(s) · ${escapeHtml(a.receptora || '—')}`,
@@ -13862,16 +13899,23 @@ function churnGestorRenderLista() {
     ];
     if (a.multa_estimada) linhas.push(`Multa estimada: ${escapeHtml(a.multa_estimada)}`);
     if (a.oferta_retencao_mkt) linhas.push(`Oferta de retenção: ${escapeHtml(a.oferta_retencao_mkt)}`);
-    const cabeca = `<div style="font-weight:700;font-size:14px;">${a.tratado_gestor ? '<span style="color:#16a34a;">✓</span> ' : ''}${escapeHtml(a.nome_cliente || '—')}</div>
+    const cabeca = `<div style="font-weight:700;font-size:14px;">${a.tratado_gestor ? '<span style="color:#16a34a;">✓</span> ' : a.devolvido ? '<span style="color:#b45309;">↩</span> ' : ''}${escapeHtml(a.nome_cliente || '—')}${a.devolvido ? ' <span style="font-size:11px;font-weight:700;color:#b45309;background:#fffbeb;border:1px solid #fcd34d;border-radius:999px;padding:1px 8px;">DEVOLVIDO — aguardando sua réplica</span>' : ''}</div>
+      ${a.atribuido_em && !a.tratado_gestor ? `<div style="font-size:12px;color:#1d4ed8;margin-top:2px;">📌 Atribuído a você por ${escapeHtml(a.atribuido_por_nome || 'responsável')} em ${escapeHtml(churnGestorFmtData(a.atribuido_em))}</div>` : ''}
       ${linhas.map(l => `<div class="cg-linha">${l}</div>`).join('')}`;
-    if (a.tratado_gestor) {
-      return `<div class="cg-card tratado">${cabeca}
-        <div style="margin-top:8px;font-size:13px;"><strong style="color:#16a34a;">Tratado</strong> por ${escapeHtml(a.tratado_gestor_nome || '—')} em ${escapeHtml(churnGestorFmtData(a.tratado_gestor_em))}</div>
-        <div style="margin-top:4px;font-size:13px;white-space:pre-wrap;">${escapeHtml(a.resposta_gestor || '')}</div></div>`;
-    }
-    return `<div class="cg-card">${cabeca}
-      <textarea data-cg-id="${a.id}" id="cg-resp-${a.id}" rows="2" placeholder="O que foi feito com o cliente (contato, proposta de retenção, resultado...)" style="width:100%;margin-top:8px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius);font-family:inherit;font-size:13px;resize:vertical;">${escapeHtml(digitado[a.id] || '')}</textarea>
-      <div style="text-align:right;margin-top:8px;"><button class="btn-primary" id="cg-btn-${a.id}" onclick="churnGestorTratar(${a.id})">Marcar como tratado</button></div></div>`;
+    const conversa = churnConversaHtml(a, a.historico, { editar: false });
+    if (a.tratado_gestor) return `<div class="cg-card tratado">${cabeca}${conversa}</div>`;
+    const d = digitado[a.id] || {};
+    const semMotivo = d.status === CHURN_STATUS_SEM_MOTIVO;
+    const campoSel = 'padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius);font-family:inherit;font-size:13px;';
+    return `<div class="cg-card" style="${a.devolvido ? 'border-color:#fcd34d;' : ''}">${cabeca}${conversa}
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
+        <label style="flex:1;min-width:150px;font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-2);">Status *
+          <select data-cg-status="${a.id}" onchange="churnGestorTrocarStatus()" style="width:100%;margin-top:3px;${campoSel}">${opcoes(CHURN_STATUS_TRAT, d.status, 'Escolha o status…')}</select></label>
+        <label style="flex:1;min-width:150px;font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-2);">Motivo ${semMotivo ? '<span style="text-transform:none;font-weight:400;">(não se aplica)</span>' : '*'}
+          <select data-cg-motivo="${a.id}" ${semMotivo ? 'disabled' : ''} style="width:100%;margin-top:3px;${campoSel}">${opcoes(CHURN_MOTIVOS, semMotivo ? '' : d.motivo, 'Escolha o motivo…')}</select></label>
+      </div>
+      <textarea data-cg-id="${a.id}" id="cg-resp-${a.id}" rows="2" placeholder="${a.devolvido ? 'Responda à pergunta do responsável…' : 'O que foi feito com o cliente (contato, proposta de retenção, resultado...)'}" style="width:100%;margin-top:8px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius);font-family:inherit;font-size:13px;resize:vertical;">${escapeHtml(d.texto || '')}</textarea>
+      <div style="text-align:right;margin-top:8px;"><button class="btn-primary" id="cg-btn-${a.id}" onclick="churnGestorTratar(${a.id})">${a.devolvido ? 'Enviar réplica' : 'Marcar como tratado'}</button></div></div>`;
   };
 
   modal.innerHTML = `
@@ -13891,15 +13935,23 @@ function churnGestorRenderLista() {
     </div>`;
 }
 
+// SEM CONTATO não tem Motivo: redesenha a lista (o que já foi digitado/escolhido é preservado) com o campo desabilitado.
+function churnGestorTrocarStatus() { churnGestorRenderLista(); }
+
 async function churnGestorTratar(id) {
   const ta = document.getElementById('cg-resp-' + id);
   const btn = document.getElementById('cg-btn-' + id);
+  const status = document.querySelector(`select[data-cg-status="${id}"]`)?.value || '';
+  const motivo = document.querySelector(`select[data-cg-motivo="${id}"]`)?.value || '';
   const resposta = (ta?.value || '').trim();
+  if (!status) { alert('Escolha o Status.'); return; }
+  if (status !== CHURN_STATUS_SEM_MOTIVO && !motivo) { alert('Escolha o Motivo.'); return; }
   if (resposta.length < 3) { alert('Escreva a tratativa antes de marcar como tratado.'); ta?.focus(); return; }
+  const textoBtn = btn ? btn.textContent : '';
   if (btn) { btn.disabled = true; btn.textContent = 'Salvando...'; }
   try {
     const res = await fetch('/api/acessos?recurso=churn&action=tratar', {
-      method: 'POST', headers: { ...authHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify({ id, resposta }),
+      method: 'POST', headers: { ...authHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify({ id, resposta, status, motivo: status === CHURN_STATUS_SEM_MOTIVO ? '' : motivo }),
     });
     const json = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(json.error || 'Falha ao salvar');
@@ -13908,8 +13960,387 @@ async function churnGestorTratar(id) {
     churnGestorRenderLista();
   } catch (e) {
     alert('Não consegui salvar: ' + e.message);
-    if (btn) { btn.disabled = false; btn.textContent = 'Marcar como tratado'; }
+    if (btn) { btn.disabled = false; btn.textContent = textoBtn || 'Marcar como tratado'; }
   }
+}
+
+// ── Responsável (aba Churn completa): quem recebe cada alerta, conversa única, devolver, atribuir e relatório ─────
+// Painel (servidor): pra cada alerta, quem recebe (regra automática pela equipe do dono do cliente, ou atribuição
+// manual do responsável) e o estado de CADA gestor — pendente, tratado ou devolvido. A pendência é individual;
+// a conversa é uma só por alerta.
+let CHURN_PAINEL = { usuarios: [], alertas: {}, erro: false };
+let CHURN_CONVERSAS = {}; // alerta_id -> mensagens (churn_tratativas, lidas direto pela policy de quem tem a aba Churn)
+let _churnPickerAberto = false;
+
+async function churnCarregarPainel() {
+  try {
+    const res = await fetch('/api/acessos?recurso=churn&action=painel', { headers: authHeaders() });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(json.error || 'Falha ao ler as atribuições');
+    CHURN_PAINEL = { usuarios: json.usuarios || [], alertas: json.alertas || {}, erro: false };
+  } catch (e) {
+    console.error('Painel de atribuição do Churn indisponível:', e);
+    CHURN_PAINEL = { usuarios: [], alertas: {}, erro: true };
+  }
+  churnPopularGestorAtribuido();
+}
+
+const churnNomeUsuario = id => (CHURN_PAINEL.usuarios.find(u => u.id === id) || {}).nome || '—';
+const churnPrimeiroNome = n => String(n || '').trim().split(/\s+/)[0] || '—';
+function churnDestino(r) { return CHURN_PAINEL.alertas[r.id] || null; }
+
+// Filtro "Tratativa do gestor" (cada alerta pode ter vários gestores, cada um com o seu estado).
+function churnTratativaPassa(r, f) {
+  if (!f || f === 'todos') return true;
+  const d = churnDestino(r);
+  if (!d) { // painel indisponível: cai na marca antiga (tratado antes da tabulação)
+    return f === 'tratados' ? !!r.tratado_gestor : f === 'nao_tratados' ? !r.tratado_gestor : false;
+  }
+  const ds = d.d || [];
+  const t = ds.filter(x => x.e === 'tratado').length, dv = ds.filter(x => x.e === 'devolvido').length, p = ds.filter(x => x.e === 'pendente').length;
+  if (f === 'sem_gestor') return ds.length === 0;
+  if (f === 'tratados') return t > 0;
+  if (f === 'nao_tratados') return ds.length > 0 && t === 0 && dv === 0;
+  if (f === 'pendencia') return p > 0 || dv > 0;
+  if (f === 'devolvidos') return dv > 0;
+  return true;
+}
+function churnGestorAtribuidoPassa(r, v) {
+  if (!v || v === 'todos') return true;
+  const d = churnDestino(r);
+  if (!d) return false;
+  if (v === 'ninguem') return (d.d || []).length === 0;
+  return (d.d || []).some(x => x.u === v);
+}
+function churnPopularGestorAtribuido() {
+  const sel = document.getElementById('churn-atribuido');
+  if (!sel) return;
+  const atual = sel.value || 'todos';
+  const presentes = new Set();
+  Object.values(CHURN_PAINEL.alertas).forEach(a => (a.d || []).forEach(x => presentes.add(x.u)));
+  const opts = [['todos', 'Todos'], ['ninguem', 'Sem gestor atribuído']];
+  CHURN_PAINEL.usuarios.filter(u => presentes.has(u.id) || u.id === atual).forEach(u => opts.push([u.id, u.nome]));
+  sel.innerHTML = opts.map(([v, t]) => `<option value="${escapeHtml(v)}">${escapeHtml(t)}</option>`).join('');
+  sel.value = opts.some(([v]) => v === atual) ? atual : 'todos';
+}
+
+const CHURN_ICONE_ESTADO = { tratado: ['✓', '#16a34a'], devolvido: ['↩', '#b45309'], pendente: ['⏳', '#64748b'] };
+// Estado de cada gestor, na coluna Status da tabela.
+function churnSeloTratativa(r) {
+  const d = churnDestino(r);
+  if (!d) return r.tratado_gestor ? '<div style="margin-top:3px;font-size:10px;font-weight:600;color:#16a34a;white-space:nowrap;">✓ Tratado pelo gestor</div>' : '';
+  if (!(d.d || []).length) return '<div style="margin-top:3px;font-size:10px;font-weight:700;color:#dc2626;white-space:nowrap;">⚠ Sem gestor atribuído</div>';
+  const linhas = d.d.slice(0, 3).map(x => {
+    const [ic, cor] = CHURN_ICONE_ESTADO[x.e] || CHURN_ICONE_ESTADO.pendente;
+    return `<div style="font-size:10px;font-weight:600;color:${cor};white-space:nowrap;">${ic} ${escapeHtml(churnPrimeiroNome(churnNomeUsuario(x.u)))}${x.s ? ' · ' + escapeHtml(x.s) : ''}</div>`;
+  });
+  if (d.d.length > 3) linhas.push(`<div style="font-size:10px;color:var(--text-3);">+${d.d.length - 3}</div>`);
+  return `<div style="margin-top:3px;">${linhas.join('')}</div>`;
+}
+
+async function churnCarregarConversa(id) {
+  const alvo = document.getElementById('churn-conversa');
+  if (alvo) alvo.innerHTML = '<div style="margin-top:14px;font-size:12px;color:var(--text-2);">Carregando conversa…</div>';
+  _churnPickerAberto = false;
+  const { data, error } = await supa.from('churn_tratativas').select('*').eq('alerta_id', id).order('criado_em', { ascending: true });
+  if (error) { if (alvo) alvo.innerHTML = `<div style="margin-top:14px;font-size:12px;color:#b91c1c;">Não consegui ler a conversa: ${escapeHtml(error.message)}</div>`; return; }
+  CHURN_CONVERSAS[id] = data || [];
+  churnRenderConversaAdmin(id);
+}
+
+function churnRenderConversaAdmin(id) {
+  const alvo = document.getElementById('churn-conversa');
+  const r = CHURN_DADOS.find(x => x.id === id);
+  if (!alvo || !r) return;
+  const guardado = document.getElementById('churn-devolver-texto')?.value || '';
+  const msgs = CHURN_CONVERSAS[id] || [];
+  const d = churnDestino(r);
+  const lab = 'font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-2);display:block;margin-bottom:6px;';
+
+  // quem recebe
+  let recebe;
+  if (!d) recebe = '<span style="font-size:12px;color:var(--text-2);">Atribuição indisponível no momento.</span>';
+  else if (!(d.d || []).length) recebe = '<span style="font-size:12px;font-weight:600;color:#dc2626;">⚠ Sem gestor atribuído — escolha quem recebe.</span>';
+  else recebe = d.d.map(x => {
+    const [ic, cor] = CHURN_ICONE_ESTADO[x.e] || CHURN_ICONE_ESTADO.pendente;
+    return `<span style="display:inline-block;margin:0 6px 6px 0;padding:3px 10px;border:1px solid ${cor}55;border-radius:999px;font-size:12px;font-weight:600;color:${cor};">${ic} ${escapeHtml(churnNomeUsuario(x.u))}${x.s ? ' · ' + escapeHtml(x.s) + (x.m ? ' (' + escapeHtml(x.m) + ')' : '') : ''}</span>`;
+  }).join('');
+  const origem = d ? (d.o === 'manual' ? 'atribuição manual' : d.o === 'auto' ? 'automático, pela equipe do dono do cliente' : '') : '';
+  const atualIds = new Set((d?.d || []).map(x => x.u));
+  const picker = _churnPickerAberto ? `
+    <div style="margin-top:8px;border:1px solid var(--border);border-radius:var(--radius);padding:10px;">
+      <input type="search" placeholder="Buscar gestor ou supervisor…" oninput="churnPickerFiltrar(this.value)" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius);font-family:inherit;font-size:13px;margin-bottom:6px;">
+      <div style="max-height:220px;overflow-y:auto;">${CHURN_PAINEL.usuarios.map(u => `
+        <label data-pick-txt="${escapeHtml((u.nome + ' ' + u.perfil + ' ' + (u.visao || '')).toLowerCase())}" style="display:flex;gap:8px;align-items:flex-start;padding:5px 2px;font-size:13px;cursor:pointer;">
+          <input type="checkbox" name="churn-pick" value="${escapeHtml(u.id)}" ${atualIds.has(u.id) ? 'checked' : ''} style="margin-top:3px;">
+          <span><strong>${escapeHtml(u.nome)}</strong> <span style="color:var(--text-2);font-size:12px;">· ${escapeHtml(u.perfil)}${u.visao ? ' · ' + escapeHtml(u.visao) : ''}</span></span>
+        </label>`).join('')}</div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px;flex-wrap:wrap;">
+        ${d && d.o === 'manual' ? `<button class="btn-secondary" onclick="churnAtribuirAuto(${r.id})" title="Descarta a atribuição manual e volta pra regra por equipe">Voltar ao automático</button>` : ''}
+        <button class="btn-secondary" onclick="_churnPickerAberto=false;churnRenderConversaAdmin(${r.id})">Cancelar</button>
+        <button class="btn-primary" id="churn-atribuir-btn" onclick="churnAtribuirSalvar(${r.id})">Salvar atribuição</button>
+      </div></div>` : '';
+
+  // devolver (a UM gestor que já respondeu com tabulação)
+  const devolvíveis = (d?.d || []).filter(x => x.e === 'tratado' && !x.l);
+  const devolver = devolvíveis.length ? `
+    <div style="margin-top:12px;">
+      <label style="${lab}">Devolver ao gestor com uma pergunta</label>
+      <select id="churn-devolver-dest" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius);font-family:inherit;font-size:13px;margin-bottom:6px;">
+        ${devolvíveis.map(x => `<option value="${escapeHtml(x.u)}">${escapeHtml(churnNomeUsuario(x.u))}</option>`).join('')}</select>
+      <textarea id="churn-devolver-texto" rows="3" placeholder="O que você precisa que o gestor esclareça ou refaça?" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:var(--radius);font-family:inherit;font-size:13px;resize:vertical;">${escapeHtml(guardado)}</textarea>
+      <div style="text-align:right;margin-top:6px;"><button class="btn-secondary" id="churn-devolver-btn" onclick="churnDevolver(${r.id})">↩ Devolver ao gestor</button></div>
+    </div>` : '';
+
+  alvo.innerHTML = `<div style="margin-top:16px;">
+    <label style="${lab}display:flex;align-items:center;gap:8px;">Gestores atribuídos <span style="text-transform:none;font-weight:400;">${origem ? '(' + origem + ')' : ''}</span>
+      <button type="button" class="btn-secondary" style="margin-left:auto;padding:2px 10px;font-size:12px;" onclick="_churnPickerAberto=!_churnPickerAberto;churnRenderConversaAdmin(${r.id})">✎ Atribuir / mover</button></label>
+    <div>${recebe}</div>${picker}
+    ${msgs.length || (r.tratado_gestor && r.resposta_gestor) ? `<div class="det-label" style="margin-top:12px;">Conversa</div>${churnConversaHtml(r, msgs, { editar: true })}` : ''}
+    ${devolver}</div>`;
+}
+
+function churnPickerFiltrar(q) {
+  const t = String(q || '').trim().toLowerCase();
+  document.querySelectorAll('[data-pick-txt]').forEach(l => { l.style.display = !t || l.dataset.pickTxt.includes(t) ? 'flex' : 'none'; });
+}
+
+async function churnPostAcao(action, corpo) {
+  const res = await fetch('/api/acessos?recurso=churn&action=' + action, {
+    method: 'POST', headers: { ...authHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify(corpo),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.error || 'Falha na operação');
+  return json;
+}
+
+// Atribuir / mover: a lista marcada passa a ser quem recebe (vale no lugar da regra automática).
+async function churnAtribuirSalvar(id, usuarios) {
+  const marcados = usuarios || [...document.querySelectorAll('input[name="churn-pick"]:checked')].map(i => i.value);
+  const btn = document.getElementById('churn-atribuir-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Salvando...'; }
+  try {
+    await churnPostAcao('atribuir', { id, usuarios: marcados });
+    await churnCarregarPainel();
+    _churnPickerAberto = false;
+    churnRenderConversaAdmin(id);
+    renderChurn();
+  } catch (e) {
+    alert('Não consegui atribuir: ' + e.message);
+    if (btn) { btn.disabled = false; btn.textContent = 'Salvar atribuição'; }
+  }
+}
+function churnAtribuirAuto(id) { return churnAtribuirSalvar(id, []); }
+
+async function churnDevolver(id) {
+  const ta = document.getElementById('churn-devolver-texto');
+  const btn = document.getElementById('churn-devolver-btn');
+  const destino = document.getElementById('churn-devolver-dest')?.value || '';
+  const texto = (ta?.value || '').trim();
+  if (!destino) { alert('Escolha o gestor.'); return; }
+  if (texto.length < 3) { alert('Escreva a pergunta para o gestor.'); ta?.focus(); return; }
+  if (btn) { btn.disabled = true; btn.textContent = 'Devolvendo...'; }
+  try {
+    const json = await churnPostAcao('devolver', { id, destinatario_id: destino, texto });
+    (CHURN_CONVERSAS[id] = CHURN_CONVERSAS[id] || []).push({ ...json.mensagem, autor_id: USUARIO_ATUAL?.id });
+    await churnCarregarPainel();
+    const t = document.getElementById('churn-devolver-texto'); if (t) t.value = '';
+    churnRenderConversaAdmin(id);
+    renderChurn();
+  } catch (e) {
+    alert('Não consegui devolver: ' + e.message);
+    if (btn) { btn.disabled = false; btn.textContent = '↩ Devolver ao gestor'; }
+  }
+}
+
+// Lápis: troca o texto da minha pergunta por um campo editável (o texto do gestor não tem lápis).
+function churnMsgEditar(tid) {
+  const m = Object.values(CHURN_CONVERSAS).flat().find(x => x.id === tid);
+  const box = document.querySelector(`[data-cg-msg="${tid}"] .cg-msg-texto`);
+  if (!m || !box) return;
+  box.style.whiteSpace = 'normal';
+  box.innerHTML = `<textarea id="cg-edit-${tid}" rows="3" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius);font-family:inherit;font-size:13px;resize:vertical;">${escapeHtml(m.texto || '')}</textarea>
+    <div style="text-align:right;margin-top:6px;display:flex;gap:8px;justify-content:flex-end;"><button class="btn-secondary" onclick="churnRenderConversaAdmin(${m.alerta_id})">Cancelar</button><button class="btn-primary" id="cg-edit-btn-${tid}" onclick="churnMsgSalvar(${tid})">Salvar</button></div>`;
+  document.getElementById('cg-edit-' + tid)?.focus();
+}
+
+async function churnMsgSalvar(tid) {
+  const m = Object.values(CHURN_CONVERSAS).flat().find(x => x.id === tid);
+  const texto = (document.getElementById('cg-edit-' + tid)?.value || '').trim();
+  const btn = document.getElementById('cg-edit-btn-' + tid);
+  if (!m) return;
+  if (texto.length < 3) { alert('Escreva o texto.'); return; }
+  if (btn) { btn.disabled = true; btn.textContent = 'Salvando...'; }
+  try {
+    const res = await fetch('/api/acessos?recurso=churn&action=editar', {
+      method: 'POST', headers: { ...authHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify({ tratativa_id: tid, texto }),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(json.error || 'Falha ao salvar');
+    Object.assign(m, json.mensagem);
+    churnRenderConversaAdmin(m.alerta_id);
+  } catch (e) {
+    alert('Não consegui salvar: ' + e.message);
+    if (btn) { btn.disabled = false; btn.textContent = 'Salvar'; }
+  }
+}
+
+// ─── RELATÓRIO DAS TRATATIVAS (responsável) ───────────────────────────────────────────────────────────
+// Por cliente: a demanda (alerta), a tabulação de cada gestor (Status/Motivo) e o retorno final pra Claro (o
+// "Feedback / resposta pra Claro" do alerta). Filtra por data (um dia ou um intervalo); sai pra copiar (texto com
+// formatação do WhatsApp) ou pra imprimir/print (visual). Independe dos filtros da tabela.
+let _churnRelatorio = null; // { itens, texto, html }
+
+function churnDiaLocal(d) { return d.toLocaleDateString('sv-SE'); } // AAAA-MM-DD no fuso do navegador
+function churnDiaDoAlerta(r, campo) {
+  if (campo === 'janela') {
+    const t = (r.data_janela || '').toString().trim();
+    let m = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/); if (m) return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+    m = t.match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? `${m[1]}-${m[2]}-${m[3]}` : '';
+  }
+  const d = r.recebido_em ? new Date(r.recebido_em) : null;
+  return d && !isNaN(d) ? churnDiaLocal(d) : '';
+}
+const churnFmtDia = iso => { const m = (iso || '').match(/^(\d{4})-(\d{2})-(\d{2})$/); return m ? `${m[3]}/${m[2]}/${m[1]}` : (iso || ''); };
+function churnFmtCnpj(c) { const d = String(c || '').replace(/\D/g, ''); return d.length === 14 ? d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5') : (c || '—'); }
+
+function churnAbrirRelatorio() {
+  document.getElementById('churn-relatorio')?.remove();
+  const hoje = new Date(), ini = new Date(Date.now() - 6 * DIA_MS_CHURN);
+  const el = document.createElement('div');
+  el.id = 'churn-relatorio';
+  el.style.cssText = 'position:fixed;inset:0;z-index:9100;background:rgba(0,0,0,.5);display:flex;align-items:flex-start;justify-content:center;padding:30px 16px;overflow-y:auto;';
+  el.onclick = e => { if (e.target === el) el.remove(); };
+  const inp = 'padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius);font-family:inherit;font-size:13px;';
+  const lab = 'font-size:11px;font-weight:600;text-transform:uppercase;color:var(--text-2);display:flex;flex-direction:column;gap:4px;';
+  el.innerHTML = `<div style="background:var(--surface);border-radius:var(--radius-xl);width:100%;max-width:820px;box-shadow:0 24px 60px rgba(0,0,0,.3);overflow:hidden;">
+    <div style="background:var(--brand);padding:14px 20px;display:flex;align-items:center;justify-content:space-between;color:#fff;">
+      <div style="font-size:16px;font-weight:700;">Relatório das tratativas de churn</div>
+      <button onclick="document.getElementById('churn-relatorio').remove()" style="background:rgba(255,255,255,.15);border:none;color:#fff;width:32px;height:32px;border-radius:50%;font-size:18px;cursor:pointer;">×</button>
+    </div>
+    <div style="padding:16px 20px;">
+      <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;">
+        <label style="${lab}">Data de
+          <select id="cr-campo" style="${inp}"><option value="recebido">Recebimento do alerta</option><option value="janela">Janela de portabilidade</option></select></label>
+        <label style="${lab}">De <input type="date" id="cr-de" value="${churnDiaLocal(ini)}" style="${inp}"></label>
+        <label style="${lab}">Até (vazio = só o dia "De") <input type="date" id="cr-ate" value="${churnDiaLocal(hoje)}" style="${inp}"></label>
+        <button class="btn-primary" id="cr-gerar" onclick="churnGerarRelatorio()">Gerar relatório</button>
+      </div>
+      <div style="display:flex;gap:18px;flex-wrap:wrap;margin-top:10px;font-size:13px;">
+        <label style="display:flex;gap:6px;align-items:center;"><input type="checkbox" id="cr-pend" checked> Incluir alertas ainda sem retorno pra Claro</label>
+        <label style="display:flex;gap:6px;align-items:center;"><input type="checkbox" id="cr-txt"> Incluir o texto da tratativa de cada gestor</label>
+      </div>
+      <div id="cr-saida" style="margin-top:14px;"></div>
+    </div></div>`;
+  document.body.appendChild(el);
+}
+const DIA_MS_CHURN = 24 * 3600 * 1000;
+
+async function churnGerarRelatorio() {
+  const campo = document.getElementById('cr-campo').value;
+  const de = document.getElementById('cr-de').value;
+  const ate = document.getElementById('cr-ate').value || de;
+  const comPend = document.getElementById('cr-pend').checked;
+  const comTxt = document.getElementById('cr-txt').checked;
+  const saida = document.getElementById('cr-saida');
+  if (!de) { alert('Escolha a data.'); return; }
+  if (ate < de) { alert('A data final é anterior à inicial.'); return; }
+  saida.innerHTML = '<div style="color:var(--text-2);font-size:13px;">Gerando…</div>';
+
+  const alertas = CHURN_DADOS.filter(r => { const dia = churnDiaDoAlerta(r, campo); return dia && dia >= de && dia <= ate; })
+    .filter(r => comPend || (r.feedback || '').trim() || r.respondido)
+    .sort((a, b) => churnDiaDoAlerta(a, campo).localeCompare(churnDiaDoAlerta(b, campo)) || (a.nome_cliente || '').localeCompare(b.nome_cliente || '', 'pt-BR'));
+
+  // texto de cada gestor (opcional): a última resposta dele em cada alerta
+  const textos = {};
+  if (comTxt && alertas.length) {
+    const ids = alertas.map(a => a.id);
+    for (let i = 0; i < ids.length; i += 150) {
+      const { data } = await supa.from('churn_tratativas').select('alerta_id,tipo,autor_id,autor_nome,texto,criado_em').eq('tipo', 'gestor').in('alerta_id', ids.slice(i, i + 150)).order('criado_em', { ascending: true });
+      (data || []).forEach(m => { (textos[m.alerta_id] = textos[m.alerta_id] || {})[m.autor_id] = m; });
+    }
+  }
+
+  const itens = alertas.map(r => {
+    const d = churnDestino(r);
+    const dono = churnDonoCliente(r);
+    return {
+      r, dono, unidade: churnUnidade(r),
+      gestores: (d?.d || []).map(x => ({ nome: churnNomeUsuario(x.u), estado: x.e, status: x.s, motivo: x.m, texto: textos[r.id]?.[x.u]?.texto || '' })),
+      retorno: (r.feedback || '').trim(), respondido: !!r.respondido,
+    };
+  });
+  const porStatus = {};
+  itens.forEach(it => it.gestores.forEach(g => { if (g.status) porStatus[g.status] = (porStatus[g.status] || 0) + 1; }));
+  const periodo = de === ate ? churnFmtDia(de) : `${churnFmtDia(de)} a ${churnFmtDia(ate)}`;
+  const quemData = campo === 'janela' ? 'janela' : 'recebimento';
+  const comRet = itens.filter(it => it.retorno).length;
+
+  // texto pro WhatsApp (*negrito*)
+  const linhasTxt = [`*RELATÓRIO DE CHURN — ${periodo}*`, `(${quemData}) · ${itens.length} alerta(s) · ${comRet} com retorno pra Claro · ${itens.length - comRet} sem retorno`];
+  const resumo = Object.entries(porStatus).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k}: ${v}`).join(' | ');
+  if (resumo) linhasTxt.push(`Tabulação: ${resumo}`);
+  itens.forEach((it, i) => {
+    const r = it.r;
+    linhasTxt.push('', `*${i + 1}) ${r.nome_cliente || '—'}* — CNPJ ${churnFmtCnpj(r.cnpj)}`);
+    linhasTxt.push(`• ${r.qtd_linhas ?? '—'} linha(s) · ${r.receptora || '—'} · Janela: ${r.data_janela || '—'} · Recebido: ${churnFmtDia(churnDiaDoAlerta(r, 'recebido'))}`);
+    const org = [it.unidade && it.unidade !== '—' ? it.unidade : '', it.dono?.equipe ? 'Equipe ' + it.dono.equipe : '', it.dono?.consultor ? 'Consultor ' + it.dono.consultor : ''].filter(Boolean).join(' · ');
+    if (org) linhasTxt.push(`• ${org}`);
+    if (!it.gestores.length) linhasTxt.push('• Gestor: sem gestor atribuído');
+    it.gestores.forEach(g => {
+      const tab = g.status ? `${g.status}${g.motivo ? ' (' + g.motivo + ')' : ''}` : (g.estado === 'devolvido' ? 'devolvido, aguardando réplica' : 'pendente');
+      linhasTxt.push(`• ${g.nome}: ${tab}${g.texto ? ' — ' + g.texto.replace(/\s+/g, ' ') : ''}`);
+    });
+    linhasTxt.push(`• *Retorno pra Claro:* ${it.retorno ? it.retorno.replace(/\s+/g, ' ') : 'ainda sem retorno'}`);
+  });
+  const texto = linhasTxt.join('\n');
+
+  // visual (print / impressão)
+  const css = 'font-family:Arial,Helvetica,sans-serif;color:#111;';
+  const cartoes = itens.map((it, i) => {
+    const r = it.r;
+    const gest = it.gestores.length ? it.gestores.map(g => {
+      const cor = g.estado === 'tratado' ? '#15803d' : g.estado === 'devolvido' ? '#b45309' : '#64748b';
+      const tab = g.status ? `${escapeHtml(g.status)}${g.motivo ? ' · ' + escapeHtml(g.motivo) : ''}` : (g.estado === 'devolvido' ? 'devolvido — aguardando réplica' : 'pendente');
+      return `<div style="margin-top:2px;"><b>${escapeHtml(g.nome)}</b>: <span style="color:${cor};font-weight:700;">${tab}</span>${g.texto ? `<div style="color:#444;margin:1px 0 0 10px;">${escapeHtml(g.texto)}</div>` : ''}</div>`;
+    }).join('') : '<div style="margin-top:2px;color:#b91c1c;font-weight:700;">Sem gestor atribuído</div>';
+    return `<div style="border:1px solid #d4d4d8;border-radius:8px;padding:10px 12px;margin-top:8px;page-break-inside:avoid;">
+      <div style="font-weight:800;font-size:14px;">${i + 1}) ${escapeHtml(r.nome_cliente || '—')} <span style="font-weight:400;color:#555;font-size:12px;">CNPJ ${escapeHtml(churnFmtCnpj(r.cnpj))}</span></div>
+      <div style="font-size:12px;color:#444;margin-top:2px;">${r.qtd_linhas ?? '—'} linha(s) · ${escapeHtml(r.receptora || '—')} · Janela: ${escapeHtml(r.data_janela || '—')} · Recebido: ${escapeHtml(churnFmtDia(churnDiaDoAlerta(r, 'recebido')))}${it.dono?.equipe ? ' · Equipe ' + escapeHtml(it.dono.equipe) : ''}${it.dono?.consultor ? ' · Consultor ' + escapeHtml(it.dono.consultor) : ''}</div>
+      <div style="font-size:13px;margin-top:4px;">${gest}</div>
+      <div style="margin-top:6px;padding:6px 8px;border-radius:6px;font-size:13px;background:${it.retorno ? '#eff6ff' : '#fef2f2'};"><b>Retorno pra Claro:</b> ${it.retorno ? escapeHtml(it.retorno) : '<span style="color:#b91c1c;">ainda sem retorno</span>'}</div>
+    </div>`;
+  }).join('');
+  const html = `<div style="${css}"><div style="font-size:16px;font-weight:800;">Relatório de churn — ${escapeHtml(periodo)}</div>
+    <div style="font-size:12px;color:#444;margin-top:2px;">Por ${quemData} · ${itens.length} alerta(s) · ${comRet} com retorno pra Claro · ${itens.length - comRet} sem retorno${resumo ? '<br>Tabulação: ' + escapeHtml(resumo) : ''}</div>
+    ${cartoes || '<div style="margin-top:10px;color:#555;">Nenhum alerta no período.</div>'}</div>`;
+
+  _churnRelatorio = { texto, html };
+  saida.innerHTML = `<div style="display:flex;gap:8px;justify-content:flex-end;margin-bottom:8px;flex-wrap:wrap;">
+      <button class="btn-primary" onclick="churnCopiarRelatorio(this)">📋 Copiar texto (WhatsApp)</button>
+      <button class="btn-secondary" onclick="churnImprimirRelatorio()">🖨 Imprimir / salvar PDF</button></div>
+    <div id="cr-visual" style="border:1px solid var(--border);border-radius:var(--radius);padding:14px;background:#fff;">${html}</div>`;
+}
+
+async function churnCopiarRelatorio(btn) {
+  if (!_churnRelatorio) return;
+  let ok = false;
+  try { await navigator.clipboard.writeText(_churnRelatorio.texto); ok = true; }
+  catch (e) {
+    const ta = document.createElement('textarea'); ta.value = _churnRelatorio.texto; ta.style.cssText = 'position:fixed;left:-9999px;';
+    document.body.appendChild(ta); ta.select(); try { ok = document.execCommand('copy'); } catch (e2) {} ta.remove();
+  }
+  if (btn) { const t = btn.textContent; btn.textContent = ok ? '✓ Copiado!' : 'Não consegui copiar'; setTimeout(() => { btn.textContent = t; }, 2000); }
+}
+
+function churnImprimirRelatorio() {
+  if (!_churnRelatorio) return;
+  const w = window.open('', '_blank');
+  if (!w) { alert('O navegador bloqueou a janela de impressão. Libere pop-ups para este site.'); return; }
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Relatório de churn</title><style>@page{margin:14mm}body{margin:0;padding:8px;}</style></head><body>${_churnRelatorio.html}</body></html>`);
+  w.document.close();
+  w.focus();
+  setTimeout(() => { w.print(); }, 300);
 }
 
 // ─── ABA CARTEIRA (planilha separada, só admin) ────────────────────────────

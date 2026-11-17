@@ -625,3 +625,11 @@ ul.aa-corpo { margin: 0; padding-left: calc(var(--e5) + 18px); font-size: 13px; 
   .topo { padding-left: max(var(--gutter), env(safe-area-inset-left)); }
   .conteudo { padding-left: max(var(--gutter), env(safe-area-inset-left)); }
 }
+
+/* Churn: conversa gestor × responsável (tratativa com Motivo/Status, devolução e lápis) */
+.ch-selo { margin-top: 3px; font-size: 10px; font-weight: 700; white-space: nowrap; } .ch-selo-ok { color: var(--ok-600); } .ch-selo-dev { color: var(--aviso-600); }
+.ch-msg { border: 1px solid var(--borda); border-radius: var(--r-md); padding: var(--e2) var(--e3); font-size: 13px; text-transform: none; font-weight: 400; color: var(--texto); }
+.ch-msg-ges { background: var(--ok-100); border-color: var(--ok-600); } .ch-msg-dev { background: var(--aviso-100); border-color: var(--aviso-500); }
+.ch-msg-topo { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 12px; } .ch-msg-topo b { font-weight: 700; } .ch-msg-lapis { margin-left: auto; }
+.ch-msg-tags { margin-top: 4px; display: flex; gap: 6px; flex-wrap: wrap; } .ch-msg-txt { margin-top: 4px; white-space: pre-wrap; } .ch-msg-txt textarea { width: 100%; }
+.ch-aviso-dev { font-size: 12px; font-weight: 600; color: var(--aviso-600); text-transform: none; }
