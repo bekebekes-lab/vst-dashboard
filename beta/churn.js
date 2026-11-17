@@ -274,9 +274,9 @@ export function criarChurn(host) {
           ${!dev && (m.status || m.motivo) ? `<div class="ch-msg-tags">${[m.status, m.motivo].filter(Boolean).map(t => `<span class="q-sit">${esc(t)}</span>`).join(' ')}</div>` : ''}
           <div class="ch-msg-txt">${esc(m.texto || '')}</div></div>`;
       }).join('');
-      // devolver: a UM gestor que já respondeu com tabulação
-      const devolviveis = (d?.d || []).filter(x => x.e === 'tratado');
-      const devolver = devolviveis.length ? `<label>Devolver ao gestor com uma pergunta<select id="ch-m-dev-dest">${devolviveis.map(x => `<option value="${esc(x.u)}">${esc(nomeU(x.u))}</option>`).join('')}</select><textarea id="ch-m-dev" rows="3" placeholder="O que você precisa que o gestor esclareça ou refaça?">${esc(guardado)}</textarea></label><div class="ch-form-pe"><span></span><button type="button" class="btn btn-fantasma" id="ch-m-devolver">↩ Devolver ao gestor</button></div>` : '';
+      // devolver a um ou mais gestores (uma só mensagem): quem já respondeu e quem ainda está pendente
+      const devolviveis = d?.d || [];
+      const devolver = devolviveis.length ? `<label>Devolver com uma pergunta<span class="ch-dev-lista">${devolviveis.map(x => { const [ic, cl] = ICONE[x.e] || ICONE.pendente; return `<label class="ch-dev-item"><input type="checkbox" name="ch-dev" value="${esc(x.u)}" checked> ${esc(nomeU(x.u))} <small class="${cl}">${ic} ${x.e}</small></label>`; }).join('')}</span><textarea id="ch-m-dev" rows="3" placeholder="O que você precisa que o gestor esclareça ou refaça?">${esc(guardado)}</textarea></label><div class="ch-form-pe"><span></span><button type="button" class="btn btn-fantasma" id="ch-m-devolver">↩ Devolver ao gestor</button></div>` : '';
       alvo.innerHTML = `<label>Gestores atribuídos ${origem ? `<small style="text-transform:none;font-weight:400">(${origem})</small>` : ''}<button type="button" class="btn btn-fantasma ch-atrib-btn" data-pick-toggle>✎ Atribuir / mover</button></label><div>${recebe}</div>${picker}${corpo ? `<label>Conversa</label>${corpo}` : ''}${devolver}`;
     };
     const depoisDeAtribuir = async () => { await carregarPainel(); pickerAberto = false; erro(''); desenharConversa(); atualizarOpcoes(); desenhar(); };
@@ -304,11 +304,11 @@ export function criarChurn(host) {
         return;
       }
       if (e.target.closest('#ch-m-devolver')) {
-        const btn = e.target.closest('#ch-m-devolver'), texto = (ov.querySelector('#ch-m-dev')?.value || '').trim(), dest = ov.querySelector('#ch-m-dev-dest')?.value || '';
-        if (!dest) return erro('Escolha o gestor.');
+        const btn = e.target.closest('#ch-m-devolver'), texto = (ov.querySelector('#ch-m-dev')?.value || '').trim(), dests = [...ov.querySelectorAll('input[name="ch-dev"]:checked')].map(i => i.value);
+        if (!dests.length) return erro('Escolha ao menos um gestor.');
         if (texto.length < 3) return erro('Escreva a pergunta para o gestor.');
         btn.disabled = true;
-        try { const j = await post('devolver', { id, destinatario_id: dest, texto }); msgs.push({ ...j.mensagem, autor_id: st.meuId }); ov.querySelector('#ch-m-dev').value = ''; await depoisDeAtribuir(); }
+        try { const j = await post('devolver', { id, destinatarios: dests, texto }); msgs.push({ ...j.mensagem, autor_id: st.meuId }); ov.querySelector('#ch-m-dev').value = ''; await depoisDeAtribuir(); }
         catch (err) { btn.disabled = false; erro('Não consegui devolver: ' + err.message); }
       }
     });

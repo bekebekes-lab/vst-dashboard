@@ -8,8 +8,8 @@
 //                             (Motivo dispensado só com Status SEM CONTATO). Vale também na réplica de uma devolução
 //  GET  ?action=painel     -> (responsável) pra cada alerta: quem recebe (automático por equipe ou manual) e o estado
 //                             de cada um (pendente / tratado / devolvido), + a lista de pessoas que podem receber
-//  POST ?action=devolver   -> { id, destinatario_id, texto }: o responsável devolve a UM gestor com uma pergunta;
-//                             a pendência volta só pra ele
+//  POST ?action=devolver   -> { id, destinatarios: [uuid...], texto }: o responsável devolve a um ou mais gestores com uma
+//                             pergunta (uma só mensagem na conversa); a pendência volta só pra eles
 //  POST ?action=atribuir   -> { id, usuarios: [uuid...] }: o responsável escolhe quem recebe (vale no lugar da regra
 //                             automática; lista vazia = volta ao automático). Serve pra atribuir e pra mover
 //  POST ?action=editar     -> { tratativa_id, texto }: o responsável corrige a PRÓPRIA mensagem (lápis).
@@ -17,7 +17,7 @@
 //
 // A CONVERSA É UMA SÓ por alerta (churn_tratativas): todos os envolvidos veem o mesmo histórico, sem cópias.
 // Só a PENDÊNCIA é individual: o estado de cada gestor sai das mensagens dele (a última dele = tratado; a última
-// devolução a ele = devolvido; nenhuma = pendente). Um gestor responder não fecha a pendência do outro.
+// devolução a ele = devolvido; nenhuma = pendente). Uma devolução pode ser endereçada a vários gestores (uma só mensagem). Um gestor responder não fecha a pendência do outro.
 //
 // Tudo roda com a chave de serviço do Supabase, então a autorização é daqui:
 //  - gestor/supervisão só vê alerta atribuído a ele: por atribuição manual, ou (sem atribuição manual) porque a EQUIPE
@@ -38,7 +38,7 @@ const EPOCH = '1970-01-01T00:00:00.000Z';
 const CAMPOS = 'id,nome_cliente,cnpj,qtd_linhas,receptora,municipio_cliente,uf_cliente,data_janela,recebido_em,'
   + 'multa_estimada,oferta_retencao_mkt,oferta_pos,promocao_atual,'
   + 'tratado_gestor,tratado_gestor_por,tratado_gestor_nome,tratado_gestor_em,resposta_gestor';
-const CAMPOS_MSG = 'id,alerta_id,tipo,autor_id,autor_nome,destinatario_id,destinatario_nome,motivo,status,texto,criado_em,editado_em';
+const CAMPOS_MSG = 'id,alerta_id,tipo,autor_id,autor_nome,destinatario_id,destinatarios,destinatario_nome,motivo,status,texto,criado_em,editado_em';
 
 // Listas da tabulação (as mesmas da planilha de tratativa). SEM CONTATO não exige Motivo.
 const MOTIVOS = ['OFERTA', 'COBERTURA', 'ATENDIMENTO'];
@@ -175,7 +175,7 @@ function destinatariosDe(alerta, mapa, usuarios, manual) {
 function estadoDe(alerta, msgs, userId, aPartirDe) {
   const corte = aPartirDe ? new Date(aPartirDe).getTime() : 0;
   const dele = (msgs || []).filter(m => new Date(m.criado_em).getTime() >= corte
-    && ((m.tipo === 'gestor' && m.autor_id === userId) || (m.tipo === 'devolucao' && m.destinatario_id === userId)));
+    && ((m.tipo === 'gestor' && m.autor_id === userId) || (m.tipo === 'devolucao' && (m.destinatario_id === userId || (m.destinatarios || []).includes(userId)))));
   const ult = dele[dele.length - 1];
   if (!ult) {
     return (alerta.tratado_gestor && alerta.tratado_gestor_por && alerta.tratado_gestor_por === userId) ? { estado: 'tratado', legado: true } : { estado: 'pendente' };
@@ -271,21 +271,20 @@ async function responsavelHandler(req, res, action) {
 
   if (action === 'devolver') {
     const id = parseInt(corpo.id, 10);
-    const destino = (corpo.destinatario_id || '').toString();
-    if (!Number.isInteger(id) || !destino) throw new ErroHttp(400, 'Informe o alerta e o gestor');
+    const alvos = [...new Set((Array.isArray(corpo.destinatarios) ? corpo.destinatarios : [corpo.destinatario_id]).filter(Boolean).map(String))];
+    if (!Number.isInteger(id) || !alvos.length) throw new ErroHttp(400, 'Informe o alerta e o(s) gestor(es)');
     const a = await supa(`/rest/v1/churn_alertas?id=eq.${id}&select=id,cnpj,tratado_gestor,tratado_gestor_por`);
     const alerta = a.ok ? a.json?.[0] : null;
     if (!alerta) throw new ErroHttp(404, 'Alerta não encontrado');
     const [mapa, usuarios, manualMap, msgsMap] = await Promise.all([baseNeo(), usuariosDestino(), atribuicoes([id]), conversas([id])]);
     const manual = manualMap.get(id);
-    const dest = destinatariosDe(alerta, mapa, usuarios, manual).usuarios.find(u => u.id === destino);
-    if (!dest) throw new ErroHttp(409, 'Esse gestor não está atribuído ao alerta');
-    const est = estadoDe(alerta, msgsMap.get(id) || [], destino, manual?.find(x => x.usuario_id === destino)?.a_partir_de);
-    // só dá pra devolver a quem já respondeu (a resposta antiga, de antes da tabulação, também vale)
-    if (est.estado !== 'tratado') throw new ErroHttp(409, 'Esse gestor ainda não respondeu (ou já está com a devolução pendente)');
+    // pode devolver a quem já respondeu e também a quem ainda está pendente (a pergunta vira a pendência dele)
+    const recebem = destinatariosDe(alerta, mapa, usuarios, manual).usuarios;
+    const dests = alvos.map(u => recebem.find(x => x.id === u));
+    if (dests.some(d => !d)) throw new ErroHttp(409, 'Algum desses gestores não está atribuído ao alerta');
     const ins = await supa('/rest/v1/churn_tratativas', {
       method: 'POST', prefer: 'return=representation',
-      body: { alerta_id: id, tipo: 'devolucao', autor_id: authUser.id, autor_nome: nome, destinatario_id: destino, destinatario_nome: dest.nome, texto },
+      body: { alerta_id: id, tipo: 'devolucao', autor_id: authUser.id, autor_nome: nome, destinatario_id: alvos[0], destinatarios: alvos, destinatario_nome: dests.map(d => d.nome).join(', '), texto },
     });
     if (!ins.ok || !ins.json?.length) throw new ErroHttp(502, 'Não consegui gravar a pergunta');
     return res.status(200).json({ mensagem: ins.json[0] });

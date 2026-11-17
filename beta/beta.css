@@ -633,3 +633,4 @@ ul.aa-corpo { margin: 0; padding-left: calc(var(--e5) + 18px); font-size: 13px; 
 .ch-msg-topo { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 12px; } .ch-msg-topo b { font-weight: 700; } .ch-msg-lapis { margin-left: auto; }
 .ch-msg-tags { margin-top: 4px; display: flex; gap: 6px; flex-wrap: wrap; } .ch-msg-txt { margin-top: 4px; white-space: pre-wrap; } .ch-msg-txt textarea { width: 100%; }
 .ch-aviso-dev { font-size: 12px; font-weight: 600; color: var(--aviso-600); text-transform: none; }
+.ch-dev-lista { display: flex; flex-wrap: wrap; gap: 6px 16px; text-transform: none; font-weight: 400; } .ch-dev-item { flex-direction: row !important; align-items: center; gap: 6px !important; text-transform: none; font-weight: 400; font-size: 13px; color: var(--texto); cursor: pointer; } .ch-dev-item small { font-size: 11px; }

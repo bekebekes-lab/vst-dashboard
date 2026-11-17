@@ -14082,13 +14082,14 @@ function churnRenderConversaAdmin(id) {
         <button class="btn-primary" id="churn-atribuir-btn" onclick="churnAtribuirSalvar(${r.id})">Salvar atribuição</button>
       </div></div>` : '';
 
-  // devolver (a UM gestor que já respondeu, inclusive resposta antiga de antes da tabulação)
-  const devolvíveis = (d?.d || []).filter(x => x.e === 'tratado');
+  // devolver a um ou mais gestores (uma só mensagem na conversa): quem já respondeu (inclusive resposta antiga) e quem ainda está pendente
+  const devolvíveis = d?.d || [];
   const devolver = devolvíveis.length ? `
     <div style="margin-top:12px;">
-      <label style="${lab}">Devolver ao gestor com uma pergunta</label>
-      <select id="churn-devolver-dest" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius);font-family:inherit;font-size:13px;margin-bottom:6px;">
-        ${devolvíveis.map(x => `<option value="${escapeHtml(x.u)}">${escapeHtml(churnNomeUsuario(x.u))}</option>`).join('')}</select>
+      <label style="${lab}">Devolver com uma pergunta</label>
+      <div style="display:flex;flex-wrap:wrap;gap:6px 16px;margin-bottom:6px;">
+        ${devolvíveis.map(x => { const [ic, cor] = CHURN_ICONE_ESTADO[x.e] || CHURN_ICONE_ESTADO.pendente; return `<label style="display:flex;gap:6px;align-items:center;font-size:13px;cursor:pointer;"><input type="checkbox" name="churn-dev" value="${escapeHtml(x.u)}" checked> ${escapeHtml(churnNomeUsuario(x.u))} <span style="color:${cor};font-size:11px;">${ic} ${x.e}</span></label>`; }).join('')}
+      </div>
       <textarea id="churn-devolver-texto" rows="3" placeholder="O que você precisa que o gestor esclareça ou refaça?" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:var(--radius);font-family:inherit;font-size:13px;resize:vertical;">${escapeHtml(guardado)}</textarea>
       <div style="text-align:right;margin-top:6px;"><button class="btn-secondary" id="churn-devolver-btn" onclick="churnDevolver(${r.id})">↩ Devolver ao gestor</button></div>
     </div>` : '';
@@ -14136,13 +14137,13 @@ function churnAtribuirAuto(id) { return churnAtribuirSalvar(id, []); }
 async function churnDevolver(id) {
   const ta = document.getElementById('churn-devolver-texto');
   const btn = document.getElementById('churn-devolver-btn');
-  const destino = document.getElementById('churn-devolver-dest')?.value || '';
+  const destinos = [...document.querySelectorAll('input[name="churn-dev"]:checked')].map(i => i.value);
   const texto = (ta?.value || '').trim();
-  if (!destino) { alert('Escolha o gestor.'); return; }
+  if (!destinos.length) { alert('Escolha ao menos um gestor.'); return; }
   if (texto.length < 3) { alert('Escreva a pergunta para o gestor.'); ta?.focus(); return; }
   if (btn) { btn.disabled = true; btn.textContent = 'Devolvendo...'; }
   try {
-    const json = await churnPostAcao('devolver', { id, destinatario_id: destino, texto });
+    const json = await churnPostAcao('devolver', { id, destinatarios: destinos, texto });
     (CHURN_CONVERSAS[id] = CHURN_CONVERSAS[id] || []).push({ ...json.mensagem, autor_id: USUARIO_ATUAL?.id });
     await churnCarregarPainel();
     const t = document.getElementById('churn-devolver-texto'); if (t) t.value = '';
