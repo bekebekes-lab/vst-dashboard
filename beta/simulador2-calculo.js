@@ -152,26 +152,16 @@ export function s2Calcular(v, sheet0) {
   const capLimitante = Math.min(capVoz, capBl);
   const limitanteLabel = capVoz <= capBl ? 'Voz' : 'BL';
 
-  let capRestante = capLimitante, totalDisponivel = 0;
-  const sugestaoPorEstagio = [], disponivelPorEstagio = [];
+  // todos os HCs disponíveis entram no cálculo (sem "sugestão a declarar")
+  let totalDisponivel = 0;
+  const disponivelPorEstagio = [];
   RAMPA_PRODUTIVIDADE.forEach((r, i) => {
     const disp = num(v['rampa-disp-' + i]);
     totalDisponivel += disp;
     disponivelPorEstagio[i] = disp;
-    let sugerido;
-    if (r.pct === 0) {
-      sugerido = disp;
-    } else {
-      const maxPossivel = capRestante === Infinity ? disp : Math.floor(capRestante / r.pct + 1e-9);
-      sugerido = Math.max(0, Math.min(disp, maxPossivel));
-      capRestante -= sugerido * r.pct;
-      if (capRestante < 0) capRestante = 0;
-    }
-    sugestaoPorEstagio[i] = sugerido;
   });
 
-  let totalVendedores = 0;
-  RAMPA_PRODUTIVIDADE.forEach((r, i) => { totalVendedores += sugestaoPorEstagio[i]; });
+  const totalVendedores = totalDisponivel;
 
   // item 2.7-ii-d: arredonda a meta individual de cada estágio para cima, depois multiplica pela quantidade
   function metaPonderadaPorEstagio(qtdPorEstagio, unidade) {
@@ -179,12 +169,9 @@ export function s2Calcular(v, sheet0) {
     RAMPA_PRODUTIVIDADE.forEach((r, i) => { total += qtdPorEstagio[i] * Math.ceil(r.pct * unidade); });
     return total;
   }
-  const metaVozPonderada = metaPonderadaPorEstagio(sugestaoPorEstagio, metaVozUnit);
-  const metaBlPonderada = metaPonderadaPorEstagio(sugestaoPorEstagio, metaBlUnit);
-  const metaSdPonderada = metaPonderadaPorEstagio(sugestaoPorEstagio, metaSdUnit);
-  const metaVozMaxTodos = metaPonderadaPorEstagio(disponivelPorEstagio, metaVozUnit);
-  const metaBlMaxTodos = metaPonderadaPorEstagio(disponivelPorEstagio, metaBlUnit);
-  const metaSdMaxTodos = metaPonderadaPorEstagio(disponivelPorEstagio, metaSdUnit);
+  const metaVozPonderada = metaPonderadaPorEstagio(disponivelPorEstagio, metaVozUnit);
+  const metaBlPonderada = metaPonderadaPorEstagio(disponivelPorEstagio, metaBlUnit);
+  const metaSdPonderada = metaPonderadaPorEstagio(disponivelPorEstagio, metaSdUnit);
 
   const pctMovel = metaVozPonderada > 0 ? (realizadoVoz / metaVozPonderada) * 100 : 0;
   const pctFixa = metaBlPonderada > 0 ? (realizadoBl / metaBlPonderada) * 100 : 0;
@@ -214,7 +201,7 @@ export function s2Calcular(v, sheet0) {
     fatores: fat, razaoCnpjHc, faixaObj, pctLiberacao, unidades,
     totais: { totalAtivacaoGeral, totalBrutoCarteira, totalTeto, totalPagoCarteira, totalNaoRecebida, totalMesa, totalLinhasVoz, totalLinhasVirtua, totalLinhasCarteira, totalPotencial, totalLinhasRecebidas },
     prod: { metaVozUnit, metaBlUnit, metaSdUnit, realizadoVoz, realizadoBl, realizadoSd, capVoz, capBl, limitanteLabel, totalDisponivel, totalVendedores,
-      sugestaoPorEstagio, metaVozPonderada, metaBlPonderada, metaSdPonderada, metaVozMaxTodos, metaBlMaxTodos, metaSdMaxTodos, pctMovel, pctFixa, pctSd,
+      metaVozPonderada, metaBlPonderada, metaSdPonderada, pctMovel, pctFixa, pctSd,
       travaOk, travaTxt, faixaBase, faixaFinal, totalBonusProdutividade },
     cat: { categoria, pctCategoria, totalBonusCategoria },
     totalGeralCompetencia,

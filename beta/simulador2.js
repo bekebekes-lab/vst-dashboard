@@ -100,7 +100,7 @@ export function criarSimulador2(host, ctx) {
         </div></section>
 
       <section class="painel"><header class="painel-cab"><div class="painel-tit"><h2><span class="sm-num">04</span> Bônus Produtividade</h2>
-        <p>Exclusivo para modalidade Elite, mínimo de 4 vendedores (item 2.7). Informe quantos HCs você TEM em cada estágio da rampa (0/25/25/50/75/100% do 1º ao 6º mês+) — "Sugestão a Declarar" calcula quantos declarar em cada estágio para maximizar o total de HCs sem cair abaixo de 100% em Voz e BL. O 1º mês (0% de meta) é "grátis".</p></div></header>
+        <p>Exclusivo para modalidade Elite, mínimo de 4 vendedores (item 2.7). Informe quantos HCs você TEM em cada estágio da rampa (0/25/25/50/75/100% do 1º ao 6º mês+). Todos os HCs disponíveis entram no cálculo: a meta é a soma, estágio a estágio, da meta individual (arredondada pra cima) × os HCs do estágio.</p></div></header>
         <div class="painel-corpo">
           <div class="sm-grade">
             ${campo('meta-voz', 'Meta p/ ativar 1 HC — Voz (linhas)', 'min="0" step="1"')}
@@ -111,17 +111,17 @@ export function criarSimulador2(host, ctx) {
           <div class="kpis sm-kpis3" style="margin-top:var(--e4)">
             <article class="kpi"><div class="kpi-rot">Capacidade máx. — Voz (em HC 100%)</div><div class="kpi-val" data-o="cap-voz">0</div><div class="kpi-pe"><span class="kpi-nota" data-o="cap-voz-s"></span></div></article>
             <article class="kpi"><div class="kpi-rot">Capacidade máx. — BL (em HC 100%)</div><div class="kpi-val" data-o="cap-bl">0</div><div class="kpi-pe"><span class="kpi-nota" data-o="cap-bl-s"></span></div></article>
-            <article class="kpi"><div class="kpi-rot">HCs disponíveis × Sugeridos p/ declarar</div><div class="kpi-val" data-o="cap-heads">0 / 0</div></article>
+            <article class="kpi"><div class="kpi-rot">HCs disponíveis (todos entram no cálculo)</div><div class="kpi-val" data-o="cap-heads">0</div></article>
           </div>
           <p class="sm-dica">"Em HC 100%" = quantos HCs a produção sustentaria SE todos estivessem no último estágio da rampa — é uma unidade de referência para achar o gargalo, não uma contagem real de cabeças.</p>
-          <div class="tab-wrap sm-tab sm-rampa"><table class="tab sm-tabela"><thead><tr><th>Estágio (meses de casa)</th><th class="num">% meta exigida</th><th>Disponível (tenho)</th><th class="num">Sugestão a Declarar</th></tr></thead>
+          <div class="tab-wrap sm-tab sm-rampa"><table class="tab sm-tabela"><thead><tr><th>Estágio (meses de casa)</th><th class="num">% meta exigida</th><th>Disponível (tenho)</th></tr></thead>
             <tbody>${RAMPA_PRODUTIVIDADE.map((r, i) => `<tr><td data-l="Estágio">${esc(r.label)}</td><td class="num" data-l="% meta">${(r.pct * 100).toFixed(0)}%</td>
-              <td data-l="Disponível"><input type="number" min="0" class="sm-in" data-k="rampa-disp-${i}" aria-label="HCs disponíveis — ${esc(r.label)}"></td><td class="num sm-verde" data-l="Sugestão" data-o="sug-${i}">0</td></tr>`).join('')}</tbody>
-            <tfoot><tr><td>Total</td><td></td><td class="num" data-o="rampa-disp">0</td><td class="num" data-o="rampa-sug">0</td></tr></tfoot></table></div>
+              <td data-l="Disponível"><input type="number" min="0" class="sm-in" data-k="rampa-disp-${i}" aria-label="HCs disponíveis — ${esc(r.label)}"></td></tr>`).join('')}</tbody>
+            <tfoot><tr><td>Total</td><td></td><td class="num" data-o="rampa-disp">0</td></tr></tfoot></table></div>
           <div class="kpis sm-kpis3" style="margin-top:var(--e4)">
-            <article class="kpi"><div class="kpi-rot">Móvel Voz — Realizado / Meta ponderada</div><div class="kpi-val" data-o="pm-num">0 / 0</div><div class="kpi-pe"><span class="kpi-nota"><b data-o="pm-pct">0%</b> atingido · Meta máx. se declarar TODOS: <b data-o="pm-max">0</b></span></div></article>
-            <article class="kpi"><div class="kpi-rot">Fixa Básica BL — Realizado / Meta ponderada</div><div class="kpi-val" data-o="pf-num">0 / 0</div><div class="kpi-pe"><span class="kpi-nota"><b data-o="pf-pct">0%</b> atingido · Meta máx. se declarar TODOS: <b data-o="pf-max">0</b></span></div></article>
-            <article class="kpi"><div class="kpi-rot">Solução Digital — Realizado / Meta ponderada</div><div class="kpi-val" data-o="ps-num">R$ 0 / R$ 0</div><div class="kpi-pe"><span class="kpi-nota"><b data-o="ps-pct">0%</b> atingido · Meta máx. se declarar TODOS: <b data-o="ps-max">R$ 0</b> — se &lt;100% retroage 1 faixa (2.7-iii-6)</span></div></article>
+            <article class="kpi"><div class="kpi-rot">Móvel Voz — Realizado / Meta ponderada</div><div class="kpi-val" data-o="pm-num">0 / 0</div><div class="kpi-pe"><span class="kpi-nota"><b data-o="pm-pct">0%</b> atingido</span></div></article>
+            <article class="kpi"><div class="kpi-rot">Fixa Básica BL — Realizado / Meta ponderada</div><div class="kpi-val" data-o="pf-num">0 / 0</div><div class="kpi-pe"><span class="kpi-nota"><b data-o="pf-pct">0%</b> atingido</span></div></article>
+            <article class="kpi"><div class="kpi-rot">Solução Digital — Realizado / Meta ponderada</div><div class="kpi-val" data-o="ps-num">R$ 0 / R$ 0</div><div class="kpi-pe"><span class="kpi-nota"><b data-o="ps-pct">0%</b> atingido · se &lt;100% retroage 1 faixa (2.7-iii-6)</span></div></article>
           </div>
           <div class="kpis" style="margin-top:var(--e4)">
             <article class="kpi"><div class="kpi-rot">Trava dupla performance (mín. 60%)</div><div class="kpi-val" data-o="trava">—</div></article>
@@ -284,12 +284,11 @@ export function criarSimulador2(host, ctx) {
     out('real-sd', moeda(P.realizadoSd));
     out('cap-voz', P.capVoz === Infinity ? '—' : P.capVoz.toFixed(1)); out('cap-voz-s', P.limitanteLabel === 'Voz' ? '⚠ é o gargalo' : 'tem folga');
     out('cap-bl', P.capBl === Infinity ? '—' : P.capBl.toFixed(1)); out('cap-bl-s', P.limitanteLabel === 'BL' ? '⚠ é o gargalo' : 'tem folga');
-    out('cap-heads', `${L(P.totalDisponivel)} / ${L(P.totalVendedores)}`);
-    P.sugestaoPorEstagio.forEach((s, i) => out('sug-' + i, L(s)));
-    out('rampa-disp', L(P.totalDisponivel)); out('rampa-sug', L(P.totalVendedores));
-    out('pm-num', `${L(P.realizadoVoz)} / ${P.metaVozPonderada.toFixed(1)}`); out('pm-pct', P.pctMovel.toFixed(1) + '%'); out('pm-max', P.metaVozMaxTodos.toFixed(1));
-    out('pf-num', `${L(P.realizadoBl)} / ${P.metaBlPonderada.toFixed(1)}`); out('pf-pct', P.pctFixa.toFixed(1) + '%'); out('pf-max', P.metaBlMaxTodos.toFixed(1));
-    out('ps-num', `${moeda(P.realizadoSd)} / ${moeda(P.metaSdPonderada)}`); out('ps-pct', P.pctSd.toFixed(1) + '%'); out('ps-max', moeda(P.metaSdMaxTodos));
+    out('cap-heads', L(P.totalDisponivel));
+    out('rampa-disp', L(P.totalDisponivel));
+    out('pm-num', `${L(P.realizadoVoz)} / ${P.metaVozPonderada.toFixed(1)}`); out('pm-pct', P.pctMovel.toFixed(1) + '%');
+    out('pf-num', `${L(P.realizadoBl)} / ${P.metaBlPonderada.toFixed(1)}`); out('pf-pct', P.pctFixa.toFixed(1) + '%');
+    out('ps-num', `${moeda(P.realizadoSd)} / ${moeda(P.metaSdPonderada)}`); out('ps-pct', P.pctSd.toFixed(1) + '%');
     out('trava', P.travaTxt); const tv = host.querySelector('[data-o="trava"]'); tv.classList.toggle('txt-pos', P.travaOk); tv.classList.toggle('txt-neg', !P.travaOk);
     out('faixa-base', P.faixaBase.label); out('faixa-final', P.faixaFinal.label); out('prod-total', moeda(P.totalBonusProdutividade));
     out('cat-nome', R.cat.categoria.charAt(0).toUpperCase() + R.cat.categoria.slice(1)); out('cat-pct', (R.cat.pctCategoria * 100).toFixed(0) + '%');
