@@ -31,7 +31,11 @@ import { abaEmCache, buscarAbaSemCache } from './dados.js';
 const MESES_INICIAIS = 13;   // mês corrente + 12 anteriores; o resto sob demanda
 const GRUPOS = ['GROSS', 'RENOVAÇÃO', 'BL', 'TITULARIDADE', 'SERV. DIGITAIS'];
 const ROTULO = { GROSS: 'Gross', 'RENOVAÇÃO': 'Renovação', BL: 'BL (Fixa Básica)', TITULARIDADE: 'Titularidade', 'SERV. DIGITAIS': 'Serv. Digitais', TOTAL: 'Total' };
-const FORA_DO_TOTAL = ['SERV. DIGITAIS'];       // Serv. Digitais não soma no total (como no Gerencial)
+const FORA_DO_TOTAL = ['SERV. DIGITAIS'];
+// Subtipos do Gross (Voz Novo / Voz Portabilidade): aparecem na lista de Tipo só pra CONSULTA — não são grupos do painel, então
+// não ganham barra, fatia, linha nem coluna e não duplicam nada. Marcar um deles mostra só aquele subtipo; marcar "Gross" junto vale
+// o Gross inteiro. Os números vêm dos pedidos reais de VOZ - Novo / Portabilidade (index.html: PN_SUB_LABEL).
+const SUB_ROTULO = { 'VOZ NOVO': 'Gross › Voz Novo', PORTABILIDADE: 'Gross › Voz Portabilidade' };       // Serv. Digitais não soma no total (como no Gerencial)
 const COR = { TOTAL: '#C0281C', GROSS: '#111111', 'RENOVAÇÃO': '#8E1B12', BL: '#D6D6D6', TITULARIDADE: '#E2B100', 'SERV. DIGITAIS': '#7C4DCC' };
 const METRICAS_TODAS = [['comissao', 'Comissão'], ['quantidade', 'Quantidade'], ['receita', 'Receita'], ['cnpjs', 'CNPJs'], ['ticket', 'Ticket médio']];
 const DIMS = [['estado', 'Estado'], ['ddd', 'DDD'], ['cidade', 'Cidade']];
@@ -71,7 +75,8 @@ function compactar(rows, chave, cfg) {
       fl: fila, sg: subgrupoDaFila(fila),
     };
     // Voz Novo/Portabilidade são o espelho do Gross: só levam a comissão (quantidade e receita vêm do GROSS)
-    if (key === 'VOZ NOVO' || key === 'PORTABILIDADE') { out.push({ ...base, g: 'GROSS', q: 0, r: 0, c: gfComissaoLinha(r, key, fat, col).valor, cn: '' }); continue; }
+    // sub/vq/vr/vcn: só pra quando o filtro Tipo pede Voz Novo / Voz Portabilidade (aí valem no lugar de q/r/cn)
+    if (key === 'VOZ NOVO' || key === 'PORTABILIDADE') { out.push({ ...base, g: 'GROSS', q: 0, r: 0, c: gfComissaoLinha(r, key, fat, col).valor, cn: '', sub: key, vq: parseInt(r['QUANTIDADE']) || 1, vr: receitaLinha(r), vcn: (r['CPF/CNPJ'] || '').replace(/\D/g, '') }); continue; }
     out.push({ ...base, g: key, q: parseInt(r['QUANTIDADE']) || 1, r: receitaLinha(r),
       c: GF_FATOR_POR_CAT[key] ? gfComissaoLinha(r, key, fat, col).valor : 0, cn: (r['CPF/CNPJ'] || '').replace(/\D/g, '') });
   }
@@ -79,7 +84,8 @@ function compactar(rows, chave, cfg) {
 }
 
 const acc = () => ({ q: 0, r: 0, c: 0, cn: new Set() });
-const soma = (a, r) => { a.q += r.q; a.r += r.r; a.c += r.c || 0; if (r.cn) a.cn.add(r.cn); };
+let subModo = false;   // Tipo = Voz Novo / Voz Portabilidade: os registros espelho entram com os números do próprio pedido
+const soma = (a, r) => { const s = subModo && r.sub; a.q += s ? r.vq : r.q; a.r += s ? r.vr : r.r; a.c += r.c || 0; const cn = s ? r.vcn : r.cn; if (cn) a.cn.add(cn); };
 function valor(a, metrica) {
   if (!a) return 0;
   switch (metrica) { case 'comissao': return a.c; case 'receita': return a.r; case 'cnpjs': return a.cn.size; case 'ticket': return a.q ? a.r / a.q : 0; default: return a.q; }
@@ -229,6 +235,15 @@ export function criarPainel(host, ctx) {
   }
 
   // ── filtro e agregação ─────────────────────────────────────────────────────
+  // Tipo: grupos escolhidos + subtipos do Gross. Subtipo marcado implica o Gross restrito àquele subtipo (a não ser que "Gross" também esteja marcado).
+  let tipoSel = { grupos: null, subs: null };
+  function lerTipos() {
+    const sel = st.selGrupos;
+    const grp = GRUPOS.filter(g => sel.includes(ROTULO[g])), sb = Object.keys(SUB_ROTULO).filter(k => sel.includes(SUB_ROTULO[k]));
+    const subs = sb.length && !grp.includes('GROSS') ? new Set(sb) : null;
+    tipoSel = { grupos: (grp.length || sb.length) ? new Set([...grp, ...(subs ? ['GROSS'] : [])]) : null, subs };
+    subModo = !!subs;
+  }
   function passa(r, c, f, ign) {
     if (!c.escopoOk(r)) return false;
     if (f.uf !== 'Todos' && r.uf !== f.uf) return false;
@@ -237,7 +252,10 @@ export function criarPainel(host, ctx) {
     if (f.consultores.length && !f.consultores.some(x => x.toUpperCase() === r.ve.toUpperCase())) return false;
     if (f.tag !== 'Todas' && r.tg !== (MAPEAMENTO_TAGS[f.tag] || 'Sem Tag')) return false;
     const permitidas = filasPermitidas(f); if (permitidas && !permitidas.has(r.fl || 'Sem Status')) return false;
-    if (ign !== 'grupo' && st.selGrupos.length && !st.selGrupos.includes(ROTULO[r.g])) return false;
+    if (ign !== 'grupo' && tipoSel.grupos) {
+      if (!tipoSel.grupos.has(r.g)) return false;
+      if (tipoSel.subs && r.g === 'GROSS' && !(r.sub && tipoSel.subs.has(r.sub))) return false;   // Gross só do subtipo escolhido
+    }
     if (ign !== 'estado' && st.selEstados.length && !st.selEstados.includes(r.es)) return false;
     return true;
   }
@@ -264,14 +282,14 @@ export function criarPainel(host, ctx) {
     for (const m of c.meses) {
       if (!st.dados[m.chave]) continue;
       for (const r of st.dados[m.chave]) {
-        if (passa(r, c, f, 'grupo')) grupos.add(ROTULO[r.g]);
+        if (passa(r, c, f, 'grupo')) { grupos.add(ROTULO[r.g]); if (r.sub) grupos.add(SUB_ROTULO[r.sub]); }
         if (passa(r, c, f, 'estado') && r.es) estados.add(r.es);
         if (passa(r, c, f)) meses.add(m.label);
       }
     }
     const ordemMes = c.meses.slice().reverse().map(m => m.label).filter(l => meses.has(l));
     msMeses.atualizar(ordemMes, st.selMeses);
-    msGrupos.atualizar(GRUPOS.map(g => ROTULO[g]).filter(l => grupos.has(l)), st.selGrupos);
+    msGrupos.atualizar(GRUPOS.flatMap(g => g === 'GROSS' ? [ROTULO[g], ...Object.values(SUB_ROTULO)] : [ROTULO[g]]).filter(l => grupos.has(l)), st.selGrupos);
     msEstados.atualizar([...estados].sort((a, b) => a.localeCompare(b, 'pt-BR')), st.selEstados);
   }
 
@@ -281,6 +299,7 @@ export function criarPainel(host, ctx) {
   function render() {
     if (!st.iniciou) return;
     const c = ctx();
+    lerTipos();
     opcoes();
     const agg = agregar();
     desenharProgresso();

@@ -5602,6 +5602,12 @@ const PN_MES_ABREV = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'S
 const PN_GRUPOS = ['GROSS', 'RENOVAÇÃO', 'BL', 'TITULARIDADE', 'SERV. DIGITAIS'];
 const PN_GRUPO_LABEL = { 'GROSS': 'Gross', 'RENOVAÇÃO': 'Renovação', 'BL': 'BL (Fixa Básica)', 'TITULARIDADE': 'Titularidade', 'SERV. DIGITAIS': 'Serv. Digitais' };
 const PN_FORA_DO_TOTAL = ['SERV. DIGITAIS'];
+// Subtipos do Gross (Voz Novo / Voz Portabilidade): aparecem na lista de Tipo só pra CONSULTA — não são grupos do painel,
+// então não ganham barra, fatia, linha nem coluna e não duplicam nada. Marcar um deles mostra só aquele subtipo.
+// (Marcar "Gross" junto vale o Gross inteiro.) Os números vêm dos pedidos reais de VOZ - Novo / Portabilidade.
+const PN_SUB_LABEL = { 'VOZ NOVO': 'Gross › Voz Novo', 'PORTABILIDADE': 'Gross › Voz Portabilidade' };
+// lista do filtro Tipo: os grupos, com os subtipos logo depois do Gross
+const pnTiposLista = () => PN_GRUPOS.flatMap(g => g === 'GROSS' ? [PN_GRUPO_LABEL[g], ...Object.values(PN_SUB_LABEL)] : [PN_GRUPO_LABEL[g]]);
 const PN_COR = { TOTAL: '#C0281C', 'GROSS': '#111111', 'RENOVAÇÃO': '#8E1B12', 'BL': '#D6D6D6', 'TITULARIDADE': '#E2B100', 'SERV. DIGITAIS': '#7C4DCC' };
 const PN_METRICAS = [
   ['comissao', 'Comissão', 'Comissão'],
@@ -5691,7 +5697,8 @@ function pnCompactar(objs, chave) {
     };
     if (key === 'VOZ NOVO' || key === 'PORTABILIDADE') {
       // espelho do Gross: só leva a comissão (quantidade/receita já vêm do GROSS)
-      out.push({ ...base, g: 'GROSS', q: 0, r: 0, c: gfComissaoLinha(r, key, fat).valor, cn: '' });
+      // sub/vq/vr/vcn: só pra quando o filtro Tipo pede Voz Novo / Voz Portabilidade (aí valem no lugar de q/r/cn)
+      out.push({ ...base, g: 'GROSS', q: 0, r: 0, c: gfComissaoLinha(r, key, fat).valor, cn: '', sub: key, vq: parseInt(r['QUANTIDADE']) || 1, vr: gerReceitaLinha(r), vcn: (r['CPF/CNPJ'] || '').replace(/\D/g, '') });
       return;
     }
     out.push({
@@ -5815,7 +5822,7 @@ function pnAtualizarFiltros(forcar) {
   const ord = s => [...s].sort((a, b) => a.localeCompare(b, 'pt-BR'));
   const itens = {
     mes: [...PN.meses].reverse().filter(m => PN.dados[m.chave]).map(m => m.label),
-    grupo: PN_GRUPOS.map(g => PN_GRUPO_LABEL[g]),
+    grupo: pnTiposLista(),
     tag: ord(PN.opcoes.tag), estado: ord(PN.opcoes.estado), uf: ord(PN.opcoes.uf),
     gestor: ord(PN.opcoes.gestor), equipe: ord(PN.opcoes.equipe), vendedor: ord(PN.opcoes.vendedor),
   };
@@ -5841,10 +5848,10 @@ function pnFacetasDefs() {
   const labelMes = {}, ordemMes = {};
   [...PN.meses].reverse().forEach((m, i) => { labelMes[m.chave] = m.label; ordemMes[m.label] = i; });
   const sel = n => facetaSelDd(`dd-content-pn-${n}`);
-  const ordemGrupo = {}; PN_GRUPOS.forEach((g, i) => { ordemGrupo[PN_GRUPO_LABEL[g]] = i; });
+  const ordemGrupo = {}; pnTiposLista().forEach((l, i) => { ordemGrupo[l] = i; });
   return [
     { id: 'mes', valor: r => labelMes[r.m] || null, sel: () => sel('mes'), ordem: (a, b) => (ordemMes[a] ?? 99) - (ordemMes[b] ?? 99) },
-    { id: 'grupo', valor: r => PN_GRUPO_LABEL[r.g] || null, sel: () => sel('grupo'), ordem: (a, b) => (ordemGrupo[a] ?? 99) - (ordemGrupo[b] ?? 99) },
+    { id: 'grupo', valor: r => r.sub ? [PN_GRUPO_LABEL[r.g], PN_SUB_LABEL[r.sub]] : (PN_GRUPO_LABEL[r.g] || null), sel: () => sel('grupo'), ordem: (a, b) => (ordemGrupo[a] ?? 99) - (ordemGrupo[b] ?? 99) },
     { id: 'tag', valor: r => r.tg || null, sel: () => sel('tag') },
     { id: 'estado', valor: r => r.es || null, sel: () => sel('estado') },
     { id: 'uf', valor: r => r.uf || null, sel: () => sel('uf') },
@@ -5876,9 +5883,15 @@ function pnAoFiltrar(origem) {
 function pnLerFiltros() {
   const sel = n => { const v = getCheckedValuesDd(`dd-content-pn-${n}`); return v.length ? new Set(v) : null; };
   const mesLabels = sel('mes'), grupoLabels = sel('grupo');
+  // Tipo: grupos escolhidos + subtipos do Gross. Subtipo marcado implica o Gross, restrito àquele subtipo — a não ser que
+  // "Gross" também esteja marcado (aí vale o Gross inteiro).
+  const grpSel = grupoLabels ? PN_GRUPOS.filter(g => grupoLabels.has(PN_GRUPO_LABEL[g])) : [];
+  const subSel = grupoLabels ? Object.keys(PN_SUB_LABEL).filter(k => grupoLabels.has(PN_SUB_LABEL[k])) : [];
+  const subs = subSel.length && !grpSel.includes('GROSS') ? new Set(subSel) : null;
   return {
     meses: mesLabels ? new Set(PN.meses.filter(m => mesLabels.has(m.label)).map(m => m.chave)) : null,
-    grupos: grupoLabels ? new Set(PN_GRUPOS.filter(g => grupoLabels.has(PN_GRUPO_LABEL[g]))) : null,
+    grupos: (grpSel.length || subSel.length) ? new Set([...grpSel, ...(subs ? ['GROSS'] : [])]) : null,
+    subs,
     tags: sel('tag'), estados: sel('estado'), ufs: sel('uf'), gestores: sel('gestor'), equipes: sel('equipe'), vendedores: sel('vendedor'),
     status: document.getElementById('pn-status')?.value || 'todos',
   };
@@ -5886,6 +5899,7 @@ function pnLerFiltros() {
 
 function pnPassa(r, f) {
   if (f.grupos && !f.grupos.has(r.g)) return false;
+  if (f.subs && r.g === 'GROSS' && !(r.sub && f.subs.has(r.sub))) return false; // Gross só do subtipo escolhido
   if (f.tags && !f.tags.has(r.tg)) return false;
   if (f.estados && !f.estados.has(r.es)) return false;
   if (f.ufs && !f.ufs.has(r.uf)) return false;
@@ -5899,7 +5913,13 @@ function pnPassa(r, f) {
 
 // ── Agregação ────────────────────────────────────────────────────────────────
 const pnAcc = () => ({ q: 0, r: 0, c: 0, cn: new Set() });
-function pnSoma(a, r) { a.q += r.q; a.r += r.r; a.c += r.c; if (r.cn) a.cn.add(r.cn); }
+// No modo "subtipo" (Tipo = Voz Novo / Voz Portabilidade) os registros espelho entram com os números do próprio pedido.
+function pnSoma(a, r) {
+  const s = PN.subModo && r.sub;
+  a.q += s ? r.vq : r.q; a.r += s ? r.vr : r.r; a.c += r.c;
+  const cn = s ? r.vcn : r.cn;
+  if (cn) a.cn.add(cn);
+}
 function pnValor(a, metrica) {
   if (!a) return 0;
   switch (metrica) {
@@ -5922,6 +5942,7 @@ function pnDimValor(r, dim) {
 
 function pnAgregar() {
   const f = pnLerFiltros();
+  PN.subModo = !!f.subs;
   const mesesCarregados = PN.meses.filter(m => PN.dados[m.chave] && (!f.meses || f.meses.has(m.chave)));
   const porMes = {}, porGrupo = {}, porDim = new Map();
   mesesCarregados.forEach(m => { porMes[m.chave] = { TOTAL: pnAcc() }; PN_GRUPOS.forEach(g => porMes[m.chave][g] = pnAcc()); });
