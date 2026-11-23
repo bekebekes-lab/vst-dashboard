@@ -140,6 +140,7 @@ export function criarProducao(host, ctx) {
   const st = {
     dim: prefs.get('prod_dim', 'unidade'), visao: prefs.get('prod_visao', window.matchMedia('(max-width: 640px)').matches ? 'cartoes' : 'tabela'),
     mom: false, tri: false, meses: new Set(), req: 0,
+    ord: { k: null, asc: false },   // ordenação da tabela (clique no cabeçalho)
   };
   if (!DIMS.some(d => d[0] === st.dim)) st.dim = 'unidade';
 
@@ -175,6 +176,12 @@ export function criarProducao(host, ctx) {
   host.addEventListener('click', e => {
     const d = e.target.closest('[data-pdim]'); if (d) { st.dim = d.dataset.pdim; prefs.set('prod_dim', st.dim); return render(); }
     const v = e.target.closest('[data-pvis]'); if (v) { st.visao = v.dataset.pvis; prefs.set('prod_visao', st.visao); return render(); }
+    const o = e.target.closest('[data-pord]');
+    if (o) {   // 1º clique: maior→menor (A→Z em Unidade/Gestor/Equipe); 2º inverte; 3º volta ao padrão
+      const k = o.dataset.pord, primeiraAsc = k === 'nome';
+      if (st.ord.k !== k) st.ord = { k, asc: primeiraAsc }; else if (st.ord.asc === primeiraAsc) st.ord = { k, asc: !primeiraAsc }; else st.ord = { k: null, asc: false };
+      return render();
+    }
     const t = e.target.closest('[data-ptog]');
     if (t) { if (t.dataset.ptog === 'mom') st.mom = !st.mom; else st.tri = !st.tri; return render(); }
     const m = e.target.closest('[data-pmes]');
@@ -283,9 +290,9 @@ export function criarProducao(host, ctx) {
     const fmtCel = (cel) => cel.qtd === 0 ? '<span class="zero">—</span>' : `<b>${fmtInt(cel.qtd)}</b>${rec ? `<small>${fmtMoeda(cel.rec)}</small>` : ''}`;
     // colunas de comparação: [{rotulo, valorDe(chave)}]
     const compCols = [];
-    if (comp && st.mom) compCols.push({ rotulo: 'MOM', tit: 'Mês anterior', mapa: comp.mom, erro: !comp.mom });
-    if (comp && st.tri) compCols.push({ rotulo: 'TRI', tit: 'Média dos 3 meses anteriores', mapa: comp.tri, erro: !comp.tri, dec: true });
-    if (comp) Object.keys(comp.meses).forEach(k => compCols.push({ rotulo: rotuloMes(...k.split('/')), tit: k, mapa: comp.meses[k].mapa, erro: !comp.meses[k].mapa }));
+    if (comp && st.mom) compCols.push({ k: 'mom', rotulo: 'MOM', tit: 'Mês anterior', mapa: comp.mom, erro: !comp.mom });
+    if (comp && st.tri) compCols.push({ k: 'tri', rotulo: 'TRI', tit: 'Média dos 3 meses anteriores', mapa: comp.tri, erro: !comp.tri, dec: true });
+    if (comp) Object.keys(comp.meses).forEach(k => compCols.push({ k: 'mes:' + k, rotulo: rotuloMes(...k.split('/')), tit: k, mapa: comp.meses[k].mapa, erro: !comp.meses[k].mapa }));
     const celComp = (cc, chave, atual) => {
       if (cc.erro) return '<span class="zero">—</span>';
       const ant = cc.mapa[chave] || 0, v = formatVariacao(atual, ant);
@@ -294,9 +301,21 @@ export function criarProducao(host, ctx) {
     const somaAnt = cc => agg.linhas.reduce((s, l) => s + (cc.mapa?.[l.chave] || 0), 0);
 
     if (st.visao === 'tabela') {
+      // ordenação: coluna escolhida no cabeçalho (nome, status, MOM/TRI/mês, total)
+      const valorOrd = l => {
+        const k = st.ord.k;
+        if (k === 'nome') return l.nome;
+        if (k === 'total') return l.totalQtd;
+        if (k && k.startsWith('st:')) { const i = agg.cols.indexOf(k.slice(3)); return i < 0 ? null : l.cells[i].qtd; }
+        const cc = compCols.find(c => c.k === k);
+        return cc ? (cc.erro ? null : (cc.mapa[l.chave] || 0)) : null;
+      };
+      const dir = st.ord.asc ? 1 : -1;
+      const linhasT = !st.ord.k ? agg.linhas : agg.linhas.slice().sort((a, b) => { const x = valorOrd(a), y = valorOrd(b); if (x === null || y === null) return 0; const c = typeof x === 'string' ? x.localeCompare(y, 'pt-BR') : x - y; return (c * dir) || a.nome.localeCompare(b.nome, 'pt-BR'); });
+      const thO = (k, rot, cls, tit) => `<th class="${cls || ''}"${tit ? ` title="${esc(tit)}"` : ''}><button type="button" class="th-ord${st.ord.k === k ? ' ativo' : ''}" data-pord="${esc(k)}">${rot}<span class="seta">${st.ord.k === k ? (st.ord.asc ? '↑' : '↓') : '↕'}</span></button></th>`;
       $('#p-corpo').innerHTML = `<div class="tab-wrap"><table class="tab tab-prod">
-        <thead><tr><th>${dimNome}</th>${agg.cols.map(s => `<th class="num">${esc(s)}</th>`).join('')}${compCols.map(cc => `<th class="num cmp" title="${esc(cc.tit)}">${esc(cc.rotulo)}</th>`).join('')}<th class="num tot">Total</th></tr></thead>
-        <tbody>${agg.linhas.map(l => `<tr><td class="cel-nome">${esc(l.nome)}</td>${l.cells.map(cel => `<td class="num">${fmtCel(cel)}</td>`).join('')}${compCols.map(cc => `<td class="num cmp">${celComp(cc, l.chave, l.totalQtd)}</td>`).join('')}<td class="num tot">${fmtCel({ qtd: l.totalQtd, rec: l.totalRec })}</td></tr>`).join('')}</tbody>
+        <thead><tr>${thO('nome', dimNome)}${agg.cols.map(s => thO('st:' + s, esc(s), 'num')).join('')}${compCols.map(cc => thO(cc.k, esc(cc.rotulo), 'num cmp', cc.tit)).join('')}${thO('total', 'Total', 'num tot')}</tr></thead>
+        <tbody>${linhasT.map(l => `<tr><td class="cel-nome">${esc(l.nome)}</td>${l.cells.map(cel => `<td class="num">${fmtCel(cel)}</td>`).join('')}${compCols.map(cc => `<td class="num cmp">${celComp(cc, l.chave, l.totalQtd)}</td>`).join('')}<td class="num tot">${fmtCel({ qtd: l.totalQtd, rec: l.totalRec })}</td></tr>`).join('')}</tbody>
         <tfoot><tr><td>TOTAL GERAL</td>${agg.totaisCol.map(cel => `<td class="num">${fmtCel(cel)}</td>`).join('')}${compCols.map(cc => { if (cc.erro) return '<td class="num cmp"><span class="zero">—</span></td>'; const ant = somaAnt(cc), v = formatVariacao(agg.totalQtd, ant); return `<td class="num cmp"><b>${ant.toLocaleString('pt-BR', { maximumFractionDigits: cc.dec ? 1 : 0 })}</b><small class="var ${v.classe}">${v.texto}</small></td>`; }).join('')}<td class="num tot">${fmtCel({ qtd: agg.totalQtd, rec: agg.totalRec })}</td></tr></tfoot>
       </table></div>`;
     } else if (st.visao === 'cartoes') {

@@ -875,6 +875,11 @@
     white-space: nowrap; text-align: center;
   }
   .prod-table-wrap table th:first-child { text-align: left; min-width: 160px; }
+  /* cabeçalho clicável (ordenar maior/menor) */
+  .prod-table-wrap table th.prod-th-ord { cursor: pointer; user-select: none; }
+  .prod-table-wrap table th.prod-th-ord:hover { background: rgba(255,255,255,0.12); }
+  .prod-th-seta { opacity: .45; font-size: 10px; white-space: nowrap; }
+  .prod-th-seta.ativa { opacity: 1; }
   .prod-table-wrap table td {
     padding: 9px 12px; border-bottom: 1px solid var(--border);
     font-size: 12px; text-align: center; vertical-align: middle;
@@ -6671,6 +6676,15 @@ const EQUIPES_PR_LIST = [
 
 let prodExibirReceita = false;
 let prodConvergencia = false;
+// Ordenação da tabela da Produção (clique no cabeçalho): 1º clique = maior→menor (A→Z na 1ª coluna), 2º = inverte, 3º = volta à ordem padrão.
+let prodOrdem = { col: null, asc: false };
+function prodOrdenar(chave) {
+  const primeiraAsc = chave === 'nome';
+  if (prodOrdem.col !== chave) prodOrdem = { col: chave, asc: primeiraAsc };
+  else if (prodOrdem.asc === primeiraAsc) prodOrdem = { col: chave, asc: !primeiraAsc };
+  else prodOrdem = { col: null, asc: false };
+  renderProducao();
+}
 let prodVisaoGestor = false;
 let prodVisaoEquipe = false;
 let prodStatusSelecionados = new Set();
@@ -7816,20 +7830,52 @@ async function renderProducao() {
     if (idRequisicao !== prodComparativoReqId) return;
   }
 
+  if (prodOrdem.col) {
+    const col = prodOrdem.col;
+    const valorOrdem = r => {
+      if (col === 'nome') return r.nome;
+      if (col === 'total') return r.totalQtd;
+      if (col === 'totalrec') return r.totalRec;
+      if (col === 'mom') return comparativo.mom?.[r.tag] || 0;
+      if (col === 'tri') return comparativo.tri?.[r.tag] || 0;
+      if (col.startsWith('mes:')) return comparativoMeses[col.slice(4)]?.mapa?.[r.tag] || 0;
+      if (col.startsWith('st:')) {
+        const rec = col.endsWith(':rec');
+        const i = colsFinal.indexOf(col.slice(3, rec ? -4 : undefined));
+        if (i < 0) return null;
+        return rec ? r.cells[i].rec : r.cells[i].qtd;
+      }
+      return null;
+    };
+    const dir = prodOrdem.asc ? 1 : -1;
+    linhas.sort((a, b) => {
+      const va = valorOrdem(a), vb = valorOrdem(b);
+      if (va === null || vb === null) return 0;
+      const c = typeof va === 'string' ? va.localeCompare(vb, 'pt-BR') : va - vb;
+      return (c * dir) || a.nome.localeCompare(b.nome, 'pt-BR');
+    });
+  }
+
+  // Cabeçalho clicável: setinha ↕ (sem ordem), ▲ crescente, ▼ decrescente
+  const thClick = (chave, label, attrs, estilo) => {
+    const ativa = prodOrdem.col === chave;
+    return `<th class="prod-th-ord"${attrs || ''} style="${estilo || ''}" onclick="prodOrdenar('${escapeJsAttr(chave)}')" title="Clique para ordenar">${label}<span class="prod-th-seta${ativa ? ' ativa' : ''}"> ${ativa ? (prodOrdem.asc ? '▲' : '▼') : '↕'}</span></th>`;
+  };
+
   const rowspanReceita = prodExibirReceita ? ' rowspan="2"' : '';
 
   const thStatus = colsFinal.map(s => prodExibirReceita
     ? `<th colspan="2">${s}</th>`
-    : `<th>${s}</th>`
+    : thClick('st:' + s, s)
   ).join('');
 
   const thSub = prodExibirReceita
-    ? colsFinal.map(() => `<th style="font-size:9px">Qtd</th><th style="font-size:9px">Receita</th>`).join('')
+    ? colsFinal.map(s => thClick('st:' + s, 'Qtd', '', 'font-size:9px') + thClick('st:' + s + ':rec', 'Receita', '', 'font-size:9px')).join('')
     : '';
 
   const thComparativo = mostrarComparativo
-    ? (prodExibirMOM ? `<th${rowspanReceita} style="border-left:2px solid rgba(255,255,255,0.3)">MOM</th>` : '')
-    + (prodExibirTRI ? `<th${rowspanReceita}${!prodExibirMOM ? ' style="border-left:2px solid rgba(255,255,255,0.3)"' : ''}>TRI</th>` : '')
+    ? (prodExibirMOM ? thClick('mom', 'MOM', rowspanReceita, 'border-left:2px solid rgba(255,255,255,0.3)') : '')
+    + (prodExibirTRI ? thClick('tri', 'TRI', rowspanReceita, !prodExibirMOM ? 'border-left:2px solid rgba(255,255,255,0.3)' : '') : '')
     : '';
 
   const thMeses = mostrarMeses
@@ -7837,13 +7883,13 @@ async function renderProducao() {
         const [mm, yyyy] = chave.split('/');
         const label = `${MESES_LABEL_CURTO[mm] || mm}/${yyyy}`;
         const primeira = i === 0 && !mostrarComparativo;
-        return `<th${rowspanReceita}${primeira ? ' style="border-left:2px solid rgba(255,255,255,0.3)"' : ''}>${label}</th>`;
+        return thClick('mes:' + chave, label, rowspanReceita, primeira ? 'border-left:2px solid rgba(255,255,255,0.3)' : '');
       }).join('')
     : '';
 
   const thTotal = prodExibirReceita
     ? `<th colspan="2" style="border-left:2px solid rgba(255,255,255,0.3)">Total</th>`
-    : `<th style="border-left:2px solid rgba(255,255,255,0.3)">Total</th>`;
+    : thClick('total', 'Total', '', 'border-left:2px solid rgba(255,255,255,0.3)');
 
   // Células de comparativo por linha (unidade ou gestor, conforme a visão ativa)
   const linhaComparativo = (r) => {
@@ -7957,13 +8003,13 @@ async function renderProducao() {
       <table>
         <thead>
           <tr>
-            <th rowspan="${prodExibirReceita ? 2 : 1}" style="vertical-align:middle;text-align:left">${colunaVisao}</th>
+            ${thClick('nome', colunaVisao, ` rowspan="${prodExibirReceita ? 2 : 1}"`, 'vertical-align:middle;text-align:left')}
             ${thStatus}
             ${thComparativo}
             ${thMeses}
             ${thTotal}
           </tr>
-          ${prodExibirReceita ? `<tr>${thSub}<th style="font-size:9px;border-left:2px solid rgba(255,255,255,0.3)">Qtd</th><th style="font-size:9px">Receita</th></tr>` : ''}
+          ${prodExibirReceita ? `<tr>${thSub}${thClick('total', 'Qtd', '', 'font-size:9px;border-left:2px solid rgba(255,255,255,0.3)')}${thClick('totalrec', 'Receita', '', 'font-size:9px')}</tr>` : ''}
         </thead>
         <tbody>
           ${linhas.map(r => `
