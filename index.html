@@ -7836,9 +7836,12 @@ async function renderProducao() {
       if (col === 'nome') return r.nome;
       if (col === 'total') return r.totalQtd;
       if (col === 'totalrec') return r.totalRec;
-      if (col === 'mom') return comparativo.mom?.[r.tag] || 0;
-      if (col === 'tri') return comparativo.tri?.[r.tag] || 0;
-      if (col.startsWith('mes:')) return comparativoMeses[col.slice(4)]?.mapa?.[r.tag] || 0;
+      // MOM / TRI / meses: ordena pela VARIAÇÃO % (com o sinal: +172% … −57%), a mesma que aparece na célula.
+      // Linha sem base de comparação (período anterior = 0, mostrada como "—") vai sempre pro fim.
+      const variacao = anterior => (anterior ? ((r.totalQtd - anterior) / anterior) * 100 : null);
+      if (col === 'mom') return variacao(comparativo.mom?.[r.tag] || 0);
+      if (col === 'tri') return variacao(comparativo.tri?.[r.tag] || 0);
+      if (col.startsWith('mes:')) return variacao(comparativoMeses[col.slice(4)]?.mapa?.[r.tag] || 0);
       if (col.startsWith('st:')) {
         const rec = col.endsWith(':rec');
         const i = colsFinal.indexOf(col.slice(3, rec ? -4 : undefined));
@@ -7850,7 +7853,7 @@ async function renderProducao() {
     const dir = prodOrdem.asc ? 1 : -1;
     linhas.sort((a, b) => {
       const va = valorOrdem(a), vb = valorOrdem(b);
-      if (va === null || vb === null) return 0;
+      if (va === null || vb === null) return (va === null ? 1 : 0) - (vb === null ? 1 : 0) || a.nome.localeCompare(b.nome, 'pt-BR');   // sem valor: sempre no fim
       const c = typeof va === 'string' ? va.localeCompare(vb, 'pt-BR') : va - vb;
       return (c * dir) || a.nome.localeCompare(b.nome, 'pt-BR');
     });
@@ -7859,7 +7862,7 @@ async function renderProducao() {
   // Cabeçalho clicável: setinha ↕ (sem ordem), ▲ crescente, ▼ decrescente
   const thClick = (chave, label, attrs, estilo) => {
     const ativa = prodOrdem.col === chave;
-    return `<th class="prod-th-ord"${attrs || ''} style="${estilo || ''}" onclick="prodOrdenar('${escapeJsAttr(chave)}')" title="Clique para ordenar">${label}<span class="prod-th-seta${ativa ? ' ativa' : ''}"> ${ativa ? (prodOrdem.asc ? '▲' : '▼') : '↕'}</span></th>`;
+    return `<th class="prod-th-ord"${attrs || ''} style="${estilo || ''}" onclick="prodOrdenar('${escapeJsAttr(chave)}')" title="${/^(mom|tri|mes:)/.test(chave) ? 'Clique para ordenar pela variação %' : 'Clique para ordenar'}">${label}<span class="prod-th-seta${ativa ? ' ativa' : ''}"> ${ativa ? (prodOrdem.asc ? '▲' : '▼') : '↕'}</span></th>`;
   };
 
   const rowspanReceita = prodExibirReceita ? ' rowspan="2"' : '';

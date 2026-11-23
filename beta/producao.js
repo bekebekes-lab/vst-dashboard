@@ -307,11 +307,14 @@ export function criarProducao(host, ctx) {
         if (k === 'nome') return l.nome;
         if (k === 'total') return l.totalQtd;
         if (k && k.startsWith('st:')) { const i = agg.cols.indexOf(k.slice(3)); return i < 0 ? null : l.cells[i].qtd; }
+        // MOM / TRI / meses: ordena pela VARIAÇÃO % (com o sinal), a mesma da célula; sem base de comparação (anterior = 0) vai pro fim
         const cc = compCols.find(c => c.k === k);
-        return cc ? (cc.erro ? null : (cc.mapa[l.chave] || 0)) : null;
+        if (!cc || cc.erro) return null;
+        const ant = cc.mapa[l.chave] || 0;
+        return ant ? ((l.totalQtd - ant) / ant) * 100 : null;
       };
       const dir = st.ord.asc ? 1 : -1;
-      const linhasT = !st.ord.k ? agg.linhas : agg.linhas.slice().sort((a, b) => { const x = valorOrd(a), y = valorOrd(b); if (x === null || y === null) return 0; const c = typeof x === 'string' ? x.localeCompare(y, 'pt-BR') : x - y; return (c * dir) || a.nome.localeCompare(b.nome, 'pt-BR'); });
+      const linhasT = !st.ord.k ? agg.linhas : agg.linhas.slice().sort((a, b) => { const x = valorOrd(a), y = valorOrd(b); if (x === null || y === null) return ((x === null ? 1 : 0) - (y === null ? 1 : 0)) || a.nome.localeCompare(b.nome, 'pt-BR'); const c = typeof x === 'string' ? x.localeCompare(y, 'pt-BR') : x - y; return (c * dir) || a.nome.localeCompare(b.nome, 'pt-BR'); });
       const thO = (k, rot, cls, tit) => `<th class="${cls || ''}"${tit ? ` title="${esc(tit)}"` : ''}><button type="button" class="th-ord${st.ord.k === k ? ' ativo' : ''}" data-pord="${esc(k)}">${rot}<span class="seta">${st.ord.k === k ? (st.ord.asc ? '↑' : '↓') : '↕'}</span></button></th>`;
       $('#p-corpo').innerHTML = `<div class="tab-wrap"><table class="tab tab-prod">
         <thead><tr>${thO('nome', dimNome)}${agg.cols.map(s => thO('st:' + s, esc(s), 'num')).join('')}${compCols.map(cc => thO(cc.k, esc(cc.rotulo), 'num cmp', cc.tit)).join('')}${thO('total', 'Total', 'num tot')}</tr></thead>
