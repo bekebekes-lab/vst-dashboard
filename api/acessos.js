@@ -23,9 +23,9 @@ const SUPA_URL = 'https://kzlchetrpsfefwybaaoy.supabase.co';
 // requisição (Host/X-Forwarded-Host), senão dava pra apontar pra outro servidor.
 const ORIGEM_DASH = 'https://vst-dashboard.vercel.app';
 
-// Admin e gestores. Supervisão NÃO gerencia acesso (decisão do negócio) — e
-// isso vale mesmo que alguém receba 'acessos' em acesso_extra_abas: a aba pode
-// até aparecer, mas o servidor recusa.
+// Admin e gestores. Supervisão NÃO gerencia acesso por padrão (decisão do negócio): só a
+// supervisão que recebeu 'acessos' em acesso_extra_abas (concessão individual, ex.: Grasiela) —
+// nesse caso vale a trava normal por equipes_ref; sem a concessão o servidor recusa.
 const PERFIS_QUE_GERENCIAM = new Set([
   'admin', 'admin_gestao', 'admin_beta',
   'gestor_macro', 'gestor_macro2', 'gestor_macro3', 'gestor', 'gestor_beta',
@@ -103,7 +103,8 @@ async function contextoDoChamador(req, res) {
   const perfilRow = await getUsuarioDashboard(req, authUser.id);
   const perfil = perfilRow?.perfil;
   if (!perfilRow || perfilRow.ativo === false) throw new ErroHttp(403, 'Acesso desativado');
-  if (!PERFIS_QUE_GERENCIAM.has(perfil)) throw new ErroHttp(403, 'Seu perfil não gerencia acessos');
+  const supervisaoComConcessao = (perfil === 'supervisao' || perfil === 'supervisao_beta') && (perfilRow.acesso_extra_abas || []).includes('acessos');
+  if (!PERFIS_QUE_GERENCIAM.has(perfil) && !supervisaoComConcessao) throw new ErroHttp(403, 'Seu perfil não gerencia acessos');
   const escopo = getEscopoTravado(perfil, perfilRow);
   // ehAdmin: pode desfazer bloqueio feito por admin. veTudo: enxerga (e pode
   // gerenciar) consultores de toda a empresa. Admin é os dois; gestor_macro2
