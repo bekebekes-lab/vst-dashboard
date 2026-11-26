@@ -9,8 +9,11 @@ import { SUPA_URL, SUPA_KEY, emailLiberadoBeta } from './config.js';
 
 export const supa = window.supabase.createClient(SUPA_URL, SUPA_KEY);
 
-function voltarAoDash() {
-  location.replace('/');
+// Mantém o destino do link: sem login → "/#beta=<visão>" (depois de entrar, o Dash manda pro Beta2 se a pessoa tem acesso);
+// sem acesso ao Beta2 → "/#aba=<visão>" (abre a mesma aba no Dash atual, se o perfil permitir).
+function voltarAoDash(semSessao) {
+  const v = (location.hash.match(/^#(\w+)/) || [])[1];
+  location.replace('/' + (v ? (semSessao ? '#beta=' : '#aba=') + v : ''));
 }
 
 // Devolve { user, perfil } se o e-mail está liberado (config.js) e a conta está ativa; senão manda pro Dash atual.
@@ -21,7 +24,7 @@ export async function exigirAcessoBeta() {
     ({ data: { session } } = await supa.auth.getSession());
   } catch (e) { /* trata como sem sessão */ }
   const user = session?.user;
-  if (!user) return voltarAoDash();
+  if (!user) return voltarAoDash(true);
   if (!emailLiberadoBeta(user.email)) return voltarAoDash();
 
   // Mesma busca de carregarPerfil() em index.html: usuarios_dashboard, com

@@ -1,4 +1,7 @@
 {
+  "rewrites": [
+    { "source": "/beta", "destination": "/beta.html" }
+  ],
   "headers": [
     {
       "source": "/(.*)",

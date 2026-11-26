@@ -8112,6 +8112,23 @@ function prodExportarCsv() {
   URL.revokeObjectURL(url);
 }
 
+// URL acompanha a aba aberta ("#aba=<id>") — dá pra copiar o link e abrir direto naquela aba (só abre se o perfil tem a aba).
+// replaceState: não enche o histórico de "voltar" a cada clique. O link do Beta2 no menu acompanha a aba (mesmos ids).
+function urlRegistrarAba(name) {
+  try {
+    if (!USUARIO_ATUAL) return;
+    if (location.hash !== '#aba=' + name) history.replaceState(null, '', '#aba=' + name);
+    const l = document.getElementById('drawer-beta2-link');
+    if (l) l.href = '/beta.html#' + name;
+  } catch (e) { /* URL é só conveniência */ }
+}
+// Mexeu na URL à mão (ou voltou/avançou): abre a aba do "#aba=<id>"
+window.addEventListener('hashchange', () => {
+  const a = (location.hash.match(/^#aba=(\w+)/) || [])[1];
+  if (!a || !USUARIO_ATUAL) return;
+  const b = document.querySelector(`.tab-btn[onclick*="'${a}'"]`);
+  if (b && !b.classList.contains('active')) switchTab(a, b);
+});
 function switchTab(name, el) {
   // Defesa em profundidade: aplicarPermissoes() já esconde o botão de abas
   // não permitidas, mas isso não impede alguém de chamar switchTab('churn', ...)
@@ -8132,6 +8149,7 @@ function switchTab(name, el) {
   el.classList.add('active');
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   document.getElementById('tab-' + name).classList.add('active');
+  urlRegistrarAba(name);
   if (name === 'gerfin') initGerFin();
   if (name === 'painel') pnIniciar();
   if (name === 'producao') initProducao();
@@ -11280,7 +11298,7 @@ async function fazerLogin(paraBeta2) {
 // Nome do sistema e e-mail liberado ficam em /beta/config.js (único lugar a trocar).
 // Falha silenciosa: se o arquivo não carregar, a opção simplesmente não aparece.
 let BETA2_CFG = null;
-import('/beta/config.js').then(cfg => { BETA2_CFG = cfg; atualizarOpcaoBeta2(); }).catch(() => {});
+const BETA2_PRONTO = import('/beta/config.js').then(cfg => { BETA2_CFG = cfg; atualizarOpcaoBeta2(); }).catch(() => {});
 function beta2Liberado(email) {
   return !!(BETA2_CFG && BETA2_CFG.emailLiberadoBeta && BETA2_CFG.emailLiberadoBeta(email));
 }
@@ -11344,6 +11362,14 @@ async function carregarPerfil(user) {
   // que USUARIO_ATUAL.email sempre venha do usuário autenticado do Supabase.
   USUARIO_ATUAL.email = USUARIO_ATUAL.email || user.email;
 
+  // Link direto pro Beta2 ("/beta#<visão>" sem estar logado cai aqui como "#beta=<visão>"): quem tem acesso ao Beta2 segue
+  // pra lá; quem não tem abre a mesma aba no Dash atual (se o perfil dela permitir). Só conveniência — a segurança é RLS/API.
+  const alvoBeta2 = (window.location.hash.match(/^#beta=(\w+)/) || [])[1];
+  if (alvoBeta2) {
+    await BETA2_PRONTO;
+    if (beta2Liberado(USUARIO_ATUAL.email)) { location.replace('/beta.html#' + alvoBeta2); return; }
+  }
+
   // Atualiza topbar
   const nome = USUARIO_ATUAL.nome || USUARIO_ATUAL.email.split('@')[0];
   const iniciais = nome.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
@@ -11357,6 +11383,7 @@ async function carregarPerfil(user) {
   // Se o usuário tiver uma "aba padrão ao abrir" salva (drawer de conta >
   // Preferências) e ela continuar permitida pro perfil dele, abre direto
   // nela em vez do padrão (Simulador).
+  const hashEntrada = window.location.hash;   // lido antes: abrir a aba padrão grava a aba na URL
   const permitidas = getAbasPermitidas(USUARIO_ATUAL);
   const prefAba = localStorage.getItem('vst_pref_aba_padrao');
   if (prefAba && permitidas.includes(prefAba)) {
@@ -11364,7 +11391,7 @@ async function carregarPerfil(user) {
     if (btnPref) switchTab(prefAba, btnPref);
   }
   // Link direto "#aba=<id>" (usado pelo menu do Dash Beta2); só vale se a aba é permitida pro perfil.
-  const abaLink = (window.location.hash.match(/^#aba=(\w+)/) || [])[1];
+  const abaLink = (hashEntrada.match(/^#(?:aba|beta)=(\w+)/) || [])[1];
   if (abaLink && permitidas.includes(abaLink)) {
     const btnLink = document.querySelector(`.tab-btn[onclick*="'${abaLink}'"]`);
     if (btnLink) switchTab(abaLink, btnLink);
