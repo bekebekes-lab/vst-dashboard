@@ -110,13 +110,20 @@ let _cache = null;      // { em, jornadas, equipes, abas }
 let _emAndamento = null;
 
 const COLS = ['NUMERO PEDIDO', 'NOME CLIENTE', 'CPF/CNPJ', 'PROPRIETARIO DO PEDIDO', 'PROPRIETARIO DA ATIVIDADE', 'EQUIPE',
-  'ETAPA PEDIDO', 'TIPO NEGOCIACAO', 'PRODUTO', 'NUMERO', 'VALOR UNIT', 'DATA REF'];
+  'ETAPA PEDIDO', 'TIPO NEGOCIACAO', 'PRODUTO', 'NUMERO', 'VALOR UNIT', 'DATA REF', 'QUANTIDADE'];
 
 function ordemDaAba(titulo) {
   const m = titulo.match(/^BaseCRM(?: (\d{2})(\d{4}))?$/);
   if (!m) return null;
   return m[1] ? Number(m[2]) * 100 + Number(m[1]) : 999999; // "BaseCRM" puro = mês corrente
 }
+// Mês (AAAA-MM) a que a aba pertence: "BaseCRM MMAAAA" = o mês fechado; "BaseCRM" puro = mês corrente.
+function mesDaAba(titulo) {
+  const m = titulo.match(/^BaseCRM (\d{2})(\d{4})$/);
+  return m ? `${m[2]}-${m[1]}` : hojeBrasilia().slice(0, 7);
+}
+// SD › Blip GO: o produto vem com nomes variados ("Blip GO - Básico", "BLIP GO - INTERMEDIARIO"...) — casa por "contém".
+const ehBlip = produto => normalizarCabecalho(produto).includes('BLIP');
 function ehAtivo(etapa) {
   const e = normalizarCabecalho(etapa);
   return e.startsWith('ATIVO') || e.startsWith('CONECTADO');
@@ -133,6 +140,7 @@ async function montarUniverso() {
 
   const porPedido = new Map();     // pedido -> Map(data_ref -> jornada) da aba mais recente em que está ativo
   const etapaAtual = new Map();    // pedido -> etapa na aba mais recente em que aparece
+  const blipLinhas = [];           // SD: todas as linhas de Blip GO de todas as abas (decide-se depois quais valem)
   for (const aba of lidas) {
     const c = aba.cols;
     const n = c['NUMERO PEDIDO'].length;
@@ -142,6 +150,20 @@ async function montarUniverso() {
       if (!pedido) continue;
       const etapa = (c['ETAPA PEDIDO'][i] || '').toString().trim();
       etapaAtual.set(pedido, etapa);
+      if (ehBlip(c['PRODUTO'][i])) {
+        blipLinhas.push({
+          pedido, ordem: aba.ordem, mes: mesDaAba(aba.t), ativa: ehAtivo(etapa),
+          cnpj: (c['CPF/CNPJ'][i] || '').toString().trim(),
+          cliente: (c['NOME CLIENTE'][i] || '').toString().trim(),
+          consultor: (c['PROPRIETARIO DO PEDIDO'][i] || c['PROPRIETARIO DA ATIVIDADE'][i] || '').toString().trim(),
+          equipe: normalizarNomeEquipe(c['EQUIPE'][i]),
+          produto: (c['PRODUTO'][i] || '').toString().trim(),
+          numero: (c['NUMERO'][i] || '').toString().trim(),
+          qtd: parseInt(c['QUANTIDADE'][i], 10) || 1,
+          valor: parseValor(c['VALOR UNIT'][i]),
+          data_ref: parseData(c['DATA REF'][i]),
+        });
+      }
       if (!ehAtivo(etapa)) continue;
       const dataRef = parseData(c['DATA REF'][i]);
       if (!dataRef) continue;
@@ -180,7 +202,41 @@ async function montarUniverso() {
   }
   jornadas.sort((a, b) => (a.data_ref < b.data_ref ? 1 : a.data_ref > b.data_ref ? -1 : a.pedido.localeCompare(b.pedido)));
   const equipes = [...new Set(jornadas.map(j => j.equipe).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
-  return { em: Date.now(), jornadas, equipes, abas: titulos.map(x => x.t) };
+  return { em: Date.now(), jornadas, equipes, abas: titulos.map(x => x.t), sd: montarSD(blipLinhas, etapaAtual) };
+}
+
+// SD › Blip GO ativos, mês a mês, uma linha por cliente em cada mês. "Ativo" = o pedido está em ATIVO/CONECTADO na aba mais
+// recente em que aparece; vale a aba mais recente onde ele está ativo (mesma regra do universo de Qualidade), então o mesmo
+// pedido nunca conta em dois meses. Quantidade = soma de QUANTIDADE (1 se vazio); valor = soma de VALOR UNIT (receita da linha).
+function montarSD(blipLinhas, etapaAtual) {
+  const ordemAtiva = new Map();   // pedido -> ordem da aba mais recente em que o pedido tem Blip ativo
+  for (const l of blipLinhas) if (l.ativa && l.ordem > (ordemAtiva.get(l.pedido) || 0)) ordemAtiva.set(l.pedido, l.ordem);
+  const grupos = new Map();
+  for (const l of blipLinhas) {
+    if (!l.ativa || l.ordem !== ordemAtiva.get(l.pedido) || !ehAtivo(etapaAtual.get(l.pedido))) continue;
+    const dig = l.cnpj.replace(/\D/g, '');
+    const k = `${l.mes}|${dig || l.cliente.toUpperCase()}`;
+    let g = grupos.get(k);
+    if (!g) { g = { mes: l.mes, cnpj: l.cnpj, cliente: l.cliente, quantidade: 0, valor: 0, pedidos: [], _cons: new Map(), _eq: new Map() }; grupos.set(k, g); }
+    if (!g.cliente) g.cliente = l.cliente;
+    if (!g.cnpj) g.cnpj = l.cnpj;
+    g.quantidade += l.qtd;
+    g.valor += l.valor;
+    if (l.consultor) g._cons.set(l.consultor, (g._cons.get(l.consultor) || 0) + 1);
+    if (l.equipe) g._eq.set(l.equipe, (g._eq.get(l.equipe) || 0) + 1);
+    g.pedidos.push({ pedido: l.pedido, produto: l.produto, numero: l.numero, qtd: l.qtd, valor: Math.round(l.valor * 100) / 100, data_ref: l.data_ref });
+  }
+  const maisFreq = m => [...m.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || '';
+  const linhas = [...grupos.values()].map(g => {
+    const equipe = maisFreq(g._eq);
+    return {
+      mes: g.mes, cnpj: g.cnpj, cliente: g.cliente, consultor: maisFreq(g._cons), equipe, gestor: EQUIPES_GESTORES[equipe] || '',
+      quantidade: g.quantidade, valor: Math.round(g.valor * 100) / 100,
+      pedidos: g.pedidos.sort((a, b) => a.pedido.localeCompare(b.pedido)).slice(0, 40),
+    };
+  });
+  linhas.sort((a, b) => (a.mes < b.mes ? 1 : a.mes > b.mes ? -1 : a.cliente.localeCompare(b.cliente, 'pt-BR')));
+  return linhas;
 }
 
 async function universo(forcar) {
@@ -315,6 +371,12 @@ export default async function handler(req, res) {
         equipes: [...equipesDisp].sort((a, b) => a.localeCompare(b, 'pt-BR')),
         tipos: [...tiposDisp].sort((a, b) => a.localeCompare(b, 'pt-BR')),
       });
+    }
+
+    // ── GET sd: Blip GO ativos mês a mês, uma linha por cliente (ordenação/filtros ficam na tela) ──
+    if (req.method === 'GET' && action === 'sd') {
+      const uni = await universo(req.query.refresh === '1');
+      return res.status(200).json({ linhas: uni.sd, base_atualizada_em: new Date(uni.em).toISOString() });
     }
 
     if (req.method !== 'POST') return res.status(400).json({ error: 'Ação inválida' });

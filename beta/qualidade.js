@@ -19,8 +19,15 @@ const chave = c => c.pedido + '|' + c.data_ref;
 
 export function criarQualidade(host) {
   const st = { dados: null, pagina: 1, timer: null, selecao: new Map(), carregou: false, situacao: 'todas', req: 0 };
+  // SD › Blip GO ativos, mês a mês (uma linha por cliente em cada mês). Mantenha igual a qualidade* de index.html (sdCarregar/sdRender).
+  const sd = { dados: null, carregou: false, req: 0, ord: { col: 'mes', asc: false }, aberto: null, sub: 'estorno' };
+  const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+  const mesRotulo = m => { const [a, mm] = (m || '').split('-'); return MESES[(+mm || 1) - 1] + '/' + a; };
 
   host.innerHTML = `
+    <div class="seg" id="q-sub" role="group" aria-label="Seção">
+      <button type="button" class="seg-btn ativo" data-qsub="estorno" aria-pressed="true"><span>Estorno (9 parcelas)</span></button><button type="button" class="seg-btn" data-qsub="sd" aria-pressed="false"><span>SD</span></button></div>
+    <div id="q-estorno">
     <section class="painel prod-ctl-painel"><div class="prod-ctl">
       <label class="busca"><input type="search" id="q-busca" placeholder="Buscar pedido, CNPJ, cliente ou vendedor" autocomplete="off" aria-label="Buscar"></label>
       <label class="chip chip-sel"><span>Janela</span><select id="q-janela"><option value="andamento">Em acompanhamento (até 270d)</option><option value="encerrado">Encerradas (+270d)</option><option value="todos">Todas</option></select></label>
@@ -32,7 +39,22 @@ export function criarQualidade(host) {
     <div id="q-kpis" class="q-kpis"></div><div id="q-msg"></div><div id="q-bulk"></div>
     <section class="painel"><div class="painel-corpo" id="q-lista" style="padding-top:var(--e4)"></div></section>
     <div id="q-pag" class="q-pag"></div>
-    <div class="modal-fundo" id="q-modal" hidden><div class="modal" id="q-modal-corpo" role="dialog" aria-modal="true" aria-label="Marcação de parcela"></div></div>`;
+    <div class="modal-fundo" id="q-modal" hidden><div class="modal" id="q-modal-corpo" role="dialog" aria-modal="true" aria-label="Marcação de parcela"></div></div>
+    </div>
+    <div id="q-sd" hidden>
+      <section class="painel prod-ctl-painel"><div class="prod-ctl">
+        <label class="busca"><input type="search" id="sd-busca" placeholder="Buscar cliente, CNPJ, consultor ou pedido" autocomplete="off" aria-label="Buscar"></label>
+        <label class="chip chip-sel"><span>Mês</span><select id="sd-mes"><option value="">Todos</option></select></label>
+        <label class="chip chip-sel"><span>Consultor</span><select id="sd-consultor"><option value="">Todos</option></select></label>
+        <label class="chip chip-sel"><span>Equipe</span><select id="sd-equipe"><option value="">Todas</option></select></label>
+        <label class="chip chip-sel"><span>Gestor</span><select id="sd-gestor"><option value="">Todos</option></select></label>
+        <button type="button" class="btn btn-fantasma" id="sd-csv">⬇ CSV</button>
+        <button type="button" class="btn btn-fantasma" id="sd-atualizar" title="Relê as planilhas do CRM (a base é guardada por 5 minutos)">↻ Atualizar base</button>
+      </div></section>
+      <div class="prod-dica" style="margin:var(--e2) 0">Pedidos de <b>Blip GO</b> ativos (ATIVO/CONECTADO no CRM), mês a mês, uma linha por cliente em cada mês. Clique no título da coluna para classificar e na linha para ver os pedidos.</div>
+      <div id="sd-kpis" class="q-kpis"></div>
+      <section class="painel"><div class="painel-corpo" id="sd-lista" style="padding-top:var(--e4)"></div></section>
+    </div>`;
   const $ = s => host.querySelector(s);
 
   async function api(action, params, body) {
@@ -155,7 +177,90 @@ export function criarQualidade(host) {
     catch (e) { $('#q-modal-erro').textContent = e.message; btn.disabled = false; }
   }
 
+  // ── SD › Blip GO ──
+  const sdFiltros = () => ({ busca: $('#sd-busca').value.trim(), mes: $('#sd-mes').value, consultor: $('#sd-consultor').value, equipe: $('#sd-equipe').value, gestor: $('#sd-gestor').value });
+  const norm = t => (t || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  function sdPassa(l, f, ign) {
+    if (ign !== 'mes' && f.mes && l.mes !== f.mes) return false;
+    if (ign !== 'consultor' && f.consultor && l.consultor !== f.consultor) return false;
+    if (ign !== 'equipe' && f.equipe && l.equipe !== f.equipe) return false;
+    if (ign !== 'gestor' && f.gestor && l.gestor !== f.gestor) return false;
+    if (f.busca) {
+      const alvo = norm(`${l.cliente} ${l.cnpj} ${l.consultor} ${l.pedidos.map(p => p.pedido).join(' ')}`), dig = f.busca.replace(/\D/g, '');
+      if (!alvo.includes(norm(f.busca)) && !(dig.length >= 4 && l.cnpj.replace(/\D/g, '').includes(dig))) return false;
+    }
+    return true;
+  }
+  // listas dos filtros em cascata: cada uma considera os OUTROS filtros (não o próprio)
+  function sdSelect(id, f, campo, vazio, fmt) {
+    const sel = $(id), atual = sel.value;
+    const vals = [...new Set(sd.dados.linhas.filter(l => sdPassa(l, f, campo)).map(l => l[campo]).filter(Boolean))];
+    vals.sort(campo === 'mes' ? (a, b) => (a < b ? 1 : -1) : (a, b) => a.localeCompare(b, 'pt-BR'));
+    if (atual && !vals.includes(atual)) vals.push(atual);
+    sel.innerHTML = `<option value="">${vazio}</option>` + vals.map(v => `<option value="${esc(v)}">${esc(fmt ? fmt(v) : v)}</option>`).join('');
+    sel.value = atual;
+  }
+  function sdVisiveis() {
+    const f = sdFiltros(), { col, asc } = sd.ord, dir = asc ? 1 : -1;
+    const v = sd.dados.linhas.filter(l => sdPassa(l, f));
+    v.sort((a, b) => { const x = a[col], y = b[col]; const c = typeof x === 'number' ? x - y : String(x || '').localeCompare(String(y || ''), 'pt-BR'); return (c * dir) || a.cliente.localeCompare(b.cliente, 'pt-BR') || (a.mes < b.mes ? 1 : -1); });
+    return v;
+  }
+  function sdDesenhar() {
+    if (!sd.dados) return;
+    const f = sdFiltros();
+    sdSelect('#sd-mes', f, 'mes', 'Todos', mesRotulo); sdSelect('#sd-consultor', f, 'consultor', 'Todos'); sdSelect('#sd-equipe', f, 'equipe', 'Todas'); sdSelect('#sd-gestor', f, 'gestor', 'Todos');
+    const linhas = sdVisiveis();
+    const qtd = linhas.reduce((a, l) => a + l.quantidade, 0), val = linhas.reduce((a, l) => a + l.valor, 0);
+    const clientes = new Set(linhas.map(l => l.cnpj.replace(/\D/g, '') || l.cliente)).size;
+    const kpi = (t, n, s) => `<div class="q-kpi"><span class="k-t">${t}</span><b class="k-n">${n}</b><span class="k-v">${s}</span></div>`;
+    $('#sd-kpis').innerHTML = kpi('Clientes', clientes.toLocaleString('pt-BR'), `${linhas.length.toLocaleString('pt-BR')} linha(s) cliente × mês`) + kpi('Quantidade', qtd.toLocaleString('pt-BR'), 'licenças / planos Blip GO') + kpi('Valor', fmtMoeda(val), 'soma da receita das linhas');
+    if (!linhas.length) { $('#sd-lista').innerHTML = '<div class="vazio">Nenhum Blip GO ativo para esses filtros.</div>'; return; }
+    const LIM = 1000;
+    const thO = (col, rot, cls) => `<th class="${cls || ''}"><button type="button" class="th-ord${sd.ord.col === col ? ' ativo' : ''}" data-sdord="${col}">${rot}<span class="seta">${sd.ord.col === col ? (sd.ord.asc ? '↑' : '↓') : '↕'}</span></button></th>`;
+    const corpo = linhas.slice(0, LIM).map((l, i) => {
+      const det = sd.aberto === i ? `<tr><td colspan="8" class="q-itens">${l.pedidos.map(p => `<div>Pedido <b>${esc(p.pedido)}</b> · ${esc(p.produto || '—')}${p.numero ? ` <span class="prod-dica">· ${esc(p.numero)}</span>` : ''} <span class="prod-dica">· qtd ${p.qtd}${p.data_ref ? ' · data ref. ' + fmtData(p.data_ref) : ''}</span> <strong style="float:right">${fmtMoeda(p.valor)}</strong></div>`).join('')}</td></tr>` : '';
+      return `<tr data-sdlinha="${i}" style="cursor:pointer" title="Ver os pedidos"><td style="white-space:nowrap">${mesRotulo(l.mes)}</td><td style="white-space:nowrap">${esc(l.cnpj)}</td><td class="cel-nome">${esc(l.cliente || '—')}</td><td>${esc(l.consultor || '—')}</td><td>${esc(l.equipe || '—')}</td><td>${esc(l.gestor || '—')}</td><td class="num">${l.quantidade.toLocaleString('pt-BR')}</td><td class="num" style="white-space:nowrap">${fmtMoeda(l.valor)}</td></tr>${det}`;
+    }).join('');
+    $('#sd-lista').innerHTML = `<div class="tab-wrap"><table class="tab"><thead><tr>${thO('mes', 'Mês')}${thO('cnpj', 'CNPJ')}${thO('cliente', 'Razão social')}${thO('consultor', 'Consultor')}${thO('equipe', 'Equipe')}${thO('gestor', 'Gestor')}${thO('quantidade', 'Qtd', 'num')}${thO('valor', 'Valor', 'num')}</tr></thead><tbody>${corpo}</tbody></table></div>
+      <div class="prod-dica" style="margin-top:var(--e3)">${linhas.length > LIM ? `Mostrando as primeiras ${LIM} de ${linhas.length.toLocaleString('pt-BR')} linhas — use os filtros ou o CSV para ver tudo. ` : ''}Base lida em ${fmtDH(sd.dados.base_atualizada_em)}</div>`;
+  }
+  async function sdCarregar(refresh) {
+    const eu = ++sd.req;
+    $('#sd-lista').innerHTML = '<div class="vazio"><span class="spinner"></span> Carregando Blip GO (lê as planilhas do CRM na primeira vez, pode levar alguns segundos)…</div>';
+    try {
+      const d = await api('sd', refresh ? { refresh: '1' } : {});
+      if (eu !== sd.req) return;
+      sd.dados = d; sd.carregou = true; sd.aberto = null; sdDesenhar();
+    } catch (e) {
+      if (eu !== sd.req) return;
+      $('#sd-kpis').innerHTML = ''; $('#sd-lista').innerHTML = `<div class="alerta alerta-erro"><b>Erro ao carregar o SD</b> ${esc(e.message)}</div>`;
+    }
+  }
+  function sdCsv() {
+    if (!sd.dados) return;
+    const cab = ['Mês', 'CNPJ', 'Razão social', 'Consultor', 'Equipe', 'Gestor', 'Quantidade', 'Valor', 'Pedidos'];
+    const dados = sdVisiveis().map(l => [mesRotulo(l.mes), l.cnpj, l.cliente, l.consultor, l.equipe, l.gestor, l.quantidade, String(l.valor).replace('.', ','), l.pedidos.map(p => p.pedido).join(' / ')]);
+    const q = v => '"' + String(v).replace(/"/g, '""') + '"';
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob(['\ufeff' + [cab, ...dados].map(l => l.map(q).join(';')).join('\n')], { type: 'text/csv;charset=utf-8;' }));
+    a.download = `sd_blip_go_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(a.href);
+  }
+  function trocarSub(qual) {
+    sd.sub = qual;
+    $('#q-estorno').hidden = qual !== 'estorno'; $('#q-sd').hidden = qual !== 'sd';
+    host.querySelectorAll('#q-sub [data-qsub]').forEach(b => { const on = b.dataset.qsub === qual; b.classList.toggle('ativo', on); b.setAttribute('aria-pressed', String(on)); });
+    if (qual === 'sd') { if (!sd.carregou) sdCarregar(); } else if (!st.carregou) carregar(1);
+  }
+
   host.addEventListener('click', e => {
+    const qs = e.target.closest('[data-qsub]'); if (qs) return trocarSub(qs.dataset.qsub);
+    const so = e.target.closest('[data-sdord]');
+    if (so) { const col = so.dataset.sdord, texto = col !== 'quantidade' && col !== 'valor'; sd.ord = sd.ord.col === col ? { col, asc: !sd.ord.asc } : { col, asc: texto && col !== 'mes' }; sd.aberto = null; return sdDesenhar(); }
+    const sl = e.target.closest('[data-sdlinha]'); if (sl) { const i = Number(sl.dataset.sdlinha); sd.aberto = sd.aberto === i ? null : i; return sdDesenhar(); }
+    if (e.target.closest('#sd-csv')) return sdCsv();
+    if (e.target.closest('#sd-atualizar')) return sdCarregar(true);
     const k = e.target.closest('[data-sit]'); if (k) { st.situacao = st.situacao === k.dataset.sit ? 'todas' : k.dataset.sit; return carregar(1); }
     const m = e.target.closest('[data-marcar]'); if (m) { const [i, n] = m.dataset.marcar.split(':').map(Number); return abrirMarcacao(i, n); }
     const it = e.target.closest('[data-itens]'); if (it) { e.preventDefault(); const tr = $('#q-itens-' + it.dataset.itens); if (tr) tr.hidden = !tr.hidden; return; }
@@ -170,10 +275,12 @@ export function criarQualidade(host) {
     if (s) { const c = st.dados.contratos[Number(s.dataset.sel)]; if (s.checked) st.selecao.set(chave(c), { pedido: c.pedido, data_ref: c.data_ref }); else st.selecao.delete(chave(c)); return desenharBulk(); }
     if (e.target.matches('[data-sel-todos]')) { st.dados.contratos.forEach(c => { if (e.target.checked) st.selecao.set(chave(c), { pedido: c.pedido, data_ref: c.data_ref }); else st.selecao.delete(chave(c)); }); return desenharLista(); }
     if (e.target.matches('#q-janela, #q-tipo, #q-equipe, #q-de, #q-ate')) carregar(1);
+    if (e.target.matches('#sd-mes, #sd-consultor, #sd-equipe, #sd-gestor')) sdDesenhar();
   });
+  $('#sd-busca').addEventListener('input', sdDesenhar);
   $('#q-busca').addEventListener('input', () => { clearTimeout(st.timer); st.timer = setTimeout(() => carregar(1), 400); });
   $('#q-atualizar').addEventListener('click', () => carregar(1, true));
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#q-modal').hidden) fecharModal(); });
 
-  return { mostrar() { if (!st.carregou) carregar(1); } };
+  return { mostrar() { if (sd.sub === 'sd') { if (!sd.carregou) sdCarregar(); } else if (!st.carregou) carregar(1); } };
 }

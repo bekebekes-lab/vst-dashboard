@@ -3078,6 +3078,11 @@
 
   <!-- TAB QUALIDADE — acompanhamento das 9 parcelas (270 dias) por contratação, só admin -->
   <div class="tab-panel" id="tab-qualidade">
+    <div id="qual-subtabs" style="display:flex;gap:8px;margin-bottom:14px;">
+      <button class="btn-secondary acessos-subtab qual-subtab active" data-sub="estorno" onclick="qualTrocarSubaba('estorno')" style="padding:6px 16px;font-size:12px;">Estorno (9 parcelas)</button>
+      <button class="btn-secondary acessos-subtab qual-subtab" data-sub="sd" onclick="qualTrocarSubaba('sd')" style="padding:6px 16px;font-size:12px;">SD</button>
+    </div>
+    <div id="qual-view-estorno">
     <div class="filters-bar">
       <div class="filter-group" style="min-width:240px;flex:1;">
         <label>Buscar (pedido, CNPJ, cliente ou vendedor)</label>
@@ -3119,6 +3124,29 @@
     <div id="qual-bulk"></div>
     <div id="qual-lista-area"></div>
     <div id="qual-pag" style="margin:12px 0;display:flex;gap:10px;align-items:center;font-size:12.5px;"></div>
+    </div>
+    <div id="qual-view-sd" style="display:none;">
+      <div style="font-size:12px;color:var(--text-3);margin-bottom:8px;">Pedidos de <strong>Blip GO</strong> ativos (ATIVO/CONECTADO no CRM), mês a mês, uma linha por cliente em cada mês. Clique no título da coluna para classificar e na linha para ver os pedidos.</div>
+      <div class="filters-bar">
+        <div class="filter-group" style="min-width:240px;flex:1;">
+          <label>Buscar (cliente, CNPJ, consultor ou pedido)</label>
+          <input type="text" id="sd-busca" autocomplete="off" oninput="sdRender()">
+        </div>
+        <div class="filter-group" style="min-width:130px;"><label>Mês</label><select id="sd-mes" onchange="sdRender()"><option value="">Todos</option></select></div>
+        <div class="filter-group" style="min-width:190px;"><label>Consultor</label><select id="sd-consultor" onchange="sdRender()"><option value="">Todos</option></select></div>
+        <div class="filter-group" style="min-width:190px;"><label>Equipe</label><select id="sd-equipe" onchange="sdRender()"><option value="">Todas</option></select></div>
+        <div class="filter-group" style="min-width:150px;"><label>Gestor</label><select id="sd-gestor" onchange="sdRender()"><option value="">Todos</option></select></div>
+        <div class="filter-group" style="justify-content:flex-end;">
+          <label>&nbsp;</label>
+          <div style="display:flex;gap:8px;">
+            <button class="btn-secondary" onclick="sdCsv()" style="padding:7px 14px;font-size:12px;white-space:nowrap;">⬇ CSV</button>
+            <button class="btn-secondary" onclick="sdCarregar(true)" style="padding:7px 14px;font-size:12px;white-space:nowrap;" title="Relê as planilhas do CRM (a base é guardada por 5 minutos)">↻ Atualizar base</button>
+          </div>
+        </div>
+      </div>
+      <div id="sd-kpis" class="qual-kpis"></div>
+      <div id="sd-lista-area"></div>
+    </div>
     <div class="qual-modal-fundo" id="qual-modal" onclick="if(event.target===this)qualFecharMarcacao()">
       <div class="qual-modal" id="qual-modal-corpo"></div>
     </div>
@@ -15567,7 +15595,132 @@ function qualMensagem(texto, erro) {
 }
 
 function initQualidade() {
+  if (QUAL_SUB === 'sd') { if (!SD.carregou) sdCarregar(); return; }
   if (!QUAL_CARREGOU) qualCarregar(1);
+}
+
+// ─── Qualidade › SD (Blip GO ativos, mês a mês) ──────────────────────────────
+// O servidor (api/qualidade.js, action=sd) devolve uma linha por cliente em cada mês; filtros e classificação ficam aqui.
+// Mantenha igual a beta/qualidade.js.
+let QUAL_SUB = 'estorno';
+const SD = { dados: null, carregou: false, req: 0, ord: { col: 'mes', asc: false }, aberto: null };
+const SD_MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+function sdMesRotulo(m) { const [a, mm] = (m || '').split('-'); return SD_MESES[(+mm || 1) - 1] + '/' + a; }
+function qualTrocarSubaba(qual) {
+  QUAL_SUB = qual;
+  document.getElementById('qual-view-estorno').style.display = qual === 'estorno' ? '' : 'none';
+  document.getElementById('qual-view-sd').style.display = qual === 'sd' ? '' : 'none';
+  document.querySelectorAll('.qual-subtab').forEach(b => b.classList.toggle('active', b.dataset.sub === qual));
+  initQualidade();
+}
+async function sdCarregar(refresh) {
+  const eu = ++SD.req;
+  const area = document.getElementById('sd-lista-area');
+  area.innerHTML = '<div class="loading-state"><div class="loading-spinner"></div><p>Carregando Blip GO (lê as planilhas do CRM na primeira vez, pode levar alguns segundos)...</p></div>';
+  try {
+    const d = await qualApi('sd', refresh ? { refresh: '1' } : {});
+    if (eu !== SD.req) return;
+    SD.dados = d; SD.carregou = true; SD.aberto = null;
+    sdRender();
+  } catch (e) {
+    if (eu !== SD.req) return;
+    document.getElementById('sd-kpis').innerHTML = '';
+    area.innerHTML = `<div class="error-state"><strong>Erro ao carregar o SD</strong>${escapeHtml(e.message)}</div>`;
+  }
+}
+function sdFiltros() {
+  return {
+    busca: (document.getElementById('sd-busca').value || '').trim(),
+    mes: document.getElementById('sd-mes').value, consultor: document.getElementById('sd-consultor').value,
+    equipe: document.getElementById('sd-equipe').value, gestor: document.getElementById('sd-gestor').value,
+  };
+}
+function sdPassa(l, f, ign) {
+  if (ign !== 'mes' && f.mes && l.mes !== f.mes) return false;
+  if (ign !== 'consultor' && f.consultor && l.consultor !== f.consultor) return false;
+  if (ign !== 'equipe' && f.equipe && l.equipe !== f.equipe) return false;
+  if (ign !== 'gestor' && f.gestor && l.gestor !== f.gestor) return false;
+  if (f.busca) {
+    const norm = t => (t || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    const alvo = norm(`${l.cliente} ${l.cnpj} ${l.consultor} ${l.pedidos.map(p => p.pedido).join(' ')}`);
+    const dig = f.busca.replace(/\D/g, '');
+    if (!alvo.includes(norm(f.busca)) && !(dig.length >= 4 && l.cnpj.replace(/\D/g, '').includes(dig))) return false;
+  }
+  return true;
+}
+// listas dos filtros em cascata: cada uma considera os OUTROS filtros (não o próprio)
+function sdPreencherSelect(id, f, campo, rotuloVazio, fmt) {
+  const sel = document.getElementById(id), atual = sel.value;
+  const vals = [...new Set(SD.dados.linhas.filter(l => sdPassa(l, f, campo)).map(l => l[campo]).filter(Boolean))];
+  vals.sort(campo === 'mes' ? (a, b) => (a < b ? 1 : -1) : (a, b) => a.localeCompare(b, 'pt-BR'));
+  if (atual && !vals.includes(atual)) vals.push(atual);
+  sel.innerHTML = `<option value="">${rotuloVazio}</option>` + vals.map(v => `<option value="${escapeHtml(v)}">${escapeHtml(fmt ? fmt(v) : v)}</option>`).join('');
+  sel.value = atual;
+}
+function sdOrdenar(col) {
+  const texto = col !== 'quantidade' && col !== 'valor';
+  SD.ord = SD.ord.col === col ? { col, asc: !SD.ord.asc } : { col, asc: texto && col !== 'mes' };
+  SD.aberto = null;
+  sdRender();
+}
+function sdLinhasVisiveis() {
+  const f = sdFiltros(), { col, asc } = SD.ord, dir = asc ? 1 : -1;
+  const v = SD.dados.linhas.filter(l => sdPassa(l, f));
+  v.sort((a, b) => {
+    const x = a[col], y = b[col];
+    const c = typeof x === 'number' ? x - y : String(x || '').localeCompare(String(y || ''), 'pt-BR');
+    return (c * dir) || a.cliente.localeCompare(b.cliente, 'pt-BR') || (a.mes < b.mes ? 1 : -1);
+  });
+  return v;
+}
+function sdToggle(i) { SD.aberto = SD.aberto === i ? null : i; sdRender(); }
+function sdRender() {
+  if (!SD.dados) return;
+  const f = sdFiltros();
+  sdPreencherSelect('sd-mes', f, 'mes', 'Todos', sdMesRotulo);
+  sdPreencherSelect('sd-consultor', f, 'consultor', 'Todos');
+  sdPreencherSelect('sd-equipe', f, 'equipe', 'Todas');
+  sdPreencherSelect('sd-gestor', f, 'gestor', 'Todos');
+  const linhas = sdLinhasVisiveis();
+  const qtd = linhas.reduce((a, l) => a + l.quantidade, 0), val = linhas.reduce((a, l) => a + l.valor, 0);
+  const clientes = new Set(linhas.map(l => l.cnpj.replace(/\D/g, '') || l.cliente)).size;
+  const kpi = (t, n, sub) => `<div class="qual-kpi" style="cursor:default;"><div class="k-t">${t}</div><div class="k-n">${n}</div><div class="k-v">${sub}</div></div>`;
+  document.getElementById('sd-kpis').innerHTML =
+    kpi('Clientes', clientes.toLocaleString('pt-BR'), `${linhas.length.toLocaleString('pt-BR')} linha(s) cliente × mês`) +
+    kpi('Quantidade', qtd.toLocaleString('pt-BR'), 'licenças / planos Blip GO') + kpi('Valor', qualFmtMoeda(val), 'soma da receita das linhas');
+  const area = document.getElementById('sd-lista-area');
+  if (!linhas.length) { area.innerHTML = '<div class="coming-soon"><p>Nenhum Blip GO ativo para esses filtros.</p></div>'; return; }
+  const LIM = 1000;
+  const th = (col, rot, align) => `<th onclick="sdOrdenar('${col}')" style="cursor:pointer;user-select:none;${align ? 'text-align:' + align : ''}" title="Clique para classificar">${rot} <span style="opacity:${SD.ord.col === col ? 1 : .35};font-size:10px">${SD.ord.col === col ? (SD.ord.asc ? '▲' : '▼') : '↕'}</span></th>`;
+  const corpo = linhas.slice(0, LIM).map((l, i) => {
+    const det = SD.aberto === i ? `<tr><td colspan="8" style="font-size:12px;background:var(--bg-2,#f8fafc);padding:8px 14px;">${l.pedidos.map(p =>
+      `<div>Pedido <strong>${escapeHtml(p.pedido)}</strong> · ${escapeHtml(p.produto || '—')}${p.numero ? ` <span style="color:var(--text-3)">· ${escapeHtml(p.numero)}</span>` : ''} <span style="color:var(--text-3)">· qtd ${p.qtd}${p.data_ref ? ' · data ref. ' + qualFmtData(p.data_ref) : ''}</span> <strong style="float:right">${qualFmtMoeda(p.valor)}</strong></div>`).join('')}</td></tr>` : '';
+    return `<tr style="cursor:pointer" onclick="sdToggle(${i})" title="Ver os pedidos">
+      <td style="font-size:12px;white-space:nowrap">${sdMesRotulo(l.mes)}</td>
+      <td style="font-size:12px;white-space:nowrap">${escapeHtml(l.cnpj)}</td>
+      <td style="font-size:12px;min-width:220px;font-weight:500">${escapeHtml(l.cliente || '—')}</td>
+      <td style="font-size:12px">${escapeHtml(l.consultor || '—')}</td>
+      <td style="font-size:12px">${escapeHtml(l.equipe || '—')}</td>
+      <td style="font-size:12px">${escapeHtml(l.gestor || '—')}</td>
+      <td style="font-size:12px;text-align:right">${l.quantidade.toLocaleString('pt-BR')}</td>
+      <td style="font-size:12px;text-align:right;white-space:nowrap">${qualFmtMoeda(l.valor)}</td></tr>${det}`;
+  }).join('');
+  area.innerHTML = `<div class="table-wrap"><div class="table-scroll"><table>
+    <thead><tr>${th('mes', 'Mês')}${th('cnpj', 'CNPJ')}${th('cliente', 'Razão social')}${th('consultor', 'Consultor')}${th('equipe', 'Equipe')}${th('gestor', 'Gestor')}${th('quantidade', 'Qtd', 'right')}${th('valor', 'Valor', 'right')}</tr></thead>
+    <tbody>${corpo}</tbody></table></div></div>
+    <div style="margin:10px 0;font-size:12px;color:var(--text-3);">${linhas.length > LIM ? `Mostrando as primeiras ${LIM} de ${linhas.length.toLocaleString('pt-BR')} linhas — use os filtros ou o CSV para ver tudo. ` : ''}Base lida em ${new Date(SD.dados.base_atualizada_em).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'short' })}</div>`;
+}
+function sdCsv() {
+  if (!SD.dados) return;
+  const linhas = sdLinhasVisiveis();
+  const cab = ['Mês', 'CNPJ', 'Razão social', 'Consultor', 'Equipe', 'Gestor', 'Quantidade', 'Valor', 'Pedidos'];
+  const dados = linhas.map(l => [sdMesRotulo(l.mes), l.cnpj, l.cliente, l.consultor, l.equipe, l.gestor, l.quantidade, String(l.valor).replace('.', ','), l.pedidos.map(p => p.pedido).join(' / ')]);
+  const esc = v => '"' + String(v).replace(/"/g, '""') + '"';
+  const csv = '\ufeff' + [cab, ...dados].map(l => l.map(esc).join(';')).join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
+  a.download = `sd_blip_go_${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(a.href);
 }
 
 function qualAoFiltrarTexto() {
