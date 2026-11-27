@@ -18,7 +18,7 @@ export const ABAS_PERMITIDAS_POR_PERFIL = {
 };
 const ehAdminLike = p => p === 'admin' || p === 'admin_gestao';
 // Gerencial Financeiro (piloto): lista fechada de e-mails, e só perfil admin
-const GF_EMAILS_PERMITIDOS = ['raphael@vstgroup.com.br', 'everton@vstgroup.com.br', 'financeiro@vstgroup.com.br'];
+const GF_EMAILS_PERMITIDOS = ['raphael@vstgroup.com.br', 'everton@vstgroup.com.br', 'financeiro@vstgroup.com.br', 'diou@vstgroup.com.br'];
 const gfPodeVer = u => u?.perfil === 'admin' && GF_EMAILS_PERMITIDOS.includes((u.email || '').trim().toLowerCase());
 
 // `usuario` = linha do perfil (usuarios_dashboard) com .email. Devolve a lista de abas (mesmos ids do Dash atual).

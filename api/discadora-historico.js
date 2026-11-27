@@ -3,16 +3,9 @@
 // antigas rápido. "Hoje" continua vindo ao vivo de /api/discadora (ver
 // discadoraCarregar() em index.html).
 import { requireAuth, getUsuarioDashboard } from './_lib/auth.js';
+import { escopoDiscadora } from './_lib/discadora-escopo.js';
 
 const SUPA_URL = 'https://kzlchetrpsfefwybaaoy.supabase.co';
-
-// Espelha getGrupoDiscadoraTravado() em index.html — só gestor/supervisao
-// têm a Discadora travada por grupo_ref; os demais perfis com acesso à aba
-// (admin, gestor_macro, gestor_macro2) veem tudo, igual sempre foi.
-function getGrupoTravado(perfil, u) {
-  if ((perfil === 'gestor' || perfil === 'supervisao') && u?.grupo_ref) return u.grupo_ref;
-  return null;
-}
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -30,8 +23,10 @@ export default async function handler(req, res) {
 
   const perfilRow = await getUsuarioDashboard(req, authUser.id);
   if (perfilRow && perfilRow.ativo === false) return res.status(403).json({ error: 'Acesso desativado' });
-  const perfil = perfilRow?.perfil || 'consultor';
-  const grupoTravado = getGrupoTravado(perfil, perfilRow);
+  // escopo decidido no servidor (api/_lib/discadora-escopo.js): tudo | só o grupo do perfil | negado
+  const escopo = escopoDiscadora(perfilRow);
+  if (escopo.tipo === 'negado') return res.status(403).json({ error: 'Sem acesso à Discadora (ou grupo não configurado no seu perfil)' });
+  const grupoTravado = escopo.tipo === 'grupo' ? escopo.grupo : null;
 
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!serviceKey) return res.status(500).json({ error: 'SUPABASE_SERVICE_ROLE_KEY não configurado no servidor' });

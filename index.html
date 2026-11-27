@@ -5039,7 +5039,7 @@ function drillFila(categoria, fila) {
 // linhaDentroDoEscopo, linhaBateBusca, linhaDentroDoPeriodoCadastro,
 // agruparFilasPorSubgrupo, gerReceitaLinha, abrirDetalheCliente...).
 // Piloto restrito: só estes e-mails (e só se forem admin) enxergam a aba.
-const GF_EMAILS_PERMITIDOS = ['raphael@vstgroup.com.br', 'everton@vstgroup.com.br', 'financeiro@vstgroup.com.br']; // financeiro@ = Dariane Slaski
+const GF_EMAILS_PERMITIDOS = ['raphael@vstgroup.com.br', 'everton@vstgroup.com.br', 'financeiro@vstgroup.com.br', 'diou@vstgroup.com.br']; // financeiro@ = Dariane Slaski; diou@ = Diou Lucas
 function gfPodeVer(usuario) {
   const u = usuario === undefined ? USUARIO_ATUAL : usuario;
   // admin_gestao NÃO vê o Gerencial Financeiro (decisão de 06/11/2026)
@@ -11606,7 +11606,7 @@ function aplicarPermissoes() {
 // ─── TRAVA DA ABA DISCADORA (Gestor e Supervisão — trava por Grupo/cidade) ──
 function aplicarTravaDiscadora() {
   const p = USUARIO_ATUAL?.perfil;
-  const locked = (p === 'gestor' || p === 'supervisao') && USUARIO_ATUAL.grupo_ref;
+  const locked = ['gestor', 'supervisao', 'gestor_beta', 'supervisao_beta'].includes(p) && USUARIO_ATUAL.grupo_ref;
   if (!locked) return;
 
   const selGrupo = document.getElementById('disc-grupo');
@@ -11631,7 +11631,7 @@ function aplicarTravaDiscadora() {
 // discadoraRender() usa isso como reforço — não depende só do estado do DOM.
 function getGrupoDiscadoraTravado() {
   const p = USUARIO_ATUAL?.perfil;
-  if ((p === 'gestor' || p === 'supervisao') && USUARIO_ATUAL?.grupo_ref) return USUARIO_ATUAL.grupo_ref;
+  if (['gestor', 'supervisao', 'gestor_beta', 'supervisao_beta'].includes(p) && USUARIO_ATUAL?.grupo_ref) return USUARIO_ATUAL.grupo_ref;
   return null;
 }
 

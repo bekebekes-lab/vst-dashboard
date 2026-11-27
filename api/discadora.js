@@ -1,4 +1,5 @@
-import { requireAuth } from './_lib/auth.js';
+import { requireAuth, getUsuarioDashboard } from './_lib/auth.js';
+import { escopoDiscadora, normGrupo, consultaPermitida, comGrupoNaConsulta } from './_lib/discadora-escopo.js';
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -13,22 +14,40 @@ export default async function handler(req, res) {
   // Supabase. Qualquer outra chamada continua exigindo login normal.
   const isCronJob = process.env.DISCADORA_CRON_SECRET
     && req.headers['x-cron-secret'] === process.env.DISCADORA_CRON_SECRET;
-  if (!isCronJob && !(await requireAuth(req, res))) return;
+  let escopo = { tipo: 'tudo' };   // o job de sincronização não tem perfil: segue sem trava
+  if (!isCronJob) {
+    const authUser = await requireAuth(req, res);
+    if (!authUser) return;
+    // quem vê o quê é decidido aqui (ver api/_lib/discadora-escopo.js), não pela tela
+    escopo = escopoDiscadora(await getUsuarioDashboard(req, authUser.id));
+    if (escopo.tipo === 'negado') return res.status(403).json({ error: 'Sem acesso à Discadora (ou grupo não configurado no seu perfil)' });
+  }
 
   const apiKey = process.env.MAKESYSTEM_API_KEY;
   if (!apiKey) return res.status(500).json({ error: 'MAKESYSTEM_API_KEY não configurado no servidor' });
 
   try {
+    let corpo = req.body;
+    if (escopo.tipo === 'grupo') {
+      // com escopo de grupo só passa consulta de leitura simples; as ligações voltam filtradas pelo grupo do perfil
+      const campo = consultaPermitida(corpo?.query);
+      if (!campo) return res.status(403).json({ error: 'Consulta não permitida para o seu perfil' });
+      corpo = { query: campo === 'listar_historico_contato' ? comGrupoNaConsulta(corpo.query) : corpo.query };
+    }
     const response = await fetch('https://legacyapi.makesystem.com.br/historic/graphql', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'key': apiKey
       },
-      body: JSON.stringify(req.body)
+      body: JSON.stringify(corpo)
     });
 
     const data = await response.json();
+    if (escopo.tipo === 'grupo' && Array.isArray(data?.data?.listar_historico_contato)) {
+      const meu = normGrupo(escopo.grupo);
+      data.data.listar_historico_contato = data.data.listar_historico_contato.filter(r => normGrupo(r?.grupo?.nome) === meu);
+    }
     res.status(200).json(data);
   } catch (e) {
     res.status(500).json({ error: e.message });

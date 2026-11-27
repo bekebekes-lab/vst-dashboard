@@ -34,7 +34,7 @@ const FAIXAS = [
 export function criarDiscadora(host, ctx) {
   const st = { dados: [], iniciou: false, carregando: false, timer: null, sortCol: 'produtivas', sortAsc: false, hdrGrupos: [], hdrConsultores: [], gravBuscando: false };
   const perfil = () => ctx().perfil;
-  const grupoTravado = () => ((perfil() === 'gestor' || perfil() === 'supervisao') && ctx().grupoRef ? ctx().grupoRef : null);
+  const grupoTravado = () => (['gestor', 'supervisao', 'gestor_beta', 'supervisao_beta'].includes(perfil()) && ctx().grupoRef ? ctx().grupoRef : null);
   const podeCsv = () => perfil() === 'admin' || perfil() === 'gestor_macro';
 
   host.innerHTML = `
