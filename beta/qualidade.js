@@ -48,11 +48,12 @@ export function criarQualidade(host) {
         <label class="chip chip-sel"><span>Consultor</span><select id="sd-consultor"><option value="">Todos</option></select></label>
         <label class="chip chip-sel"><span>Equipe</span><select id="sd-equipe"><option value="">Todas</option></select></label>
         <label class="chip chip-sel"><span>Gestor</span><select id="sd-gestor"><option value="">Todos</option></select></label>
+        <label class="chip chip-sel"><span>Faturas pagas</span><select id="sd-pgto"><option value="">Todas</option><option value="pendente">Com fatura pendente (1ª–5ª)</option><option value="ok">1ª a 5ª pagas</option></select></label>
         <button type="button" class="btn btn-fantasma" id="sd-csv">⬇ CSV</button>
         <button type="button" class="btn btn-fantasma" id="sd-atualizar" title="Relê as planilhas do CRM (a base é guardada por 5 minutos)">↻ Atualizar base</button>
       </div></section>
       <div class="prod-dica" style="margin:var(--e2) 0">Pedidos de <b>Blip GO</b> ativos (ATIVO/CONECTADO no CRM), mês a mês, uma linha por cliente em cada mês. Clique no título da coluna para classificar e na linha para ver os pedidos.</div>
-      <div id="sd-kpis" class="q-kpis"></div>
+      <div id="sd-msg"></div><div id="sd-kpis" class="q-kpis"></div>
       <section class="painel"><div class="painel-corpo" id="sd-lista" style="padding-top:var(--e4)"></div></section>
     </div>`;
   const $ = s => host.querySelector(s);
@@ -178,13 +179,18 @@ export function criarQualidade(host) {
   }
 
   // ── SD › Blip GO ──
-  const sdFiltros = () => ({ busca: $('#sd-busca').value.trim(), mes: $('#sd-mes').value, consultor: $('#sd-consultor').value, equipe: $('#sd-equipe').value, gestor: $('#sd-gestor').value });
+  const sdFiltros = () => ({ busca: $('#sd-busca').value.trim(), mes: $('#sd-mes').value, consultor: $('#sd-consultor').value, equipe: $('#sd-equipe').value, gestor: $('#sd-gestor').value, pgto: $('#sd-pgto').value });
   const norm = t => (t || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  // Faturas pagas (1ª–5ª): cada pedido da linha guarda p.f = [faturas pagas]. Estado da fatura n na linha: 0 nenhum pedido, 1 alguns, 2 todos.
+  const estadoFatura = (l, n) => { const c = l.pedidos.filter(p => (p.f || []).includes(n)).length; return c === 0 ? 0 : (c === l.pedidos.length ? 2 : 1); };
+  const pagasDe = l => [1, 2, 3, 4, 5].filter(n => estadoFatura(l, n) === 2).length;
   function sdPassa(l, f, ign) {
     if (ign !== 'mes' && f.mes && l.mes !== f.mes) return false;
     if (ign !== 'consultor' && f.consultor && l.consultor !== f.consultor) return false;
     if (ign !== 'equipe' && f.equipe && l.equipe !== f.equipe) return false;
     if (ign !== 'gestor' && f.gestor && l.gestor !== f.gestor) return false;
+    if (f.pgto === 'ok' && pagasDe(l) < 5) return false;
+    if (f.pgto === 'pendente' && pagasDe(l) >= 5) return false;
     if (f.busca) {
       const alvo = norm(`${l.cliente} ${l.cnpj} ${l.consultor} ${l.pedidos.map(p => p.pedido).join(' ')}`), dig = f.busca.replace(/\D/g, '');
       if (!alvo.includes(norm(f.busca)) && !(dig.length >= 4 && l.cnpj.replace(/\D/g, '').includes(dig))) return false;
@@ -202,28 +208,45 @@ export function criarQualidade(host) {
   }
   function sdVisiveis() {
     const f = sdFiltros(), { col, asc } = sd.ord, dir = asc ? 1 : -1;
+    sd.dados.linhas.forEach(l => { l.pagas = pagasDe(l); });
     const v = sd.dados.linhas.filter(l => sdPassa(l, f));
     v.sort((a, b) => { const x = a[col], y = b[col]; const c = typeof x === 'number' ? x - y : String(x || '').localeCompare(String(y || ''), 'pt-BR'); return (c * dir) || a.cliente.localeCompare(b.cliente, 'pt-BR') || (a.mes < b.mes ? 1 : -1); });
     return v;
   }
+  const sdMsg = (t, erro) => { $('#sd-msg').innerHTML = t ? `<div class="${erro ? 'txt-neg' : 'txt-pos'} ac-msg">${esc(t)}</div>` : ''; };
+  // Marca/desmarca a fatura n (1–5, ou 'todas') como paga em todos os pedidos da linha. Grava no servidor e só então atualiza a tela.
+  async function sdMarcar(i, n, marcado) {
+    const l = sdVisiveis()[i]; if (!l) return;
+    sdMsg('');
+    try {
+      await api('sd_marcar', {}, { mes: l.mes, chave: l.chave, fatura: n, marcado });
+      const alvo = n === 'todas' ? [1, 2, 3, 4, 5] : [n];
+      l.pedidos.forEach(p => { const set = new Set(p.f || []); alvo.forEach(x => (marcado ? set.add(x) : set.delete(x))); p.f = [...set].sort(); });
+    } catch (e) { sdMsg(e.message, true); }
+    sdDesenhar();
+  }
   function sdDesenhar() {
     if (!sd.dados) return;
-    const f = sdFiltros();
+    const f = sdFiltros(), ok = sd.dados.pagamentos_ok;
     sdSelect('#sd-mes', f, 'mes', 'Todos', mesRotulo); sdSelect('#sd-consultor', f, 'consultor', 'Todos'); sdSelect('#sd-equipe', f, 'equipe', 'Todas'); sdSelect('#sd-gestor', f, 'gestor', 'Todos');
     const linhas = sdVisiveis();
     const qtd = linhas.reduce((a, l) => a + l.quantidade, 0), val = linhas.reduce((a, l) => a + l.valor, 0);
-    const clientes = new Set(linhas.map(l => l.cnpj.replace(/\D/g, '') || l.cliente)).size;
+    const clientes = new Set(linhas.map(l => l.cnpj.replace(/\D/g, '') || l.cliente)).size, completas = linhas.filter(l => l.pagas >= 5).length;
     const kpi = (t, n, s) => `<div class="q-kpi"><span class="k-t">${t}</span><b class="k-n">${n}</b><span class="k-v">${s}</span></div>`;
-    $('#sd-kpis').innerHTML = kpi('Clientes', clientes.toLocaleString('pt-BR'), `${linhas.length.toLocaleString('pt-BR')} linha(s) cliente × mês`) + kpi('Quantidade', qtd.toLocaleString('pt-BR'), 'licenças / planos Blip GO') + kpi('Valor', fmtMoeda(val), 'soma da receita das linhas');
+    $('#sd-kpis').innerHTML = kpi('Clientes', clientes.toLocaleString('pt-BR'), `${linhas.length.toLocaleString('pt-BR')} linha(s) cliente × mês`) + kpi('Quantidade', qtd.toLocaleString('pt-BR'), 'licenças / planos Blip GO') + kpi('Valor', fmtMoeda(val), 'soma da receita das linhas') + kpi('1ª a 5ª fatura paga', completas.toLocaleString('pt-BR'), `de ${linhas.length.toLocaleString('pt-BR')} linha(s)`);
+    if (!ok) sdMsg('As caixinhas de fatura estão desativadas: falta criar a tabela sd_pagamentos no Supabase (arquivo supabase/migrations/20261127000001_sd_pagamentos.sql).', true);
     if (!linhas.length) { $('#sd-lista').innerHTML = '<div class="vazio">Nenhum Blip GO ativo para esses filtros.</div>'; return; }
     const LIM = 1000;
     const thO = (col, rot, cls) => `<th class="${cls || ''}"><button type="button" class="th-ord${sd.ord.col === col ? ' ativo' : ''}" data-sdord="${col}">${rot}<span class="seta">${sd.ord.col === col ? (sd.ord.asc ? '↑' : '↓') : '↕'}</span></button></th>`;
     const corpo = linhas.slice(0, LIM).map((l, i) => {
-      const det = sd.aberto === i ? `<tr><td colspan="8" class="q-itens">${l.pedidos.map(p => `<div>Pedido <b>${esc(p.pedido)}</b> · ${esc(p.produto || '—')}${p.numero ? ` <span class="prod-dica">· ${esc(p.numero)}</span>` : ''} <span class="prod-dica">· qtd ${p.qtd}${p.data_ref ? ' · data ref. ' + fmtData(p.data_ref) : ''}</span> <strong style="float:right">${fmtMoeda(p.valor)}</strong></div>`).join('')}</td></tr>` : '';
-      return `<tr data-sdlinha="${i}" style="cursor:pointer" title="Ver os pedidos"><td style="white-space:nowrap">${mesRotulo(l.mes)}</td><td style="white-space:nowrap">${esc(l.cnpj)}</td><td class="cel-nome">${esc(l.cliente || '—')}</td><td>${esc(l.consultor || '—')}</td><td>${esc(l.equipe || '—')}</td><td>${esc(l.gestor || '—')}</td><td class="num">${l.quantidade.toLocaleString('pt-BR')}</td><td class="num" style="white-space:nowrap">${fmtMoeda(l.valor)}</td></tr>${det}`;
+      const det = sd.aberto === i ? `<tr><td colspan="11" class="q-itens">${l.pedidos.map(p => `<div>Pedido <b>${esc(p.pedido)}</b> · ${esc(p.produto || '—')}${p.numero ? ` <span class="prod-dica">· ${esc(p.numero)}</span>` : ''} <span class="prod-dica">· qtd ${p.qtd}${p.data_ref ? ' · ativação ' + fmtData(p.data_ref) : ''} · faturas pagas: ${(p.f || []).length ? p.f.map(n => n + 'ª').join(', ') : 'nenhuma'}</span> <strong style="float:right">${fmtMoeda(p.valor)}</strong></div>`).join('')}</td></tr>` : '';
+      const caixas = [1, 2, 3, 4, 5].map(n => { const e = estadoFatura(l, n); return `<label class="sd-fat" title="${n}ª fatura${e === 1 ? ' (paga só em parte dos pedidos)' : ''}"><input type="checkbox" data-sdfat="${i}:${n}" ${e === 2 ? 'checked' : ''} ${e === 1 ? 'data-parcial="1"' : ''} ${ok ? '' : 'disabled'}><span>${n}ª</span></label>`; }).join('');
+      const todas = ok ? `<a href="#" class="lnk lnk-sec" data-sdtodas="${i}:${l.pagas < 5 ? 1 : 0}" title="${l.pagas < 5 ? 'Marcar a 1ª a 5ª como pagas' : 'Desmarcar as cinco'}">${l.pagas < 5 ? '✓ até a 5ª' : '✗ limpar'}</a>` : '';
+      return `<tr data-sdlinha="${i}" style="cursor:pointer" title="Ver os pedidos"><td style="white-space:nowrap">${mesRotulo(l.mes)}</td><td style="white-space:nowrap">${l.data_ativacao ? fmtData(l.data_ativacao) : '—'}</td><td style="white-space:nowrap">${esc(l.cnpj)}</td><td class="cel-nome">${esc(l.cliente || '—')}</td><td>${esc(l.consultor || '—')}</td><td>${esc(l.equipe || '—')}</td><td>${esc(l.gestor || '—')}</td><td class="num">${l.quantidade.toLocaleString('pt-BR')}</td><td class="num" style="white-space:nowrap">${fmtMoeda(l.valor)}</td><td style="white-space:nowrap" data-sdfatcel>${caixas} ${todas}</td><td class="num">${l.pagas}/5</td></tr>${det}`;
     }).join('');
-    $('#sd-lista').innerHTML = `<div class="tab-wrap"><table class="tab"><thead><tr>${thO('mes', 'Mês')}${thO('cnpj', 'CNPJ')}${thO('cliente', 'Razão social')}${thO('consultor', 'Consultor')}${thO('equipe', 'Equipe')}${thO('gestor', 'Gestor')}${thO('quantidade', 'Qtd', 'num')}${thO('valor', 'Valor', 'num')}</tr></thead><tbody>${corpo}</tbody></table></div>
-      <div class="prod-dica" style="margin-top:var(--e3)">${linhas.length > LIM ? `Mostrando as primeiras ${LIM} de ${linhas.length.toLocaleString('pt-BR')} linhas — use os filtros ou o CSV para ver tudo. ` : ''}Base lida em ${fmtDH(sd.dados.base_atualizada_em)}</div>`;
+    $('#sd-lista').innerHTML = `<div class="tab-wrap"><table class="tab"><thead><tr>${thO('mes', 'Mês')}${thO('data_ativacao', 'Data de ativação')}${thO('cnpj', 'CNPJ')}${thO('cliente', 'Razão social')}${thO('consultor', 'Consultor')}${thO('equipe', 'Equipe')}${thO('gestor', 'Gestor')}${thO('quantidade', 'Qtd', 'num')}${thO('valor', 'Valor', 'num')}<th>Faturas pagas (1ª–5ª)</th>${thO('pagas', 'Pagas', 'num')}</tr></thead><tbody>${corpo}</tbody></table></div>
+      <div class="prod-dica" style="margin-top:var(--e3)">${linhas.length > LIM ? `Mostrando as primeiras ${LIM} de ${linhas.length.toLocaleString('pt-BR')} linhas — use os filtros ou o CSV para ver tudo. ` : ''}Data de ativação = DATA REF (a mais antiga entre os pedidos da linha). Base lida em ${fmtDH(sd.dados.base_atualizada_em)}</div>`;
+    $('#sd-lista').querySelectorAll('input[data-parcial]').forEach(x => { x.indeterminate = true; });
   }
   async function sdCarregar(refresh) {
     const eu = ++sd.req;
@@ -239,8 +262,9 @@ export function criarQualidade(host) {
   }
   function sdCsv() {
     if (!sd.dados) return;
-    const cab = ['Mês', 'CNPJ', 'Razão social', 'Consultor', 'Equipe', 'Gestor', 'Quantidade', 'Valor', 'Pedidos'];
-    const dados = sdVisiveis().map(l => [mesRotulo(l.mes), l.cnpj, l.cliente, l.consultor, l.equipe, l.gestor, l.quantidade, String(l.valor).replace('.', ','), l.pedidos.map(p => p.pedido).join(' / ')]);
+    const cab = ['Mês', 'Data de ativação', 'CNPJ', 'Razão social', 'Consultor', 'Equipe', 'Gestor', 'Quantidade', 'Valor', 'Faturas pagas', 'Pedidos'];
+    const dados = sdVisiveis().map(l => [mesRotulo(l.mes), l.data_ativacao ? fmtData(l.data_ativacao) : '', l.cnpj, l.cliente, l.consultor, l.equipe, l.gestor, l.quantidade, String(l.valor).replace('.', ','),
+      [1, 2, 3, 4, 5].filter(n => estadoFatura(l, n) === 2).map(n => n + 'ª').join(' '), l.pedidos.map(p => p.pedido).join(' / ')]);
     const q = v => '"' + String(v).replace(/"/g, '""') + '"';
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob(['\ufeff' + [cab, ...dados].map(l => l.map(q).join(';')).join('\n')], { type: 'text/csv;charset=utf-8;' }));
@@ -257,7 +281,14 @@ export function criarQualidade(host) {
   host.addEventListener('click', e => {
     const qs = e.target.closest('[data-qsub]'); if (qs) return trocarSub(qs.dataset.qsub);
     const so = e.target.closest('[data-sdord]');
-    if (so) { const col = so.dataset.sdord, texto = col !== 'quantidade' && col !== 'valor'; sd.ord = sd.ord.col === col ? { col, asc: !sd.ord.asc } : { col, asc: texto && col !== 'mes' }; sd.aberto = null; return sdDesenhar(); }
+    if (so) { const col = so.dataset.sdord, texto = !['quantidade', 'valor', 'pagas'].includes(col); sd.ord = sd.ord.col === col ? { col, asc: !sd.ord.asc } : { col, asc: texto && col !== 'mes' && col !== 'data_ativacao' }; sd.aberto = null; return sdDesenhar(); }
+    if (e.target.closest('[data-sdfatcel]')) {   // caixinhas de fatura / "até a 5ª": não abre o detalhe da linha
+      const t = e.target.closest('[data-sdtodas]');
+      if (t) { e.preventDefault(); const [i, m] = t.dataset.sdtodas.split(':'); return sdMarcar(Number(i), 'todas', m === '1'); }
+      const c = e.target.closest('input[data-sdfat]');
+      if (c) { const [i, n] = c.dataset.sdfat.split(':').map(Number); return sdMarcar(i, n, c.checked); }
+      return;
+    }
     const sl = e.target.closest('[data-sdlinha]'); if (sl) { const i = Number(sl.dataset.sdlinha); sd.aberto = sd.aberto === i ? null : i; return sdDesenhar(); }
     if (e.target.closest('#sd-csv')) return sdCsv();
     if (e.target.closest('#sd-atualizar')) return sdCarregar(true);
@@ -275,7 +306,7 @@ export function criarQualidade(host) {
     if (s) { const c = st.dados.contratos[Number(s.dataset.sel)]; if (s.checked) st.selecao.set(chave(c), { pedido: c.pedido, data_ref: c.data_ref }); else st.selecao.delete(chave(c)); return desenharBulk(); }
     if (e.target.matches('[data-sel-todos]')) { st.dados.contratos.forEach(c => { if (e.target.checked) st.selecao.set(chave(c), { pedido: c.pedido, data_ref: c.data_ref }); else st.selecao.delete(chave(c)); }); return desenharLista(); }
     if (e.target.matches('#q-janela, #q-tipo, #q-equipe, #q-de, #q-ate')) carregar(1);
-    if (e.target.matches('#sd-mes, #sd-consultor, #sd-equipe, #sd-gestor')) sdDesenhar();
+    if (e.target.matches('#sd-mes, #sd-consultor, #sd-equipe, #sd-gestor, #sd-pgto')) sdDesenhar();
   });
   $('#sd-busca').addEventListener('input', sdDesenhar);
   $('#q-busca').addEventListener('input', () => { clearTimeout(st.timer); st.timer = setTimeout(() => carregar(1), 400); });

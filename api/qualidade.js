@@ -105,6 +105,19 @@ async function carregarMarcacoes() {
   return mapa;
 }
 
+// SD › faturas pagas (1ª–5ª) por pedido. Falha na leitura (tabela ainda não criada) não derruba a lista.
+async function carregarPagamentosSD() {
+  const mapa = new Map();   // pedido -> [faturas pagas]
+  const TAM = 50000;
+  for (let pagina = 0; pagina < 20; pagina++) {
+    const r = await supa(`/rest/v1/sd_pagamentos?select=pedido,fatura&order=pedido,fatura&limit=${TAM}&offset=${pagina * TAM}`);
+    if (!r.ok) return { ok: false, mapa: new Map() };
+    for (const l of r.json) { if (!mapa.has(l.pedido)) mapa.set(l.pedido, []); mapa.get(l.pedido).push(l.fatura); }
+    if (r.json.length < TAM) break;
+  }
+  return { ok: true, mapa };
+}
+
 // ── universo de contratações (vem das planilhas, com cache em memória) ──────
 let _cache = null;      // { em, jornadas, equipes, abas }
 let _emAndamento = null;
@@ -217,7 +230,7 @@ function montarSD(blipLinhas, etapaAtual) {
     const dig = l.cnpj.replace(/\D/g, '');
     const k = `${l.mes}|${dig || l.cliente.toUpperCase()}`;
     let g = grupos.get(k);
-    if (!g) { g = { mes: l.mes, cnpj: l.cnpj, cliente: l.cliente, quantidade: 0, valor: 0, pedidos: [], _cons: new Map(), _eq: new Map() }; grupos.set(k, g); }
+    if (!g) { g = { mes: l.mes, chave: dig || l.cliente.toUpperCase(), cnpj: l.cnpj, cliente: l.cliente, quantidade: 0, valor: 0, pedidos: [], _cons: new Map(), _eq: new Map() }; grupos.set(k, g); }
     if (!g.cliente) g.cliente = l.cliente;
     if (!g.cnpj) g.cnpj = l.cnpj;
     g.quantidade += l.qtd;
@@ -229,10 +242,12 @@ function montarSD(blipLinhas, etapaAtual) {
   const maisFreq = m => [...m.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || '';
   const linhas = [...grupos.values()].map(g => {
     const equipe = maisFreq(g._eq);
+    const datas = g.pedidos.map(p => p.data_ref).filter(Boolean).sort();
     return {
-      mes: g.mes, cnpj: g.cnpj, cliente: g.cliente, consultor: maisFreq(g._cons), equipe, gestor: EQUIPES_GESTORES[equipe] || '',
+      mes: g.mes, chave: g.chave, cnpj: g.cnpj, cliente: g.cliente, consultor: maisFreq(g._cons), equipe, gestor: EQUIPES_GESTORES[equipe] || '',
       quantidade: g.quantidade, valor: Math.round(g.valor * 100) / 100,
-      pedidos: g.pedidos.sort((a, b) => a.pedido.localeCompare(b.pedido)).slice(0, 40),
+      data_ativacao: datas[0] || null,   // data de ativação = DATA REF (a mais antiga entre os pedidos da linha)
+      pedidos: g.pedidos.sort((a, b) => a.pedido.localeCompare(b.pedido)).slice(0, 200),
     };
   });
   linhas.sort((a, b) => (a.mes < b.mes ? 1 : a.mes > b.mes ? -1 : a.cliente.localeCompare(b.cliente, 'pt-BR')));
@@ -376,11 +391,40 @@ export default async function handler(req, res) {
     // ── GET sd: Blip GO ativos mês a mês, uma linha por cliente (ordenação/filtros ficam na tela) ──
     if (req.method === 'GET' && action === 'sd') {
       const uni = await universo(req.query.refresh === '1');
-      return res.status(200).json({ linhas: uni.sd, base_atualizada_em: new Date(uni.em).toISOString() });
+      // faturas pagas (1ª–5ª) por pedido; se a tabela ainda não existe, a lista vem igual, só sem as caixinhas (pagamentos_ok=false)
+      const pag = await carregarPagamentosSD();
+      const linhas = uni.sd.map(l => ({ ...l, pedidos: l.pedidos.map(p => ({ ...p, f: pag.mapa.get(p.pedido) || [] })) }));
+      return res.status(200).json({ linhas, pagamentos_ok: pag.ok, base_atualizada_em: new Date(uni.em).toISOString() });
     }
 
     if (req.method !== 'POST') return res.status(400).json({ error: 'Ação inválida' });
     const corpo = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
+
+    // ── POST sd_marcar: marca/desmarca a fatura N (1–5) paga em TODOS os pedidos de uma linha da SD (mês + cliente) ──
+    if (action === 'sd_marcar') {
+      const mes = (corpo.mes || '').toString();
+      const chaveLinha = (corpo.chave || '').toString();
+      const marcado = corpo.marcado === true;
+      const faturas = corpo.fatura === 'todas' ? [1, 2, 3, 4, 5] : [Number(corpo.fatura)];
+      if (faturas.some(n => !Number.isInteger(n) || n < 1 || n > 5)) throw new ErroHttp(400, 'Fatura inválida');
+      const uni = await universo(false);
+      const linha = uni.sd.find(l => l.mes === mes && l.chave === chaveLinha);
+      if (!linha) throw new ErroHttp(404, 'Cliente não encontrado nessa base — atualize a SD e tente de novo');
+      const pedidos = [...new Set(linha.pedidos.map(p => p.pedido))].filter(p => /^[0-9A-Za-z._-]{1,40}$/.test(p));
+      if (!pedidos.length) throw new ErroHttp(400, 'Sem pedidos para marcar');
+      let w;
+      if (marcado) {
+        const agora = new Date().toISOString();
+        const novas = pedidos.flatMap(pedido => faturas.map(fatura => ({ pedido, fatura, marcado_por: ctx.quem, marcado_em: agora })));
+        w = await supa('/rest/v1/sd_pagamentos?on_conflict=pedido,fatura', { method: 'POST', prefer: 'resolution=ignore-duplicates,return=minimal', body: novas });
+      } else {
+        const lista = pedidos.map(p => encodeURIComponent(p)).join(',');
+        w = await supa(`/rest/v1/sd_pagamentos?pedido=in.(${lista})&fatura=in.(${faturas.join(',')})`, { method: 'DELETE', prefer: 'return=minimal' });
+      }
+      if (!w.ok) throw erroTabela(w) || new ErroHttp(502, 'Não consegui salvar a marcação');
+      auditar(ctx.quem, 'sd_marcar', { mes, cliente: linha.cliente, pedidos: pedidos.length, faturas, marcado });
+      return res.status(200).json({ ok: true });
+    }
 
     // ── POST marcar: uma parcela de uma contratação ──
     if (action === 'marcar') {

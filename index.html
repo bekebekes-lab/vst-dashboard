@@ -3136,6 +3136,7 @@
         <div class="filter-group" style="min-width:190px;"><label>Consultor</label><select id="sd-consultor" onchange="sdRender()"><option value="">Todos</option></select></div>
         <div class="filter-group" style="min-width:190px;"><label>Equipe</label><select id="sd-equipe" onchange="sdRender()"><option value="">Todas</option></select></div>
         <div class="filter-group" style="min-width:150px;"><label>Gestor</label><select id="sd-gestor" onchange="sdRender()"><option value="">Todos</option></select></div>
+        <div class="filter-group" style="min-width:190px;"><label>Faturas pagas</label><select id="sd-pgto" onchange="sdRender()"><option value="">Todas</option><option value="pendente">Com fatura pendente (1ª–5ª)</option><option value="ok">1ª a 5ª pagas</option></select></div>
         <div class="filter-group" style="justify-content:flex-end;">
           <label>&nbsp;</label>
           <div style="display:flex;gap:8px;">
@@ -3144,6 +3145,7 @@
           </div>
         </div>
       </div>
+      <div id="sd-msg"></div>
       <div id="sd-kpis" class="qual-kpis"></div>
       <div id="sd-lista-area"></div>
     </div>
@@ -15633,13 +15635,19 @@ function sdFiltros() {
     busca: (document.getElementById('sd-busca').value || '').trim(),
     mes: document.getElementById('sd-mes').value, consultor: document.getElementById('sd-consultor').value,
     equipe: document.getElementById('sd-equipe').value, gestor: document.getElementById('sd-gestor').value,
+    pgto: document.getElementById('sd-pgto').value,
   };
 }
+// Faturas pagas (1ª–5ª): cada pedido da linha guarda p.f = [faturas pagas]. Estado da fatura n na linha: 0 nenhum pedido, 1 alguns, 2 todos.
+function sdEstadoFatura(l, n) { const c = l.pedidos.filter(p => (p.f || []).includes(n)).length; return c === 0 ? 0 : (c === l.pedidos.length ? 2 : 1); }
+function sdPagas(l) { return [1, 2, 3, 4, 5].filter(n => sdEstadoFatura(l, n) === 2).length; }
 function sdPassa(l, f, ign) {
   if (ign !== 'mes' && f.mes && l.mes !== f.mes) return false;
   if (ign !== 'consultor' && f.consultor && l.consultor !== f.consultor) return false;
   if (ign !== 'equipe' && f.equipe && l.equipe !== f.equipe) return false;
   if (ign !== 'gestor' && f.gestor && l.gestor !== f.gestor) return false;
+  if (f.pgto === 'ok' && sdPagas(l) < 5) return false;
+  if (f.pgto === 'pendente' && sdPagas(l) >= 5) return false;
   if (f.busca) {
     const norm = t => (t || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
     const alvo = norm(`${l.cliente} ${l.cnpj} ${l.consultor} ${l.pedidos.map(p => p.pedido).join(' ')}`);
@@ -15658,13 +15666,14 @@ function sdPreencherSelect(id, f, campo, rotuloVazio, fmt) {
   sel.value = atual;
 }
 function sdOrdenar(col) {
-  const texto = col !== 'quantidade' && col !== 'valor';
-  SD.ord = SD.ord.col === col ? { col, asc: !SD.ord.asc } : { col, asc: texto && col !== 'mes' };
+  const texto = col !== 'quantidade' && col !== 'valor' && col !== 'pagas';
+  SD.ord = SD.ord.col === col ? { col, asc: !SD.ord.asc } : { col, asc: texto && col !== 'mes' && col !== 'data_ativacao' };
   SD.aberto = null;
   sdRender();
 }
 function sdLinhasVisiveis() {
   const f = sdFiltros(), { col, asc } = SD.ord, dir = asc ? 1 : -1;
+  SD.dados.linhas.forEach(l => { l.pagas = sdPagas(l); });
   const v = SD.dados.linhas.filter(l => sdPassa(l, f));
   v.sort((a, b) => {
     const x = a[col], y = b[col];
@@ -15674,6 +15683,24 @@ function sdLinhasVisiveis() {
   return v;
 }
 function sdToggle(i) { SD.aberto = SD.aberto === i ? null : i; sdRender(); }
+function sdMensagem(texto, erro) {
+  document.getElementById('sd-msg').innerHTML = texto
+    ? `<div style="margin:8px 0;font-size:12.5px;font-weight:500;color:${erro ? 'var(--red-sem)' : '#16a34a'};">${escapeHtml(texto)}</div>` : '';
+}
+// Marca/desmarca a fatura n (1–5, ou 'todas') como paga em todos os pedidos da linha. Grava no servidor e só então atualiza a tela.
+async function sdMarcar(i, n, marcado) {
+  const l = sdLinhasVisiveis()[i];
+  if (!l) return;
+  sdMensagem('');
+  try {
+    await qualApi('sd_marcar', {}, { mes: l.mes, chave: l.chave, fatura: n, marcado });
+    const alvo = n === 'todas' ? [1, 2, 3, 4, 5] : [n];
+    l.pedidos.forEach(p => { const set = new Set(p.f || []); alvo.forEach(x => (marcado ? set.add(x) : set.delete(x))); p.f = [...set].sort(); });
+  } catch (e) {
+    sdMensagem(e.message, true);
+  }
+  sdRender();
+}
 function sdRender() {
   if (!SD.dados) return;
   const f = sdFiltros();
@@ -15684,37 +15711,50 @@ function sdRender() {
   const linhas = sdLinhasVisiveis();
   const qtd = linhas.reduce((a, l) => a + l.quantidade, 0), val = linhas.reduce((a, l) => a + l.valor, 0);
   const clientes = new Set(linhas.map(l => l.cnpj.replace(/\D/g, '') || l.cliente)).size;
+  const completas = linhas.filter(l => l.pagas >= 5).length;
   const kpi = (t, n, sub) => `<div class="qual-kpi" style="cursor:default;"><div class="k-t">${t}</div><div class="k-n">${n}</div><div class="k-v">${sub}</div></div>`;
   document.getElementById('sd-kpis').innerHTML =
     kpi('Clientes', clientes.toLocaleString('pt-BR'), `${linhas.length.toLocaleString('pt-BR')} linha(s) cliente × mês`) +
-    kpi('Quantidade', qtd.toLocaleString('pt-BR'), 'licenças / planos Blip GO') + kpi('Valor', qualFmtMoeda(val), 'soma da receita das linhas');
+    kpi('Quantidade', qtd.toLocaleString('pt-BR'), 'licenças / planos Blip GO') + kpi('Valor', qualFmtMoeda(val), 'soma da receita das linhas') +
+    kpi('1ª a 5ª fatura paga', completas.toLocaleString('pt-BR'), `de ${linhas.length.toLocaleString('pt-BR')} linha(s)`);
   const area = document.getElementById('sd-lista-area');
+  if (!SD.dados.pagamentos_ok) sdMensagem('As caixinhas de fatura estão desativadas: falta criar a tabela sd_pagamentos no Supabase (arquivo supabase/migrations/20261127000001_sd_pagamentos.sql).', true);
   if (!linhas.length) { area.innerHTML = '<div class="coming-soon"><p>Nenhum Blip GO ativo para esses filtros.</p></div>'; return; }
   const LIM = 1000;
   const th = (col, rot, align) => `<th onclick="sdOrdenar('${col}')" style="cursor:pointer;user-select:none;${align ? 'text-align:' + align : ''}" title="Clique para classificar">${rot} <span style="opacity:${SD.ord.col === col ? 1 : .35};font-size:10px">${SD.ord.col === col ? (SD.ord.asc ? '▲' : '▼') : '↕'}</span></th>`;
   const corpo = linhas.slice(0, LIM).map((l, i) => {
-    const det = SD.aberto === i ? `<tr><td colspan="8" style="font-size:12px;background:var(--bg-2,#f8fafc);padding:8px 14px;">${l.pedidos.map(p =>
-      `<div>Pedido <strong>${escapeHtml(p.pedido)}</strong> · ${escapeHtml(p.produto || '—')}${p.numero ? ` <span style="color:var(--text-3)">· ${escapeHtml(p.numero)}</span>` : ''} <span style="color:var(--text-3)">· qtd ${p.qtd}${p.data_ref ? ' · data ref. ' + qualFmtData(p.data_ref) : ''}</span> <strong style="float:right">${qualFmtMoeda(p.valor)}</strong></div>`).join('')}</td></tr>` : '';
+    const det = SD.aberto === i ? `<tr><td colspan="11" style="font-size:12px;background:var(--bg-2,#f8fafc);padding:8px 14px;">${l.pedidos.map(p =>
+      `<div>Pedido <strong>${escapeHtml(p.pedido)}</strong> · ${escapeHtml(p.produto || '—')}${p.numero ? ` <span style="color:var(--text-3)">· ${escapeHtml(p.numero)}</span>` : ''} <span style="color:var(--text-3)">· qtd ${p.qtd}${p.data_ref ? ' · ativação ' + qualFmtData(p.data_ref) : ''} · faturas pagas: ${(p.f || []).length ? p.f.map(n => n + 'ª').join(', ') : 'nenhuma'}</span> <strong style="float:right">${qualFmtMoeda(p.valor)}</strong></div>`).join('')}</td></tr>` : '';
+    const caixas = [1, 2, 3, 4, 5].map(n => {
+      const e = sdEstadoFatura(l, n);
+      return `<label style="display:inline-flex;flex-direction:column;align-items:center;font-size:10px;color:var(--text-3);margin-right:6px;cursor:pointer;" title="${n}ª fatura${e === 1 ? ' (paga só em parte dos pedidos)' : ''}"><input type="checkbox" ${e === 2 ? 'checked' : ''} ${e === 1 ? 'data-parcial="1"' : ''} ${SD.dados.pagamentos_ok ? '' : 'disabled'} onchange="sdMarcar(${i},${n},this.checked)">${n}ª</label>`;
+    }).join('');
+    const todas = `<a href="#" style="font-size:11px;white-space:nowrap" onclick="event.preventDefault();sdMarcar(${i},'todas',${l.pagas < 5})" title="${l.pagas < 5 ? 'Marcar a 1ª a 5ª como pagas' : 'Desmarcar as cinco'}">${l.pagas < 5 ? '✓ até a 5ª' : '✗ limpar'}</a>`;
     return `<tr style="cursor:pointer" onclick="sdToggle(${i})" title="Ver os pedidos">
       <td style="font-size:12px;white-space:nowrap">${sdMesRotulo(l.mes)}</td>
+      <td style="font-size:12px;white-space:nowrap">${l.data_ativacao ? qualFmtData(l.data_ativacao) : '—'}</td>
       <td style="font-size:12px;white-space:nowrap">${escapeHtml(l.cnpj)}</td>
       <td style="font-size:12px;min-width:220px;font-weight:500">${escapeHtml(l.cliente || '—')}</td>
       <td style="font-size:12px">${escapeHtml(l.consultor || '—')}</td>
       <td style="font-size:12px">${escapeHtml(l.equipe || '—')}</td>
       <td style="font-size:12px">${escapeHtml(l.gestor || '—')}</td>
       <td style="font-size:12px;text-align:right">${l.quantidade.toLocaleString('pt-BR')}</td>
-      <td style="font-size:12px;text-align:right;white-space:nowrap">${qualFmtMoeda(l.valor)}</td></tr>${det}`;
+      <td style="font-size:12px;text-align:right;white-space:nowrap">${qualFmtMoeda(l.valor)}</td>
+      <td style="font-size:12px;white-space:nowrap" onclick="event.stopPropagation()">${caixas}${SD.dados.pagamentos_ok ? todas : ''}</td>
+      <td style="font-size:12px;text-align:right">${l.pagas}/5</td></tr>${det}`;
   }).join('');
   area.innerHTML = `<div class="table-wrap"><div class="table-scroll"><table>
-    <thead><tr>${th('mes', 'Mês')}${th('cnpj', 'CNPJ')}${th('cliente', 'Razão social')}${th('consultor', 'Consultor')}${th('equipe', 'Equipe')}${th('gestor', 'Gestor')}${th('quantidade', 'Qtd', 'right')}${th('valor', 'Valor', 'right')}</tr></thead>
+    <thead><tr>${th('mes', 'Mês')}${th('data_ativacao', 'Data de ativação')}${th('cnpj', 'CNPJ')}${th('cliente', 'Razão social')}${th('consultor', 'Consultor')}${th('equipe', 'Equipe')}${th('gestor', 'Gestor')}${th('quantidade', 'Qtd', 'right')}${th('valor', 'Valor', 'right')}<th>Faturas pagas (1ª–5ª)</th>${th('pagas', 'Pagas', 'right')}</tr></thead>
     <tbody>${corpo}</tbody></table></div></div>
-    <div style="margin:10px 0;font-size:12px;color:var(--text-3);">${linhas.length > LIM ? `Mostrando as primeiras ${LIM} de ${linhas.length.toLocaleString('pt-BR')} linhas — use os filtros ou o CSV para ver tudo. ` : ''}Base lida em ${new Date(SD.dados.base_atualizada_em).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'short' })}</div>`;
+    <div style="margin:10px 0;font-size:12px;color:var(--text-3);">${linhas.length > LIM ? `Mostrando as primeiras ${LIM} de ${linhas.length.toLocaleString('pt-BR')} linhas — use os filtros ou o CSV para ver tudo. ` : ''}Data de ativação = DATA REF (a mais antiga entre os pedidos da linha). Base lida em ${new Date(SD.dados.base_atualizada_em).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'short' })}</div>`;
+  area.querySelectorAll('input[data-parcial]').forEach(x => { x.indeterminate = true; });
 }
 function sdCsv() {
   if (!SD.dados) return;
   const linhas = sdLinhasVisiveis();
-  const cab = ['Mês', 'CNPJ', 'Razão social', 'Consultor', 'Equipe', 'Gestor', 'Quantidade', 'Valor', 'Pedidos'];
-  const dados = linhas.map(l => [sdMesRotulo(l.mes), l.cnpj, l.cliente, l.consultor, l.equipe, l.gestor, l.quantidade, String(l.valor).replace('.', ','), l.pedidos.map(p => p.pedido).join(' / ')]);
+  const cab = ['Mês', 'Data de ativação', 'CNPJ', 'Razão social', 'Consultor', 'Equipe', 'Gestor', 'Quantidade', 'Valor', 'Faturas pagas', 'Pedidos'];
+  const dados = linhas.map(l => [sdMesRotulo(l.mes), l.data_ativacao ? qualFmtData(l.data_ativacao) : '', l.cnpj, l.cliente, l.consultor, l.equipe, l.gestor, l.quantidade, String(l.valor).replace('.', ','),
+    [1, 2, 3, 4, 5].filter(n => sdEstadoFatura(l, n) === 2).map(n => n + 'ª').join(' '), l.pedidos.map(p => p.pedido).join(' / ')]);
   const esc = v => '"' + String(v).replace(/"/g, '""') + '"';
   const csv = '\ufeff' + [cab, ...dados].map(l => l.map(esc).join(';')).join('\n');
   const a = document.createElement('a');
